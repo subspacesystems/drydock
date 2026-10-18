@@ -21,3 +21,10 @@ The plan fixes Rust and a desktop app (Linux first, Windows second). We need a G
 - One toolkit for app, tests and headless rendering; offscreen render tests work on the VM without a GPU.
 - egui is immediate-mode: fine for tool UI, but the viewport's input handling (inference, snapping, typed dimensions) is ours and lives outside egui.
 - Tracking craft-libs revs couples our egui version to theirs; revisit if that blocks an upgrade we need.
+
+## Amendments
+- **2026-10-18, M0 planning.**
+  - DAE reader: our own, on `roxmltree` (MIT OR Apache-2.0) instead of a streaming parser. The largest corpus file is 20 MB; a DOM keeps the reader simple, and it only needs the subset the corpus uses (triangles, lines, matrices, library nodes, lambert/constant materials, images). Existing COLLADA crates were not adopted: we need a few hundred lines of a well-specified subset, and owning it keeps the clean-room record simple.
+  - Viewport: the renderer draws into its own offscreen color/depth texture, which the app shows as an egui image, instead of drawing inside egui's render pass. It needs a depth buffer and MSAA that egui's pass doesn't have, and the same code path renders headless for tests.
+  - wgpu 30, the major egui-wgpu 0.36 uses, so the app can share egui's device.
+  - Bringing in eframe depends on the license question (egui's bundled fonts are OFL-1.1/Ubuntu-font-1.0; the Windows clipboard crates are BSL-1.0).

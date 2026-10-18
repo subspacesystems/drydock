@@ -1,0 +1,20 @@
+[package]
+name = "modeler-render"
+description = "wgpu scene renderer, on screen and headless"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+modeler-dae.workspace = true
+modeler-view.workspace = true
+glam.workspace = true
+image.workspace = true
+bytemuck.workspace = true
+pollster.workspace = true
+wgpu.workspace = true
+
+[lints]
+workspace = true

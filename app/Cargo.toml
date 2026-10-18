@@ -6,8 +6,24 @@ members = ["crates/*"]
 version = "0.0.1"
 edition = "2024"
 license = "GPL-3.0-or-later"
-rust-version = "1.90"
+rust-version = "1.95"
 publish = false
+
+[workspace.dependencies]
+modeler-dae = { path = "crates/modeler-dae" }
+modeler-view = { path = "crates/modeler-view" }
+modeler-render = { path = "crates/modeler-render" }
+glam = "0.34"
+roxmltree = "0.21"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+# eframe waits on the license question; nothing depends on it yet.
+eframe = { version = "0.36", default-features = false, features = ["wgpu", "wayland", "x11", "default_fonts"] }
+egui-wgpu = "0.36"
+# Same major as egui-wgpu 0.36, so the app can hand the renderer egui's device.
+wgpu = { version = "30", default-features = false, features = ["std", "wgsl", "vulkan", "dx12", "metal"] }
+pollster = "1"
+bytemuck = { version = "1", features = ["derive"] }
+proptest = "1"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
@@ -15,3 +31,7 @@ unsafe_code = "forbid"
 [workspace.lints.clippy]
 dbg_macro = "warn"
 todo = "warn"
+
+# Tests decode large textures and XML; optimise dependencies even in test builds.
+[profile.dev.package."*"]
+opt-level = 3
