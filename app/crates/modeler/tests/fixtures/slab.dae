@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<COLLADA xmlns="http://www.collada.org/2005/11/COLLADASchema" version="1.4.1">
+    <asset>
+        <contributor><authoring_tool>modeler test fixture</authoring_tool></contributor>
+        <unit meter="1" name="meter"/>
+        <up_axis>Z_UP</up_axis>
+    </asset>
+    <library_effects>
+        <effect id="fx-blue"><profile_COMMON><technique sid="COMMON"><lambert><diffuse><color>0 0 1 1</color></diffuse></lambert></technique></profile_COMMON></effect>
+    </library_effects>
+    <library_materials>
+        <material id="m-blue" name="blue"><instance_effect url="#fx-blue"/></material>
+    </library_materials>
+    <library_geometries>
+        <geometry id="g-quad" name="quad"><mesh><source id="q-p"><float_array id="q-p-a" count="12">0 0 0 2 0 0 2 3 0 0 3 0</float_array><technique_common><accessor source="#q-p-a" count="4" stride="3"><param name="X" type="float"/><param name="Y" type="float"/><param name="Z" type="float"/></accessor></technique_common></source><vertices id="q-v"><input semantic="POSITION" source="#q-p"/></vertices><triangles count="2" material="Mat0"><input semantic="VERTEX" source="#q-v" offset="0"/><p>0 1 2 0 2 3</p></triangles></mesh></geometry>
+        <geometry id="g-post" name="post"><mesh><source id="p-p"><float_array id="p-p-a" count="6">0 0 0 0 0 4</float_array><technique_common><accessor source="#p-p-a" count="2" stride="3"><param name="X" type="float"/><param name="Y" type="float"/><param name="Z" type="float"/></accessor></technique_common></source><vertices id="p-v"><input semantic="POSITION" source="#p-p"/></vertices><lines count="1"><input semantic="VERTEX" source="#p-v" offset="0"/><p>0 1</p></lines></mesh></geometry>
+    </library_geometries>
+    <library_visual_scenes>
+        <visual_scene id="scene">
+            <node name="quad"><instance_geometry url="#g-quad"><bind_material><technique_common><instance_material symbol="Mat0" target="#m-blue"/></technique_common></bind_material></instance_geometry></node>
+            <node name="post"><instance_geometry url="#g-post"/></node>
+        </visual_scene>
+    </library_visual_scenes>
+    <scene><instance_visual_scene url="#scene"/></scene>
+</COLLADA>
