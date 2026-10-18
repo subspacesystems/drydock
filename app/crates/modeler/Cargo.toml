@@ -1,0 +1,11 @@
+[package]
+name = "modeler"
+description = "modeler (codename): a 3D modeler for architecture and woodworking"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
