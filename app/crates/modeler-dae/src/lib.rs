@@ -13,6 +13,7 @@ use std::path::{Path, PathBuf};
 use glam::DMat4;
 
 mod flat;
+mod reader;
 
 pub use flat::{Aabb, Batch, FlatScene, LineBatch, flatten};
 
@@ -191,6 +192,5 @@ pub fn import_file(path: &Path) -> Result<Model, ImportError> {
 /// Parse a COLLADA document held in memory. `base_dir` is where relative image paths
 /// resolve from.
 pub fn import_str(xml: &str, base_dir: &Path) -> Result<Model, ImportError> {
-    let _ = (xml, base_dir);
-    unimplemented!("m0-dae-import")
+    reader::read(xml, base_dir)
 }
