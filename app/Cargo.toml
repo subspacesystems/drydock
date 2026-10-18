@@ -16,8 +16,8 @@ modeler-render = { path = "crates/modeler-render" }
 glam = "0.34"
 roxmltree = "0.21"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
-# eframe waits on the license question; nothing depends on it yet.
-eframe = { version = "0.36", default-features = false, features = ["wgpu", "wayland", "x11", "default_fonts"] }
+# No "default_fonts": egui's bundled fonts are OFL/Ubuntu-licensed; the app ships Roboto.
+eframe = { version = "0.36", default-features = false, features = ["wgpu", "wayland", "x11"] }
 egui-wgpu = "0.36"
 # Same major as egui-wgpu 0.36, so the app can hand the renderer egui's device.
 wgpu = { version = "30", default-features = false, features = ["std", "wgsl", "vulkan", "dx12", "metal"] }
