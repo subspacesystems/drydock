@@ -9,6 +9,7 @@
 use std::collections::HashMap;
 use std::fmt;
 use std::path::PathBuf;
+use std::sync::Mutex;
 
 use glam::DVec3;
 use modeler_dae::{Aabb, FlatScene};
@@ -67,6 +68,10 @@ impl std::error::Error for RenderError {}
 const SAMPLE_COUNT: u32 = 4;
 const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
+/// Serializes headless rendering: creating devices on several threads at once can
+/// crash some Vulkan drivers (lavapipe).
+static HEADLESS_LOCK: Mutex<()> = Mutex::new(());
+
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 struct Vertex {
@@ -124,6 +129,7 @@ pub struct Renderer {
     camera_layout: wgpu::BindGroupLayout,
     material_layout: wgpu::BindGroupLayout,
     opaque_pipeline: wgpu::RenderPipeline,
+    opaque_back_pipeline: wgpu::RenderPipeline,
     transparent_pipeline: wgpu::RenderPipeline,
     line_pipeline: wgpu::RenderPipeline,
     sampler: wgpu::Sampler,
@@ -278,7 +284,7 @@ impl Renderer {
             },
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList,
-                cull_mode: None,
+                cull_mode: Some(wgpu::Face::Back),
                 ..Default::default()
             },
             depth_stencil: Some(wgpu::DepthStencilState {
@@ -287,6 +293,45 @@ impl Renderer {
                 depth_compare: Some(wgpu::CompareFunction::Less),
                 stencil: Default::default(),
                 bias: Default::default(),
+            }),
+            multisample: wgpu::MultisampleState {
+                count: SAMPLE_COUNT,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("fs_face"),
+                compilation_options: Default::default(),
+                targets: &targets,
+            }),
+            multiview_mask: None,
+            cache: None,
+        });
+        let opaque_back_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("modeler-render opaque faces from behind"),
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs_face"),
+                compilation_options: Default::default(),
+                buffers: &[Some(vertex_layout.clone())],
+            },
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                cull_mode: Some(wgpu::Face::Front),
+                ..Default::default()
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: DEPTH_FORMAT,
+                depth_write_enabled: Some(true),
+                depth_compare: Some(wgpu::CompareFunction::Less),
+                stencil: Default::default(),
+                bias: wgpu::DepthBiasState {
+                    constant: 16,
+                    slope_scale: 0.05,
+                    clamp: 0.0,
+                },
             }),
             multisample: wgpu::MultisampleState {
                 count: SAMPLE_COUNT,
@@ -409,6 +454,7 @@ impl Renderer {
             camera_layout,
             material_layout,
             opaque_pipeline,
+            opaque_back_pipeline,
             transparent_pipeline,
             line_pipeline,
             sampler,
@@ -712,6 +758,17 @@ impl Renderer {
                 self.draw(device, &mut pass, scene, batch, material);
             }
 
+            pass.set_pipeline(&self.opaque_back_pipeline);
+            for batch in scene.batches.iter().filter(|batch| !batch.transparent) {
+                let material = batch.material.unwrap_or_else(|| GpuMaterial {
+                    color: linear_color(style.default_face),
+                    opacity: style.default_face[3],
+                    unlit: false,
+                    texture: None,
+                });
+                self.draw(device, &mut pass, scene, batch, material);
+            }
+
             pass.set_pipeline(&self.line_pipeline);
             for batch in &scene.lines {
                 let material = batch.material.unwrap_or_else(|| GpuMaterial {
@@ -941,6 +998,9 @@ pub fn render_headless(
     height: u32,
     style: &Style,
 ) -> Result<(image::RgbaImage, Vec<String>), RenderError> {
+    let _guard = HEADLESS_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     let instance =
         wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
     let adapter =
