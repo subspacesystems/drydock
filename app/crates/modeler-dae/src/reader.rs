@@ -694,18 +694,22 @@ fn decode_percent(value: &str) -> String {
     let mut out = Vec::with_capacity(bytes.len());
     let mut i = 0;
     while i < bytes.len() {
-        if bytes[i] == b'%' && i + 2 < bytes.len() {
-            let hex = &value[i + 1..i + 3];
-            if let Ok(byte) = u8::from_str_radix(hex, 16) {
-                out.push(byte);
-                i += 3;
-                continue;
-            }
+        if bytes[i] == b'%'
+            && let Some(&[high, low]) = bytes.get(i + 1..i + 3)
+            && let (Some(high), Some(low)) = (hex_digit(high), hex_digit(low))
+        {
+            out.push(high << 4 | low);
+            i += 3;
+            continue;
         }
         out.push(bytes[i]);
         i += 1;
     }
     String::from_utf8_lossy(&out).into_owned()
+}
+
+fn hex_digit(byte: u8) -> Option<u8> {
+    (byte as char).to_digit(16).map(|digit| digit as u8)
 }
 
 fn resolve_path(value: &str, base_dir: &Path) -> PathBuf {
@@ -1294,4 +1298,19 @@ pub(crate) fn read(xml: &str, base_dir: &Path) -> Result<Model> {
         scene: root_pnode.to_node(),
         cameras,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::decode_percent;
+
+    #[test]
+    fn percent_decoding() {
+        assert_eq!(decode_percent("a%20b"), "a b");
+        assert_eq!(decode_percent("end%20"), "end ");
+        assert_eq!(decode_percent("caf%C3%A9"), "café");
+        assert_eq!(decode_percent("50%"), "50%");
+        assert_eq!(decode_percent("%zz"), "%zz");
+        assert_eq!(decode_percent("%é1"), "%é1");
+    }
 }
