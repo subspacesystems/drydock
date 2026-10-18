@@ -62,14 +62,23 @@ fn set_bounds_none_leaves_camera() {
 fn orbit_pan_zoom_call_the_camera() {
     let mut s = ViewState::new();
     let mut c = Camera::default();
-    assert_eq!(s.apply(Action::Orbit { dx: 12.0, dy: -7.0 }, VP), Effect::None);
+    assert_eq!(
+        s.apply(Action::Orbit { dx: 12.0, dy: -7.0 }, VP),
+        Effect::None
+    );
     c.orbit(12.0, -7.0);
     assert_eq!(s.camera, c);
     assert_eq!(s.apply(Action::Pan { dx: 30.0, dy: 4.0 }, VP), Effect::None);
     c.pan(30.0, 4.0, VP.1);
     assert_eq!(s.camera, c);
     let ndc = DVec2::new(0.3, -0.2);
-    s.apply(Action::Zoom { steps: 2.0, cursor_ndc: ndc }, VP);
+    s.apply(
+        Action::Zoom {
+            steps: 2.0,
+            cursor_ndc: ndc,
+        },
+        VP,
+    );
     c.zoom(2.0, ndc, VP.0 / VP.1);
     assert_eq!(s.camera, c);
 }
@@ -91,8 +100,20 @@ fn views_projection_and_tool() {
 fn zoom_extents_uses_model_bounds() {
     let mut s = ViewState::new();
     s.set_bounds(Some(bounds()), VP);
-    s.apply(Action::Pan { dx: 200.0, dy: 100.0 }, VP);
-    s.apply(Action::Zoom { steps: 5.0, cursor_ndc: DVec2::ZERO }, VP);
+    s.apply(
+        Action::Pan {
+            dx: 200.0,
+            dy: 100.0,
+        },
+        VP,
+    );
+    s.apply(
+        Action::Zoom {
+            steps: 5.0,
+            cursor_ndc: DVec2::ZERO,
+        },
+        VP,
+    );
     s.apply(Action::ZoomExtents, VP);
     let mut want = s.camera;
     want.zoom_extents(&bounds(), VP.0 / VP.1);
@@ -122,7 +143,13 @@ fn degenerate_viewport_does_not_panic_or_produce_nan() {
     let mut s = ViewState::new();
     s.set_bounds(Some(bounds()), (0.0, 0.0));
     s.apply(Action::Pan { dx: 5.0, dy: 5.0 }, (0.0, 0.0));
-    s.apply(Action::Zoom { steps: 1.0, cursor_ndc: DVec2::ZERO }, (0.0, 0.0));
+    s.apply(
+        Action::Zoom {
+            steps: 1.0,
+            cursor_ndc: DVec2::ZERO,
+        },
+        (0.0, 0.0),
+    );
     s.apply(Action::ZoomExtents, (0.0, 0.0));
     let c = s.camera;
     assert!(c.target.is_finite() && c.distance.is_finite() && c.distance > 0.0);
