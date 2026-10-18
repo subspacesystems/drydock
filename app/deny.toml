@@ -20,6 +20,12 @@ allow = [
     "Unicode-3.0",
 ]
 confidence-threshold = 0.93
+# Per-crate exceptions; each needs Tyrel's approval.
+exceptions = [
+    # Windows clipboard, always enabled by eframe. Boost license, permissive.
+    { crate = "clipboard-win", allow = ["BSL-1.0"] },
+    { crate = "error-code", allow = ["BSL-1.0"] },
+]
 
 [bans]
 multiple-versions = "warn"

@@ -7,8 +7,7 @@
 //! Screen space: pixels from the viewport's top-left corner, y down. NDC: x right,
 //! y up, both -1..1 across the viewport.
 
-use std::f64::consts::FRAC_PI_2;
-
+use glam::dcamera::rh::{proj::directx, view::look_to_mat4};
 use glam::{DMat4, DVec2, DVec3, DVec4};
 
 /// Degrees of orbit per pixel dragged.
@@ -102,56 +101,41 @@ impl Camera {
 
     /// World to view (right-handed, camera looks down -Z).
     pub fn view_matrix(&self) -> DMat4 {
-        let (forward, right, up) = self.basis();
-        let eye = self.eye();
-        DMat4::from_cols(
-            DVec4::new(right.x, up.x, -forward.x, 0.0),
-            DVec4::new(right.y, up.y, -forward.y, 0.0),
-            DVec4::new(right.z, up.z, -forward.z, 0.0),
-            DVec4::new(-right.dot(eye), -up.dot(eye), forward.dot(eye), 1.0),
-        )
+        let (forward, _, up) = self.basis();
+        look_to_mat4(self.eye(), forward, up)
     }
 
     /// View to clip, depth 0..1 (wgpu convention). Near and far planes enclose
     /// `scene` (center, radius) when given.
     pub fn projection_matrix(&self, aspect: f64, scene: Option<(DVec3, f64)>) -> DMat4 {
         let (forward, _, _) = self.basis();
-        let eye = self.eye();
-        match self.projection {
-            Projection::Perspective => {
-                let (mut near, mut far) = match scene {
-                    Some((center, radius)) => {
-                        let d = (center - eye).dot(forward);
-                        let far = d + radius;
-                        let near = (d - radius).max(far / 10_000.0);
-                        (near, far)
-                    }
-                    None => (self.distance / 1000.0, self.distance * 1000.0),
-                };
-                near = near.max(1e-4);
-                far = far.max(1e-4);
-                let f = 1.0 / (self.fov_y / 2.0).tan();
-                DMat4::from_cols(
-                    DVec4::new(f / aspect, 0.0, 0.0, 0.0),
-                    DVec4::new(0.0, f, 0.0, 0.0),
-                    DVec4::new(0.0, 0.0, far / (near - far), -1.0),
-                    DVec4::new(0.0, 0.0, near * far / (near - far), 0.0),
-                )
+        let (near, far) = match (self.projection, scene) {
+            (Projection::Perspective, Some((center, radius))) => {
+                let d = (center - self.eye()).dot(forward);
+                let far = (d + radius).max(1e-4);
+                let near = (d - radius).max(far / 10_000.0).max(1e-4);
+                (near, far)
             }
+            (Projection::Parallel, Some((center, radius))) => {
+                let d = (center - self.eye()).dot(forward);
+                (d - radius - 1e-3, d + radius + 1e-3)
+            }
+            (Projection::Perspective, None) => (self.distance / 1000.0, self.distance * 1000.0),
+            (Projection::Parallel, None) => (-self.distance * 1000.0, self.distance * 1000.0),
+        };
+
+        match self.projection {
+            Projection::Perspective => directx::perspective(self.fov_y, aspect, near, far),
             Projection::Parallel => {
-                let (near, far) = match scene {
-                    Some((center, radius)) => {
-                        let d = (center - eye).dot(forward);
-                        (d - radius - 1e-3, d + radius + 1e-3)
-                    }
-                    None => (-self.distance * 1000.0, self.distance * 1000.0),
-                };
                 let height = 2.0 * self.distance * (self.fov_y / 2.0).tan();
-                DMat4::from_cols(
-                    DVec4::new(2.0 / (height * aspect), 0.0, 0.0, 0.0),
-                    DVec4::new(0.0, 2.0 / height, 0.0, 0.0),
-                    DVec4::new(0.0, 0.0, 1.0 / (near - far), 0.0),
-                    DVec4::new(0.0, 0.0, near / (near - far), 1.0),
+                let width = height * aspect;
+                directx::orthographic(
+                    -width / 2.0,
+                    width / 2.0,
+                    -height / 2.0,
+                    height / 2.0,
+                    near,
+                    far,
                 )
             }
         }
@@ -165,9 +149,10 @@ impl Camera {
         if self.projection == Projection::Perspective && depth <= 0.0 {
             return None;
         }
-        let clip = self.projection_matrix(aspect, None) * self.view_matrix() * p.extend(1.0);
-        let ndc = clip.truncate() / clip.w;
-        Some((DVec2::new(ndc.x, ndc.y), depth))
+        let clip = self.projection_matrix(aspect, None)
+            * self.view_matrix()
+            * DVec4::new(p.x, p.y, p.z, 1.0);
+        Some((DVec2::new(clip.x / clip.w, clip.y / clip.w), depth))
     }
 
     /// The point on the plane through the target, facing the camera, that appears at
@@ -185,9 +170,10 @@ impl Camera {
 
     /// Orbit about the target by a mouse drag of (dx, dy) pixels.
     pub fn orbit(&mut self, dx: f64, dy: f64) {
-        self.yaw -= (dx * ORBIT_DEGREES_PER_PIXEL).to_radians();
-        self.pitch += (dy * ORBIT_DEGREES_PER_PIXEL).to_radians();
-        self.pitch = self.pitch.clamp(-FRAC_PI_2, FRAC_PI_2);
+        let per_pixel = ORBIT_DEGREES_PER_PIXEL.to_radians();
+        self.yaw -= dx * per_pixel;
+        self.pitch = (self.pitch + dy * per_pixel)
+            .clamp(-std::f64::consts::FRAC_PI_2, std::f64::consts::FRAC_PI_2);
     }
 
     /// Pan by a mouse drag of (dx, dy) pixels in a viewport `height_px` tall.
@@ -198,38 +184,35 @@ impl Camera {
 
     /// Zoom by `steps` (positive = in) toward the point under `cursor_ndc`.
     pub fn zoom(&mut self, steps: f64, cursor_ndc: DVec2, aspect: f64) {
-        let p = self.target_plane_point(cursor_ndc, aspect);
         let old = self.distance;
-        let new = (old * ZOOM_STEP_FACTOR.powf(steps)).clamp(MIN_DISTANCE, MAX_DISTANCE);
-        self.distance = new;
-        let factor = new / old;
-        self.target = p + (self.target - p) * factor;
+        let p = self.target_plane_point(cursor_ndc, aspect);
+        self.distance = (old * ZOOM_STEP_FACTOR.powf(steps)).clamp(MIN_DISTANCE, MAX_DISTANCE);
+        let ratio = self.distance / old;
+        self.target = p + (self.target - p) * ratio;
     }
 
     /// Keep the orientation; center and fit `bounds` in a viewport of `aspect`
     /// (width / height).
     pub fn zoom_extents(&mut self, bounds: &Bounds, aspect: f64) {
-        self.target = (bounds.min + bounds.max) * 0.5;
-        let mut radius = (bounds.max - bounds.min).length() * 0.5;
-        if radius < 1e-6 {
-            radius = 1.0;
+        self.target = (bounds.min + bounds.max) / 2.0;
+        let mut r = (bounds.max - bounds.min).length() / 2.0;
+        if r < 1e-6 {
+            r = 1.0;
         }
-        let tan_half = (self.fov_y / 2.0).tan();
-        match self.projection {
+        self.distance = match self.projection {
             Projection::Perspective => {
-                let fov_x = 2.0 * (aspect * tan_half).atan();
-                let fit = self.fov_y.min(fov_x) / 2.0;
-                self.distance = radius / fit.sin();
+                let fov_x = 2.0 * (aspect * (self.fov_y / 2.0).tan()).atan();
+                r / (self.fov_y.min(fov_x) / 2.0).sin()
             }
             Projection::Parallel => {
                 let height = if aspect >= 1.0 {
-                    2.0 * radius
+                    2.0 * r
                 } else {
-                    2.0 * radius / aspect
+                    2.0 * r / aspect
                 };
-                self.distance = height / (2.0 * tan_half);
+                height / (2.0 * (self.fov_y / 2.0).tan())
             }
-        }
+        };
         self.distance = self.distance.clamp(MIN_DISTANCE, MAX_DISTANCE);
     }
 
@@ -248,11 +231,10 @@ impl Camera {
         self.pitch = pitch.to_radians();
     }
 
+    /// Direction from target to eye, unit length.
     fn offset(&self) -> DVec3 {
-        DVec3::new(
-            self.pitch.cos() * self.yaw.cos(),
-            self.pitch.cos() * self.yaw.sin(),
-            self.pitch.sin(),
-        )
+        let (sp, cp) = self.pitch.sin_cos();
+        let (sy, cy) = self.yaw.sin_cos();
+        DVec3::new(cp * cy, cp * sy, sp)
     }
 }

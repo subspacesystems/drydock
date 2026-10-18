@@ -28,7 +28,7 @@ A window that opens a corpus DAE file and orbits, pans and zooms it.
 | `m0-app` | eframe window: open file (argument, dialog, drag and drop), mouse/keyboard navigation, status bar | the three above; (licenses) |
 | `m0-corpus-render` | Render every corpus model from iso/top/front; compare silhouettes to the reference PNGs | `m0-render` (orchestrator writes the comparison and calibrates thresholds) |
 
-Done when: `modeler corpus/05-house/model.dae` opens in under 5 s on modeler-build (release build), looks right in all standard views, and navigation is smooth on Tyrel's desktop.
+Done when: `modeler` on the reference house model opens in under 5 s on modeler-build (release build), looks right in all standard views, and navigation is smooth on Tyrel's desktop.
 
 ## M1: Geometry kernel and native file (orchestrator-designed, kernel tasks)
 

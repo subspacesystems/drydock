@@ -1,0 +1,8 @@
+modeler
+Copyright (C) 2026 Subspace Systems. Licensed under GPL-3.0-or-later; see LICENSE.
+
+Third-party material distributed with this software:
+
+- Roboto font 2.138 (crates/modeler/assets/fonts/Roboto-Regular.ttf),
+  Copyright 2011 Google Inc. Licensed under the Apache License 2.0
+  (crates/modeler/assets/fonts/LICENSE-Roboto).

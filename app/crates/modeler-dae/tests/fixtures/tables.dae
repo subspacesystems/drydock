@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<COLLADA xmlns="http://www.collada.org/2005/11/COLLADASchema" version="1.4.1">
+    <asset>
+        <contributor><authoring_tool>modeler test fixture</authoring_tool></contributor>
+        <unit meter="0.0254" name="inch"/>
+        <up_axis>Z_UP</up_axis>
+    </asset>
+    <library_cameras>
+        <camera id="cam-persp" name="persp"><optics><technique_common><perspective><yfov>35</yfov><aspect_ratio>0</aspect_ratio><znear>1</znear><zfar>1000</zfar></perspective></technique_common></optics></camera>
+        <camera id="cam-top" name="top"><optics><technique_common><orthographic><ymag>50</ymag><znear>1</znear><zfar>1000</zfar></orthographic></technique_common></optics></camera>
+    </library_cameras>
+    <library_images>
+        <image id="img-wood"><init_from>box tex/wood%20grain.png</init_from></image>
+    </library_images>
+    <library_effects>
+        <effect id="fx-red"><profile_COMMON><technique sid="COMMON"><lambert><diffuse><color>1 0 0 1</color></diffuse></lambert></technique></profile_COMMON></effect>
+        <effect id="fx-wood"><profile_COMMON>
+            <newparam sid="wood-surface"><surface type="2D"><init_from>img-wood</init_from></surface></newparam>
+            <newparam sid="wood-sampler"><sampler2D><source>wood-surface</source></sampler2D></newparam>
+            <technique sid="COMMON"><lambert><diffuse><texture texture="wood-sampler" texcoord="UVSET0"/></diffuse></lambert></technique>
+        </profile_COMMON></effect>
+        <effect id="fx-glass"><profile_COMMON><technique sid="COMMON"><lambert><diffuse><color>0.5 0.5 0.5 1</color></diffuse>
+            <transparent opaque="RGB_ZERO"><color>0.75 0.75 0.75 1</color></transparent><transparency><float>1</float></transparency>
+        </lambert></technique></profile_COMMON></effect>
+        <effect id="fx-edge"><profile_COMMON><technique sid="COMMON"><constant><emission><color>0.1 0.2 0.3 1</color></emission></constant></technique></profile_COMMON></effect>
+    </library_effects>
+    <library_materials>
+        <material id="m-red" name="red"><instance_effect url="#fx-red"/></material>
+        <material id="m-wood" name="wood"><instance_effect url="#fx-wood"/></material>
+        <material id="m-glass" name="glass"><instance_effect url="#fx-glass"/></material>
+        <material id="m-edge" name="edge"><instance_effect url="#fx-edge"/></material>
+    </library_materials>
+    <library_geometries>
+        <geometry id="g-box" name="box"><mesh><source id="box-p"><float_array id="box-p-a" count="72">0 0 0 0 10 0 10 10 0 10 0 0 0 0 10 10 0 10 10 10 10 0 10 10 0 0 0 10 0 0 10 0 10 0 0 10 0 10 0 0 10 10 10 10 10 10 10 0 0 0 0 0 0 10 0 10 10 0 10 0 10 0 0 10 10 0 10 10 10 10 0 10</float_array><technique_common><accessor source="#box-p-a" count="24" stride="3"><param name="X" type="float"/><param name="Y" type="float"/><param name="Z" type="float"/></accessor></technique_common></source><source id="box-n"><float_array id="box-n-a" count="72">0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 1 0 0 1 0 0 1 0 0 1 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 1 0 0 1 0 0 1 0 0 1 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 1 0 0 1 0 0 1 0 0 1 0 0</float_array><technique_common><accessor source="#box-n-a" count="24" stride="3"><param name="X" type="float"/><param name="Y" type="float"/><param name="Z" type="float"/></accessor></technique_common></source><vertices id="box-v"><input semantic="POSITION" source="#box-p"/><input semantic="NORMAL" source="#box-n"/></vertices><triangles count="12" material="Mat0"><input semantic="VERTEX" source="#box-v" offset="0"/><p>0 1 2 0 2 3 4 5 6 4 6 7 8 9 10 8 10 11 12 13 14 12 14 15 16 17 18 16 18 19 20 21 22 20 22 23</p></triangles></mesh></geometry>
+        <geometry id="g-top" name="top"><mesh><source id="top-p"><float_array id="top-p-a" count="12">0 0 0 50 0 0 50 10 0 0 10 0</float_array><technique_common><accessor source="#top-p-a" count="4" stride="3"><param name="X" type="float"/><param name="Y" type="float"/><param name="Z" type="float"/></accessor></technique_common></source><source id="top-n"><float_array id="top-n-a" count="3">0 0 1</float_array><technique_common><accessor source="#top-n-a" count="1" stride="3"><param name="X" type="float"/><param name="Y" type="float"/><param name="Z" type="float"/></accessor></technique_common></source><source id="top-t"><float_array id="top-t-a" count="12">0 0 1 0 1 1 0 0 1 1 0 1</float_array><technique_common><accessor source="#top-t-a" count="6" stride="2"><param name="S" type="float"/><param name="T" type="float"/></accessor></technique_common></source><vertices id="top-v"><input semantic="POSITION" source="#top-p"/></vertices><triangles count="2" material="Mat0"><input semantic="VERTEX" source="#top-v" offset="0"/><input semantic="NORMAL" source="#top-n" offset="1"/><input semantic="TEXCOORD" source="#top-t" offset="2" set="0"/><p>0 0 0 1 0 1 2 0 2 0 0 3 2 0 4 3 0 5</p></triangles></mesh></geometry>
+        <geometry id="g-edges" name="edges"><mesh><source id="edges-p"><float_array id="edges-p-a" count="9">0 0 0 0 0 40 100 0 40</float_array><technique_common><accessor source="#edges-p-a" count="3" stride="3"><param name="X" type="float"/><param name="Y" type="float"/><param name="Z" type="float"/></accessor></technique_common></source><vertices id="edges-v"><input semantic="POSITION" source="#edges-p"/></vertices><lines count="2" material="Edge"><input semantic="VERTEX" source="#edges-v" offset="0"/><p>0 1 1 2</p></lines></mesh></geometry>
+        <geometry id="g-empty" name="empty"><mesh/></geometry>
+        <geometry id="g-raw" name="raw"><mesh><source id="raw-p"><float_array id="raw-p-a" count="9">0 -20 0 10 -20 0 0 -20 10</float_array><technique_common><accessor source="#raw-p-a" count="3" stride="3"><param name="X" type="float"/><param name="Y" type="float"/><param name="Z" type="float"/></accessor></technique_common></source><vertices id="raw-v"><input semantic="POSITION" source="#raw-p"/></vertices><triangles count="1"><input semantic="VERTEX" source="#raw-v" offset="0"/><p>0 1 2</p></triangles></mesh></geometry>
+    </library_geometries>
+    <library_nodes>
+        <node id="d-leg" name="leg">
+            <instance_geometry url="#g-box"><bind_material><technique_common><instance_material symbol="Mat0" target="#m-red"><bind_vertex_input semantic="UVSET0" input_semantic="TEXCOORD" input_set="0"/></instance_material></technique_common></bind_material></instance_geometry>
+        </node>
+        <node id="d-table" name="table">
+            <node name="top"><matrix>1 0 0 0 0 1 0 0 0 0 1 30 0 0 0 1</matrix><instance_geometry url="#g-top"><bind_material><technique_common><instance_material symbol="Mat0" target="#m-wood"><bind_vertex_input semantic="UVSET0" input_semantic="TEXCOORD" input_set="0"/></instance_material></technique_common></bind_material></instance_geometry></node>
+            <node name="leg-a"><matrix>1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1</matrix><instance_node url="#d-leg"/></node>
+            <node name="leg-b"><matrix>1 0 0 40 0 1 0 0 0 0 1 0 0 0 0 1</matrix><instance_node url="#d-leg"/></node>
+        </node>
+    </library_nodes>
+    <library_visual_scenes>
+        <visual_scene id="scene-1" name="fixture">
+            <node name="camera"><matrix>1 0 0 200 0 1 0 -200 0 0 1 200 0 0 0 1</matrix><instance_camera url="#cam-persp"/></node>
+            <node name="table-1"><matrix>1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1</matrix><instance_node url="#d-table"/></node>
+            <node id="n-table-2" name="table-2"><matrix>-1 0 0 100 0 1 0 0 0 0 1 0 0 0 0 1</matrix><instance_node url="#d-table"/></node>
+            <node name="glass"><translate>0 50 0</translate><scale>1 1 2</scale><instance_geometry url="#g-box"><bind_material><technique_common><instance_material symbol="Mat0" target="#m-glass"><bind_vertex_input semantic="UVSET0" input_semantic="TEXCOORD" input_set="0"/></instance_material></technique_common></bind_material></instance_geometry></node>
+            <node name="edges"><instance_geometry url="#g-edges"><bind_material><technique_common><instance_material symbol="Edge" target="#m-edge"><bind_vertex_input semantic="UVSET0" input_semantic="TEXCOORD" input_set="0"/></instance_material></technique_common></bind_material></instance_geometry>
+                <node name="top-camera"><instance_camera url="#cam-top"/></node>
+            </node>
+            <node name="nothing"><instance_geometry url="#g-empty"/></node>
+            <node id="n-raw"><instance_geometry url="#g-raw"/></node>
+        </visual_scene>
+    </library_visual_scenes>
+    <scene><instance_visual_scene url="#scene-1"/></scene>
+</COLLADA>
