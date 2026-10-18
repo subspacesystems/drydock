@@ -9,6 +9,7 @@
 
 pub mod document;
 pub mod input;
+pub mod viewstate;
 
 /// One-line product banner.
 pub fn banner() -> String {
