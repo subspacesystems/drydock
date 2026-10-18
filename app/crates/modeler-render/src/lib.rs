@@ -13,6 +13,9 @@ use modeler_view::Camera;
 
 /// The color format every viewport texture uses.
 pub const COLOR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
+/// Share of a lit material's color that doesn't depend on the angle to the viewer.
+/// Faces seen head-on show their full color; faces seen edge-on show `AMBIENT` of it.
+pub const AMBIENT: f32 = 0.4;
 /// Textures larger than this on either side are downscaled on upload.
 pub const MAX_TEXTURE_SIZE: u32 = 2048;
 
