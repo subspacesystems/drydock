@@ -54,19 +54,74 @@ pub fn drag(
     delta: DVec2,
     start_ndc: DVec2,
 ) -> Option<Action> {
-    let _ = (tool, button, mods, delta, start_ndc);
-    unimplemented!("m0-app")
+    if delta == DVec2::ZERO {
+        return None;
+    }
+    match button {
+        Button::Middle => Some(if mods.shift {
+            Action::Pan {
+                dx: delta.x,
+                dy: delta.y,
+            }
+        } else {
+            Action::Orbit {
+                dx: delta.x,
+                dy: delta.y,
+            }
+        }),
+        Button::Left => match tool {
+            Tool::Orbit => Some(if mods.shift {
+                Action::Pan {
+                    dx: delta.x,
+                    dy: delta.y,
+                }
+            } else {
+                Action::Orbit {
+                    dx: delta.x,
+                    dy: delta.y,
+                }
+            }),
+            Tool::Pan => Some(Action::Pan {
+                dx: delta.x,
+                dy: delta.y,
+            }),
+            Tool::Zoom => Some(Action::Zoom {
+                steps: -delta.y / ZOOM_DRAG_PIXELS_PER_STEP,
+                cursor_ndc: start_ndc,
+            }),
+        },
+        Button::Right => None,
+    }
 }
 
 /// A scroll of `lines` notches (positive = away from the user) with the cursor at
 /// `cursor_ndc`.
 pub fn scroll(lines: f64, cursor_ndc: DVec2) -> Action {
-    let _ = (lines, cursor_ndc);
-    unimplemented!("m0-app")
+    Action::Zoom {
+        steps: lines,
+        cursor_ndc,
+    }
 }
 
 /// A key press. `key` is the egui key name (e.g. "O", "Z", "F2").
 pub fn key(key: &str, mods: Modifiers) -> Option<Action> {
-    let _ = (key, mods);
-    unimplemented!("m0-app")
+    let plain = !mods.shift && !mods.ctrl && !mods.alt;
+    let shift = mods.shift && !mods.ctrl && !mods.alt;
+    let ctrl = !mods.shift && mods.ctrl && !mods.alt;
+    match key {
+        "O" if plain => Some(Action::SelectTool(Tool::Orbit)),
+        "H" if plain => Some(Action::SelectTool(Tool::Pan)),
+        "Z" if plain => Some(Action::SelectTool(Tool::Zoom)),
+        "Z" if shift => Some(Action::ZoomExtents),
+        "P" if plain => Some(Action::ToggleProjection),
+        "O" if ctrl => Some(Action::Open),
+        "F2" if plain => Some(Action::View(StandardView::Iso)),
+        "F3" if plain => Some(Action::View(StandardView::Top)),
+        "F4" if plain => Some(Action::View(StandardView::Front)),
+        "F5" if plain => Some(Action::View(StandardView::Right)),
+        "F6" if plain => Some(Action::View(StandardView::Back)),
+        "F7" if plain => Some(Action::View(StandardView::Left)),
+        "F8" if plain => Some(Action::View(StandardView::Bottom)),
+        _ => None,
+    }
 }
