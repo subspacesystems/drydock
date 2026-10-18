@@ -1,9 +1,10 @@
-# Large binary and model files go through Git LFS.
-*.dae  filter=lfs diff=lfs merge=lfs -text
-*.png  filter=lfs diff=lfs merge=lfs -text
-*.jpg  filter=lfs diff=lfs merge=lfs -text
-*.jpeg filter=lfs diff=lfs merge=lfs -text
-*.tif  filter=lfs diff=lfs merge=lfs -text
-*.tiff filter=lfs diff=lfs merge=lfs -text
-*.bmp  filter=lfs diff=lfs merge=lfs -text
-*.tga  filter=lfs diff=lfs merge=lfs -text
+# Large binary and model files in the corpus go through Git LFS. Test fixtures under
+# app/ stay plain git: the test oracle checks out sources without LFS.
+corpus/**/*.dae  filter=lfs diff=lfs merge=lfs -text
+corpus/**/*.png  filter=lfs diff=lfs merge=lfs -text
+corpus/**/*.jpg  filter=lfs diff=lfs merge=lfs -text
+corpus/**/*.jpeg filter=lfs diff=lfs merge=lfs -text
+corpus/**/*.tif  filter=lfs diff=lfs merge=lfs -text
+corpus/**/*.tiff filter=lfs diff=lfs merge=lfs -text
+corpus/**/*.bmp  filter=lfs diff=lfs merge=lfs -text
+corpus/**/*.tga  filter=lfs diff=lfs merge=lfs -text
