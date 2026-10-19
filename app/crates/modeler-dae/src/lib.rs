@@ -6,6 +6,8 @@
 //! Behaviour: `docs/specs/m0-dae-import.md`. [`import_file`] reads a document into a
 //! [`Model`] that keeps the file's structure (component definitions, instances, units,
 //! up axis). [`flatten`] turns a model into world-space draw batches in meters, Z up.
+//! [`to_kernel`] converts a model into a `modeler-kernel` model, merging triangles back
+//! into polygons (`docs/specs/m1-dae-to-kernel.md`).
 
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -13,9 +15,11 @@ use std::path::{Path, PathBuf};
 use glam::DMat4;
 
 mod flat;
+mod kernel;
 mod reader;
 
 pub use flat::{Aabb, Batch, FlatScene, LineBatch, flatten};
+pub use kernel::{ConvertError, to_kernel};
 
 /// Why an import failed. Messages name the element or file involved.
 #[derive(Debug)]

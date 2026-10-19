@@ -1311,6 +1311,8 @@ name = "modeler-dae"
 version = "0.0.1"
 dependencies = [
  "glam",
+ "modeler-kernel",
+ "proptest",
  "roxmltree",
 ]
 

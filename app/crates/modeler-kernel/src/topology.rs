@@ -419,6 +419,13 @@ impl Context {
         out
     }
 
+    /// The face check `validate` would report for this face (open or repeated loop, not
+    /// planar, not simple, hole winding, hole outside, holes touching), or `None` when the
+    /// face passes or is unknown. Doesn't look at other faces or edges.
+    pub fn face_violation(&self, f: FaceId) -> Option<Violation> {
+        self.faces.get(&f).and_then(|face| self.check_face(f, face))
+    }
+
     fn check_face(&self, f: FaceId, face: &Face) -> Option<Violation> {
         let loops = std::iter::once(&face.outer).chain(face.inner.iter());
 
