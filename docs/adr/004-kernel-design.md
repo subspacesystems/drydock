@@ -27,5 +27,19 @@ Status: accepted (M1). Owner: orchestrator.
 - `add_face(points)` for direct polygon creation (used by import).
 - Undo/redo: every mutation yields a list of primitive records (added/removed vertex, edge, face); the undo stack stores them and replays reversed. No operation mutates without a record.
 
+## Native file (`format.rs`)
+- Versioned line-based UTF-8 text, defined in `docs/format.md`. Ids and numbers round-trip exactly (shortest `Display` floats); the reader rebuilds the model through `Model::apply`, so references are checked by the same code as undo. Save writes `<name>.tmp`, syncs it and renames it over the target.
+
+## Face finding (`m1-sticky-faces`, design draft)
+- Work per affected plane `P`. Planes come from each edge the operation inserted: the plane of every existing face containing it, and the plane it spans with each non-collinear edge at either end. Planes are deduplicated with `LINEAR_TOL`.
+- In `P`: take every edge whose ends lie within tolerance of `P` and drop bridges (edges on no cycle: dangling spurs, links between loops). These edges just lie on faces. Project to 2D with `plane_basis` and trace the boundary walks of the planar arrangement (turn to the next edge clockwise at each vertex). Walks with positive area are region outlines. Negative walks are outer contours of connected components; each one becomes a hole of the smallest outline (from another component) that contains it.
+- A region can become a face only if its outline and holes are simple. A region touching itself at a vertex can't, and a face that would have to be split into one is left alone.
+- Region `R` lies inside an old face `F` (`F` in `P`) when the midpoint of `R`'s first outline edge that isn't one of `F`'s edges is inside `F`. If all of `R`'s edges are `F`'s edges, `R` is inside `F` when `R` crosses its first edge with `F`'s interior on the same side.
+- `add_edge`: a region with a new edge on its outline or holes, inside no old face, becomes a new face. An old face with a new-edge region inside it is replaced by all the regions inside it, keeping its orientation, provided every one of them can be a face.
+- Orientation of a new face: opposite use of a shared edge with an existing face (lowest id), so solids come out consistently oriented. With no shared face, the front faces +Z, then +Y, then +X: the first of `n.z`, `n.y`, `n.x` that isn't ~0 is positive. Horizontal faces therefore face up. This is easy to change if Tyrel wants ground faces to face down.
+- Sticky reports where each new face came from (`(new, Option<old>)`), so the model layer copies face materials to split pieces.
+- `erase_edge` on an edge shared by exactly two coplanar faces with the same orientation merges them: after the erase, the region of `P` containing the edge's midpoint becomes one face, oriented like the lower-id face. Otherwise the behaviour stays as in `m1-sticky-edges`: faces whose outer loop uses the edge go, and holes it borders close.
+- Known limit: regions whose outline touches itself (for example a triangle inside a face that touches the face's edge at one vertex) get no face.
+
 ## Task order
 `m1-geom` (math) -> `m1-topology` (arenas, ids, validate, primitive records) -> `m1-sticky-edges` (snap, split crossings, T-junctions and overlaps, erase; no face creation) -> `m1-sticky-faces` (faces from closed coplanar loops, splitting a face, holes, merging coplanar faces on erase). In parallel after topology: `m1-model` (definitions, instances, materials, model records, undo stack; replaces `m1-undo`) -> `m1-format` (native file, `docs/format.md`) and `m1-dae-to-kernel` (merge triangles into polygons, keep hierarchy).
