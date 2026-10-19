@@ -419,6 +419,13 @@ impl Context {
         out
     }
 
+    /// Pairs of coplanar faces whose areas overlap, lower id first, sorted. Faces may share
+    /// edges and vertices. Not part of `validate`: imported models can hold overlapping
+    /// decals. Behaviour: `docs/specs/m1-sticky-faces.md`.
+    pub fn face_overlaps(&self) -> Vec<(FaceId, FaceId)> {
+        unimplemented!("m1-sticky-faces")
+    }
+
     /// The face check `validate` would report for this face (open or repeated loop, not
     /// planar, not simple, hole winding, hole outside, holes touching), or `None` when the
     /// face passes or is unknown. Doesn't look at other faces or edges.

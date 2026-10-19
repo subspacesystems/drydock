@@ -31,6 +31,9 @@ pub struct EdgeChain {
     /// `edges.len() + 1` vertices: `edges[i]` joins `vertices[i]` and `vertices[i + 1]`.
     pub vertices: Vec<VertexId>,
     pub edges: Vec<EdgeId>,
+    /// Faces the call created, in creation order, each with the face it was split from
+    /// (`None` for a face over empty space). See `docs/specs/m1-sticky-faces.md`.
+    pub faces: Vec<(FaceId, Option<FaceId>)>,
 }
 
 fn finite(p: DVec3) -> bool {
@@ -200,6 +203,7 @@ impl Context {
         Ok(EdgeChain {
             vertices: chain_vertices,
             edges: chain_edges,
+            faces: Vec::new(),
         })
     }
 
