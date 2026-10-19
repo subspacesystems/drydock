@@ -379,7 +379,9 @@ fn tic_tac_toe_grid() {
     let (c2, _) = draw(&mut ctx, p(3.0, 2.0, 0.0), p(0.0, 2.0, 0.0));
     assert_eq!(c1.edges.len(), 3);
     assert_eq!(c2.edges.len(), 3);
-    assert_eq!(counts(&ctx), (12, 12, 0));
+    // The centre square closes, so it becomes a face (m1-sticky-faces).
+    assert_eq!(counts(&ctx), (12, 12, 1));
+    assert_eq!(c2.faces.len(), 1);
     for (x, y) in [(1.0, 1.0), (2.0, 1.0), (1.0, 2.0), (2.0, 2.0)] {
         assert_eq!(ctx.edges_of_vertex(vat(&ctx, p(x, y, 0.0))).len(), 4);
     }

@@ -10,6 +10,7 @@ use std::collections::BTreeSet;
 
 use glam::DVec3;
 
+use crate::faces;
 use crate::geom::{self, LINEAR_TOL, SegmentHit};
 use crate::topology::{
     Context, Edge, EdgeId, EdgeUse, Edit, Face, FaceId, Loop, Record, TopoError, VertexId,
@@ -200,11 +201,217 @@ impl Context {
             chain_edges.push(e);
         }
 
-        Ok(EdgeChain {
+        let mut chain = EdgeChain {
             vertices: chain_vertices,
             edges: chain_edges,
             faces: Vec::new(),
-        })
+        };
+        self.build_faces(&mut chain, log)?;
+        Ok(chain)
+    }
+
+    fn edge_lies_in(&self, edge: Edge, plane: &geom::Plane) -> bool {
+        let Some(a) = self.vertex(edge.ends[0]).map(|v| v.position) else {
+            return false;
+        };
+        let Some(b) = self.vertex(edge.ends[1]).map(|v| v.position) else {
+            return false;
+        };
+        plane.signed_distance(a).abs() <= LINEAR_TOL && plane.signed_distance(b).abs() <= LINEAR_TOL
+    }
+
+    fn affected_planes(&self, chain: &EdgeChain) -> Vec<geom::Plane> {
+        let mut out: Vec<geom::Plane> = Vec::new();
+        fn push(out: &mut Vec<geom::Plane>, plane: geom::Plane) {
+            if !out.iter().any(|p| faces::same_plane(p, &plane)) {
+                out.push(plane);
+            }
+        }
+        for &e in &chain.edges {
+            let Some(edge) = self.edge(e).copied() else {
+                continue;
+            };
+            for (_, face) in self.faces() {
+                let Some(p) = faces::face_plane_of(self, face) else {
+                    continue;
+                };
+                if self.edge_lies_in(edge, &p)
+                    && let Some(cp) = faces::canonical_plane(p.point, p.normal)
+                {
+                    push(&mut out, cp);
+                }
+            }
+            for end in edge.ends {
+                let Some(ep) = self.vertex(end).map(|v| v.position) else {
+                    continue;
+                };
+                let other_end = if edge.ends[0] == end {
+                    edge.ends[1]
+                } else {
+                    edge.ends[0]
+                };
+                let Some(op) = self.vertex(other_end).map(|v| v.position) else {
+                    continue;
+                };
+                let de = op - ep;
+                if de.length() <= LINEAR_TOL {
+                    continue;
+                }
+                let de = de.normalize();
+                for other_id in self.edges_of_vertex(end) {
+                    if other_id == e {
+                        continue;
+                    }
+                    let Some(other) = self.edge(other_id).copied() else {
+                        continue;
+                    };
+                    let other_far = if other.ends[0] == end {
+                        other.ends[1]
+                    } else if other.ends[1] == end {
+                        other.ends[0]
+                    } else {
+                        continue;
+                    };
+                    let Some(fp) = self.vertex(other_far).map(|v| v.position) else {
+                        continue;
+                    };
+                    let df = fp - ep;
+                    if df.length() <= LINEAR_TOL {
+                        continue;
+                    }
+                    let cross = de.cross(df.normalize());
+                    if cross.length() <= 1e-9 {
+                        continue;
+                    }
+                    if let Some(cp) = faces::canonical_plane(ep, cross) {
+                        push(&mut out, cp);
+                    }
+                }
+            }
+        }
+        out
+    }
+
+    fn build_faces(&mut self, chain: &mut EdgeChain, log: &mut Edit) -> Result<(), StickyError> {
+        if chain.edges.is_empty() {
+            return Ok(());
+        }
+        let chain_edges: BTreeSet<EdgeId> = chain.edges.iter().copied().collect();
+        for plane in self.affected_planes(chain) {
+            let Some(plane) = faces::canonical_plane(plane.point, plane.normal) else {
+                continue;
+            };
+            let regions = faces::arrangement(self, &plane);
+            if regions.is_empty() {
+                continue;
+            }
+            let old: Vec<(FaceId, Face, geom::Plane)> = self
+                .faces()
+                .filter_map(|(id, face)| {
+                    let p = faces::face_plane_of(self, face)?;
+                    if faces::same_plane(&p, &plane) {
+                        Some((id, face.clone(), p))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            for (fid, face, face_plane) in &old {
+                let inside: Vec<usize> = regions
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, r)| faces::region_inside_face(self, r, face, plane.normal))
+                    .map(|(i, _)| i)
+                    .collect();
+                if inside.is_empty() {
+                    continue;
+                }
+                if !inside
+                    .iter()
+                    .any(|&i| regions[i].edges.iter().any(|e| chain_edges.contains(e)))
+                {
+                    continue;
+                }
+                if inside.len() == 1 && regions[inside[0]].edges == faces::face_edges(face) {
+                    continue;
+                }
+                if inside.iter().any(|&i| !regions[i].simple) {
+                    continue;
+                }
+
+                self.delete_face(*fid, log).map_err(topo_error)?;
+                let mut order = inside;
+                order.sort_by_key(|&i| regions[i].lowest_edge.0);
+                let flip = face_plane.normal.dot(plane.normal) < 0.0;
+                for i in order {
+                    let Some(new_face) = faces::region_face(self, &regions[i], flip) else {
+                        return Err(StickyError::Degenerate);
+                    };
+                    let new_id = self.insert_face(new_face, log).map_err(topo_error)?;
+                    chain.faces.push((new_id, Some(*fid)));
+                }
+            }
+
+            let mut order: Vec<usize> = (0..regions.len()).collect();
+            order.sort_by_key(|&i| regions[i].lowest_edge.0);
+            for i in order {
+                let region = &regions[i];
+                if !region.edges.iter().any(|e| chain_edges.contains(e)) {
+                    continue;
+                }
+                if old
+                    .iter()
+                    .any(|(_, face, _)| faces::region_inside_face(self, region, face, plane.normal))
+                {
+                    continue;
+                }
+                if !region.simple {
+                    continue;
+                }
+                if self
+                    .faces()
+                    .any(|(_, face)| faces::face_edges(face) == region.edges)
+                {
+                    continue;
+                }
+
+                let neighbour = self
+                    .faces()
+                    .filter(|(_, face)| {
+                        region.outline.iter().any(|s| {
+                            std::iter::once(&face.outer)
+                                .chain(face.inner.iter())
+                                .flat_map(|l| l.uses.iter())
+                                .any(|u| u.edge == s.edge)
+                        })
+                    })
+                    .map(|(id, _)| id)
+                    .min();
+                let flip = if let Some(g) = neighbour {
+                    let Some(g_face) = self.face(g) else {
+                        continue;
+                    };
+                    let mut same = false;
+                    for step in &region.outline {
+                        if let Some(dir) = faces::face_use_direction(self, g_face, step.edge) {
+                            same = dir.dot(faces::step_direction(self, step)) > 0.0;
+                            break;
+                        }
+                    }
+                    same
+                } else {
+                    false
+                };
+
+                let Some(new_face) = faces::region_face(self, region, flip) else {
+                    continue;
+                };
+                let new_id = self.insert_face(new_face, log).map_err(topo_error)?;
+                chain.faces.push((new_id, None));
+            }
+        }
+        Ok(())
     }
 
     fn snap_end(&mut self, p: DVec3, log: &mut Edit) -> Result<VertexId, StickyError> {
@@ -306,6 +513,23 @@ impl Context {
         edge: Edge,
         log: &mut Edit,
     ) -> Result<(), StickyError> {
+        let faces = self.faces_of_edge(e);
+        if faces.len() == 2 {
+            let (a, b) = (faces[0], faces[1]);
+            let (Some(fa), Some(fb)) = (self.face(a).cloned(), self.face(b).cloned()) else {
+                return Err(StickyError::Degenerate);
+            };
+            let (Some(pa), Some(pb)) = (
+                faces::face_plane_of(self, &fa),
+                faces::face_plane_of(self, &fb),
+            ) else {
+                return Err(StickyError::Degenerate);
+            };
+            if faces::same_plane(&pa, &pb) && pa.normal.dot(pb.normal) > 0.0 {
+                return self.merge_faces(e, edge, a, &pa, log);
+            }
+        }
+
         for f in self.faces_of_edge(e) {
             let Some(old) = self.face(f).cloned() else {
                 continue;
@@ -326,6 +550,57 @@ impl Context {
                 self.delete_vertex(v, log).map_err(topo_error)?;
             }
         }
+        Ok(())
+    }
+
+    fn merge_faces(
+        &mut self,
+        e: EdgeId,
+        edge: Edge,
+        keep: FaceId,
+        plane: &geom::Plane,
+        log: &mut Edit,
+    ) -> Result<(), StickyError> {
+        let (Some(a), Some(b)) = (
+            self.vertex(edge.ends[0]).map(|v| v.position),
+            self.vertex(edge.ends[1]).map(|v| v.position),
+        ) else {
+            return Err(StickyError::MissingEdge(e));
+        };
+        let midpoint = (a + b) * 0.5;
+        let Some(canonical) = faces::canonical_plane(plane.point, plane.normal) else {
+            return Err(StickyError::Degenerate);
+        };
+        let lower = self.faces_of_edge(e)[0];
+        let higher = self.faces_of_edge(e)[1];
+
+        self.delete_face(lower, log).map_err(topo_error)?;
+        self.delete_face(higher, log).map_err(topo_error)?;
+        self.delete_edge(e, log).map_err(topo_error)?;
+        for v in edge.ends {
+            if self.edges_of_vertex(v).is_empty() {
+                self.delete_vertex(v, log).map_err(topo_error)?;
+            }
+        }
+
+        let midpoint_2d = faces::to_2d(canonical.normal, midpoint);
+        let regions = faces::arrangement(self, &canonical);
+        let Some(region) = regions
+            .iter()
+            .find(|r| faces::region_contains_2d(r, midpoint_2d))
+        else {
+            return Ok(());
+        };
+        if !region.simple {
+            return Ok(());
+        }
+        let flip = plane.normal.dot(canonical.normal) < 0.0;
+        let Some(face) = faces::region_face(self, region, flip) else {
+            return Ok(());
+        };
+        let record = Record::AddFace(keep, face);
+        self.apply(&record).map_err(topo_error)?;
+        log.records.push(record);
         Ok(())
     }
 

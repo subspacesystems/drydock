@@ -1,0 +1,11 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc ead78fa9658a131f99f1dcfe7ec51f0a39d0143fb9cbce384a4a70548a72ea02 # shrinks to steps = [Segment(DVec3(0.0, 0.0, 0.0), DVec3(0.0, 0.0, 0.0))]
+cc b62b55585bf8be29b5b593db22a4ad6aced5e6c84bf578ce54e64aff45423a25 # shrinks to steps = [Segment(DVec3(0.0, 0.0, 0.0), DVec3(0.0, 0.0, 0.0))]
+cc 79060105839d0973a8fceb5b5ccd171d687a87673bc1d8732fd33caddb0e7e4b # shrinks to steps = [Segment(DVec3(0.0, 0.0, 0.0), DVec3(0.0, 0.0, 0.0))]
+cc 89d7f0bc5239fea9ec73c31703fb27323548398f55bd9298c2347274f4270347 # shrinks to steps = [Segment(DVec3(0.0, 0.0, 0.0), DVec3(0.0, 0.0, 0.0))]
+cc 78fadedac2cbe904be8ff0b046dccb65b6258b173ab6b19eac77fb4929651519 # shrinks to segs = [(DVec3(0.0, 0.0, 0.0), DVec3(0.0, 0.0, 1.0))]
