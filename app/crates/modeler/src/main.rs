@@ -18,11 +18,14 @@ const SCREENSHOT_SIZE: (u32, u32) = (1280, 800);
 fn usage() -> String {
     format!(
         "{}\n\n\
-         Usage: modeler [FILE.dae]\n\
-         \x20      modeler --screenshot OUT.png FILE.dae\n\n\
+         Usage: modeler [FILE]\n\
+         \x20      modeler --screenshot OUT.png FILE\n\
+         \x20      modeler --convert OUT.modeler FILE\n\n\
+         FILE is a .dae or .modeler file.\n\n\
          Options:\n\
-         \x20 --screenshot OUT.png  Render FILE.dae once without a window (iso view, zoom\n\
+         \x20 --screenshot OUT.png  Render FILE once without a window (iso view, zoom\n\
          \x20                       extents, {}x{}), write OUT.png and exit\n\
+         \x20 --convert OUT.modeler Convert FILE to a native .modeler file and exit\n\
          \x20 -h, --help            Show this help\n\
          \x20 -V, --version         Show the version",
         modeler::banner(),
@@ -34,6 +37,7 @@ fn usage() -> String {
 struct Args {
     file: Option<PathBuf>,
     screenshot: Option<PathBuf>,
+    convert: Option<PathBuf>,
 }
 
 enum Parsed {
@@ -45,6 +49,7 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Parsed {
     let mut parsed = Args {
         file: None,
         screenshot: None,
+        convert: None,
     };
     let mut args = args.into_iter();
     while let Some(arg) = args.next() {
@@ -61,12 +66,22 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Parsed {
                 Some(out) => parsed.screenshot = Some(PathBuf::from(out)),
                 None => return usage_error("--screenshot needs an output path"),
             },
+            "--convert" => match args.next() {
+                Some(out) => parsed.convert = Some(PathBuf::from(out)),
+                None => return usage_error("--convert needs an output path"),
+            },
             _ if arg.starts_with('-') && arg.len() > 1 => {
                 return usage_error(&format!("unknown option {arg}"));
             }
             _ if parsed.file.is_some() => return usage_error("only one file can be opened"),
             _ => parsed.file = Some(PathBuf::from(arg)),
         }
+    }
+    if parsed.convert.is_some() && parsed.screenshot.is_some() {
+        return usage_error("--convert and --screenshot cannot be used together");
+    }
+    if parsed.convert.is_some() && parsed.file.is_none() {
+        return usage_error("--convert needs a FILE");
     }
     Parsed::Run(parsed)
 }
@@ -77,6 +92,11 @@ fn usage_error(message: &str) -> Parsed {
 }
 
 /// Load `file`, render it headless in the iso view framed to the model, write `out`.
+fn convert(file: &Path, out: &Path) -> Result<PathBuf, String> {
+    let mut document = Document::open(file)?;
+    document.save_as(out)
+}
+
 fn screenshot(file: &Path, out: &Path) -> Result<(), String> {
     let document = Document::open(file)?;
     let (width, height) = SCREENSHOT_SIZE;
@@ -107,9 +127,25 @@ fn main() -> ExitCode {
         Parsed::Run(args) => args,
         Parsed::Exit(code) => return code,
     };
+    if let Some(out) = &args.convert {
+        let Some(file) = &args.file else {
+            eprintln!("modeler: --convert needs a FILE\n\n{}", usage());
+            return ExitCode::from(2);
+        };
+        return match convert(file, out) {
+            Ok(path) => {
+                println!("wrote {}", path.display());
+                ExitCode::SUCCESS
+            }
+            Err(message) => {
+                eprintln!("modeler: {message}");
+                ExitCode::FAILURE
+            }
+        };
+    }
     if let Some(out) = &args.screenshot {
         let Some(file) = &args.file else {
-            eprintln!("modeler: --screenshot needs a FILE.dae\n\n{}", usage());
+            eprintln!("modeler: --screenshot needs a FILE\n\n{}", usage());
             return ExitCode::from(2);
         };
         return match screenshot(file, out) {

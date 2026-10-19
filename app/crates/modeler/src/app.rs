@@ -11,7 +11,7 @@ use std::sync::mpsc::{self, Receiver, TryRecvError};
 use eframe::egui;
 use egui::{Color32, Event, MouseWheelUnit, PointerButton, Pos2, Rect, Sense};
 use glam::DVec2;
-use modeler::document::{Document, Stats, format_size};
+use modeler::document::{Document, FileKind, format_size, native_path};
 use modeler::input::{self, Button, Modifiers, Tool};
 use modeler::viewstate::{Effect, ViewState, scene_bounds};
 use modeler_dae::FlatScene;
@@ -45,12 +45,6 @@ struct Gpu {
     texture: Option<egui::TextureId>,
 }
 
-/// The open model, as far as the status bar cares.
-struct OpenModel {
-    path: PathBuf,
-    stats: Stats,
-}
-
 struct Loading {
     path: PathBuf,
     result: Receiver<Result<Document, String>>,
@@ -60,11 +54,14 @@ pub struct App {
     view: ViewState,
     style: Style,
     gpu: Option<Gpu>,
-    model: Option<OpenModel>,
+    model: Option<Document>,
     loading: Option<Loading>,
     error: Option<String>,
+    /// "Saved <file name>" until the next open or save.
+    saved: Option<String>,
     warnings: Vec<String>,
     dialog: Option<OpenDialog>,
+    save_dialog: Option<SaveDialog>,
     /// Viewport size in points, for camera input.
     viewport_pt: (f64, f64),
     drag_start_ndc: DVec2,
@@ -92,8 +89,10 @@ impl App {
             model: None,
             loading: None,
             error: None,
+            saved: None,
             warnings: Vec::new(),
             dialog: None,
+            save_dialog: None,
             viewport_pt: (1.0, 1.0),
             drag_start_ndc: DVec2::ZERO,
             dirty: true,
@@ -119,6 +118,7 @@ impl App {
             ctx.request_repaint();
         });
         self.error = None;
+        self.saved = None;
         self.loading = Some(Loading {
             path,
             result: receiver,
@@ -153,10 +153,7 @@ impl App {
         self.view
             .set_bounds(scene_bounds(&document.scene), self.viewport_pt);
         ctx.send_viewport_cmd(egui::ViewportCommand::Title(document.title()));
-        self.model = Some(OpenModel {
-            path: document.path,
-            stats: document.stats,
-        });
+        self.model = Some(document);
         self.dirty = true;
     }
 
@@ -171,11 +168,50 @@ impl App {
         self.dialog = Some(OpenDialog::new(dir));
     }
 
+    fn open_save_dialog(&mut self) {
+        let Some(document) = &self.model else {
+            return;
+        };
+        let dir = document
+            .path
+            .parent()
+            .map(Path::to_path_buf)
+            .filter(|dir| dir.is_dir())
+            .or_else(|| std::env::current_dir().ok())
+            .unwrap_or_else(|| PathBuf::from("."));
+        let name = native_path(&document.path)
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "model.modeler".to_owned());
+        self.save_dialog = Some(SaveDialog::new(dir, name));
+    }
+
+    fn save(&mut self) {
+        if self.loading.is_some() {
+            return;
+        }
+        let Some(document) = &self.model else {
+            return;
+        };
+        self.error = None;
+        self.saved = None;
+        if document.kind == FileKind::Dae {
+            self.open_save_dialog();
+            return;
+        }
+        let document = self.model.as_mut().expect("checked above");
+        match document.save() {
+            Ok(path) => self.saved = Some(file_name(&path)),
+            Err(message) => self.error = Some(message),
+        }
+    }
+
     fn apply(&mut self, action: input::Action) {
         match self.view.apply(action, self.viewport_pt) {
             Effect::None => self.dirty = true,
             Effect::OpenDialog => self.open_dialog(),
-            Effect::Save | Effect::SaveAsDialog => unimplemented!(),
+            Effect::Save => self.save(),
+            Effect::SaveAsDialog => self.open_save_dialog(),
         }
     }
 
@@ -332,6 +368,18 @@ impl App {
                     stats.materials,
                     format_size(stats.size_m)
                 ));
+                if model.kernel.is_some() {
+                    ui.separator();
+                    ui.label(format!("{} faces, {} edges", stats.faces, stats.edges));
+                }
+                if let Some(error) = &model.kernel_error {
+                    ui.separator();
+                    ui.colored_label(ERROR_COLOR, error);
+                }
+            }
+            if let Some(saved) = &self.saved {
+                ui.separator();
+                ui.label(format!("Saved {saved}"));
             }
             if !self.warnings.is_empty() {
                 ui.separator();
@@ -367,14 +415,15 @@ impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         self.poll_loading(&ctx, frame);
-        if self.dialog.is_none() {
+        let dialog_open = self.dialog.is_some() || self.save_dialog.is_some();
+        if !dialog_open {
             self.global_input(&ctx);
         }
         egui::Panel::bottom("status").show(ui, |ui| self.status_bar(ui));
         egui::CentralPanel::no_frame().show(ui, |ui| {
             let (rect, response) = ui.allocate_exact_size(ui.available_size(), Sense::drag());
             self.viewport_pt = (f64::from(rect.width()), f64::from(rect.height()));
-            if self.dialog.is_none() {
+            if !dialog_open {
                 self.viewport_input(ui, rect, &response);
             }
             self.paint_viewport(ui, frame, rect);
@@ -387,6 +436,26 @@ impl eframe::App for App {
                 }
                 DialogOutcome::Cancel => self.dialog = None,
                 DialogOutcome::Pending => {}
+            }
+        }
+        if let Some(dialog) = &mut self.save_dialog {
+            match dialog.show(&ctx) {
+                SaveOutcome::Save(path) => {
+                    self.save_dialog = None;
+                    let Some(document) = self.model.as_mut() else {
+                        return;
+                    };
+                    match document.save_as(&path) {
+                        Ok(written) => {
+                            self.error = None;
+                            self.saved = Some(file_name(&written));
+                            ctx.send_viewport_cmd(egui::ViewportCommand::Title(document.title()));
+                        }
+                        Err(message) => self.error = Some(message),
+                    }
+                }
+                SaveOutcome::Cancel => self.save_dialog = None,
+                SaveOutcome::Pending => {}
             }
         }
     }
@@ -444,10 +513,10 @@ impl OpenDialog {
                     let path = entry.path();
                     let name = entry.file_name().to_string_lossy().into_owned();
                     let is_dir = path.is_dir();
-                    let is_dae = path
-                        .extension()
-                        .is_some_and(|ext| ext.eq_ignore_ascii_case("dae"));
-                    if (is_dir && !name.starts_with('.')) || (!is_dir && is_dae) {
+                    let is_model = path.extension().is_some_and(|ext| {
+                        ext.eq_ignore_ascii_case("dae") || ext.eq_ignore_ascii_case("modeler")
+                    });
+                    if (is_dir && !name.starts_with('.')) || (!is_dir && is_model) {
                         self.entries.push((name, path, is_dir));
                     }
                 }
@@ -498,7 +567,7 @@ impl OpenDialog {
             let typed = ui.add(
                 egui::TextEdit::singleline(&mut self.path_text)
                     .desired_width(f32::INFINITY)
-                    .hint_text("Path to a .dae file or folder"),
+                    .hint_text("Path to a .dae or .modeler file, or a folder"),
             );
             let submitted = typed.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
             if let Some(error) = &self.error {
@@ -525,6 +594,149 @@ impl OpenDialog {
         }
         if matches!(outcome, DialogOutcome::Pending) && response.should_close() {
             outcome = DialogOutcome::Cancel;
+        }
+        outcome
+    }
+}
+
+enum SaveOutcome {
+    Pending,
+    Save(PathBuf),
+    Cancel,
+}
+
+/// A minimal save-file dialog in plain egui: browse folders, list `.modeler` files,
+/// and choose a file name.
+struct SaveDialog {
+    dir: PathBuf,
+    /// Subfolders and `.modeler` files of `dir`, folders first, each sorted by name.
+    entries: Vec<(String, PathBuf, bool)>,
+    name_text: String,
+    error: Option<String>,
+    /// A target that already exists and awaits confirmation.
+    replacing: Option<PathBuf>,
+}
+
+impl SaveDialog {
+    fn new(dir: PathBuf, name: String) -> SaveDialog {
+        let mut dialog = SaveDialog {
+            dir: PathBuf::new(),
+            entries: Vec::new(),
+            name_text: name,
+            error: None,
+            replacing: None,
+        };
+        dialog.enter(dir);
+        dialog
+    }
+
+    fn enter(&mut self, dir: PathBuf) {
+        self.error = None;
+        self.replacing = None;
+        self.entries.clear();
+        match std::fs::read_dir(&dir) {
+            Ok(read_dir) => {
+                for entry in read_dir.flatten() {
+                    let path = entry.path();
+                    let name = entry.file_name().to_string_lossy().into_owned();
+                    let is_dir = path.is_dir();
+                    let is_model = path
+                        .extension()
+                        .is_some_and(|ext| ext.eq_ignore_ascii_case("modeler"));
+                    if (is_dir && !name.starts_with('.')) || (!is_dir && is_model) {
+                        self.entries.push((name, path, is_dir));
+                    }
+                }
+            }
+            Err(err) => self.error = Some(format!("{}: {err}", dir.display())),
+        }
+        self.entries.sort_by(|a, b| {
+            b.2.cmp(&a.2)
+                .then_with(|| a.0.to_lowercase().cmp(&b.0.to_lowercase()))
+        });
+        self.dir = dir;
+    }
+
+    fn target(&self) -> Option<PathBuf> {
+        let name = self.name_text.trim();
+        (!name.is_empty()).then(|| native_path(&self.dir.join(name)))
+    }
+
+    fn show(&mut self, ctx: &egui::Context) -> SaveOutcome {
+        let mut outcome = SaveOutcome::Pending;
+        let mut enter = None;
+        let response = egui::Modal::new(egui::Id::new("save-dialog")).show(ctx, |ui| {
+            ui.set_width(520.0);
+            ui.heading("Save model");
+            ui.label(self.dir.display().to_string());
+            ui.separator();
+            egui::ScrollArea::vertical()
+                .max_height(320.0)
+                .auto_shrink([false, true])
+                .show(ui, |ui| {
+                    if let Some(parent) = self.dir.parent()
+                        && ui.selectable_label(false, "../").clicked()
+                    {
+                        enter = Some(parent.to_path_buf());
+                    }
+                    for (name, path, is_dir) in &self.entries {
+                        let text = if *is_dir {
+                            format!("{name}/")
+                        } else {
+                            name.clone()
+                        };
+                        if ui.selectable_label(false, text).clicked() {
+                            if *is_dir {
+                                enter = Some(path.clone());
+                            } else {
+                                self.name_text = name.clone();
+                                self.replacing = None;
+                            }
+                        }
+                    }
+                });
+            ui.separator();
+            if let Some(target) = &self.replacing {
+                ui.label(format!("Replace {}?", file_name(target)));
+                ui.horizontal(|ui| {
+                    if ui.button("Replace").clicked() {
+                        outcome = SaveOutcome::Save(target.clone());
+                    }
+                    if ui.button("Cancel").clicked() {
+                        outcome = SaveOutcome::Cancel;
+                    }
+                });
+            } else {
+                let name = ui.add(
+                    egui::TextEdit::singleline(&mut self.name_text)
+                        .desired_width(f32::INFINITY)
+                        .hint_text("File name"),
+                );
+                let submitted = name.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+                if let Some(error) = &self.error {
+                    ui.colored_label(ERROR_COLOR, error);
+                }
+                ui.horizontal(|ui| {
+                    if (ui.button("Save").clicked() || submitted)
+                        && let Some(target) = self.target()
+                    {
+                        if target.exists() {
+                            self.replacing = Some(target);
+                        } else {
+                            outcome = SaveOutcome::Save(target);
+                        }
+                    }
+                    if ui.button("Cancel").clicked() {
+                        outcome = SaveOutcome::Cancel;
+                    }
+                });
+            }
+        });
+        if let Some(dir) = enter {
+            self.enter(dir);
+        }
+        if matches!(outcome, SaveOutcome::Pending) && response.should_close() {
+            outcome = SaveOutcome::Cancel;
         }
         outcome
     }
