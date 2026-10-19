@@ -36,14 +36,27 @@ pub struct Modifiers {
 /// What an input does to the view.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Action {
-    Orbit { dx: f64, dy: f64 },
-    Pan { dx: f64, dy: f64 },
-    Zoom { steps: f64, cursor_ndc: DVec2 },
+    Orbit {
+        dx: f64,
+        dy: f64,
+    },
+    Pan {
+        dx: f64,
+        dy: f64,
+    },
+    Zoom {
+        steps: f64,
+        cursor_ndc: DVec2,
+    },
     ZoomExtents,
     View(StandardView),
     ToggleProjection,
     SelectTool(Tool),
     Open,
+    /// Save to the open native file (a DAE document asks for a name instead).
+    Save,
+    /// Save under a new name.
+    SaveAs,
 }
 
 /// A mouse drag of `delta` pixels (screen space, y down) with `button` held.

@@ -175,6 +175,7 @@ impl App {
         match self.view.apply(action, self.viewport_pt) {
             Effect::None => self.dirty = true,
             Effect::OpenDialog => self.open_dialog(),
+            Effect::Save | Effect::SaveAsDialog => unimplemented!(),
         }
     }
 
