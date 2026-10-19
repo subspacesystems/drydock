@@ -110,7 +110,7 @@ fn run(steps: &[Step], check_cover: bool) -> Result<(), TestCaseError> {
             }
         }
         prop_assert_eq!(ctx.validate(), vec![]);
-        prop_assert_eq!(ctx.face_count(), 0);
+        prop_assert_eq!(ctx.face_overlaps(), vec![]);
         check_undo_redo(&before, &ctx, &log)?;
         // Every edge lies on something that was drawn.
         for (_, e) in ctx.edges() {
@@ -255,8 +255,16 @@ proptest! {
                 }
             }
             prop_assert_eq!(ctx.validate(), vec![]);
+            prop_assert_eq!(ctx.face_overlaps(), vec![]);
             check_undo_redo(&before, &ctx, &log)?;
-            prop_assert_eq!(ctx.face_count(), 9);
+            // Segments may close loops off the face plane (m1-sticky-faces); no new face lies
+            // in it.
+            for (f, face) in ctx.faces() {
+                if !shapes.iter().any(|(g, _, _)| *g == f) {
+                    let pts = ctx.loop_points(&face.outer);
+                    prop_assert!(pts.iter().any(|q| q.z != 0.0), "new face {:?} in the grid plane", f);
+                }
+            }
             for (f, area, corners) in &shapes {
                 let pts = ctx.loop_points(&ctx.face(*f).unwrap().outer);
                 prop_assert!((geom::area_vector(&pts) - *area).length() < 1e-12);
