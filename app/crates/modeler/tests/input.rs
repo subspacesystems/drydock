@@ -35,6 +35,17 @@ const CTRL_SHIFT: Modifiers = Modifiers {
     alt: false,
 };
 
+const CTRL_ALT: Modifiers = Modifiers {
+    shift: false,
+    ctrl: true,
+    alt: true,
+};
+const CTRL_SHIFT_ALT: Modifiers = Modifiers {
+    shift: true,
+    ctrl: true,
+    alt: true,
+};
+
 const TOOLS: [Tool; 3] = [Tool::Orbit, Tool::Pan, Tool::Zoom];
 const START: DVec2 = DVec2::new(0.25, -0.5);
 
@@ -187,6 +198,8 @@ fn key_table() {
         ("Z", SHIFT, Action::ZoomExtents),
         ("P", NONE, Action::ToggleProjection),
         ("O", CTRL, Action::Open),
+        ("S", CTRL, Action::Save),
+        ("S", CTRL_SHIFT, Action::SaveAs),
         ("F2", NONE, Action::View(StandardView::Iso)),
         ("F3", NONE, Action::View(StandardView::Top)),
         ("F4", NONE, Action::View(StandardView::Front)),
@@ -217,6 +230,12 @@ fn unlisted_keys_and_modifier_sets_do_nothing() {
         ("F1", NONE),
         ("F9", NONE),
         ("A", NONE),
+        ("S", NONE),
+        ("S", SHIFT),
+        ("S", ALT),
+        ("S", CTRL_ALT),
+        ("S", CTRL_SHIFT_ALT),
+        ("s", CTRL),
         ("Escape", NONE),
         ("", NONE),
     ] {

@@ -1,0 +1,23 @@
+modeler-model 1
+material 0 0 0 1 1 "blue" -
+definition 0 group "quad"
+definition 1 group "post"
+body root
+instance 0 0 - 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 "quad"
+instance 1 1 - 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 "post"
+body 0
+vertex 0 0 0 0
+vertex 1 2 0 0
+vertex 2 2 3 0
+vertex 3 0 3 0
+edge 0 0 1
+edge 1 1 2
+edge 2 2 3
+edge 3 3 0
+face 0 +0 +1 +2 +3
+paint 0 0 -
+body 1
+vertex 0 0 0 0
+vertex 1 0 0 4
+edge 0 0 1
+end
