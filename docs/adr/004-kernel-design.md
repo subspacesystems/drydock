@@ -55,3 +55,9 @@ Status: accepted (M1). Owner: orchestrator.
 - Materials: color is `[r, g, b, opacity]`; texture keeps the resolved path as a string. Texture coordinates are dropped for now: the plan is a per-face affine map from plane coordinates to UV, added with format v2 when kernel models are rendered.
 - Corpus findings (throwaway impl, 2026-10-19): the corpus is exported two-sided (about half the triangles are back twins), so per-material area only matches `flatten` as front plus back. Which twin is the front is "first in reading order"; for some materials (ground in 01) that puts the exporter's back side in front. Recheck by eye when kernel models are rendered. 01 also repeats a few faces in one component (dropped as duplicates). 0.19-0.33 faces per file triangle; 05-house converts in 27 s in a debug build.
 - Not repaired: crossing or T-junction edges in the source (they show up as `EdgesIntersect` in `validate`), twins triangulated differently from their front, faces with slits. Recheck with the corpus when sticky faces land.
+
+## Drawing kernel models (`m1-kernel-scene`)
+- Added after the other M1 tasks merged: nothing in the app could show a kernel model, so M1 couldn't be tried. `modeler_kernel::tess::triangulate` (ear clipping, holes joined by bridge edges, no new points, collinear runs allowed) and `modeler_dae::kernel_scene` (kernel `Model` -> the renderer's `FlatScene`). It lives in `modeler-dae` because that crate owns `FlatScene` and already depends on the kernel; move `FlatScene` to its own crate if this gets awkward.
+- Sides: the front is always drawn; a back copy (reversed, negated normal) only when the back has a material. Instance materials paint sides with no material, innermost instance first.
+- Materials draw without textures until faces carry texture coordinates (format v2).
+- Then `m1-app-native`: the app opens native files and saves (DAE through `to_kernel`), drawing with `kernel_scene`, so Tyrel can try M1.
