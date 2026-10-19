@@ -121,7 +121,6 @@ pub fn key(key: &str, mods: Modifiers) -> Option<Action> {
     let plain = !mods.shift && !mods.ctrl && !mods.alt;
     let shift = mods.shift && !mods.ctrl && !mods.alt;
     let ctrl = !mods.shift && mods.ctrl && !mods.alt;
-    let ctrl_shift = mods.shift && mods.ctrl && !mods.alt;
     match key {
         "O" if plain => Some(Action::SelectTool(Tool::Orbit)),
         "H" if plain => Some(Action::SelectTool(Tool::Pan)),
@@ -129,8 +128,6 @@ pub fn key(key: &str, mods: Modifiers) -> Option<Action> {
         "Z" if shift => Some(Action::ZoomExtents),
         "P" if plain => Some(Action::ToggleProjection),
         "O" if ctrl => Some(Action::Open),
-        "S" if ctrl => Some(Action::Save),
-        "S" if ctrl_shift => Some(Action::SaveAs),
         "F2" if plain => Some(Action::View(StandardView::Iso)),
         "F3" if plain => Some(Action::View(StandardView::Top)),
         "F4" if plain => Some(Action::View(StandardView::Front)),

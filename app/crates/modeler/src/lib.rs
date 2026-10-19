@@ -7,8 +7,11 @@
 //! orbit, pan and zoom it. The window code lives in `app`; `input` and `document`
 //! hold the logic that tests exercise without a display.
 
+#[path = "document_impl.rs"]
 pub mod document;
+#[path = "input_impl.rs"]
 pub mod input;
+#[path = "viewstate_impl.rs"]
 pub mod viewstate;
 
 /// One-line product banner.

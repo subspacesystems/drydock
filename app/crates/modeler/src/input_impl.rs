@@ -1,0 +1,143 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Subspace Systems
+
+//! Mouse and keyboard to viewport actions. Pure functions; the window code feeds them
+//! egui input and applies the result to the camera.
+
+use glam::DVec2;
+use modeler_view::StandardView;
+
+/// Pixels of vertical drag per zoom step with the Zoom tool.
+pub const ZOOM_DRAG_PIXELS_PER_STEP: f64 = 25.0;
+
+/// The active viewport tool (left mouse button).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum Tool {
+    #[default]
+    Orbit,
+    Pan,
+    Zoom,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Button {
+    Left,
+    Middle,
+    Right,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub struct Modifiers {
+    pub shift: bool,
+    pub ctrl: bool,
+    pub alt: bool,
+}
+
+/// What an input does to the view.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Action {
+    Orbit {
+        dx: f64,
+        dy: f64,
+    },
+    Pan {
+        dx: f64,
+        dy: f64,
+    },
+    Zoom {
+        steps: f64,
+        cursor_ndc: DVec2,
+    },
+    ZoomExtents,
+    View(StandardView),
+    ToggleProjection,
+    SelectTool(Tool),
+    Open,
+    /// Save to the open native file (a DAE document asks for a name instead).
+    Save,
+    /// Save under a new name.
+    SaveAs,
+}
+
+/// A mouse drag of `delta` pixels (screen space, y down) with `button` held.
+pub fn drag(
+    tool: Tool,
+    button: Button,
+    mods: Modifiers,
+    delta: DVec2,
+    start_ndc: DVec2,
+) -> Option<Action> {
+    if delta == DVec2::ZERO {
+        return None;
+    }
+    match button {
+        Button::Middle => Some(if mods.shift {
+            Action::Pan {
+                dx: delta.x,
+                dy: delta.y,
+            }
+        } else {
+            Action::Orbit {
+                dx: delta.x,
+                dy: delta.y,
+            }
+        }),
+        Button::Left => match tool {
+            Tool::Orbit => Some(if mods.shift {
+                Action::Pan {
+                    dx: delta.x,
+                    dy: delta.y,
+                }
+            } else {
+                Action::Orbit {
+                    dx: delta.x,
+                    dy: delta.y,
+                }
+            }),
+            Tool::Pan => Some(Action::Pan {
+                dx: delta.x,
+                dy: delta.y,
+            }),
+            Tool::Zoom => Some(Action::Zoom {
+                steps: -delta.y / ZOOM_DRAG_PIXELS_PER_STEP,
+                cursor_ndc: start_ndc,
+            }),
+        },
+        Button::Right => None,
+    }
+}
+
+/// A scroll of `lines` notches (positive = away from the user) with the cursor at
+/// `cursor_ndc`.
+pub fn scroll(lines: f64, cursor_ndc: DVec2) -> Action {
+    Action::Zoom {
+        steps: lines,
+        cursor_ndc,
+    }
+}
+
+/// A key press. `key` is the egui key name (e.g. "O", "Z", "F2").
+pub fn key(key: &str, mods: Modifiers) -> Option<Action> {
+    let plain = !mods.shift && !mods.ctrl && !mods.alt;
+    let shift = mods.shift && !mods.ctrl && !mods.alt;
+    let ctrl = !mods.shift && mods.ctrl && !mods.alt;
+    let ctrl_shift = mods.shift && mods.ctrl && !mods.alt;
+    match key {
+        "O" if plain => Some(Action::SelectTool(Tool::Orbit)),
+        "H" if plain => Some(Action::SelectTool(Tool::Pan)),
+        "Z" if plain => Some(Action::SelectTool(Tool::Zoom)),
+        "Z" if shift => Some(Action::ZoomExtents),
+        "P" if plain => Some(Action::ToggleProjection),
+        "O" if ctrl => Some(Action::Open),
+        "S" if ctrl => Some(Action::Save),
+        "S" if ctrl_shift => Some(Action::SaveAs),
+        "F2" if plain => Some(Action::View(StandardView::Iso)),
+        "F3" if plain => Some(Action::View(StandardView::Top)),
+        "F4" if plain => Some(Action::View(StandardView::Front)),
+        "F5" if plain => Some(Action::View(StandardView::Right)),
+        "F6" if plain => Some(Action::View(StandardView::Back)),
+        "F7" if plain => Some(Action::View(StandardView::Left)),
+        "F8" if plain => Some(Action::View(StandardView::Bottom)),
+        _ => None,
+    }
+}

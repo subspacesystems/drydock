@@ -3,6 +3,7 @@
 
 //! modeler: the viewer window, or a headless screenshot with `--screenshot`.
 
+#[path = "app_impl.rs"]
 mod app;
 
 use std::path::{Path, PathBuf};

@@ -88,8 +88,7 @@ impl ViewState {
             }
             Action::SelectTool(tool) => self.tool = tool,
             Action::Open => return Effect::OpenDialog,
-            Action::Save => return Effect::Save,
-            Action::SaveAs => return Effect::SaveAsDialog,
+            Action::Save | Action::SaveAs => unimplemented!(),
         }
         Effect::None
     }
