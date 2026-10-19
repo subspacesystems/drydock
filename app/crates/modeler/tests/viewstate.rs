@@ -139,6 +139,19 @@ fn open_asks_for_the_dialog_and_changes_nothing() {
 }
 
 #[test]
+fn save_actions_ask_for_saving_and_change_nothing() {
+    let mut s = ViewState::new();
+    s.set_bounds(Some(bounds()), VP);
+    s.apply(Action::SelectTool(Tool::Pan), VP);
+    let before = s.camera;
+    assert_eq!(s.apply(Action::Save, VP), Effect::Save);
+    assert_eq!(s.apply(Action::SaveAs, VP), Effect::SaveAsDialog);
+    assert_eq!(s.camera, before);
+    assert_eq!(s.tool, Tool::Pan);
+    assert_eq!(s.bounds, Some(bounds()));
+}
+
+#[test]
 fn degenerate_viewport_does_not_panic_or_produce_nan() {
     let mut s = ViewState::new();
     s.set_bounds(Some(bounds()), (0.0, 0.0));
