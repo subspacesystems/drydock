@@ -33,7 +33,7 @@ Done when: `modeler` on the reference house model opens in under 5 s on modeler-
 ## M1: Geometry kernel and native file (orchestrator-designed, kernel tasks)
 
 - Data model: vertices, edges, faces with outer and inner loops, groups and component definitions/instances. Edges and faces are shared ("sticky") within a context; groups/components isolate.
-- Invariants (property-tested): every face is planar within tolerance and bounded by closed edge loops; no two edges overlap; an edge crossing another splits both; coplanar edges that close a loop create a face; deleting an edge that bounds a face removes the face.
+- Invariants (property-tested): every face is planar within tolerance and bounded by closed edge loops; no two edges overlap; an edge crossing another splits both; coplanar edges that close a loop create a face; deleting the edge between two coplanar faces merges them, and deleting any other edge that bounds a face removes the face.
 - Undo/redo as reversible operations on the model.
 - Native file format: versioned, documented in `docs/format.md`, crash-safe save (write-then-rename).
 - DAE import into the kernel: merge triangulated faces back into polygons (coplanar neighbours with shared edges), keep component hierarchy and materials.
