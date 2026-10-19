@@ -1315,6 +1315,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "modeler-kernel"
+version = "0.0.1"
+dependencies = [
+ "glam",
+ "proptest",
+]
+
+[[package]]
 name = "modeler-render"
 version = "0.0.1"
 dependencies = [
