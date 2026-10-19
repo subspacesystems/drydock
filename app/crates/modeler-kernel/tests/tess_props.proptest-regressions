@@ -1,0 +1,8 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 270e5c4ab4ccfc571eb622a7845837ba51a1f2139cdbff9d029f3802b8191e85 # shrinks to c = Case { corners: [(1.0, 1.0), (1.0, 1.0), (1.0, 1.0), (1.0, 1.0), (1.0, 1.0)], extra: [0], clockwise: false, holes: [(6, 3, 0.757800035350585, 0.7136811454340259, false, 0), (7, 3, 0.3, 0.0, false, 0)], offset: (0.0, 0.0), scale: 1.0 }
+cc 7886500ed78c19073c0bec7b8ad64f53000e59ab9a78755033016dd93410ed16 # shrinks to c = Case { corners: [(1.0, 1.0), (1.0, 1.0), (1.0, 1.0), (1.0, 1.0), (1.0, 1.0)], extra: [0], clockwise: false, holes: [(0, 3, 0.6542893490680667, 0.0, false, 0), (3, 6, 0.3, 0.0, false, 0)], offset: (0.0, 0.0), scale: 1.0 }
