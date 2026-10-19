@@ -27,12 +27,7 @@ pub fn kernel_scene(model: &km::Model) -> FlatScene {
         materials.push(Material {
             id: id.0.to_string(),
             name: material.name.clone(),
-            color: [
-                material.color[0],
-                material.color[1],
-                material.color[2],
-                1.0,
-            ],
+            color: [material.color[0], material.color[1], material.color[2], 1.0],
             texture: None,
             opacity: material.color[3],
             unlit: false,
@@ -85,6 +80,13 @@ pub fn kernel_scene(model: &km::Model) -> FlatScene {
     }
 }
 
+struct FaceDraw {
+    outer: Vec<DVec3>,
+    holes: Vec<Vec<DVec3>>,
+    front: Option<usize>,
+    back: Option<usize>,
+}
+
 struct Draw<'a> {
     model: &'a km::Model,
     material_index: BTreeMap<km::MaterialId, usize>,
@@ -98,13 +100,7 @@ impl Draw<'_> {
         id.and_then(|id| self.material_index.get(&id).copied())
     }
 
-    fn walk(
-        &mut self,
-        body_id: km::BodyId,
-        world: DMat4,
-        inherited: Option<usize>,
-        depth: usize,
-    ) {
+    fn walk(&mut self, body_id: km::BodyId, world: DMat4, inherited: Option<usize>, depth: usize) {
         if depth >= MAX_DEPTH {
             return;
         }
@@ -115,22 +111,20 @@ impl Draw<'_> {
             };
             let geometry = body.geometry();
 
-            let faces: Vec<(Vec<DVec3>, Vec<Vec<DVec3>>, Option<usize>, Option<usize>)> = geometry
+            let faces: Vec<FaceDraw> = geometry
                 .faces()
                 .map(|(id, face)| {
                     let materials = body.face_materials(id);
-                    let outer = geometry.loop_points(&face.outer);
-                    let holes: Vec<Vec<DVec3>> = face
-                        .inner
-                        .iter()
-                        .map(|hole| geometry.loop_points(hole))
-                        .collect();
-                    (
-                        outer,
-                        holes,
-                        self.material(materials.front).or(inherited),
-                        self.material(materials.back).or(inherited),
-                    )
+                    FaceDraw {
+                        outer: geometry.loop_points(&face.outer),
+                        holes: face
+                            .inner
+                            .iter()
+                            .map(|hole| geometry.loop_points(hole))
+                            .collect(),
+                        front: self.material(materials.front).or(inherited),
+                        back: self.material(materials.back).or(inherited),
+                    }
                 })
                 .collect();
 
@@ -158,15 +152,15 @@ impl Draw<'_> {
             (faces, edges, instances)
         };
 
-        for (outer, holes, front, back) in faces {
+        for face in faces {
             draw_face(
                 &mut self.batches,
                 &mut self.default_batch,
                 world,
-                &outer,
-                &holes,
-                front,
-                back,
+                &face.outer,
+                &face.holes,
+                face.front,
+                face.back,
             );
         }
 
@@ -234,10 +228,7 @@ fn draw_face(
     }
 
     let outer_2d = to_plane_2d(outer, normal);
-    let holes_2d: Vec<Vec<DVec2>> = holes
-        .iter()
-        .map(|hole| to_plane_2d(hole, normal))
-        .collect();
+    let holes_2d: Vec<Vec<DVec2>> = holes.iter().map(|hole| to_plane_2d(hole, normal)).collect();
     let triangles = triangulate(&outer_2d, &holes_2d);
     if triangles.is_empty() {
         return;
@@ -271,10 +262,8 @@ fn draw_face(
     );
 
     if let Some(back) = back {
-        let back_triangles: Vec<[usize; 3]> = front_triangles
-            .iter()
-            .map(|&[a, b, c]| [a, c, b])
-            .collect();
+        let back_triangles: Vec<[usize; 3]> =
+            front_triangles.iter().map(|&[a, b, c]| [a, c, b]).collect();
         append(
             batch(batches, default_batch, Some(back)),
             &positions,

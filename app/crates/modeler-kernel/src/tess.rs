@@ -7,7 +7,9 @@
 
 use glam::{DVec2, DVec3};
 
-use crate::geom::{point_in_polygon_2d, segment_intersection, signed_area_2d, Containment, SegmentHit};
+use crate::geom::{
+    Containment, SegmentHit, point_in_polygon_2d, segment_intersection, signed_area_2d,
+};
 
 /// Triangles covering the polygon `outer` minus the `holes`. A triangle is three indices
 /// into the points listed in order: `outer`, then each hole in turn. Every triangle runs
@@ -19,9 +21,8 @@ pub fn triangulate(outer: &[DVec2], holes: &[Vec<DVec2>]) -> Vec<[usize; 3]> {
 
     // Points are numbered outer first, then every hole in order (short holes included,
     // even though they take no part in the triangulation).
-    let mut points: Vec<DVec2> = Vec::with_capacity(
-        outer.len() + holes.iter().map(Vec::len).sum::<usize>(),
-    );
+    let mut points: Vec<DVec2> =
+        Vec::with_capacity(outer.len() + holes.iter().map(Vec::len).sum::<usize>());
     points.extend_from_slice(outer);
     let mut hole_ranges = Vec::new();
     for hole in holes {
@@ -118,8 +119,7 @@ fn find_bridge(
     holes: &[Vec<DVec2>],
     length_eps: f64,
 ) -> Option<(usize, usize)> {
-    let mut candidates: Vec<(f64, usize, usize)> =
-        Vec::with_capacity(polygon.len() * hole.len());
+    let mut candidates: Vec<(f64, usize, usize)> = Vec::with_capacity(polygon.len() * hole.len());
     for (position, &anchor) in polygon.iter().enumerate() {
         if virtual_vertex[position] {
             continue;
@@ -136,13 +136,16 @@ fn find_bridge(
     });
 
     for (_, position, start) in candidates {
-        if bridge_is_visible(polygon, hole, position, start, points, outer, holes, length_eps) {
+        if bridge_is_visible(
+            polygon, hole, position, start, points, outer, holes, length_eps,
+        ) {
             return Some((position, start));
         }
     }
     None
 }
 
+#[allow(clippy::too_many_arguments)]
 fn bridge_is_visible(
     polygon: &[usize],
     hole: &[usize],
@@ -263,15 +266,7 @@ fn ear_clip(polygon: Vec<usize>, points: &[DVec2], area_eps: f64) -> Vec<[usize;
             && p != current
             && q != current
             && let Some(triangle) = ear_at(
-                p,
-                current,
-                q,
-                &active,
-                &polygon,
-                points,
-                area_eps,
-                &previous,
-                &next,
+                p, current, q, &active, &polygon, points, area_eps, &previous, &next,
             )
         {
             triangles.push(triangle);
@@ -304,11 +299,7 @@ fn ear_clip(polygon: Vec<usize>, points: &[DVec2], area_eps: f64) -> Vec<[usize;
                 break;
             };
             let cross = orientation(points[a], points[b], points[c]);
-            triangles.push(if cross >= 0.0 {
-                [a, b, c]
-            } else {
-                [a, c, b]
-            });
+            triangles.push(if cross >= 0.0 { [a, b, c] } else { [a, c, b] });
             next[p] = q;
             previous[q] = p;
             active[i] = false;
@@ -330,16 +321,13 @@ fn ear_clip(polygon: Vec<usize>, points: &[DVec2], area_eps: f64) -> Vec<[usize;
     if ring.len() == 3 {
         let (a, b, c) = (ring[0], ring[1], ring[2]);
         let cross = orientation(points[a], points[b], points[c]);
-        triangles.push(if cross >= 0.0 {
-            [a, b, c]
-        } else {
-            [a, c, b]
-        });
+        triangles.push(if cross >= 0.0 { [a, b, c] } else { [a, c, b] });
     }
 
     triangles
 }
 
+#[allow(clippy::too_many_arguments)]
 fn ear_at(
     p: usize,
     current: usize,
@@ -384,11 +372,7 @@ fn ear_at(
         }
     }
 
-    Some(if cross >= 0.0 {
-        [a, b, c]
-    } else {
-        [a, c, b]
-    })
+    Some(if cross >= 0.0 { [a, b, c] } else { [a, c, b] })
 }
 
 #[allow(clippy::too_many_arguments)]
