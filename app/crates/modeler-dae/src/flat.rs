@@ -274,7 +274,7 @@ fn dvec(value: [f32; 3]) -> DVec3 {
     DVec3::new(value[0] as f64, value[1] as f64, value[2] as f64)
 }
 
-fn frame_matrix(up: UpAxis) -> DMat4 {
+pub(crate) fn frame_matrix(up: UpAxis) -> DMat4 {
     match up {
         UpAxis::Z => DMat4::IDENTITY,
         UpAxis::Y => DMat4::from_cols_array(&[
