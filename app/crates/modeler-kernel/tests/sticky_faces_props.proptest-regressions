@@ -1,0 +1,9 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc cd530ff0a9683cc3afb5167e75ce920b30e6d8c3cbb216b27a9f116ec1c01b5a # shrinks to nx = 2, ny = 1, picks = [false, false, false, false, false, false, false, false, false]
+cc a0387e2d30fee0aa7590fa5900da3b5aabe8621239974b943d25c16b397b2cde # shrinks to steps = [Segment { x: 0, y: 0, along_x: false, len: 1 }]
+cc 5bf7b882b0feadcafff08a98232ffd757d25cce3ef4b9b3cdeccd79b9e611d65 # shrinks to (nx, ny, edges, flips) = (1, 1, [((0, 0), (1, 0)), ((0, 1), (1, 1)), ((0, 0), (0, 1)), ((1, 0), (1, 1))], [false, false, false, false])
