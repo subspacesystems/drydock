@@ -20,7 +20,7 @@ Status: accepted (M1). Owner: orchestrator.
 3. Each loop is a closed simple cycle; each face is planar within tolerance; inner loops lie strictly inside the outer loop and don't touch each other.
 4. An edge may border any number of faces (non-manifold models from DAE import are legal); the kernel stores the face uses and never assumes two.
 5. Edge to face and face to edge back references agree.
-6. Once `m1-sticky-faces` lands: no two coplanar faces overlap in area (they may share edges and vertices only). Add this to `validate()` there, so the property tests catch a face built over existing ones.
+6. No two coplanar faces overlap in area (they may share edges and vertices only). Checked by `Context::face_overlaps()`, not `validate()`: imported models can hold overlapping decals, so this is an invariant of sticky editing, asserted by the sticky property tests.
 
 ## Operations (each returns an `Edit` that can be applied in reverse)
 - `add_edge(a, b)`: add vertices as needed; split existing edges the new edge crosses or touches (and split the new edge at existing vertices); then create faces for the new minimal closed coplanar regions, and split an existing face when the new edge cuts across it (see Face finding).
@@ -31,7 +31,7 @@ Status: accepted (M1). Owner: orchestrator.
 ## Native file (`format.rs`)
 - Versioned line-based UTF-8 text, defined in `docs/format.md`. Ids and numbers round-trip exactly (shortest `Display` floats); the reader rebuilds the model through `Model::apply`, so references are checked by the same code as undo. Save writes `<name>.tmp`, syncs it and renames it over the target.
 
-## Face finding (`m1-sticky-faces`, design draft)
+## Face finding (`m1-sticky-faces`, spec `docs/specs/m1-sticky-faces.md`)
 - Work per affected plane `P`. Planes come from each edge the operation inserted: the plane of every existing face containing it, and the plane it spans with each non-collinear edge at either end. Planes are deduplicated with `LINEAR_TOL`.
 - In `P`: take every edge whose ends lie within tolerance of `P` and drop bridges (edges on no cycle: dangling spurs, links between loops). These edges just lie on faces. Project to 2D with `plane_basis` and trace the boundary walks of the planar arrangement (turn to the next edge clockwise at each vertex). Walks with positive area are region outlines. Negative walks are outer contours of connected components; each one becomes a hole of the smallest outline (from another component) that contains it.
 - A region can become a face only if its outline and holes are simple. A region touching itself at a vertex can't, and a face that would have to be split into one is left alone.
@@ -39,6 +39,8 @@ Status: accepted (M1). Owner: orchestrator.
 - `add_edge`: a region with a new edge on its outline or holes, inside no old face, becomes a new face. An old face with a new-edge region inside it is replaced by all the regions inside it, keeping its orientation, provided every one of them can be a face.
 - Orientation of a new face: opposite use of a shared edge with an existing face (lowest id), so solids come out consistently oriented. With no shared face, the front faces +Z, then +Y, then +X: the first of `n.z`, `n.y`, `n.x` that isn't ~0 is positive. Horizontal faces therefore face up. This is easy to change if Tyrel wants ground faces to face down.
 - Sticky reports where each new face came from (`(new, Option<old>)`), so the model layer copies face materials to split pieces.
+- An old face whose only inside region has exactly its edges is left alone (no new id), so redrawing an edge or a spur changes nothing. Redrawing an edge of a loop that has no face restores the face (chain edges count whether inserted or reused). The merged face on erase keeps the lower id. New loops start at their lowest-id edge, so results are deterministic.
+- Existing faces are never flipped: a box comes out consistent when drawn outward from one face, not in every drawing order (two faces created apart may disagree when a third joins them).
 - `erase_edge` on an edge shared by exactly two coplanar faces with the same orientation merges them: after the erase, the region of `P` containing the edge's midpoint becomes one face, oriented like the lower-id face. Otherwise the behaviour stays as in `m1-sticky-edges`: faces whose outer loop uses the edge go, and holes it borders close.
 - Known limit: regions whose outline touches itself (for example a triangle inside a face that touches the face's edge at one vertex) get no face.
 
