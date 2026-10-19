@@ -22,6 +22,10 @@ pub enum Effect {
     None,
     /// Show the open-file dialog.
     OpenDialog,
+    /// Save the document (`docs/specs/m1-app-native.md`).
+    Save,
+    /// Show the save dialog.
+    SaveAsDialog,
 }
 
 /// The scene's bounding box in `modeler_view` terms (`None` for an empty scene).
@@ -84,6 +88,7 @@ impl ViewState {
             }
             Action::SelectTool(tool) => self.tool = tool,
             Action::Open => return Effect::OpenDialog,
+            Action::Save | Action::SaveAs => unimplemented!(),
         }
         Effect::None
     }
