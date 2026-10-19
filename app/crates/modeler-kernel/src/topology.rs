@@ -423,7 +423,7 @@ impl Context {
     /// edges and vertices. Not part of `validate`: imported models can hold overlapping
     /// decals. Behaviour: `docs/specs/m1-sticky-faces.md`.
     pub fn face_overlaps(&self) -> Vec<(FaceId, FaceId)> {
-        unimplemented!("m1-sticky-faces")
+        crate::faces::face_overlaps(self)
     }
 
     /// The face check `validate` would report for this face (open or repeated loop, not
