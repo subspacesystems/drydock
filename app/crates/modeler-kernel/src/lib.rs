@@ -3,6 +3,7 @@
 
 //! Geometry kernel. World space is meters, Z up, right-handed.
 //!
-//! Behaviour: `docs/specs/m1-geom.md`.
+//! Behaviour: `docs/specs/m1-geom.md`, `docs/specs/m1-topology.md`.
 
 pub mod geom;
+pub mod topology;

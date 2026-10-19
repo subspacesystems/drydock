@@ -4,7 +4,7 @@ Status: accepted (M1). Owner: orchestrator.
 
 ## Model
 - Crate `modeler-kernel`. A `Context` (the root model, or the inside of one group/component definition) owns arenas of vertices, edges and faces, addressed by generational ids (`VertexId`, `EdgeId`, `FaceId`). Ids are never reused within a session, so undo records stay valid.
-- Vertex: a point. Edge: two distinct vertices, no direction. Face: one outer loop and zero or more inner loops, each a closed cycle of oriented edge uses, plus the plane. A face's front side follows the loop's counter-clockwise order seen from the front; material per side lives on the face.
+- Vertex: a point. Edge: two distinct vertices, no direction. Face: one outer loop and zero or more inner loops, each a closed cycle of oriented edge uses. The plane is derived from the outer loop, not stored. Inner loops run clockwise seen from the front. A vertex no edge uses is invalid (operations remove orphans). A face's front side follows the loop's counter-clockwise order seen from the front; material per side lives on the face.
 - Groups and component instances are separate contexts with a transform. Geometry in different contexts never merges ("sticky" only within one context).
 - All lengths are meters (f64). `geom::LINEAR_TOL` (10 um) is the single identity tolerance.
 
