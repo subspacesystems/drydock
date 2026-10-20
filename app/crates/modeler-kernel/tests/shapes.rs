@@ -260,3 +260,13 @@ fn sweep_angle_refuses_degenerate_input() {
     assert!(sweep_angle(DVec3::ZERO, DVec3::ZERO, X, Y).is_none());
     assert!(sweep_angle(DVec3::ZERO, DVec3::new(f64::NAN, 0.0, 1.0), X, Y).is_none());
 }
+
+#[test]
+fn sweep_angle_works_for_every_axis_normal() {
+    let got = sweep_angle(DVec3::ZERO, X, Y, Z).unwrap();
+    assert!((got - std::f64::consts::FRAC_PI_2).abs() < 1e-9);
+    let got = sweep_angle(DVec3::ZERO, Y, Z, X).unwrap();
+    assert!((got - std::f64::consts::FRAC_PI_2).abs() < 1e-9);
+    let got = sweep_angle(DVec3::ZERO, -X, Y, Z).unwrap();
+    assert!((got - 3.0 * std::f64::consts::FRAC_PI_2).abs() < 1e-9);
+}

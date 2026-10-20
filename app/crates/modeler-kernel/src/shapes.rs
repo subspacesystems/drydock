@@ -107,15 +107,15 @@ pub fn sweep_angle(center: DVec3, normal: DVec3, from: DVec3, to: DVec3) -> Opti
         return None;
     }
     let n = normal / normal.length();
-    // an in-plane unit `x`: `X` unless nearly parallel to the normal, then `Y`
-    let (_, x, y) = frame(
-        n,
-        if n.dot(DVec3::X).abs() > 1e-6 {
-            DVec3::X
-        } else {
-            DVec3::Y
-        },
-    )?;
+    // any in-plane unit `x`: seed from the world axis least aligned with the normal
+    let seed = if n.x.abs() <= n.y.abs() && n.x.abs() <= n.z.abs() {
+        DVec3::X
+    } else if n.y.abs() <= n.z.abs() {
+        DVec3::Y
+    } else {
+        DVec3::Z
+    };
+    let (_, x, y) = frame(n, seed)?;
     let project = |p: DVec3| -> Option<DVec3> {
         let d = p - center;
         if !d.is_finite() {
