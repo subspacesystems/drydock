@@ -6,12 +6,14 @@
 //! Behaviour: `docs/specs/m1-geom.md`, `docs/specs/m1-topology.md`,
 //! `docs/specs/m1-sticky-edges.md`, `docs/specs/m1-model.md`,
 //! `docs/specs/m1-format.md` (file format: `docs/format.md`), `docs/specs/m1-kernel-scene.md`
-//! (triangulation), `docs/specs/m2-units.md` (typed lengths), `docs/specs/m2-shapes.md` (shape points).
+//! (triangulation), `docs/specs/m2-units.md` (typed lengths), `docs/specs/m2-shapes.md` (shape points),
+//! `docs/specs/m2-select-box.md` (box and connected selection).
 
 mod faces;
 pub mod format;
 pub mod geom;
 pub mod model;
+pub mod select;
 pub mod shapes;
 pub mod sticky;
 pub mod tess;
