@@ -104,18 +104,41 @@ impl Document {
 
     /// A new, empty native model named `untitled.modeler` (not on disk).
     pub fn new_empty() -> Document {
-        unimplemented!()
+        Document {
+            path: PathBuf::from("untitled.modeler"),
+            kind: FileKind::Native,
+            kernel: Some(km::Model::new()),
+            kernel_error: None,
+            scene: FlatScene::default(),
+            stats: Stats {
+                triangles: 0,
+                lines: 0,
+                materials: 0,
+                size_m: [0.0; 3],
+                faces: 0,
+                edges: 0,
+            },
+            untitled: true,
+            modified: false,
+        }
     }
 
     /// Rebuild `scene` and `stats` from `kernel` after an edit and set `modified`.
     /// Does nothing without a kernel model.
     pub fn refresh(&mut self) {
-        unimplemented!()
+        let Some(kernel) = &self.kernel else {
+            return;
+        };
+        self.scene = kernel_scene(kernel);
+        self.stats = stats_from_scene(&self.scene, Some(kernel));
+        self.modified = true;
     }
 
-    /// The window title: "<file name> - modeler".
+    /// The window title: "<file name> - modeler", with a `*` after the name while
+    /// the document is modified.
     pub fn title(&self) -> String {
-        format!("{} - modeler", file_name(&self.path))
+        let star = if self.modified { "*" } else { "" };
+        format!("{}{star} - modeler", file_name(&self.path))
     }
 
     /// Write the kernel model to `native_path(path)`; on success the document is that
@@ -128,11 +151,19 @@ impl Document {
         format::save(kernel, &target).map_err(|err| file_format_error(&target, err))?;
         self.path = target.clone();
         self.kind = FileKind::Native;
+        self.untitled = false;
+        self.modified = false;
         Ok(target)
     }
 
     /// Write the kernel model back to the open native file. Returns the path written.
     pub fn save(&mut self) -> Result<PathBuf, String> {
+        if self.untitled {
+            return Err(file_error(
+                &self.path,
+                "is a new model with no file; use Save As".to_owned(),
+            ));
+        }
         if self.kind == FileKind::Dae {
             return Err(file_error(
                 &self.path,
@@ -144,6 +175,8 @@ impl Document {
         };
         let path = self.path.clone();
         format::save(kernel, &path).map_err(|err| file_format_error(&path, err))?;
+        self.untitled = false;
+        self.modified = false;
         Ok(path)
     }
 }
