@@ -407,6 +407,9 @@ impl App {
                     Tool::Zoom => "Zoom",
                     Tool::Select => "Select",
                     Tool::Line => "Line",
+                    Tool::Rectangle => "Rectangle",
+                    Tool::Circle => "Circle",
+                    Tool::Arc => "Arc",
                 });
             });
         });

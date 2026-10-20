@@ -20,6 +20,10 @@ pub enum Tool {
     /// Click and box selection (`docs/specs/m2-app-editor.md`).
     Select,
     Line,
+    /// Rectangle, circle and arc tools (`docs/specs/m2-app-shapes.md`).
+    Rectangle,
+    Circle,
+    Arc,
 }
 
 /// A key for the editor (`docs/specs/m2-app-editor.md`).
@@ -122,7 +126,7 @@ pub fn drag(
                 cursor_ndc: start_ndc,
             }),
             // The editor handles left drags for these (`docs/specs/m2-app-editor.md`).
-            Tool::Select | Tool::Line => None,
+            Tool::Select | Tool::Line | Tool::Rectangle | Tool::Circle | Tool::Arc => None,
         },
         Button::Right => None,
     }

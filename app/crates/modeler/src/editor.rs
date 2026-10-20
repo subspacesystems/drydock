@@ -5,7 +5,7 @@
 //! model's root body, and keeps the selection, the undo stack and the typed text of the
 //! measurement box. No egui, no GPU: the window code feeds it pointer and key events.
 //!
-//! Behaviour: `docs/specs/m2-app-editor.md`.
+//! Behaviour: `docs/specs/m2-app-editor.md`, shape tools: `docs/specs/m2-app-shapes.md`.
 
 use glam::{DVec2, DVec3};
 use modeler_kernel::click::{self, ClickMods};
@@ -13,6 +13,7 @@ use modeler_kernel::infer::{self, Inference, Probe};
 use modeler_kernel::model::{BodyId, Model, UndoStack};
 use modeler_kernel::select::{self, BoxMode, Entity};
 use modeler_kernel::tools::line::LineTool;
+use modeler_kernel::tools::plane::DrawPlane;
 use modeler_kernel::tools::{Input, Target, ToolError};
 use modeler_kernel::units::{self, Unit};
 use modeler_view::{Camera, Projection};
@@ -33,6 +34,13 @@ fn unit_or(v: DVec3, fallback: DVec3) -> DVec3 {
     } else {
         fallback
     }
+}
+
+/// The draw plane for a shape on a plane with unit normal `n`: `u` horizontal unless the
+/// plane is, `u × v = n`; the ground gives `(X, Y)`.
+pub fn plane_for_normal(n: DVec3) -> DrawPlane {
+    let _ = n;
+    unimplemented!()
 }
 
 /// The camera and the viewport size, (width, height) in pixels.
@@ -246,6 +254,7 @@ impl Editor {
                 false
             }
             Tool::Orbit | Tool::Pan | Tool::Zoom => false,
+            Tool::Rectangle | Tool::Circle | Tool::Arc => unimplemented!(),
         }
     }
 
@@ -420,6 +429,16 @@ impl Editor {
             return Vec::new();
         }
         self.line.preview().into_iter().collect()
+    }
+
+    /// The plane the shape tool draws in (the next shape's while idle); `None` for other tools.
+    pub fn draw_plane(&self) -> Option<DrawPlane> {
+        unimplemented!()
+    }
+
+    /// The axis the shape tool's plane normal is locked to (arrow keys), if any.
+    pub fn plane_lock(&self) -> Option<usize> {
+        unimplemented!()
     }
 
     /// Why the last input was refused, for the status bar.
