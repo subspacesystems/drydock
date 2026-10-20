@@ -32,19 +32,38 @@ pub enum SelectOp {
 impl ClickMods {
     /// The operation these modifiers select.
     pub fn op(self) -> SelectOp {
-        unimplemented!("m2-select-click")
+        if self.alt {
+            SelectOp::Remove
+        } else if self.ctrl {
+            SelectOp::Toggle
+        } else if self.shift {
+            SelectOp::Add
+        } else {
+            SelectOp::Replace
+        }
     }
 }
 
 /// The selection after applying `mods` to `current` with the `picked` entities (a click's hit,
 /// or a box's result). Sorted, no duplicates. `current` may be unsorted or hold duplicates.
 pub fn apply(current: &[Entity], picked: &[Entity], mods: ClickMods) -> Vec<Entity> {
-    let _ = (current, picked, mods);
-    unimplemented!("m2-select-click")
+    use std::collections::BTreeSet;
+
+    let current: BTreeSet<Entity> = current.iter().copied().collect();
+    let picked: BTreeSet<Entity> = picked.iter().copied().collect();
+
+    match mods.op() {
+        SelectOp::Replace => picked.into_iter().collect(),
+        SelectOp::Add => current.union(&picked).copied().collect(),
+        SelectOp::Toggle => current.symmetric_difference(&picked).copied().collect(),
+        SelectOp::Remove => current.difference(&picked).copied().collect(),
+    }
 }
 
 /// `apply` for a click: `hit` is the entity under the cursor, `None` for empty space.
 pub fn apply_click(current: &[Entity], hit: Option<Entity>, mods: ClickMods) -> Vec<Entity> {
-    let _ = (current, hit, mods);
-    unimplemented!("m2-select-click")
+    match hit {
+        Some(entity) => apply(current, &[entity], mods),
+        None => apply(current, &[], mods),
+    }
 }
