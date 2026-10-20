@@ -13,7 +13,11 @@ use crate::model::{BodyId, Model, ModelError, UndoStack};
 use crate::sticky::{EdgeChain, StickyError};
 use crate::units::{ParseError, Unit};
 
+pub mod arc;
+pub mod circle;
 pub mod line;
+pub mod plane;
+pub mod rectangle;
 
 /// One event for a tool. Points are in the body's coordinates.
 #[derive(Clone, Debug, PartialEq)]
