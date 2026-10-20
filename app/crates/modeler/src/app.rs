@@ -10,17 +10,24 @@ use std::sync::mpsc::{self, Receiver, TryRecvError};
 
 use eframe::egui;
 use egui::{Color32, Event, MouseWheelUnit, PointerButton, Pos2, Rect, Sense};
-use glam::DVec2;
+use glam::{DVec2, DVec3};
 use modeler::document::{Document, FileKind, format_size, native_path};
+use modeler::editor::{Editor, Viewport as EditorViewport};
 use modeler::input::{self, Button, Modifiers, Tool};
 use modeler::viewstate::{Effect, ViewState, scene_bounds};
 use modeler_dae::FlatScene;
+use modeler_kernel::infer::Snap;
+use modeler_kernel::model::BodyId;
+use modeler_kernel::select::Entity;
+use modeler_kernel::tools::plane::DrawPlane;
 use modeler_render::{GpuScene, Renderer, Style, Viewport};
 use modeler_view::Projection;
 
 /// Scroll distance in points that counts as one wheel notch (touchpads report points).
 const POINTS_PER_SCROLL_LINE: f64 = 50.0;
 const ERROR_COLOR: Color32 = Color32::from_rgb(200, 60, 50);
+const ACCENT_COLOR: Color32 = Color32::from_rgb(230, 140, 25);
+const PREVIEW_COLOR: Color32 = Color32::from_rgb(55, 60, 70);
 
 const ROBOTO: &[u8] = include_bytes!("../assets/fonts/Roboto-Regular.ttf");
 
@@ -55,6 +62,8 @@ pub struct App {
     style: Style,
     gpu: Option<Gpu>,
     model: Option<Document>,
+    /// One editor per open document; `None` before a document exists.
+    editor: Option<Editor>,
     loading: Option<Loading>,
     error: Option<String>,
     /// "Saved <file name>" until the next open or save.
@@ -62,9 +71,16 @@ pub struct App {
     warnings: Vec<String>,
     dialog: Option<OpenDialog>,
     save_dialog: Option<SaveDialog>,
+    /// A destructive action waiting for the Save/Discard/Cancel question.
+    confirm: Option<PendingAction>,
+    /// What to do after a save that was started from the unsaved-changes question.
+    after_save: Option<PendingAction>,
+    /// Let the close request through after the question has been answered.
+    allow_close: bool,
     /// Viewport size in points, for camera input.
     viewport_pt: (f64, f64),
     drag_start_ndc: DVec2,
+    drag_start_px: Option<DVec2>,
     /// The rendered image is out of date.
     dirty: bool,
 }
@@ -87,14 +103,19 @@ impl App {
             style: Style::default(),
             gpu,
             model: None,
+            editor: None,
             loading: None,
             error: None,
             saved: None,
             warnings: Vec::new(),
             dialog: None,
             save_dialog: None,
+            confirm: None,
+            after_save: None,
+            allow_close: false,
             viewport_pt: (1.0, 1.0),
             drag_start_ndc: DVec2::ZERO,
+            drag_start_px: None,
             dirty: true,
         };
         if app.gpu.is_none() {
@@ -144,14 +165,54 @@ impl App {
     }
 
     fn show_document(&mut self, ctx: &egui::Context, frame: &eframe::Frame, document: Document) {
+        self.upload_scene(frame, &document.scene);
+        self.view
+            .set_bounds(scene_bounds(&document.scene), self.viewport_pt);
+        self.editor = Some(Editor::new());
+        if let Some(editor) = &mut self.editor {
+            editor.set_tool(self.view.tool);
+        }
+        ctx.send_viewport_cmd(egui::ViewportCommand::Title(document.title()));
+        self.model = Some(document);
+        self.dirty = true;
+    }
+
+    /// Make `scene` the scene on screen and keep its texture warnings.
+    fn upload_scene(&mut self, frame: &eframe::Frame, scene: &FlatScene) {
+        if let (Some(gpu), Some(state)) = (&mut self.gpu, frame.wgpu_render_state()) {
+            gpu.scene = gpu.renderer.upload(&state.device, &state.queue, scene);
+            self.warnings = gpu.scene.warnings.clone();
+        }
+    }
+
+    /// Rebuild the scene after an editor change and upload it.
+    fn refresh_document(&mut self, ctx: &egui::Context, frame: &eframe::Frame) {
+        let Some(document) = &mut self.model else {
+            return;
+        };
+        document.refresh();
+        let title = document.title();
         if let (Some(gpu), Some(state)) = (&mut self.gpu, frame.wgpu_render_state()) {
             gpu.scene = gpu
                 .renderer
                 .upload(&state.device, &state.queue, &document.scene);
             self.warnings = gpu.scene.warnings.clone();
         }
-        self.view
-            .set_bounds(scene_bounds(&document.scene), self.viewport_pt);
+        ctx.send_viewport_cmd(egui::ViewportCommand::Title(title));
+        self.dirty = true;
+    }
+
+    /// Replace the document with a new, empty one and a default view.
+    fn new_document(&mut self, ctx: &egui::Context, frame: &eframe::Frame) {
+        let document = Document::new_empty();
+        self.upload_scene(frame, &document.scene);
+        self.view = ViewState::new();
+        self.editor = Some(Editor::new());
+        self.loading = None;
+        self.error = None;
+        self.saved = None;
+        self.confirm = None;
+        self.after_save = None;
         ctx.send_viewport_cmd(egui::ViewportCommand::Title(document.title()));
         self.model = Some(document);
         self.dirty = true;
@@ -186,46 +247,132 @@ impl App {
         self.save_dialog = Some(SaveDialog::new(dir, name));
     }
 
-    fn save(&mut self) {
+    /// Save the open document, asking for a file name when it has none (or is a DAE).
+    fn save(&mut self, ctx: &egui::Context, frame: &eframe::Frame) {
         if self.loading.is_some() {
             return;
         }
-        let Some(document) = &mut self.model else {
+        let Some(document) = &self.model else {
             return;
         };
         self.error = None;
         self.saved = None;
-        if document.kind == FileKind::Dae {
+        if document.untitled || document.kind == FileKind::Dae {
             self.open_save_dialog();
             return;
         }
-        match document.save() {
-            Ok(path) => self.saved = Some(file_name(&path)),
-            Err(message) => self.error = Some(message),
+        let result = self.model.as_mut().map(Document::save);
+        match result {
+            Some(Ok(path)) => {
+                self.saved = Some(file_name(&path));
+                self.saved_now(ctx, frame);
+            }
+            Some(Err(message)) => {
+                self.error = Some(message);
+                self.after_save = None;
+            }
+            None => {}
         }
     }
 
-    fn apply(&mut self, action: input::Action) {
-        match self.view.apply(action, self.viewport_pt) {
+    /// A save succeeded: refresh the title and continue an interrupted open/new/close.
+    fn saved_now(&mut self, ctx: &egui::Context, frame: &eframe::Frame) {
+        if let Some(document) = &self.model {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Title(document.title()));
+        }
+        if let Some(action) = self.after_save.take() {
+            self.perform(action, ctx, frame);
+        }
+    }
+
+    /// Ask about unsaved changes first when the document is modified.
+    fn request(&mut self, action: PendingAction, ctx: &egui::Context, frame: &eframe::Frame) {
+        if self.loading.is_some() {
+            return;
+        }
+        let modified = self.model.as_ref().is_some_and(|model| model.modified);
+        if modified {
+            self.confirm = Some(action);
+        } else {
+            self.perform(action, ctx, frame);
+        }
+    }
+
+    fn perform(&mut self, action: PendingAction, ctx: &egui::Context, frame: &eframe::Frame) {
+        match action {
+            PendingAction::New => self.new_document(ctx, frame),
+            PendingAction::Open(None) => self.open_dialog(),
+            PendingAction::Open(Some(path)) => self.start_loading(ctx, path),
+            PendingAction::Close => {
+                self.allow_close = true;
+                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            }
+        }
+    }
+
+    /// Save from the unsaved-changes question, then continue what was asked for.
+    fn save_before(&mut self, ctx: &egui::Context, frame: &eframe::Frame) {
+        let Some(action) = self.confirm.take() else {
+            return;
+        };
+        self.after_save = Some(action);
+        self.save(ctx, frame);
+    }
+
+    fn edit(&mut self, key: input::EditKey, ctx: &egui::Context, frame: &eframe::Frame) {
+        let (Some(editor), Some(document)) = (&mut self.editor, &mut self.model) else {
+            return;
+        };
+        let Some(model) = document.kernel.as_mut() else {
+            return;
+        };
+        if editor.key(key, model) {
+            self.refresh_document(ctx, frame);
+        }
+    }
+
+    fn apply(&mut self, action: input::Action, ctx: &egui::Context, frame: &eframe::Frame) {
+        let selects_tool = matches!(action, input::Action::SelectTool(_));
+        let effect = self.view.apply(action, self.viewport_pt);
+        if selects_tool {
+            if let Some(editor) = &mut self.editor {
+                editor.set_tool(self.view.tool);
+            }
+            self.dirty = true;
+        }
+        match effect {
             Effect::None => self.dirty = true,
-            Effect::OpenDialog => self.open_dialog(),
-            Effect::Save => self.save(),
+            Effect::New => self.request(PendingAction::New, ctx, frame),
+            Effect::OpenDialog => self.request(PendingAction::Open(None), ctx, frame),
+            Effect::Save => self.save(ctx, frame),
             Effect::SaveAsDialog => self.open_save_dialog(),
-            Effect::Edit(_) => {}
+            Effect::Edit(key) => self.edit(key, ctx, frame),
         }
     }
 
     /// Keyboard shortcuts and dropped files (window-wide).
-    fn global_input(&mut self, ctx: &egui::Context) {
+    fn global_input(&mut self, ctx: &egui::Context, frame: &eframe::Frame) {
         let (events, dropped) = ctx.input(|i| (i.events.clone(), i.raw.dropped_files.clone()));
         if let Some(path) = dropped.into_iter().find_map(|file| {
             let path = file.path();
             (!path.as_os_str().is_empty()).then(|| path.to_path_buf())
         }) {
-            self.start_loading(ctx, path);
+            self.request(PendingAction::Open(Some(path)), ctx, frame);
+            return;
         }
         if ctx.egui_wants_keyboard_input() {
             return;
+        }
+        let mods = ctx.input(|i| to_modifiers(i.modifiers));
+        if !mods.ctrl && !mods.alt {
+            for text in events.iter().filter_map(|event| match event {
+                Event::Text(text) => Some(text.clone()),
+                _ => None,
+            }) {
+                if let Some(editor) = &mut self.editor {
+                    editor.text(&text);
+                }
+            }
         }
         for event in events {
             if let Event::Key {
@@ -237,19 +384,45 @@ impl App {
             } = event
                 && let Some(action) = input::key(key.name(), to_modifiers(modifiers))
             {
-                self.apply(action);
+                let typing = self
+                    .editor
+                    .as_ref()
+                    .is_some_and(|editor| !editor.typed().is_empty());
+                let editor_key = matches!(
+                    action,
+                    input::Action::Edit(
+                        input::EditKey::Enter
+                            | input::EditKey::Cancel
+                            | input::EditKey::Backspace
+                            | input::EditKey::Undo
+                            | input::EditKey::Redo
+                            | input::EditKey::Lock(_)
+                    )
+                );
+                if typing && !editor_key {
+                    continue;
+                }
+                self.apply(action, ctx, frame);
             }
         }
     }
 
     /// Mouse input over the viewport rectangle.
-    fn viewport_input(&mut self, ui: &egui::Ui, rect: Rect, response: &egui::Response) {
+    fn viewport_input(
+        &mut self,
+        ctx: &egui::Context,
+        frame: &eframe::Frame,
+        ui: &egui::Ui,
+        rect: Rect,
+        response: &egui::Response,
+    ) {
         let ndc = |p: Pos2| {
             DVec2::new(
                 f64::from((p.x - rect.left()) / rect.width()) * 2.0 - 1.0,
                 1.0 - f64::from((p.y - rect.top()) / rect.height()) * 2.0,
             )
         };
+        let local = |p: Pos2| DVec2::new(f64::from(p.x - rect.left()), f64::from(p.y - rect.top()));
         let (mods, press_origin, events) = ui.input(|i| {
             (
                 to_modifiers(i.modifiers),
@@ -266,6 +439,9 @@ impl App {
                 && let Some(origin) = press_origin.or(response.interact_pointer_pos())
             {
                 self.drag_start_ndc = ndc(origin);
+                if egui_button == PointerButton::Primary {
+                    self.drag_start_px = Some(local(origin));
+                }
             }
             if response.dragged_by(egui_button) {
                 let delta = response.drag_delta();
@@ -273,7 +449,7 @@ impl App {
                 if let Some(action) =
                     input::drag(self.view.tool, button, mods, delta, self.drag_start_ndc)
                 {
-                    self.apply(action);
+                    self.apply(action, ctx, frame);
                 }
             }
         }
@@ -286,11 +462,100 @@ impl App {
                         MouseWheelUnit::Page => f64::from(delta.y) * 3.0,
                     };
                     if lines != 0.0 {
-                        self.apply(input::scroll(lines, ndc(cursor)));
+                        self.apply(input::scroll(lines, ndc(cursor)), ctx, frame);
                     }
                 }
             }
         }
+        let Some(tool) = self.editor.as_ref().map(Editor::tool) else {
+            return;
+        };
+        let drawing = matches!(
+            tool,
+            Tool::Select | Tool::Line | Tool::Rectangle | Tool::Circle | Tool::Arc
+        );
+        if !drawing {
+            return;
+        }
+        let view = EditorViewport {
+            camera: self.view.camera,
+            size_px: (f64::from(rect.width()), f64::from(rect.height())),
+        };
+        let cursor = response
+            .interact_pointer_pos()
+            .or_else(|| response.hover_pos());
+        if let Some(cursor) = cursor {
+            self.editor_pointer_move(&view, local(cursor), mods);
+        }
+        if response.drag_stopped_by(PointerButton::Primary) {
+            if tool == Tool::Select {
+                if let (Some(start), Some(end)) = (
+                    self.drag_start_px.take(),
+                    response.interact_pointer_pos().map(local),
+                ) {
+                    self.editor_box_select(&view, start, end, mods);
+                }
+            } else {
+                self.drag_start_px = None;
+            }
+        }
+        let count = if response.triple_clicked_by(PointerButton::Primary) {
+            3
+        } else if response.double_clicked_by(PointerButton::Primary) {
+            2
+        } else if response.clicked_by(PointerButton::Primary) {
+            1
+        } else {
+            0
+        };
+        if count > 0
+            && let Some(cursor) = response.interact_pointer_pos()
+            && self.editor_click(&view, local(cursor), mods, count)
+        {
+            self.refresh_document(ctx, frame);
+        }
+    }
+
+    fn editor_pointer_move(&mut self, view: &EditorViewport, cursor: DVec2, mods: Modifiers) {
+        let (Some(editor), Some(document)) = (&mut self.editor, &mut self.model) else {
+            return;
+        };
+        let Some(model) = document.kernel.as_mut() else {
+            return;
+        };
+        editor.pointer_move(model, view, cursor, mods);
+    }
+
+    fn editor_click(
+        &mut self,
+        view: &EditorViewport,
+        cursor: DVec2,
+        mods: Modifiers,
+        count: u32,
+    ) -> bool {
+        let (Some(editor), Some(document)) = (&mut self.editor, &mut self.model) else {
+            return false;
+        };
+        let Some(model) = document.kernel.as_mut() else {
+            return false;
+        };
+        editor.click(model, view, cursor, mods, count)
+    }
+
+    fn editor_box_select(
+        &mut self,
+        view: &EditorViewport,
+        start: DVec2,
+        end: DVec2,
+        mods: Modifiers,
+    ) {
+        let (Some(editor), Some(document)) = (&mut self.editor, &self.model) else {
+            return;
+        };
+        let Some(model) = document.kernel.as_ref() else {
+            return;
+        };
+        editor.box_select(model, view, start, end, mods);
     }
 
     /// Make the offscreen target match the panel, re-render if needed, and paint it.
@@ -345,6 +610,171 @@ impl App {
         }
     }
 
+    /// Draw the editor's preview, hint, selection and draw plane over the rendered view.
+    fn paint_overlays(&self, ui: &egui::Ui, rect: Rect) {
+        let (Some(editor), Some(document)) = (&self.editor, &self.model) else {
+            return;
+        };
+        let view = EditorViewport {
+            camera: self.view.camera,
+            size_px: (f64::from(rect.width()), f64::from(rect.height())),
+        };
+        let project = |p: DVec3| {
+            view.project(p)
+                .map(|q| rect.min + egui::vec2(q.x as f32, q.y as f32))
+        };
+        let painter = ui.painter();
+        let plane = editor.draw_plane();
+        let preview_color = preview_color(plane);
+        for (a, b) in editor.preview() {
+            if let (Some(a), Some(b)) = (project(a), project(b)) {
+                painter.line_segment([a, b], egui::Stroke::new(1.5, preview_color));
+            }
+        }
+        if let Some(kernel) = &document.kernel
+            && let Some(body) = kernel.body(BodyId::Root)
+        {
+            let geometry = body.geometry();
+            for entity in editor.selection() {
+                match *entity {
+                    Entity::Edge(id) => {
+                        let Some(edge) = geometry.edge(id) else {
+                            continue;
+                        };
+                        let (Some(a), Some(b)) =
+                            (geometry.vertex(edge.ends[0]), geometry.vertex(edge.ends[1]))
+                        else {
+                            continue;
+                        };
+                        if let (Some(a), Some(b)) = (project(a.position), project(b.position)) {
+                            painter.line_segment([a, b], egui::Stroke::new(3.0, ACCENT_COLOR));
+                        }
+                    }
+                    Entity::Face(id) => {
+                        let Some(face) = geometry.face(id) else {
+                            continue;
+                        };
+                        let points: Vec<Pos2> = geometry
+                            .loop_points(&face.outer)
+                            .into_iter()
+                            .filter_map(project)
+                            .collect();
+                        if points.len() >= 3 {
+                            let fill = Color32::from_rgba_unmultiplied(
+                                ACCENT_COLOR.r(),
+                                ACCENT_COLOR.g(),
+                                ACCENT_COLOR.b(),
+                                55,
+                            );
+                            painter.add(egui::Shape::convex_polygon(
+                                points,
+                                fill,
+                                egui::Stroke::new(1.5, ACCENT_COLOR),
+                            ));
+                        }
+                    }
+                    Entity::Instance(_) => {}
+                }
+            }
+        }
+        if let Some(hint) = editor.hint()
+            && let Some(point) = project(hint.point)
+        {
+            let square = Rect::from_center_size(point, egui::vec2(8.0, 8.0));
+            painter.rect_filled(square, 1.0, hint_color(hint.snap));
+            painter.rect_stroke(
+                square,
+                1.0,
+                egui::Stroke::new(1.0, Color32::from_rgb(30, 30, 30)),
+                egui::StrokeKind::Outside,
+            );
+        }
+    }
+
+    /// The measurement box at the bottom right of the viewport.
+    fn measurement_box(&self, ctx: &egui::Context, rect: Rect) {
+        let Some(editor) = &self.editor else {
+            return;
+        };
+        let pos = rect.right_bottom() - egui::vec2(226.0, 74.0);
+        egui::Area::new(egui::Id::new("measurement-box"))
+            .order(egui::Order::Foreground)
+            .fixed_pos(pos)
+            .show(ctx, |ui| {
+                egui::Frame::popup(ui.style()).show(ui, |ui| {
+                    ui.set_width(210.0);
+                    match editor.measurement() {
+                        Some((label, value)) => {
+                            ui.horizontal(|ui| {
+                                ui.label(label);
+                                ui.with_layout(
+                                    egui::Layout::right_to_left(egui::Align::Center),
+                                    |ui| {
+                                        ui.monospace(&value);
+                                    },
+                                );
+                            });
+                        }
+                        None => {
+                            ui.label("");
+                        }
+                    }
+                    if !editor.typed().is_empty() {
+                        ui.separator();
+                        ui.monospace(editor.typed());
+                    }
+                });
+            });
+    }
+
+    fn toolbar(&mut self, ui: &mut egui::Ui) -> Option<input::Action> {
+        let mut chosen = None;
+        ui.vertical(|ui| {
+            ui.set_width(92.0);
+            for (tool, label) in [
+                (Tool::Select, "Select"),
+                (Tool::Line, "Line"),
+                (Tool::Rectangle, "Rectangle"),
+                (Tool::Circle, "Circle"),
+                (Tool::Arc, "Arc"),
+                (Tool::Orbit, "Orbit"),
+                (Tool::Pan, "Pan"),
+                (Tool::Zoom, "Zoom"),
+            ] {
+                if ui.selectable_label(self.view.tool == tool, label).clicked() {
+                    chosen = Some(input::Action::SelectTool(tool));
+                }
+            }
+        });
+        chosen
+    }
+
+    fn menu_bar(&mut self, ui: &mut egui::Ui) -> Option<input::Action> {
+        let mut chosen = None;
+        egui::MenuBar::new().ui(ui, |ui| {
+            ui.menu_button("File", |ui| {
+                if ui.button("New    Ctrl+N").clicked() {
+                    chosen = Some(input::Action::New);
+                    ui.close();
+                }
+                if ui.button("Open...    Ctrl+O").clicked() {
+                    chosen = Some(input::Action::Open);
+                    ui.close();
+                }
+                ui.separator();
+                if ui.button("Save    Ctrl+S").clicked() {
+                    chosen = Some(input::Action::Save);
+                    ui.close();
+                }
+                if ui.button("Save As...    Ctrl+Shift+S").clicked() {
+                    chosen = Some(input::Action::SaveAs);
+                    ui.close();
+                }
+            });
+        });
+        chosen
+    }
+
     fn status_bar(&self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             match (&self.loading, &self.model) {
@@ -360,17 +790,21 @@ impl App {
             }
             if let Some(model) = &self.model {
                 ui.separator();
-                let stats = &model.stats;
-                ui.label(format!(
-                    "{} triangles, {} lines, {} materials, {}",
-                    stats.triangles,
-                    stats.lines,
-                    stats.materials,
-                    format_size(stats.size_m)
-                ));
-                if model.kernel.is_some() {
-                    ui.separator();
-                    ui.label(format!("{} faces, {} edges", stats.faces, stats.edges));
+                if let Some(message) = self.editor.as_ref().and_then(Editor::message) {
+                    ui.colored_label(ERROR_COLOR, message);
+                } else {
+                    let stats = &model.stats;
+                    ui.label(format!(
+                        "{} triangles, {} lines, {} materials, {}",
+                        stats.triangles,
+                        stats.lines,
+                        stats.materials,
+                        format_size(stats.size_m)
+                    ));
+                    if model.kernel.is_some() {
+                        ui.separator();
+                        ui.label(format!("{} faces, {} edges", stats.faces, stats.edges));
+                    }
                 }
                 if let Some(error) = &model.kernel_error {
                     ui.separator();
@@ -419,19 +853,46 @@ impl App {
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+        if ctx.input(|input| input.viewport().close_requested()) && !self.allow_close {
+            let modified = self.model.as_ref().is_some_and(|model| model.modified);
+            if modified {
+                ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+                if self.confirm.is_none() && self.dialog.is_none() && self.save_dialog.is_none() {
+                    self.confirm = Some(PendingAction::Close);
+                }
+            } else {
+                self.allow_close = true;
+            }
+        }
         self.poll_loading(&ctx, frame);
-        let dialog_open = self.dialog.is_some() || self.save_dialog.is_some();
+
+        let mut menu_action = None;
+        egui::Panel::top("menu").show(ui, |ui| {
+            menu_action = self.menu_bar(ui);
+        });
+        let mut tool_action = None;
+        egui::Panel::left("toolbar").show(ui, |ui| {
+            tool_action = self.toolbar(ui);
+        });
+        if let Some(action) = menu_action.or(tool_action) {
+            self.apply(action, &ctx, frame);
+        }
+
+        let dialog_open =
+            self.dialog.is_some() || self.save_dialog.is_some() || self.confirm.is_some();
         if !dialog_open {
-            self.global_input(&ctx);
+            self.global_input(&ctx, frame);
         }
         egui::Panel::bottom("status").show(ui, |ui| self.status_bar(ui));
         egui::CentralPanel::no_frame().show(ui, |ui| {
             let (rect, response) = ui.allocate_exact_size(ui.available_size(), Sense::drag());
             self.viewport_pt = (f64::from(rect.width()), f64::from(rect.height()));
             if !dialog_open {
-                self.viewport_input(ui, rect, &response);
+                self.viewport_input(&ctx, frame, ui, rect, &response);
             }
             self.paint_viewport(ui, frame, rect);
+            self.paint_overlays(ui, rect);
+            self.measurement_box(&ctx, rect);
         });
         if let Some(dialog) = &mut self.dialog {
             match dialog.show(&ctx) {
@@ -454,15 +915,105 @@ impl eframe::App for App {
                         Ok(written) => {
                             self.error = None;
                             self.saved = Some(file_name(&written));
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Title(document.title()));
+                            self.saved_now(&ctx, frame);
                         }
-                        Err(message) => self.error = Some(message),
+                        Err(message) => {
+                            self.error = Some(message);
+                            self.after_save = None;
+                        }
                     }
                 }
-                SaveOutcome::Cancel => self.save_dialog = None,
+                SaveOutcome::Cancel => {
+                    self.save_dialog = None;
+                    self.after_save = None;
+                }
                 SaveOutcome::Pending => {}
             }
         }
+        if let Some(action) = self.confirm.clone() {
+            let name = self
+                .model
+                .as_ref()
+                .map(|model| file_name(&model.path))
+                .unwrap_or_else(|| "this model".to_owned());
+            match unsaved_dialog(&ctx, &name) {
+                Some(UnsavedChoice::Save) => {
+                    self.confirm = None;
+                    self.save_before(&ctx, frame);
+                }
+                Some(UnsavedChoice::Discard) => {
+                    self.confirm = None;
+                    self.perform(action, &ctx, frame);
+                }
+                Some(UnsavedChoice::Cancel) => self.confirm = None,
+                None => {}
+            }
+        }
+    }
+}
+
+/// What the user asked for that may need the document saved first.
+#[derive(Clone, Debug)]
+enum PendingAction {
+    New,
+    Open(Option<PathBuf>),
+    Close,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum UnsavedChoice {
+    Save,
+    Discard,
+    Cancel,
+}
+
+fn unsaved_dialog(ctx: &egui::Context, name: &str) -> Option<UnsavedChoice> {
+    let mut choice = None;
+    let response = egui::Modal::new(egui::Id::new("unsaved-changes")).show(ctx, |ui| {
+        ui.set_width(360.0);
+        ui.heading("Unsaved changes");
+        ui.label(format!("Save changes to {name}?"));
+        ui.add_space(8.0);
+        ui.horizontal(|ui| {
+            if ui.button("Save").clicked() {
+                choice = Some(UnsavedChoice::Save);
+            }
+            if ui.button("Discard").clicked() {
+                choice = Some(UnsavedChoice::Discard);
+            }
+            if ui.button("Cancel").clicked() {
+                choice = Some(UnsavedChoice::Cancel);
+            }
+        });
+    });
+    if choice.is_none() && response.should_close() {
+        choice = Some(UnsavedChoice::Cancel);
+    }
+    choice
+}
+
+fn hint_color(snap: Snap) -> Color32 {
+    match snap {
+        Snap::Endpoint(_) => Color32::from_rgb(40, 200, 80),
+        Snap::Midpoint(_) | Snap::Center(_) => Color32::from_rgb(60, 200, 220),
+        Snap::OnEdge(_) => Color32::from_rgb(220, 70, 60),
+        Snap::OnFace(_) => Color32::from_rgb(70, 130, 230),
+        Snap::OnAxis(_) | Snap::Ground | Snap::Along => Color32::from_rgb(160, 160, 160),
+    }
+}
+
+/// The preview is dark; a non-ground draw plane tints it to show its normal.
+fn preview_color(plane: Option<DrawPlane>) -> Color32 {
+    let Some(plane) = plane else {
+        return PREVIEW_COLOR;
+    };
+    let normal = plane.normal();
+    if normal.z.abs() > 0.9 {
+        PREVIEW_COLOR
+    } else if normal.y.abs() > normal.x.abs() {
+        Color32::from_rgb(30, 95, 75)
+    } else {
+        Color32::from_rgb(110, 45, 45)
     }
 }
 

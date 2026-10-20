@@ -20,6 +20,8 @@ pub struct ViewState {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Effect {
     None,
+    /// Start a new empty document (asking first when the open one is modified).
+    New,
     /// Show the open-file dialog.
     OpenDialog,
     /// Save the document (`docs/specs/m1-app-native.md`).
@@ -89,6 +91,7 @@ impl ViewState {
                 };
             }
             Action::SelectTool(tool) => self.tool = tool,
+            Action::New => return Effect::New,
             Action::Open => return Effect::OpenDialog,
             Action::Save => return Effect::Save,
             Action::SaveAs => return Effect::SaveAsDialog,
