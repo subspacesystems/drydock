@@ -860,4 +860,14 @@ impl UndoStack {
     pub fn redo_label(&self) -> Option<&str> {
         self.redo.last().map(|(label, _)| label.as_str())
     }
+
+    /// Number of edits that can be undone.
+    pub fn undo_count(&self) -> usize {
+        self.undo.len()
+    }
+
+    /// Number of edits that can be redone.
+    pub fn redo_count(&self) -> usize {
+        self.redo.len()
+    }
 }
