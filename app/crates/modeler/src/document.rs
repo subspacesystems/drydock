@@ -42,6 +42,10 @@ pub struct Document {
     /// What the viewport draws.
     pub scene: FlatScene,
     pub stats: Stats,
+    /// True for a new model that has no file yet (`Document::new_empty`) until it is saved.
+    pub untitled: bool,
+    /// True after `refresh` until the next successful save.
+    pub modified: bool,
 }
 
 impl Document {
@@ -62,6 +66,8 @@ impl Document {
                 kernel_error: None,
                 scene,
                 stats,
+                untitled: false,
+                modified: false,
             });
         }
 
@@ -78,6 +84,8 @@ impl Document {
                     kernel_error: Some(message),
                     stats: stats_from_scene(&scene, None),
                     scene,
+                    untitled: false,
+                    modified: false,
                 });
             }
         };
@@ -89,7 +97,20 @@ impl Document {
             kernel_error: None,
             scene,
             stats,
+            untitled: false,
+            modified: false,
         })
+    }
+
+    /// A new, empty native model named `untitled.modeler` (not on disk).
+    pub fn new_empty() -> Document {
+        unimplemented!()
+    }
+
+    /// Rebuild `scene` and `stats` from `kernel` after an edit and set `modified`.
+    /// Does nothing without a kernel model.
+    pub fn refresh(&mut self) {
+        unimplemented!()
     }
 
     /// The window title: "<file name> - modeler".
