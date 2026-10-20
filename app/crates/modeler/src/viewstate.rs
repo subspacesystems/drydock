@@ -7,7 +7,7 @@ use glam::DVec3;
 use modeler_dae::FlatScene;
 use modeler_view::{Bounds, Camera, Projection};
 
-use crate::input::{Action, Tool};
+use crate::input::{Action, EditKey, Tool};
 
 pub struct ViewState {
     pub camera: Camera,
@@ -26,6 +26,8 @@ pub enum Effect {
     Save,
     /// Show the save dialog.
     SaveAsDialog,
+    /// Pass the key to the editor.
+    Edit(EditKey),
 }
 
 /// The scene's bounding box in `modeler_view` terms (`None` for an empty scene).
@@ -90,6 +92,7 @@ impl ViewState {
             Action::Open => return Effect::OpenDialog,
             Action::Save => return Effect::Save,
             Action::SaveAs => return Effect::SaveAsDialog,
+            Action::Edit(key) => return Effect::Edit(key),
         }
         Effect::None
     }

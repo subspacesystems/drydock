@@ -9,7 +9,7 @@
 
 use glam::DVec3;
 
-use crate::model::{BodyId, Model, ModelError, UndoStack};
+use crate::model::{BodyId, FaceMaterials, Model, ModelEdit, ModelError, UndoStack};
 use crate::sticky::{EdgeChain, StickyError};
 use crate::units::{ParseError, Unit};
 
@@ -61,6 +61,58 @@ pub fn draw_segments(
     segments: &[(DVec3, DVec3)],
     label: &str,
 ) -> Result<Vec<EdgeChain>, ToolError> {
-    let _ = (target, segments, label);
-    unimplemented!()
+    if segments.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut edit = ModelEdit::new();
+    let mut chains = Vec::with_capacity(segments.len());
+    let mut failure = None;
+    let result = target
+        .model
+        .edit_geometry(target.body, &mut edit, |ctx, log| {
+            for &(a, b) in segments {
+                match ctx.add_edge(a, b, log) {
+                    Ok(chain) => chains.push(chain),
+                    Err(error) => {
+                        failure = Some(error);
+                        break;
+                    }
+                }
+            }
+        });
+    if let Err(error) = result {
+        return Err(ToolError::Model(error));
+    }
+    if let Some(error) = failure {
+        let _ = target.model.apply_edit(&edit.inverse());
+        return Err(ToolError::Geometry(error));
+    }
+
+    for chain in &chains {
+        for &(new, old) in &chain.faces {
+            let Some(old) = old else {
+                continue;
+            };
+            let Some(body) = target.model.body(target.body) else {
+                let _ = target.model.apply_edit(&edit.inverse());
+                return Err(ToolError::Model(ModelError::MissingBody(target.body)));
+            };
+            let materials = body.face_materials(old);
+            if materials == FaceMaterials::default() {
+                continue;
+            }
+            if let Err(error) =
+                target
+                    .model
+                    .set_face_materials(target.body, new, materials, &mut edit)
+            {
+                let _ = target.model.apply_edit(&edit.inverse());
+                return Err(ToolError::Model(error));
+            }
+        }
+    }
+
+    target.undo.push(label, edit);
+    Ok(chains)
 }

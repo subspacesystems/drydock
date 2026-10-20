@@ -17,6 +17,24 @@ pub enum Tool {
     Orbit,
     Pan,
     Zoom,
+    /// Click and box selection (`docs/specs/m2-app-editor.md`).
+    Select,
+    Line,
+}
+
+/// A key for the editor (`docs/specs/m2-app-editor.md`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EditKey {
+    /// Esc: drop the shape in progress and the typed text.
+    Cancel,
+    /// Send the typed text to the tool.
+    Enter,
+    /// Delete the last typed character.
+    Backspace,
+    Undo,
+    Redo,
+    /// Lock the drawing direction to an axis (0 red, 1 green, 2 blue), or release it.
+    Lock(usize),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -57,6 +75,7 @@ pub enum Action {
     Save,
     /// Save under a new name.
     SaveAs,
+    Edit(EditKey),
 }
 
 /// A mouse drag of `delta` pixels (screen space, y down) with `button` held.
@@ -102,6 +121,8 @@ pub fn drag(
                 steps: -delta.y / ZOOM_DRAG_PIXELS_PER_STEP,
                 cursor_ndc: start_ndc,
             }),
+            // The editor handles left drags for these (`docs/specs/m2-app-editor.md`).
+            Tool::Select | Tool::Line => None,
         },
         Button::Right => None,
     }

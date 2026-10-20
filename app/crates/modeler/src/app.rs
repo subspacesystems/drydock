@@ -211,6 +211,7 @@ impl App {
             Effect::OpenDialog => self.open_dialog(),
             Effect::Save => self.save(),
             Effect::SaveAsDialog => self.open_save_dialog(),
+            Effect::Edit(_) => {}
         }
     }
 
@@ -404,6 +405,8 @@ impl App {
                     Tool::Orbit => "Orbit",
                     Tool::Pan => "Pan",
                     Tool::Zoom => "Zoom",
+                    Tool::Select => "Select",
+                    Tool::Line => "Line",
                 });
             });
         });
