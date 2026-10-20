@@ -45,6 +45,16 @@ Done when: `modeler` on the reference house model opens in under 5 s on modeler-
 - Typed dimensions: parser for `5'4`, `5' 4"`, `100mm`, `4 1/2"`, `2.5m`, model units default; typed entry box during tools.
 - Select: click, Shift+click to add, Ctrl+click to modify (exact semantics confirmed with Tyrel before M2); window (left to right, fully inside) and crossing (right to left, touching) boxes; double/triple click selects connected.
 
+| Task | What | Needs |
+| --- | --- | --- |
+| `m2-units` | Typed lengths: parse and format feet/inches, fractions and metric; model units default | |
+| `m2-shapes` | Rectangle, circle and arc point generation (pure geometry) | |
+| `m2-select-box` | Window and crossing boxes; double click selects bounded, triple click connected | |
+| `m2-select-click` | Click modifiers: click replaces, Shift adds, Ctrl toggles, Alt removes | |
+| `m2-inference` | Inference: snaps to endpoints, midpoints, edges, faces and centers; axis locks; hint data (kernel, orchestrator) | |
+| `m2-tools` | Line, rectangle, circle and arc tools as state machines driving the kernel; face material copy on split | `m2-shapes`, `m2-units`, `m2-inference` |
+| `m2-app` | App wiring: toolbar, measurement box, inference hints, selection drawing, pick under cursor (slug tentative) | all of the above |
+
 ## M3: Modify
 
 - Push/Pull with typed distance; extrudes faces, creating side faces.
