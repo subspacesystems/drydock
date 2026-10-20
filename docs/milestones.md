@@ -51,9 +51,9 @@ Done when: `modeler` on the reference house model opens in under 5 s on modeler-
 | `m2-shapes` | Rectangle, circle and arc point generation (pure geometry) | |
 | `m2-select-box` | Window and crossing boxes; double click selects bounded, triple click connected | |
 | `m2-select-click` | Click modifiers: click replaces, Shift adds, Ctrl toggles, Alt removes | |
-| `m2-inference` | Inference: snaps to endpoints, midpoints, edges, faces and centers; axis locks; hint data (kernel, orchestrator) | |
+| `m2-inference` | Inference: snaps to endpoints, midpoints, edges, faces and centers; axis inference and direction lock; hint data; pick under cursor (kernel, orchestrator) | |
 | `m2-tools` | Line, rectangle, circle and arc tools as state machines driving the kernel; face material copy on split | `m2-shapes`, `m2-units`, `m2-inference` |
-| `m2-app` | App wiring: toolbar, measurement box, inference hints, selection drawing, pick under cursor (slug tentative) | all of the above |
+| `m2-app` | App wiring: toolbar, measurement box, inference hints, selection drawing, click picking via `infer::pick` (slug tentative) | all of the above |
 
 ## M3: Modify
 
