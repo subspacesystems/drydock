@@ -1304,6 +1304,7 @@ dependencies = [
  "modeler-kernel",
  "modeler-render",
  "modeler-view",
+ "proptest",
  "wgpu",
 ]
 

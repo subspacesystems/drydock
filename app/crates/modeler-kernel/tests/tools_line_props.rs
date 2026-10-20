@@ -50,7 +50,7 @@ proptest! {
     #![proptest_config(ProptestConfig::with_cases(64))]
 
     /// Every call either fails and changes nothing, or adds exactly one undo step that takes
-    /// the model back.
+    /// the model back (none when every segment is already there: an empty edit is not pushed).
     #[test]
     fn draw_segments_is_one_step_or_nothing(
         first in prop::collection::vec((grid_point(), grid_point()), 0..6),
@@ -67,6 +67,10 @@ proptest! {
             Ok(chains) => {
                 prop_assert_eq!(chains.len(), second.len());
                 prop_assert!(model.validate().is_empty());
+                if model == before {
+                    prop_assert_eq!(undo_depth(&undo, &model), depth);
+                    return Ok(());
+                }
                 prop_assert_eq!(undo_depth(&undo, &model), depth + 1);
                 prop_assert_eq!(undo.undo_label(), Some("B"));
                 let after = model.clone();
