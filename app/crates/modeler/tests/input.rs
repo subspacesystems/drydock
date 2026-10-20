@@ -5,7 +5,7 @@
 
 use glam::DVec2;
 use modeler::input::{
-    Action, Button, Modifiers, Tool, ZOOM_DRAG_PIXELS_PER_STEP, drag, key, scroll,
+    Action, Button, EditKey, Modifiers, Tool, ZOOM_DRAG_PIXELS_PER_STEP, drag, key, scroll,
 };
 use modeler_view::StandardView;
 
@@ -133,6 +133,19 @@ fn right_drag_does_nothing() {
 }
 
 #[test]
+fn editor_tools_leave_left_drags_to_the_editor() {
+    for tool in [Tool::Select, Tool::Line] {
+        for mods in [NONE, SHIFT, CTRL, ALT] {
+            assert_eq!(drag(tool, Button::Left, mods, d(5.0, 6.0), START), None);
+        }
+        assert_eq!(
+            drag(tool, Button::Middle, NONE, d(5.0, 6.0), START),
+            Some(Action::Orbit { dx: 5.0, dy: 6.0 })
+        );
+    }
+}
+
+#[test]
 fn zero_delta_does_nothing() {
     for tool in TOOLS {
         for button in [Button::Left, Button::Middle, Button::Right] {
@@ -207,6 +220,18 @@ fn key_table() {
         ("F6", NONE, Action::View(StandardView::Back)),
         ("F7", NONE, Action::View(StandardView::Left)),
         ("F8", NONE, Action::View(StandardView::Bottom)),
+        ("Space", NONE, Action::SelectTool(Tool::Select)),
+        ("L", NONE, Action::SelectTool(Tool::Line)),
+        ("Escape", NONE, Action::Edit(EditKey::Cancel)),
+        ("Enter", NONE, Action::Edit(EditKey::Enter)),
+        ("Backspace", NONE, Action::Edit(EditKey::Backspace)),
+        ("Z", CTRL, Action::Edit(EditKey::Undo)),
+        ("Y", CTRL, Action::Edit(EditKey::Redo)),
+        ("Z", CTRL_SHIFT, Action::Edit(EditKey::Redo)),
+        ("Right", NONE, Action::Edit(EditKey::Lock(0))),
+        ("Left", NONE, Action::Edit(EditKey::Lock(1))),
+        ("Up", NONE, Action::Edit(EditKey::Lock(2))),
+        ("Down", NONE, Action::Edit(EditKey::Lock(2))),
     ];
     for (name, mods, action) in table {
         assert_eq!(key(name, mods), Some(action), "{name} {mods:?}");
@@ -216,27 +241,38 @@ fn key_table() {
 #[test]
 fn unlisted_keys_and_modifier_sets_do_nothing() {
     for (name, mods) in [
+        ("l", NONE),
         ("o", NONE),
         ("z", SHIFT),
         ("O", SHIFT),
         ("O", ALT),
         ("O", CTRL_SHIFT),
         ("H", CTRL),
-        ("Z", CTRL),
-        ("Z", CTRL_SHIFT),
+        ("Z", ALT),
+        ("Y", NONE),
+        ("Y", CTRL_SHIFT),
+        ("L", SHIFT),
+        ("L", CTRL),
+        ("Space", CTRL),
+        ("Space", SHIFT),
+        ("Escape", SHIFT),
+        ("Enter", CTRL),
+        ("Backspace", ALT),
+        ("Right", SHIFT),
+        ("Left", CTRL),
+        ("Up", ALT),
         ("P", SHIFT),
         ("F2", SHIFT),
         ("F3", CTRL),
         ("F1", NONE),
         ("F9", NONE),
-        ("A", NONE),
+        ("Q", NONE),
         ("S", NONE),
         ("S", SHIFT),
         ("S", ALT),
         ("S", CTRL_ALT),
         ("S", CTRL_SHIFT_ALT),
         ("s", CTRL),
-        ("Escape", NONE),
         ("", NONE),
     ] {
         assert_eq!(key(name, mods), None, "{name:?} {mods:?}");
