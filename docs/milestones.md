@@ -54,7 +54,9 @@ Done when: `modeler` on the reference house model opens in under 5 s on modeler-
 | `m2-inference` | Inference: snaps to endpoints, midpoints, edges, faces and centers; axis inference and direction lock; hint data; pick under cursor (kernel, orchestrator) | |
 | `m2-tool-line` | Tool plumbing (`draw_segments`, one undo step, face material copy on split) and the line tool: clicks, typed lengths, chain ends on a face | `m2-units` |
 | `m2-tool-shapes` | Rectangle, circle and arc tools on `draw_segments`; typed sizes and segment counts | `m2-shapes`, `m2-tool-line` |
-| `m2-app` | App wiring: toolbar, measurement box, inference hints, selection drawing, click picking via `infer::pick` (slug tentative) | all of the above |
+| `m2-app-editor` | Editor logic for the app: select tool (click, modifiers, double/triple click, boxes) and line tool driven by inference; typed lengths, Shift and arrow-key locks, undo/redo, key map | `m2-tool-line`, `m2-inference`, `m2-select-box`, `m2-select-click` |
+| `m2-app-shapes` | Rectangle, circle and arc tools in the editor: draw plane from the face under the cursor, segment counts | `m2-app-editor`, `m2-tool-shapes` |
+| `m2-app-ui` | Window wiring: toolbar, measurement box, inference hints and previews, selection highlight, new empty model, scene refresh after edits | `m2-app-editor`, `m2-app-shapes` |
 
 ## M3: Modify
 
