@@ -42,14 +42,23 @@ fn unit_or(v: DVec3, fallback: DVec3) -> DVec3 {
 /// The draw plane for a shape on a plane with unit normal `n`: `u` horizontal unless the
 /// plane is, `u × v = n`; the ground gives `(X, Y)`.
 pub fn plane_for_normal(n: DVec3) -> DrawPlane {
-    let n = unit_or(n, DVec3::Z);
     if n.z.abs() >= 1.0 - 1e-9 {
         let u = DVec3::X;
-        DrawPlane { u, v: n.cross(u) }
+        let v = n.cross(u);
+        DrawPlane { u, v }
     } else {
         let u = unit_or(DVec3::Z.cross(n), DVec3::X);
-        DrawPlane { u, v: n.cross(u) }
+        let v = n.cross(u);
+        DrawPlane { u, v }
     }
+}
+
+fn is_shape(tool: Tool) -> bool {
+    matches!(tool, Tool::Rectangle | Tool::Circle | Tool::Arc)
+}
+
+fn is_drawing(tool: Tool) -> bool {
+    tool == Tool::Line || is_shape(tool)
 }
 
 /// The camera and the viewport size, (width, height) in pixels.
@@ -113,12 +122,12 @@ pub struct Editor {
     hint: Option<Inference>,
     arrow_lock: Option<usize>,
     shift_lock: Option<DVec3>,
+    plane_lock: Option<usize>,
     message: Option<String>,
     line: LineTool,
     rect: RectTool,
     circle: CircleTool,
     arc: ArcTool,
-    plane_lock: Option<usize>,
 }
 
 fn click_mods(mods: Modifiers) -> ClickMods {
@@ -150,12 +159,12 @@ impl Editor {
             hint: None,
             arrow_lock: None,
             shift_lock: None,
+            plane_lock: None,
             message: None,
             line: LineTool::new(),
             rect: RectTool::new(plane_for_normal(DVec3::Z)),
             circle: CircleTool::new(plane_for_normal(DVec3::Z)),
             arc: ArcTool::new(plane_for_normal(DVec3::Z)),
-            plane_lock: None,
         }
     }
 
@@ -167,8 +176,7 @@ impl Editor {
     pub fn set_tool(&mut self, tool: Tool) {
         self.tool = tool;
         self.line = LineTool::new();
-        let mut idle_model = Model::new();
-        self.idle_shape_tools(&mut idle_model);
+        self.idle_shapes();
         self.typed.clear();
         self.arrow_lock = None;
         self.shift_lock = None;
@@ -195,50 +203,39 @@ impl Editor {
         cursor: DVec2,
         mods: Modifiers,
     ) {
-        match self.tool {
-            Tool::Line => {
-                self.update_shift_lock(mods);
-                let inf = self.infer_at(model, view, cursor);
-                match inf {
-                    Some(inf) => {
-                        self.hint = Some(inf);
-                        let mut target = Target {
-                            model,
-                            body: BodyId::Root,
-                            undo: &mut self.undo,
-                            unit: self.unit,
-                        };
-                        let _ = self.line.handle(Input::Move(inf.point), &mut target);
+        if is_shape(self.tool) {
+            let (origin, dir) = view.ray(cursor);
+            match self.infer_shape_at(model, view, cursor) {
+                Some(inf) => {
+                    if self.shape_idle() {
+                        self.pick_shape_plane(model, origin, dir);
                     }
-                    None => self.hint = None,
+                    let point = self.shape_input_point(inf, origin, dir);
+                    self.hint = Some(Inference { point, ..inf });
+                    let _ = self.handle_shape(Input::Move(point), model);
                 }
+                None => self.hint = None,
             }
-            Tool::Rectangle | Tool::Circle | Tool::Arc => {
-                let (origin, dir) = view.ray(cursor);
-                if self.shape_anchor().is_none() {
-                    self.pick_shape_plane(model, origin, dir);
-                }
-                let Some(inf) = self.shape_infer_at(model, view, cursor) else {
-                    self.hint = None;
-                    return;
-                };
-                let point = self.shape_point(inf, origin, dir);
-                self.hint = Some(Inference { point, ..inf });
-                let tool = self.tool;
+            return;
+        }
+        if self.tool != Tool::Line {
+            self.hint = None;
+            return;
+        }
+        self.update_shift_lock(mods);
+        let inf = self.infer_at(model, view, cursor);
+        match inf {
+            Some(inf) => {
+                self.hint = Some(inf);
                 let mut target = Target {
                     model,
                     body: BodyId::Root,
                     undo: &mut self.undo,
                     unit: self.unit,
                 };
-                let _ = match tool {
-                    Tool::Rectangle => self.rect.handle(Input::Move(point), &mut target),
-                    Tool::Circle => self.circle.handle(Input::Move(point), &mut target),
-                    Tool::Arc => self.arc.handle(Input::Move(point), &mut target),
-                    _ => Ok(()),
-                };
+                let _ = self.line.handle(Input::Move(inf.point), &mut target);
             }
-            Tool::Orbit | Tool::Pan | Tool::Zoom | Tool::Select => self.hint = None,
+            None => self.hint = None,
         }
     }
 
@@ -299,32 +296,20 @@ impl Editor {
                 };
                 false
             }
+            Tool::Orbit | Tool::Pan | Tool::Zoom => false,
             Tool::Rectangle | Tool::Circle | Tool::Arc => {
+                let before = self.undo.undo_count();
                 let (origin, dir) = view.ray(cursor);
-                if self.shape_anchor().is_none() {
-                    self.pick_shape_plane(model, origin, dir);
-                }
-                let Some(inf) = self.shape_infer_at(model, view, cursor) else {
+                let Some(inf) = self.infer_shape_at(model, view, cursor) else {
+                    self.hint = None;
                     return false;
                 };
-                let point = self.shape_point(inf, origin, dir);
+                if self.shape_idle() {
+                    self.pick_shape_plane(model, origin, dir);
+                }
+                let point = self.shape_input_point(inf, origin, dir);
                 self.hint = Some(Inference { point, ..inf });
-                let tool = self.tool;
-                let before = self.undo.undo_count();
-                let result = {
-                    let mut target = Target {
-                        model,
-                        body: BodyId::Root,
-                        undo: &mut self.undo,
-                        unit: self.unit,
-                    };
-                    match tool {
-                        Tool::Rectangle => self.rect.handle(Input::Click(point), &mut target),
-                        Tool::Circle => self.circle.handle(Input::Click(point), &mut target),
-                        Tool::Arc => self.arc.handle(Input::Click(point), &mut target),
-                        _ => Ok(()),
-                    }
-                };
+                let result = self.handle_shape(Input::Click(point), model);
                 match result {
                     Ok(()) => self.message = None,
                     Err(error) => self.message = Some(error_message(&error).to_string()),
@@ -335,7 +320,6 @@ impl Editor {
                 }
                 changed
             }
-            Tool::Orbit | Tool::Pan | Tool::Zoom => false,
         }
     }
 
@@ -365,7 +349,7 @@ impl Editor {
 
     /// Typed characters for the measurement box. True when they were taken.
     pub fn text(&mut self, text: &str) -> bool {
-        if !self.drawing_tool() {
+        if !is_drawing(self.tool) {
             return false;
         }
         let filtered: String = text.chars().filter(|c| !c.is_control()).collect();
@@ -389,7 +373,7 @@ impl Editor {
         match key {
             EditKey::Cancel => {
                 self.line = LineTool::new();
-                self.idle_shape_tools(model);
+                self.idle_shapes();
                 self.typed.clear();
                 self.arrow_lock = None;
                 self.shift_lock = None;
@@ -402,34 +386,28 @@ impl Editor {
                     return false;
                 }
                 let text = std::mem::take(&mut self.typed);
-                let tool = self.tool;
-                if !matches!(
-                    tool,
-                    Tool::Line | Tool::Rectangle | Tool::Circle | Tool::Arc
-                ) {
+                if !is_drawing(self.tool) {
                     return false;
                 }
                 let before = self.undo.undo_count();
-                let result = {
+                let result = if self.tool == Tool::Line {
                     let mut target = Target {
                         model,
                         body: BodyId::Root,
                         undo: &mut self.undo,
                         unit: self.unit,
                     };
-                    match tool {
-                        Tool::Line => self.line.handle(Input::Typed(text), &mut target),
-                        Tool::Rectangle => self.rect.handle(Input::Typed(text), &mut target),
-                        Tool::Circle => self.circle.handle(Input::Typed(text), &mut target),
-                        Tool::Arc => self.arc.handle(Input::Typed(text), &mut target),
-                        _ => Ok(()),
-                    }
+                    self.line.handle(Input::Typed(text), &mut target)
+                } else {
+                    self.handle_shape(Input::Typed(text), model)
                 };
                 match result {
                     Ok(()) => {
                         self.message = None;
-                        self.arrow_lock = None;
-                        self.shift_lock = None;
+                        if self.tool == Tool::Line {
+                            self.arrow_lock = None;
+                            self.shift_lock = None;
+                        }
                     }
                     Err(error) => self.message = Some(error_message(&error).to_string()),
                 }
@@ -445,7 +423,7 @@ impl Editor {
             }
             EditKey::Undo => {
                 self.line = LineTool::new();
-                self.idle_shape_tools(model);
+                self.idle_shapes();
                 self.typed.clear();
                 match self.undo.undo(model) {
                     Ok(Some(_)) => {
@@ -461,7 +439,7 @@ impl Editor {
             }
             EditKey::Redo => {
                 self.line = LineTool::new();
-                self.idle_shape_tools(model);
+                self.idle_shapes();
                 self.typed.clear();
                 match self.undo.redo(model) {
                     Ok(Some(_)) => {
@@ -476,17 +454,19 @@ impl Editor {
                 }
             }
             EditKey::Lock(i) => {
-                if self.tool == Tool::Line && i < AXES.len() {
+                if is_shape(self.tool) {
+                    if self.shape_idle() && i < AXES.len() {
+                        if self.plane_lock == Some(i) {
+                            self.plane_lock = None;
+                        } else {
+                            self.plane_lock = Some(i);
+                        }
+                    }
+                } else if self.tool == Tool::Line && i < AXES.len() {
                     if self.arrow_lock == Some(i) {
                         self.arrow_lock = None;
                     } else {
                         self.arrow_lock = Some(i);
-                    }
-                } else if self.shape_tool() && i < AXES.len() && self.shape_anchor().is_none() {
-                    if self.plane_lock == Some(i) {
-                        self.plane_lock = None;
-                    } else {
-                        self.plane_lock = Some(i);
                     }
                 }
                 false
@@ -501,17 +481,18 @@ impl Editor {
 
     /// The measurement box's label and value for the shape in progress.
     pub fn measurement(&self) -> Option<(&'static str, String)> {
-        let length = |value: Option<f64>| match value {
-            Some(length) => units::format_length(length, self.unit, 2),
-            None => String::new(),
-        };
+        let length = |value: f64| units::format_length(value, self.unit, 2);
         match self.tool {
-            Tool::Line => Some(("Length", length(self.line.length()))),
+            Tool::Line => {
+                let value = match self.line.length() {
+                    Some(value) => length(value),
+                    None => String::new(),
+                };
+                Some(("Length", value))
+            }
             Tool::Rectangle => {
                 let value = match self.rect.size() {
-                    Some((w, h)) => {
-                        format!("{}, {}", length(Some(w)), length(Some(h)))
-                    }
+                    Some((w, h)) => format!("{}, {}", length(w), length(h)),
                     None => String::new(),
                 };
                 Some(("Dimensions", value))
@@ -520,15 +501,25 @@ impl Editor {
                 if self.circle.anchor().is_none() {
                     Some(("Segments", self.circle.segments().to_string()))
                 } else {
-                    Some(("Radius", length(self.circle.radius())))
+                    let value = match self.circle.radius() {
+                        Some(value) => length(value),
+                        None => String::new(),
+                    };
+                    Some(("Radius", value))
                 }
             }
             Tool::Arc => match self.arc.placed() {
                 0 => Some(("Segments", self.arc.segments().to_string())),
-                1 => Some(("Radius", length(self.arc.radius()))),
+                1 => {
+                    let value = match self.arc.radius() {
+                        Some(value) => length(value),
+                        None => String::new(),
+                    };
+                    Some(("Radius", value))
+                }
                 _ => {
                     let value = match self.arc.sweep() {
-                        Some(sweep) => format!("{:.1}°", sweep.to_degrees()),
+                        Some(value) => format!("{:.1}°", value.to_degrees()),
                         None => String::new(),
                     };
                     Some(("Angle", value))
@@ -545,7 +536,7 @@ impl Editor {
 
     /// The direction the drawing is locked to, if any.
     pub fn lock(&self) -> Option<DVec3> {
-        if self.shape_tool() {
+        if is_shape(self.tool) {
             return None;
         }
         if let Some(i) = self.arrow_lock {
@@ -558,18 +549,24 @@ impl Editor {
     pub fn preview(&self) -> Vec<(DVec3, DVec3)> {
         match self.tool {
             Tool::Line => self.line.preview().into_iter().collect(),
-            Tool::Rectangle => match self.rect.preview() {
-                Some(c) => (0..4).map(|i| (c[i], c[(i + 1) % 4])).collect(),
-                None => Vec::new(),
-            },
-            Tool::Circle => match self.circle.preview() {
-                Some(points) => loops(&points, true),
-                None => Vec::new(),
-            },
-            Tool::Arc => match self.arc.preview() {
-                Some(points) => loops(&points, false),
-                None => Vec::new(),
-            },
+            Tool::Rectangle => self
+                .rect
+                .preview()
+                .map(|c| (0..4).map(|i| (c[i], c[(i + 1) % 4])).collect())
+                .unwrap_or_default(),
+            Tool::Circle => self
+                .circle
+                .preview()
+                .map(|p| {
+                    let n = p.len();
+                    (0..n).map(|i| (p[i], p[(i + 1) % n])).collect()
+                })
+                .unwrap_or_default(),
+            Tool::Arc => self
+                .arc
+                .preview()
+                .map(|p| p.windows(2).map(|w| (w[0], w[1])).collect())
+                .unwrap_or_default(),
             Tool::Orbit | Tool::Pan | Tool::Zoom | Tool::Select => Vec::new(),
         }
     }
@@ -586,23 +583,16 @@ impl Editor {
 
     /// The axis the shape tool's plane normal is locked to (arrow keys), if any.
     pub fn plane_lock(&self) -> Option<usize> {
-        self.shape_tool().then_some(self.plane_lock).flatten()
+        if is_shape(self.tool) {
+            self.plane_lock
+        } else {
+            None
+        }
     }
 
     /// Why the last input was refused, for the status bar.
     pub fn message(&self) -> Option<&str> {
         self.message.as_deref()
-    }
-
-    fn drawing_tool(&self) -> bool {
-        matches!(
-            self.tool,
-            Tool::Line | Tool::Rectangle | Tool::Circle | Tool::Arc
-        )
-    }
-
-    fn shape_tool(&self) -> bool {
-        matches!(self.tool, Tool::Rectangle | Tool::Circle | Tool::Arc)
     }
 
     fn shape_anchor(&self) -> Option<DVec3> {
@@ -623,45 +613,11 @@ impl Editor {
         }
     }
 
-    fn idle_shape_tools(&mut self, model: &mut Model) {
-        let Editor {
-            rect,
-            circle,
-            arc,
-            undo,
-            unit,
-            ..
-        } = self;
-        let mut target = Target {
-            model,
-            body: BodyId::Root,
-            undo,
-            unit: *unit,
-        };
-        let _ = rect.handle(Input::Cancel, &mut target);
-        let _ = circle.handle(Input::Cancel, &mut target);
-        let _ = arc.handle(Input::Cancel, &mut target);
+    fn shape_idle(&self) -> bool {
+        self.shape_anchor().is_none()
     }
 
-    fn pick_shape_plane(&mut self, model: &Model, origin: DVec3, dir: DVec3) {
-        let normal = match self.plane_lock.and_then(|i| AXES.get(i).copied()) {
-            Some(axis) => axis,
-            None => {
-                let geometry = model.root().geometry();
-                match infer::ray_face(geometry, origin, dir)
-                    .and_then(|(face, _)| geometry.face_plane(face))
-                {
-                    Some(plane) => plane.normal,
-                    None => DVec3::Z,
-                }
-            }
-        };
-        let normal = if normal.dot(dir) > 0.0 {
-            -normal
-        } else {
-            normal
-        };
-        let plane = plane_for_normal(normal);
+    fn set_shape_plane(&mut self, plane: DrawPlane) {
         match self.tool {
             Tool::Rectangle => self.rect.set_plane(plane),
             Tool::Circle => self.circle.set_plane(plane),
@@ -670,30 +626,69 @@ impl Editor {
         }
     }
 
-    fn shape_point(&self, inf: Inference, origin: DVec3, dir: DVec3) -> DVec3 {
-        let Some(anchor) = self.shape_anchor() else {
-            return inf.point;
+    fn handle_shape(&mut self, input: Input, model: &mut Model) -> Result<(), ToolError> {
+        let mut target = Target {
+            model,
+            body: BodyId::Root,
+            undo: &mut self.undo,
+            unit: self.unit,
         };
-        if !matches!(inf.snap, Snap::OnFace(_) | Snap::Ground | Snap::Along) {
-            return inf.point;
+        match self.tool {
+            Tool::Rectangle => self.rect.handle(input, &mut target),
+            Tool::Circle => self.circle.handle(input, &mut target),
+            Tool::Arc => self.arc.handle(input, &mut target),
+            _ => Ok(()),
         }
-        let Some(plane) = self.shape_plane() else {
-            return inf.point;
-        };
-        let normal = plane.normal();
-        let denom = dir.dot(normal);
-        if denom.abs() <= 1e-9 {
-            return inf.point;
-        }
-        let t = (anchor - origin).dot(normal) / denom;
-        if !t.is_finite() || t <= 0.0 {
-            return inf.point;
-        }
-        let hit = origin + dir * t;
-        if hit.is_finite() { hit } else { inf.point }
     }
 
-    fn shape_infer_at(&self, model: &Model, view: &Viewport, cursor: DVec2) -> Option<Inference> {
+    fn idle_shapes(&mut self) {
+        let mut model = Model::new();
+        let mut undo = UndoStack::new();
+        let mut target = Target {
+            model: &mut model,
+            body: BodyId::Root,
+            undo: &mut undo,
+            unit: self.unit,
+        };
+        let _ = self.rect.handle(Input::Cancel, &mut target);
+        let _ = self.circle.handle(Input::Cancel, &mut target);
+        let _ = self.arc.handle(Input::Cancel, &mut target);
+    }
+
+    fn pick_shape_plane(&mut self, model: &Model, origin: DVec3, dir: DVec3) {
+        let n = match self.plane_lock.and_then(|i| AXES.get(i).copied()) {
+            Some(axis) => axis,
+            None => {
+                let ctx = model.root().geometry();
+                match infer::ray_face(ctx, origin, dir).and_then(|(face, _)| ctx.face_plane(face)) {
+                    Some(plane) => plane.normal,
+                    None => DVec3::Z,
+                }
+            }
+        };
+        let n = if n.dot(dir) > 0.0 { -n } else { n };
+        self.set_shape_plane(plane_for_normal(unit_or(n, DVec3::Z)));
+    }
+
+    fn shape_input_point(&self, inf: Inference, origin: DVec3, dir: DVec3) -> DVec3 {
+        if !self.shape_idle()
+            && matches!(inf.snap, Snap::OnFace(_) | Snap::Ground | Snap::Along)
+            && let (Some(anchor), Some(plane)) = (self.shape_anchor(), self.shape_plane())
+        {
+            let n = plane.normal();
+            let denom = dir.dot(n);
+            if denom.abs() > 1e-9 {
+                let t = (anchor - origin).dot(n) / denom;
+                let hit = origin + dir * t;
+                if t > 0.0 && hit.is_finite() {
+                    return hit;
+                }
+            }
+        }
+        inf.point
+    }
+
+    fn infer_shape_at(&self, model: &Model, view: &Viewport, cursor: DVec2) -> Option<Inference> {
         let (origin, dir) = view.ray(cursor);
         let project = |p: DVec3| view.project(p);
         let centers: [DVec3; 0] = [];
@@ -797,17 +792,6 @@ impl Editor {
         self.selection.sort();
         self.selection.dedup();
     }
-}
-
-fn loops(points: &[DVec3], closed: bool) -> Vec<(DVec3, DVec3)> {
-    if points.len() < 2 {
-        return Vec::new();
-    }
-    let mut edges: Vec<_> = points.windows(2).map(|pair| (pair[0], pair[1])).collect();
-    if closed {
-        edges.push((points[points.len() - 1], points[0]));
-    }
-    edges
 }
 
 impl Default for Editor {
