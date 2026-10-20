@@ -8,12 +8,13 @@
 //! `docs/specs/m1-format.md` (file format: `docs/format.md`), `docs/specs/m1-kernel-scene.md`
 //! (triangulation), `docs/specs/m2-units.md` (typed lengths), `docs/specs/m2-shapes.md` (shape points),
 //! `docs/specs/m2-select-box.md` (box and connected selection), `docs/specs/m2-select-click.md`
-//! (click modifiers).
+//! (click modifiers), `docs/specs/m2-inference.md` (snaps and picking).
 
 pub mod click;
 mod faces;
 pub mod format;
 pub mod geom;
+pub mod infer;
 pub mod model;
 pub mod select;
 pub mod shapes;
