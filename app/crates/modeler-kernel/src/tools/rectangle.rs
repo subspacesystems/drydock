@@ -33,6 +33,17 @@ impl RectTool {
         }
     }
 
+    pub fn plane(&self) -> DrawPlane {
+        self.plane
+    }
+
+    /// Use `plane` for the next shape. Ignored while a shape is in progress.
+    pub fn set_plane(&mut self, plane: DrawPlane) {
+        if self.start.is_none() {
+            self.plane = plane;
+        }
+    }
+
     /// The first corner while drawing. Use it as `Probe::anchor`.
     pub fn anchor(&self) -> Option<DVec3> {
         self.start

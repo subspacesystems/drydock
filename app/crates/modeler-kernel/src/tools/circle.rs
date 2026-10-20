@@ -43,6 +43,17 @@ impl CircleTool {
         }
     }
 
+    pub fn plane(&self) -> DrawPlane {
+        self.plane
+    }
+
+    /// Use `plane` for the next shape. Ignored while a shape is in progress.
+    pub fn set_plane(&mut self, plane: DrawPlane) {
+        if self.center.is_none() {
+            self.plane = plane;
+        }
+    }
+
     /// The center while drawing. Use it as `Probe::anchor`.
     pub fn anchor(&self) -> Option<DVec3> {
         self.center

@@ -42,6 +42,26 @@ impl ArcTool {
         }
     }
 
+    pub fn plane(&self) -> DrawPlane {
+        self.plane
+    }
+
+    /// Use `plane` for the next shape. Ignored while a shape is in progress.
+    pub fn set_plane(&mut self, plane: DrawPlane) {
+        if self.placed() == 0 {
+            self.plane = plane;
+        }
+    }
+
+    /// Points placed so far: 0 idle, 1 the center, 2 the center and the start point.
+    pub fn placed(&self) -> usize {
+        match self.stage {
+            Stage::Idle => 0,
+            Stage::Center(_) => 1,
+            Stage::Start { .. } => 2,
+        }
+    }
+
     /// The last point placed (the center, then the start point). Use it as `Probe::anchor`.
     pub fn anchor(&self) -> Option<DVec3> {
         match self.stage {

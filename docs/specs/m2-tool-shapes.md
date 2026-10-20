@@ -31,3 +31,7 @@ Three placed points, all in the plane: center `c`, start `s`, then the end direc
 - **Click(p)**: idle: `c = p`. Stage 1: `radial(p)` is `None`: `Ok`, nothing changes; else `s = c + radial(p)`, no cursor. Stage 2: the sweep to `p` as for `sweep()`; if there is none (point on the center, or sweep under `1e-9`): `Ok`, nothing changes; else draw the arc: the points of `shapes::arc` as consecutive edges `pts[i] → pts[i+1]`.
 - **Typed(text)** (not a segment count): idle: `Err(NotStarted)`. Stage 1: a length as for the circle's radius (same errors); `s = c + x·r` with `x` the unit cursor `radial`, else `u`; goes to stage 2 (no cursor), nothing drawn. Stage 2: a number of degrees (trim, then an optional trailing `°`), counter-clockwise positive, negative clockwise; not a number, zero, or `|deg| > 360`: `Err(Parse(Invalid))`, nothing changes. Draw the arc with sweep `deg` in radians (at 360 the last point is the first; keep that edge).
 - `Cancel` from any stage goes idle.
+
+## Added at takeover (for `m2-app-shapes`)
+- `plane()` on all three tools; `set_plane(p)` replaces the plane only while idle (ignored while a shape is in progress).
+- `ArcTool::placed()`: 0 idle, 1 center placed, 2 start placed.
