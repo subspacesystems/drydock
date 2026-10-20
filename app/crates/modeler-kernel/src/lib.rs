@@ -6,7 +6,7 @@
 //! Behaviour: `docs/specs/m1-geom.md`, `docs/specs/m1-topology.md`,
 //! `docs/specs/m1-sticky-edges.md`, `docs/specs/m1-model.md`,
 //! `docs/specs/m1-format.md` (file format: `docs/format.md`), `docs/specs/m1-kernel-scene.md`
-//! (triangulation).
+//! (triangulation), `docs/specs/m2-units.md` (typed lengths).
 
 mod faces;
 pub mod format;
@@ -15,3 +15,4 @@ pub mod model;
 pub mod sticky;
 pub mod tess;
 pub mod topology;
+pub mod units;
