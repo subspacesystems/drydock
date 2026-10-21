@@ -624,6 +624,26 @@ impl App {
                 .map(|q| rect.min + egui::vec2(q.x as f32, q.y as f32))
         };
         let painter = ui.painter();
+        if editor.tool() == Tool::Select
+            && let Some(start) = self.drag_start_px
+            && let Some(now) = ui.input(|i| i.pointer.latest_pos())
+        {
+            let a = rect.min + egui::vec2(start.x as f32, start.y as f32);
+            let band = Rect::from_two_pos(a, now);
+            // Left to right is a window box, right to left a crossing box.
+            let color = if now.x >= a.x {
+                ACCENT_COLOR
+            } else {
+                Color32::from_rgb(60, 160, 60)
+            };
+            painter.rect_filled(band, 0.0, color.gamma_multiply(0.15));
+            painter.rect_stroke(
+                band,
+                0.0,
+                egui::Stroke::new(1.0, color),
+                egui::StrokeKind::Inside,
+            );
+        }
         let plane = editor.draw_plane();
         let preview_color = preview_color(plane);
         for (a, b) in editor.preview() {
@@ -885,7 +905,8 @@ impl eframe::App for App {
         }
         egui::Panel::bottom("status").show(ui, |ui| self.status_bar(ui));
         egui::CentralPanel::no_frame().show(ui, |ui| {
-            let (rect, response) = ui.allocate_exact_size(ui.available_size(), Sense::drag());
+            let (rect, response) =
+                ui.allocate_exact_size(ui.available_size(), Sense::click_and_drag());
             self.viewport_pt = (f64::from(rect.width()), f64::from(rect.height()));
             if !dialog_open {
                 self.viewport_input(&ctx, frame, ui, rect, &response);
