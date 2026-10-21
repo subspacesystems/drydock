@@ -9,6 +9,7 @@
 
 pub mod document;
 pub mod editor;
+pub mod hints;
 pub mod input;
 pub mod viewstate;
 
