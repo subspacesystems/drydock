@@ -25,6 +25,9 @@ fn letters_pick_the_shape_tools() {
 fn shape_letters_with_modifiers_do_nothing() {
     for k in ["R", "C", "A"] {
         for m in 1..8 {
+            if k == "A" && m == 1 {
+                continue; // Shift+A is the three-point arc (`docs/specs/m2-arc-3pt-app.md`).
+            }
             assert_eq!(key(k, mods(m)), None, "{k} {:?}", mods(m));
         }
     }
