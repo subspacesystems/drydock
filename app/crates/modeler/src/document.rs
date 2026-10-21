@@ -143,15 +143,14 @@ impl Document {
     /// Record that the file on disk matches the model at undo-stack state `state`
     /// (`UndoStack::state`): sets `saved_state` and clears `modified`.
     pub fn mark_saved_at(&mut self, state: u64) {
-        let _ = state;
-        unimplemented!("m2-undo-state")
+        self.saved_state = state;
+        self.modified = false;
     }
 
     /// Set `modified` to whether `state` differs from `saved_state`. The app calls this
     /// after an undo or redo instead of `refresh` setting it blindly.
     pub fn sync_modified(&mut self, state: u64) {
-        let _ = state;
-        unimplemented!("m2-undo-state")
+        self.modified = state != self.saved_state;
     }
 
     /// The window title: "<file name> - modeler", with a `*` after the name while

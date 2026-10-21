@@ -185,12 +185,20 @@ impl App {
         }
     }
 
+    fn undo_state(&self) -> u64 {
+        self.editor
+            .as_ref()
+            .map_or(0, |editor| editor.undo_stack().state())
+    }
+
     /// Rebuild the scene after an editor change and upload it.
     fn refresh_document(&mut self, ctx: &egui::Context, frame: &eframe::Frame) {
+        let state = self.undo_state();
         let Some(document) = &mut self.model else {
             return;
         };
         document.refresh();
+        document.sync_modified(state);
         let title = document.title();
         if let (Some(gpu), Some(state)) = (&mut self.gpu, frame.wgpu_render_state()) {
             gpu.scene = gpu
@@ -264,6 +272,10 @@ impl App {
         let result = self.model.as_mut().map(Document::save);
         match result {
             Some(Ok(path)) => {
+                let state = self.undo_state();
+                if let Some(document) = &mut self.model {
+                    document.mark_saved_at(state);
+                }
                 self.saved = Some(file_name(&path));
                 self.saved_now(ctx, frame);
             }
@@ -791,6 +803,40 @@ impl App {
                     ui.close();
                 }
             });
+            ui.menu_button("Edit", |ui| {
+                let undo = self
+                    .editor
+                    .as_ref()
+                    .and_then(|editor| editor.undo_stack().undo_label())
+                    .map(str::to_owned);
+                let redo = self
+                    .editor
+                    .as_ref()
+                    .and_then(|editor| editor.undo_stack().redo_label())
+                    .map(str::to_owned);
+                let undo_text = match &undo {
+                    Some(label) => format!("Undo {label}    Ctrl+Z"),
+                    None => "Undo    Ctrl+Z".to_owned(),
+                };
+                if ui
+                    .add_enabled(undo.is_some(), egui::Button::new(undo_text))
+                    .clicked()
+                {
+                    chosen = Some(input::Action::Edit(input::EditKey::Undo));
+                    ui.close();
+                }
+                let redo_text = match &redo {
+                    Some(label) => format!("Redo {label}    Ctrl+Y"),
+                    None => "Redo    Ctrl+Y".to_owned(),
+                };
+                if ui
+                    .add_enabled(redo.is_some(), egui::Button::new(redo_text))
+                    .clicked()
+                {
+                    chosen = Some(input::Action::Edit(input::EditKey::Redo));
+                    ui.close();
+                }
+            });
         });
         chosen
     }
@@ -929,19 +975,22 @@ impl eframe::App for App {
             match dialog.show(&ctx) {
                 SaveOutcome::Save(path) => {
                     self.save_dialog = None;
-                    let Some(document) = self.model.as_mut() else {
-                        return;
-                    };
-                    match document.save_as(&path) {
-                        Ok(written) => {
+                    let state = self.undo_state();
+                    let result = self.model.as_mut().map(|document| document.save_as(&path));
+                    match result {
+                        Some(Ok(written)) => {
+                            if let Some(document) = &mut self.model {
+                                document.mark_saved_at(state);
+                            }
                             self.error = None;
                             self.saved = Some(file_name(&written));
                             self.saved_now(&ctx, frame);
                         }
-                        Err(message) => {
+                        Some(Err(message)) => {
                             self.error = Some(message);
                             self.after_save = None;
                         }
+                        None => {}
                     }
                 }
                 SaveOutcome::Cancel => {

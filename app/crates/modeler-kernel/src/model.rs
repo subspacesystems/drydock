@@ -804,11 +804,19 @@ impl Model {
     }
 }
 
+#[derive(Clone, Debug)]
+struct UndoEntry {
+    state: u64,
+    label: String,
+    edit: ModelEdit,
+}
+
 /// Labelled edits that can be undone and redone in order.
 #[derive(Clone, Debug, Default)]
 pub struct UndoStack {
-    undo: Vec<(String, ModelEdit)>,
-    redo: Vec<(String, ModelEdit)>,
+    undo: Vec<UndoEntry>,
+    redo: Vec<UndoEntry>,
+    next_state: u64,
 }
 
 impl UndoStack {
@@ -821,7 +829,12 @@ impl UndoStack {
         if edit.is_empty() {
             return;
         }
-        self.undo.push((label.to_string(), edit));
+        self.next_state = self.next_state.wrapping_add(1);
+        self.undo.push(UndoEntry {
+            state: self.next_state,
+            label: label.to_string(),
+            edit,
+        });
         self.redo.clear();
     }
 
@@ -830,11 +843,11 @@ impl UndoStack {
         let Some(entry) = self.undo.pop() else {
             return Ok(None);
         };
-        if let Err(error) = model.apply_edit(&entry.1.inverse()) {
+        if let Err(error) = model.apply_edit(&entry.edit.inverse()) {
             self.undo.push(entry);
             return Err(error);
         }
-        let label = entry.0.clone();
+        let label = entry.label.clone();
         self.redo.push(entry);
         Ok(Some(label))
     }
@@ -844,21 +857,21 @@ impl UndoStack {
         let Some(entry) = self.redo.pop() else {
             return Ok(None);
         };
-        if let Err(error) = model.apply_edit(&entry.1) {
+        if let Err(error) = model.apply_edit(&entry.edit) {
             self.redo.push(entry);
             return Err(error);
         }
-        let label = entry.0.clone();
+        let label = entry.label.clone();
         self.undo.push(entry);
         Ok(Some(label))
     }
 
     pub fn undo_label(&self) -> Option<&str> {
-        self.undo.last().map(|(label, _)| label.as_str())
+        self.undo.last().map(|entry| entry.label.as_str())
     }
 
     pub fn redo_label(&self) -> Option<&str> {
-        self.redo.last().map(|(label, _)| label.as_str())
+        self.redo.last().map(|entry| entry.label.as_str())
     }
 
     /// Identifies the model state this stack has reached. Two calls return the same
@@ -867,7 +880,7 @@ impl UndoStack {
     /// fresh one; undo then redo returns to the earlier value; a push after an undo
     /// never reuses a value).
     pub fn state(&self) -> u64 {
-        unimplemented!("m2-undo-state")
+        self.undo.last().map_or(0, |entry| entry.state)
     }
 
     /// Number of edits that can be undone.
