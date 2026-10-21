@@ -13,6 +13,7 @@ use modeler_kernel::infer::{self, Inference, Probe, Snap};
 use modeler_kernel::model::{BodyId, Model, UndoStack};
 use modeler_kernel::select::{self, BoxMode, Entity};
 use modeler_kernel::tools::arc::ArcTool;
+use modeler_kernel::tools::arc3::Arc3Tool;
 use modeler_kernel::tools::circle::CircleTool;
 use modeler_kernel::tools::line::LineTool;
 use modeler_kernel::tools::plane::DrawPlane;
@@ -54,7 +55,10 @@ pub fn plane_for_normal(n: DVec3) -> DrawPlane {
 }
 
 fn is_shape(tool: Tool) -> bool {
-    matches!(tool, Tool::Rectangle | Tool::Circle | Tool::Arc)
+    matches!(
+        tool,
+        Tool::Rectangle | Tool::Circle | Tool::Arc | Tool::Arc3
+    )
 }
 
 fn is_drawing(tool: Tool) -> bool {
@@ -128,6 +132,7 @@ pub struct Editor {
     rect: RectTool,
     circle: CircleTool,
     arc: ArcTool,
+    arc3: Arc3Tool,
 }
 
 fn click_mods(mods: Modifiers) -> ClickMods {
@@ -165,6 +170,7 @@ impl Editor {
             rect: RectTool::new(plane_for_normal(DVec3::Z)),
             circle: CircleTool::new(plane_for_normal(DVec3::Z)),
             arc: ArcTool::new(plane_for_normal(DVec3::Z)),
+            arc3: Arc3Tool::new(plane_for_normal(DVec3::Z)),
         }
     }
 
@@ -297,7 +303,7 @@ impl Editor {
                 false
             }
             Tool::Orbit | Tool::Pan | Tool::Zoom => false,
-            Tool::Rectangle | Tool::Circle | Tool::Arc => {
+            Tool::Rectangle | Tool::Circle | Tool::Arc | Tool::Arc3 => {
                 let before = self.undo.undo_count();
                 let (origin, dir) = view.ray(cursor);
                 let Some(inf) = self.infer_shape_at(model, view, cursor) else {
@@ -525,6 +531,36 @@ impl Editor {
                     Some(("Angle", value))
                 }
             },
+            Tool::Arc3 => match self.arc3.placed() {
+                0 => Some(("Segments", self.arc3.segments().to_string())),
+                1 => {
+                    let value = match self.arc3.chord() {
+                        Some(value) => length(value),
+                        None => String::new(),
+                    };
+                    Some(("Length", value))
+                }
+                _ => {
+                    let value = match (self.arc3.radius(), self.arc3.chord(), self.arc3.preview()) {
+                        (Some(r), Some(c), Some(points)) if points.len() >= 2 => {
+                            let a = points[0];
+                            let b = points[points.len() - 1];
+                            let mid = points[points.len() / 2];
+                            let d = b - a;
+                            let distance = if d.length() > TOL {
+                                (mid - a).cross(d).length() / d.length()
+                            } else {
+                                f64::INFINITY
+                            };
+                            let h0 = (r * r - c * c / 4.0).max(0.0).sqrt();
+                            let bulge = if distance > r { r + h0 } else { r - h0 };
+                            length(bulge)
+                        }
+                        _ => String::new(),
+                    };
+                    Some(("Bulge", value))
+                }
+            },
             Tool::Orbit | Tool::Pan | Tool::Zoom | Tool::Select => None,
         }
     }
@@ -567,6 +603,11 @@ impl Editor {
                 .preview()
                 .map(|p| p.windows(2).map(|w| (w[0], w[1])).collect())
                 .unwrap_or_default(),
+            Tool::Arc3 => self
+                .arc3
+                .preview()
+                .map(|p| p.windows(2).map(|w| (w[0], w[1])).collect())
+                .unwrap_or_default(),
             Tool::Orbit | Tool::Pan | Tool::Zoom | Tool::Select => Vec::new(),
         }
     }
@@ -577,6 +618,7 @@ impl Editor {
             Tool::Rectangle => Some(self.rect.plane()),
             Tool::Circle => Some(self.circle.plane()),
             Tool::Arc => Some(self.arc.plane()),
+            Tool::Arc3 => Some(self.arc3.plane()),
             Tool::Orbit | Tool::Pan | Tool::Zoom | Tool::Select | Tool::Line => None,
         }
     }
@@ -600,6 +642,7 @@ impl Editor {
             Tool::Rectangle => self.rect.anchor(),
             Tool::Circle => self.circle.anchor(),
             Tool::Arc => self.arc.anchor(),
+            Tool::Arc3 => self.arc3.anchor(),
             _ => None,
         }
     }
@@ -609,6 +652,7 @@ impl Editor {
             Tool::Rectangle => Some(self.rect.plane()),
             Tool::Circle => Some(self.circle.plane()),
             Tool::Arc => Some(self.arc.plane()),
+            Tool::Arc3 => Some(self.arc3.plane()),
             _ => None,
         }
     }
@@ -622,6 +666,7 @@ impl Editor {
             Tool::Rectangle => self.rect.set_plane(plane),
             Tool::Circle => self.circle.set_plane(plane),
             Tool::Arc => self.arc.set_plane(plane),
+            Tool::Arc3 => self.arc3.set_plane(plane),
             _ => {}
         }
     }
@@ -637,6 +682,7 @@ impl Editor {
             Tool::Rectangle => self.rect.handle(input, &mut target),
             Tool::Circle => self.circle.handle(input, &mut target),
             Tool::Arc => self.arc.handle(input, &mut target),
+            Tool::Arc3 => self.arc3.handle(input, &mut target),
             _ => Ok(()),
         }
     }
@@ -653,6 +699,7 @@ impl Editor {
         let _ = self.rect.handle(Input::Cancel, &mut target);
         let _ = self.circle.handle(Input::Cancel, &mut target);
         let _ = self.arc.handle(Input::Cancel, &mut target);
+        let _ = self.arc3.handle(Input::Cancel, &mut target);
     }
 
     fn pick_shape_plane(&mut self, model: &Model, origin: DVec3, dir: DVec3) {

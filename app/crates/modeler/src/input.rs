@@ -24,6 +24,8 @@ pub enum Tool {
     Rectangle,
     Circle,
     Arc,
+    /// Three-point arc (`docs/specs/m2-arc-3pt-app.md`).
+    Arc3,
 }
 
 /// A key for the editor (`docs/specs/m2-app-editor.md`).
@@ -128,7 +130,9 @@ pub fn drag(
                 cursor_ndc: start_ndc,
             }),
             // The editor handles left drags for these (`docs/specs/m2-app-editor.md`).
-            Tool::Select | Tool::Line | Tool::Rectangle | Tool::Circle | Tool::Arc => None,
+            Tool::Select | Tool::Line | Tool::Rectangle | Tool::Circle | Tool::Arc | Tool::Arc3 => {
+                None
+            }
         },
         Button::Right => None,
     }
@@ -164,6 +168,7 @@ pub fn key(key: &str, mods: Modifiers) -> Option<Action> {
         "R" if plain => Some(Action::SelectTool(Tool::Rectangle)),
         "C" if plain => Some(Action::SelectTool(Tool::Circle)),
         "A" if plain => Some(Action::SelectTool(Tool::Arc)),
+        "A" if shift => Some(Action::SelectTool(Tool::Arc3)),
         "Escape" if plain => Some(Action::Edit(EditKey::Cancel)),
         "Enter" if plain => Some(Action::Edit(EditKey::Enter)),
         "Backspace" if plain => Some(Action::Edit(EditKey::Backspace)),
