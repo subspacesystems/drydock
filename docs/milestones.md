@@ -60,7 +60,8 @@ Done when: `modeler` on the reference house model opens in under 5 s on modeler-
 | `m2-undo-state` | `*` follows the saved undo state (undo/redo back to saved is clean); Edit menu with Undo/Redo | `m2-app-ui` |
 | `m2-pick-imported` | Select and snap on geometry imported from DAE (box and click found only new geometry on 05-house); kernel/editor fix with tests | `m2-app-ui` |
 | `m2-hints` | Inference feedback in the window: axis lock color and snap name next to the cursor | `m2-app-ui` |
-| `m2-arc-3pt` | Three-point arc (and tangent/two-point if cheap) beside center/start/end | `m2-app-shapes` |
+| `m2-arc-3pt` | Three-point arc tool in the kernel (`Arc3Tool`, `three_point_arc`): start, end, bulge point; typed chord and bulge height | `m2-tool-shapes` |
+| `m2-arc-3pt-app` | Three-point arc in the editor and window: tool, key, toolbar button | `m2-arc-3pt`, `m2-app-shapes` |
 
 ## M3: Modify
 
