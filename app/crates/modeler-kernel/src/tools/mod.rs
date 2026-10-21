@@ -14,6 +14,7 @@ use crate::sticky::{EdgeChain, StickyError};
 use crate::units::{ParseError, Unit};
 
 pub mod arc;
+pub mod arc3;
 pub mod circle;
 pub mod line;
 pub mod plane;
