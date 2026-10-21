@@ -7,7 +7,9 @@
 //! Behaviour: `docs/specs/m2-inference.md`. Works on one context, in its own coordinates;
 //! instances are not entered.
 
+use std::cell::RefCell;
 use std::collections::BTreeSet;
+use std::rc::Rc;
 
 use crate::geom::{self, Containment};
 use crate::model::{BodyId, DefinitionId, InstanceId, Model};
@@ -623,6 +625,33 @@ fn flatten(model: &Model) -> Flat {
     flat
 }
 
+struct CachedFlat {
+    key: (u64, u64),
+    flat: Rc<Flat>,
+}
+
+thread_local! {
+    static FLAT_CACHE: RefCell<Option<CachedFlat>> = const { RefCell::new(None) };
+}
+
+fn cached_flat(model: &Model) -> Rc<Flat> {
+    let key = model.cache_key();
+    FLAT_CACHE.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        if let Some(cached) = cache.as_ref()
+            && cached.key == key
+        {
+            return Rc::clone(&cached.flat);
+        }
+        let flat = Rc::new(flatten(model));
+        *cache = Some(CachedFlat {
+            key,
+            flat: Rc::clone(&flat),
+        });
+        flat
+    })
+}
+
 fn gather_flat_body(
     model: &Model,
     body: BodyId,
@@ -990,7 +1019,7 @@ pub fn pick_model(model: &Model, probe: &Probe) -> Option<Entity> {
         return pick(model.root().geometry(), probe);
     }
     let d = valid_probe(probe)?;
-    let flat = flatten(model);
+    let flat = cached_flat(model);
     if let Some(Hit {
         snap: Snap::OnEdge(edge),
         owner,
@@ -1019,7 +1048,7 @@ pub fn infer_model(model: &Model, probe: &Probe) -> Option<Inference> {
         return infer(model.root().geometry(), probe);
     }
     let d = valid_probe(probe)?;
-    let flat = flatten(model);
+    let flat = cached_flat(model);
 
     if let (Some(anchor), Some(a)) = (probe.anchor, probe.lock.and_then(unit)) {
         if let Some(hit) = flat_point_categories(&flat, probe, d) {

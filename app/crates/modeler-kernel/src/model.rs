@@ -8,6 +8,7 @@
 //! that `ModelRecord::inverse` undoes; `UndoStack` keeps labelled `ModelEdit`s.
 
 use std::collections::BTreeMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use glam::DMat4;
 
@@ -261,6 +262,27 @@ pub struct Model {
     next_material: u64,
     next_definition: u64,
     next_instance: u64,
+    id: ModelId,
+    revision: u64,
+}
+
+/// A process-unique identity; a clone takes a fresh one, so caches keyed on it never
+/// mistake a clone for its original.
+#[derive(Debug)]
+struct ModelId(u64);
+
+static NEXT_MODEL_ID: AtomicU64 = AtomicU64::new(1);
+
+impl Default for ModelId {
+    fn default() -> Self {
+        Self(NEXT_MODEL_ID.fetch_add(1, Ordering::Relaxed))
+    }
+}
+
+impl Clone for ModelId {
+    fn clone(&self) -> Self {
+        Self::default()
+    }
 }
 
 impl PartialEq for Model {
@@ -274,6 +296,17 @@ impl PartialEq for Model {
 impl Model {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// A counter that changes whenever the root, a definition or an instance changes.
+    /// Behaviour: `docs/specs/m2-infer-cache.md`.
+    pub fn revision(&self) -> u64 {
+        self.revision
+    }
+
+    /// The identity and revision that key a cached flattening of this model.
+    pub(crate) fn cache_key(&self) -> (u64, u64) {
+        (self.id.0, self.revision)
     }
 
     fn body_mut(&mut self, id: BodyId) -> Option<&mut Body> {
@@ -599,6 +632,7 @@ impl Model {
         let b = self.body_mut(body).ok_or(ModelError::MissingBody(body))?;
         let mut edit = Edit::new();
         let result = f(&mut b.geometry, &mut edit);
+        self.revision = self.revision.wrapping_add(1);
         log.records.extend(
             edit.records
                 .into_iter()
@@ -611,6 +645,12 @@ impl Model {
 
     /// Apply one record. On error, nothing changes.
     pub fn apply(&mut self, record: &ModelRecord) -> Result<(), ModelError> {
+        self.apply_record(record)?;
+        self.revision = self.revision.wrapping_add(1);
+        Ok(())
+    }
+
+    fn apply_record(&mut self, record: &ModelRecord) -> Result<(), ModelError> {
         match record {
             ModelRecord::Geometry(body, r) => {
                 let b = self.body_mut(*body).ok_or(ModelError::MissingBody(*body))?;
