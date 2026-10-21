@@ -704,7 +704,7 @@ impl Editor {
             centers: &centers,
             lock: None,
         };
-        infer::infer(model.root().geometry(), &probe)
+        infer::infer_model(model, &probe)
     }
 
     fn update_shift_lock(&mut self, mods: Modifiers) {
@@ -759,7 +759,7 @@ impl Editor {
             centers: &centers,
             lock: self.lock(),
         };
-        infer::infer(model.root().geometry(), &probe)
+        infer::infer_model(model, &probe)
     }
 
     fn pick_at(&self, model: &Model, view: &Viewport, cursor: DVec2) -> Option<Entity> {
@@ -778,7 +778,7 @@ impl Editor {
             centers: &centers,
             lock: self.lock(),
         };
-        infer::pick(model.root().geometry(), &probe)
+        infer::pick_model(model, &probe)
     }
 
     fn prune(&mut self, model: &Model) {
