@@ -10,10 +10,10 @@
 use std::collections::BTreeSet;
 
 use crate::geom::{self, Containment};
-use crate::model::Model;
+use crate::model::{BodyId, DefinitionId, InstanceId, Model};
 use crate::select::Entity;
 use crate::topology::{Context, EdgeId, FaceId, VertexId};
-use glam::{DVec2, DVec3};
+use glam::{DMat4, DVec2, DVec3};
 
 const TOL: f64 = geom::LINEAR_TOL;
 
@@ -263,12 +263,29 @@ fn is_hidden(
 
 // -- candidates --------------------------------------------------------------------
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum Owner {
+    Root,
+    Instance(InstanceId),
+}
+
+impl Owner {
+    fn rank(self) -> (u8, u64) {
+        match self {
+            Owner::Root => (0, 0),
+            Owner::Instance(id) => (1, id.0),
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 struct Hit {
     snap: Snap,
     point: DVec3,
     screen: f64,
     depth: f64,
+    owner: Owner,
+    context: u64,
     id: u64,
 }
 
@@ -277,6 +294,10 @@ fn better(a: &Hit, b: &Hit) -> bool {
         a.screen < b.screen
     } else if a.depth != b.depth {
         a.depth < b.depth
+    } else if a.owner != b.owner {
+        a.owner.rank() < b.owner.rank()
+    } else if a.context != b.context {
+        a.context < b.context
     } else {
         a.id < b.id
     }
@@ -310,6 +331,8 @@ fn endpoint_best(ctx: &Context, probe: &Probe, d: DVec3) -> Option<Hit> {
                 point: p,
                 screen,
                 depth: dep,
+                owner: Owner::Root,
+                context: 0,
                 id: id.0,
             },
         );
@@ -345,6 +368,8 @@ fn midpoint_best(ctx: &Context, probe: &Probe, d: DVec3) -> Option<Hit> {
                 point: p,
                 screen,
                 depth: dep,
+                owner: Owner::Root,
+                context: 0,
                 id: id.0,
             },
         );
@@ -373,6 +398,8 @@ fn center_best(ctx: &Context, probe: &Probe, d: DVec3) -> Option<Hit> {
                 point: p,
                 screen,
                 depth: dep,
+                owner: Owner::Root,
+                context: 0,
                 id: i as u64,
             },
         );
@@ -410,6 +437,8 @@ fn on_edge_best(ctx: &Context, probe: &Probe, d: DVec3) -> Option<Hit> {
                 point: p,
                 screen,
                 depth: dep,
+                owner: Owner::Root,
+                context: 0,
                 id: id.0,
             },
         );
@@ -446,6 +475,8 @@ fn on_axis_best(ctx: &Context, probe: &Probe, d: DVec3) -> Option<Hit> {
                 point: p,
                 screen,
                 depth: dep,
+                owner: Owner::Root,
+                context: 0,
                 id: i as u64,
             },
         );
@@ -533,14 +564,448 @@ fn segment_point_nearest_ray(a: DVec3, b: DVec3, origin: DVec3, d: DVec3) -> Opt
     Some(a + u * s.clamp(0.0, 1.0))
 }
 
+// -- flattened geometry ------------------------------------------------------------
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+struct FaceKey {
+    context: u64,
+    face: FaceId,
+}
+
+struct FlatVertex {
+    id: VertexId,
+    pos: DVec3,
+    owner: Owner,
+    context: u64,
+    touching: BTreeSet<FaceKey>,
+}
+
+struct FlatEdge {
+    id: EdgeId,
+    a: DVec3,
+    b: DVec3,
+    owner: Owner,
+    context: u64,
+    touching: BTreeSet<FaceKey>,
+}
+
+struct FlatFace {
+    id: FaceId,
+    owner: Owner,
+    context: u64,
+    plane: geom::Plane,
+    outer: Vec<DVec3>,
+    inner: Vec<Vec<DVec3>>,
+}
+
+#[derive(Default)]
+struct Flat {
+    vertices: Vec<FlatVertex>,
+    edges: Vec<FlatEdge>,
+    faces: Vec<FlatFace>,
+    next_context: u64,
+}
+
+fn flatten(model: &Model) -> Flat {
+    let mut flat = Flat {
+        next_context: 1,
+        ..Flat::default()
+    };
+    gather_flat_body(
+        model,
+        BodyId::Root,
+        DMat4::IDENTITY,
+        Owner::Root,
+        0,
+        &mut Vec::new(),
+        &mut flat,
+    );
+    flat
+}
+
+fn gather_flat_body(
+    model: &Model,
+    body: BodyId,
+    xform: DMat4,
+    owner: Owner,
+    context: u64,
+    path: &mut Vec<DefinitionId>,
+    flat: &mut Flat,
+) {
+    let Some(b) = model.body(body) else {
+        return;
+    };
+    let ctx = b.geometry();
+
+    for (id, face) in ctx.faces() {
+        let outer: Vec<DVec3> = ctx
+            .loop_points(&face.outer)
+            .into_iter()
+            .map(|p| xform.transform_point3(p))
+            .collect();
+        let Some(plane) = geom::fit_plane(&outer) else {
+            continue;
+        };
+        let inner: Vec<Vec<DVec3>> = face
+            .inner
+            .iter()
+            .map(|l| {
+                ctx.loop_points(l)
+                    .into_iter()
+                    .map(|p| xform.transform_point3(p))
+                    .collect()
+            })
+            .collect();
+        flat.faces.push(FlatFace {
+            id,
+            owner,
+            context,
+            plane,
+            outer,
+            inner,
+        });
+    }
+
+    for (id, edge) in ctx.edges() {
+        let (Some(a), Some(b)) = (ctx.vertex(edge.ends[0]), ctx.vertex(edge.ends[1])) else {
+            continue;
+        };
+        let touching = ctx
+            .faces_of_edge(id)
+            .into_iter()
+            .map(|face| FaceKey { context, face })
+            .collect();
+        flat.edges.push(FlatEdge {
+            id,
+            a: xform.transform_point3(a.position),
+            b: xform.transform_point3(b.position),
+            owner,
+            context,
+            touching,
+        });
+    }
+
+    for (id, vertex) in ctx.vertices() {
+        let mut touching = BTreeSet::new();
+        for edge in ctx.edges_of_vertex(id) {
+            for face in ctx.faces_of_edge(edge) {
+                touching.insert(FaceKey { context, face });
+            }
+        }
+        flat.vertices.push(FlatVertex {
+            id,
+            pos: xform.transform_point3(vertex.position),
+            owner,
+            context,
+            touching,
+        });
+    }
+
+    for (id, inst) in b.instances() {
+        if path.contains(&inst.definition) {
+            continue;
+        }
+        path.push(inst.definition);
+        let child_owner = match owner {
+            Owner::Root => Owner::Instance(id),
+            Owner::Instance(root) => Owner::Instance(root),
+        };
+        let child_context = flat.next_context;
+        flat.next_context += 1;
+        gather_flat_body(
+            model,
+            BodyId::Definition(inst.definition),
+            xform * inst.transform,
+            child_owner,
+            child_context,
+            path,
+            flat,
+        );
+        path.pop();
+    }
+}
+
+fn flat_face_t(face: &FlatFace, origin: DVec3, d: DVec3) -> Option<f64> {
+    let plane = face.plane;
+    let denom = d.dot(plane.normal);
+    if denom.abs() < 1e-12 {
+        return None;
+    }
+    let t = -plane.signed_distance(origin) / denom;
+    if !t.is_finite() || t <= 1e-9 {
+        return None;
+    }
+
+    let hit = origin + d * t;
+    let hit2 = geom::to_plane_2d(&[hit], plane.normal)[0];
+    let outer = geom::to_plane_2d(&face.outer, plane.normal);
+    if !matches!(
+        geom::point_in_polygon_2d(hit2, &outer, 1e-9),
+        Containment::Inside | Containment::Boundary
+    ) {
+        return None;
+    }
+    for hole in &face.inner {
+        let points = geom::to_plane_2d(hole, plane.normal);
+        if geom::point_in_polygon_2d(hit2, &points, 1e-9) == Containment::Inside {
+            return None;
+        }
+    }
+    Some(t)
+}
+
+fn flat_ray_face(flat: &Flat, origin: DVec3, dir: DVec3) -> Option<(&FlatFace, f64)> {
+    let d = unit(dir)?;
+    let mut best: Option<(&FlatFace, f64)> = None;
+    for face in &flat.faces {
+        let Some(t) = flat_face_t(face, origin, d) else {
+            continue;
+        };
+        let better = match best {
+            None => true,
+            Some((best_face, best_t)) => {
+                t < best_t
+                    || (t == best_t
+                        && (face.owner, face.context, face.id)
+                            < (best_face.owner, best_face.context, best_face.id))
+            }
+        };
+        if better {
+            best = Some((face, t));
+        }
+    }
+    best
+}
+
+fn flat_is_hidden(
+    flat: &Flat,
+    probe: &Probe,
+    d: DVec3,
+    p: DVec3,
+    touching: &BTreeSet<FaceKey>,
+) -> bool {
+    let s = if probe.parallel {
+        p - d * depth(probe, p, d)
+    } else {
+        probe.origin
+    };
+    let diff = p - s;
+    let length = diff.length();
+    if length <= TOL {
+        return false;
+    }
+    let Some(view) = unit(diff) else {
+        return false;
+    };
+    let limit = length - TOL;
+    for face in &flat.faces {
+        if touching.contains(&FaceKey {
+            context: face.context,
+            face: face.id,
+        }) {
+            continue;
+        }
+        if let Some(t) = flat_face_t(face, s, view)
+            && t < limit
+        {
+            return true;
+        }
+    }
+    false
+}
+
+fn flat_endpoint_best(flat: &Flat, probe: &Probe, d: DVec3) -> Option<Hit> {
+    let mut best = None;
+    for vertex in &flat.vertices {
+        let p = vertex.pos;
+        let dep = depth(probe, p, d);
+        if dep.is_nan() || dep <= 0.0 {
+            continue;
+        }
+        let Some(screen) = in_range(probe, p) else {
+            continue;
+        };
+        if flat_is_hidden(flat, probe, d, p, &vertex.touching) {
+            continue;
+        }
+        consider(
+            &mut best,
+            Hit {
+                snap: Snap::Endpoint(vertex.id),
+                point: p,
+                screen,
+                depth: dep,
+                owner: vertex.owner,
+                context: vertex.context,
+                id: vertex.id.0,
+            },
+        );
+    }
+    best
+}
+
+fn flat_midpoint_best(flat: &Flat, probe: &Probe, d: DVec3) -> Option<Hit> {
+    let mut best = None;
+    for edge in &flat.edges {
+        let p = (edge.a + edge.b) / 2.0;
+        let dep = depth(probe, p, d);
+        if dep.is_nan() || dep <= 0.0 {
+            continue;
+        }
+        let Some(screen) = in_range(probe, p) else {
+            continue;
+        };
+        if flat_is_hidden(flat, probe, d, p, &edge.touching) {
+            continue;
+        }
+        consider(
+            &mut best,
+            Hit {
+                snap: Snap::Midpoint(edge.id),
+                point: p,
+                screen,
+                depth: dep,
+                owner: edge.owner,
+                context: edge.context,
+                id: edge.id.0,
+            },
+        );
+    }
+    best
+}
+
+fn flat_center_best(flat: &Flat, probe: &Probe, d: DVec3) -> Option<Hit> {
+    let mut best = None;
+    let empty = BTreeSet::new();
+    for (i, &p) in probe.centers.iter().enumerate() {
+        let dep = depth(probe, p, d);
+        if dep.is_nan() || dep <= 0.0 {
+            continue;
+        }
+        let Some(screen) = in_range(probe, p) else {
+            continue;
+        };
+        if flat_is_hidden(flat, probe, d, p, &empty) {
+            continue;
+        }
+        consider(
+            &mut best,
+            Hit {
+                snap: Snap::Center(i),
+                point: p,
+                screen,
+                depth: dep,
+                owner: Owner::Root,
+                context: 0,
+                id: i as u64,
+            },
+        );
+    }
+    best
+}
+
+fn flat_on_edge_best(flat: &Flat, probe: &Probe, d: DVec3) -> Option<Hit> {
+    let mut best = None;
+    for edge in &flat.edges {
+        let Some(p) = segment_point_nearest_ray(edge.a, edge.b, probe.origin, d) else {
+            continue;
+        };
+        let dep = depth(probe, p, d);
+        if dep.is_nan() || dep <= 0.0 {
+            continue;
+        }
+        let Some(screen) = in_range(probe, p) else {
+            continue;
+        };
+        if flat_is_hidden(flat, probe, d, p, &edge.touching) {
+            continue;
+        }
+        consider(
+            &mut best,
+            Hit {
+                snap: Snap::OnEdge(edge.id),
+                point: p,
+                screen,
+                depth: dep,
+                owner: edge.owner,
+                context: edge.context,
+                id: edge.id.0,
+            },
+        );
+    }
+    best
+}
+
+fn flat_on_axis_best(flat: &Flat, probe: &Probe, d: DVec3) -> Option<Hit> {
+    let anchor = probe.anchor?;
+    let mut best = None;
+    let empty = BTreeSet::new();
+    for (i, &axis) in probe.axes.iter().enumerate() {
+        if d.cross(axis).length() < 1e-9 {
+            continue;
+        }
+        let Some(s) = line_param(anchor, axis, probe.origin, d) else {
+            continue;
+        };
+        let p = anchor + axis * s;
+        let dep = depth(probe, p, d);
+        if dep.is_nan() || dep <= 0.0 {
+            continue;
+        }
+        let Some(screen) = in_range(probe, p) else {
+            continue;
+        };
+        if flat_is_hidden(flat, probe, d, p, &empty) {
+            continue;
+        }
+        consider(
+            &mut best,
+            Hit {
+                snap: Snap::OnAxis(i),
+                point: p,
+                screen,
+                depth: dep,
+                owner: Owner::Root,
+                context: 0,
+                id: i as u64,
+            },
+        );
+    }
+    best
+}
+
+fn flat_point_categories(flat: &Flat, probe: &Probe, d: DVec3) -> Option<Hit> {
+    flat_endpoint_best(flat, probe, d)
+        .or_else(|| flat_midpoint_best(flat, probe, d))
+        .or_else(|| flat_center_best(flat, probe, d))
+}
+
 /// Like [`pick`], for the root body of `model` including the geometry inside instances (at any
 /// depth, with their transforms). A hit inside an instance is reported as the root-level
 /// instance that holds it, `Entity::Instance`.
 ///
 /// Behaviour: `docs/specs/m2-pick-imported.md`.
 pub fn pick_model(model: &Model, probe: &Probe) -> Option<Entity> {
-    let _ = (model, probe);
-    unimplemented!("m2-pick-imported")
+    if model.root().instances().next().is_none() {
+        return pick(model.root().geometry(), probe);
+    }
+    let d = valid_probe(probe)?;
+    let flat = flatten(model);
+    if let Some(Hit {
+        snap: Snap::OnEdge(edge),
+        owner,
+        ..
+    }) = flat_on_edge_best(&flat, probe, d)
+    {
+        return Some(match owner {
+            Owner::Root => Entity::Edge(edge),
+            Owner::Instance(id) => Entity::Instance(id),
+        });
+    }
+    flat_ray_face(&flat, probe.origin, d).map(|(face, _)| match face.owner {
+        Owner::Root => Entity::Face(face.id),
+        Owner::Instance(id) => Entity::Instance(id),
+    })
 }
 
 /// Like [`infer`], for the root body of `model` including the geometry inside instances:
@@ -550,6 +1015,39 @@ pub fn pick_model(model: &Model, probe: &Probe) -> Option<Entity> {
 ///
 /// Behaviour: `docs/specs/m2-pick-imported.md`.
 pub fn infer_model(model: &Model, probe: &Probe) -> Option<Inference> {
-    let _ = (model, probe);
-    unimplemented!("m2-pick-imported")
+    if model.root().instances().next().is_none() {
+        return infer(model.root().geometry(), probe);
+    }
+    let d = valid_probe(probe)?;
+    let flat = flatten(model);
+
+    if let (Some(anchor), Some(a)) = (probe.anchor, probe.lock.and_then(unit)) {
+        if let Some(hit) = flat_point_categories(&flat, probe, d) {
+            let point = anchor + a * ((hit.point - anchor).dot(a));
+            return Some(inference(probe, hit.snap, point));
+        }
+        let point = match line_param(anchor, a, probe.origin, d) {
+            Some(s) if d.cross(a).length() >= 1e-9 => anchor + a * s,
+            _ => anchor,
+        };
+        return Some(inference(probe, Snap::Along, point));
+    }
+
+    if let Some(hit) = flat_point_categories(&flat, probe, d)
+        .or_else(|| flat_on_edge_best(&flat, probe, d))
+        .or_else(|| flat_on_axis_best(&flat, probe, d))
+    {
+        return Some(inference(probe, hit.snap, hit.point));
+    }
+
+    if let Some((face, t)) = flat_ray_face(&flat, probe.origin, d) {
+        let point = probe.origin + d * t;
+        return Some(inference(probe, Snap::OnFace(face.id), point));
+    }
+
+    if let Some(point) = ground_point(probe, d) {
+        return Some(inference(probe, Snap::Ground, point));
+    }
+
+    None
 }

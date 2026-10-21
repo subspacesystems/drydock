@@ -399,6 +399,36 @@ pub fn connected(ctx: &Context, entity: Entity) -> Vec<Entity> {
     visited.into_iter().collect()
 }
 
+fn gather_instance_segments(
+    model: &Model,
+    definition: crate::model::DefinitionId,
+    xform: DMat4,
+    out: &mut Vec<(DVec3, DVec3)>,
+    path: &mut Vec<crate::model::DefinitionId>,
+) {
+    let Some(b) = model.body(BodyId::Definition(definition)) else {
+        return;
+    };
+    let ctx = b.geometry();
+    for (_, edge) in ctx.edges() {
+        let (Some(a), Some(b)) = (ctx.vertex(edge.ends[0]), ctx.vertex(edge.ends[1])) else {
+            continue;
+        };
+        out.push((
+            xform.transform_point3(a.position),
+            xform.transform_point3(b.position),
+        ));
+    }
+    for (_, inst) in b.instances() {
+        if path.contains(&inst.definition) {
+            continue;
+        }
+        path.push(inst.definition);
+        gather_instance_segments(model, inst.definition, xform * inst.transform, out, path);
+        path.pop();
+    }
+}
+
 /// The edges of instance `id` of `body`, as segments in `body` coordinates: every edge of the
 /// definition's geometry and, recursively, of the instances inside it, each with the composed
 /// transforms. In no particular order; empty when the body or instance
@@ -406,6 +436,17 @@ pub fn connected(ctx: &Context, entity: Entity) -> Vec<Entity> {
 ///
 /// Behaviour: `docs/specs/m2-pick-imported.md`.
 pub fn instance_segments(model: &Model, body: BodyId, id: InstanceId) -> Vec<(DVec3, DVec3)> {
-    let _ = (model, body, id);
-    unimplemented!("m2-pick-imported")
+    let Some(instance) = model.body(body).and_then(|b| b.instance(id)) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    let mut path = vec![instance.definition];
+    gather_instance_segments(
+        model,
+        instance.definition,
+        instance.transform,
+        &mut out,
+        &mut path,
+    );
+    out
 }

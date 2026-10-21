@@ -18,7 +18,7 @@ use modeler::viewstate::{Effect, ViewState, scene_bounds};
 use modeler_dae::FlatScene;
 use modeler_kernel::infer::Snap;
 use modeler_kernel::model::BodyId;
-use modeler_kernel::select::Entity;
+use modeler_kernel::select::{Entity, instance_segments};
 use modeler_kernel::tools::plane::DrawPlane;
 use modeler_render::{GpuScene, Renderer, Style, Viewport};
 use modeler_view::Projection;
@@ -705,7 +705,13 @@ impl App {
                             ));
                         }
                     }
-                    Entity::Instance(_) => {}
+                    Entity::Instance(id) => {
+                        for (a, b) in instance_segments(kernel, BodyId::Root, id) {
+                            if let (Some(a), Some(b)) = (project(a), project(b)) {
+                                painter.line_segment([a, b], egui::Stroke::new(3.0, ACCENT_COLOR));
+                            }
+                        }
+                    }
                 }
             }
         }
