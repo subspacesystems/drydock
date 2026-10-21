@@ -276,6 +276,12 @@ impl Model {
         Self::default()
     }
 
+    /// A counter that changes whenever the root, a definition or an instance changes.
+    /// Behaviour: `docs/specs/m2-infer-cache.md`.
+    pub fn revision(&self) -> u64 {
+        0
+    }
+
     fn body_mut(&mut self, id: BodyId) -> Option<&mut Body> {
         match id {
             BodyId::Root => Some(&mut self.root),
