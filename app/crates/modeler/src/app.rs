@@ -13,10 +13,10 @@ use egui::{Color32, Event, MouseWheelUnit, PointerButton, Pos2, Rect, Sense};
 use glam::{DVec2, DVec3};
 use modeler::document::{Document, FileKind, format_size, native_path};
 use modeler::editor::{Editor, Viewport as EditorViewport};
+use modeler::hints::hint_label;
 use modeler::input::{self, Button, Modifiers, Tool};
 use modeler::viewstate::{Effect, ViewState, scene_bounds};
 use modeler_dae::FlatScene;
-use modeler_kernel::infer::Snap;
 use modeler_kernel::model::BodyId;
 use modeler_kernel::select::Entity;
 use modeler_kernel::tools::plane::DrawPlane;
@@ -712,14 +712,45 @@ impl App {
         if let Some(hint) = editor.hint()
             && let Some(point) = project(hint.point)
         {
+            let label = hint_label(&hint);
+            let color = Color32::from_rgb(label.color[0], label.color[1], label.color[2]);
+            if hint.axis.is_some() {
+                let preview = editor.preview();
+                if let Some((anchor, _)) = preview.first()
+                    && let Some(anchor) = project(*anchor)
+                {
+                    painter.line_segment([anchor, point], egui::Stroke::new(1.5, color));
+                }
+            }
+
             let square = Rect::from_center_size(point, egui::vec2(8.0, 8.0));
-            painter.rect_filled(square, 1.0, hint_color(hint.snap));
+            painter.rect_filled(square, 1.0, color);
             painter.rect_stroke(
                 square,
                 1.0,
                 egui::Stroke::new(1.0, Color32::from_rgb(30, 30, 30)),
                 egui::StrokeKind::Outside,
             );
+
+            let mut text = label.text;
+            if editor.lock().is_some() {
+                text = format!("Locked: {text}");
+            }
+            let galley = painter.layout_no_wrap(text, egui::FontId::proportional(12.0), color);
+            let padding = egui::vec2(5.0, 2.0);
+            let size = galley.size() + padding * 2.0;
+            let mut min = point + egui::vec2(14.0, 14.0);
+            min.x = min.x.min(rect.right() - size.x).max(rect.left());
+            min.y = min.y.min(rect.bottom() - size.y).max(rect.top());
+            let box_rect = Rect::from_min_size(min, size);
+            painter.rect_filled(box_rect, 3.0, Color32::from_rgb(30, 30, 30));
+            painter.rect_stroke(
+                box_rect,
+                3.0,
+                egui::Stroke::new(1.0, color),
+                egui::StrokeKind::Inside,
+            );
+            painter.galley(box_rect.min + padding, galley, color);
         }
     }
 
@@ -1060,16 +1091,6 @@ fn unsaved_dialog(ctx: &egui::Context, name: &str) -> Option<UnsavedChoice> {
         choice = Some(UnsavedChoice::Cancel);
     }
     choice
-}
-
-fn hint_color(snap: Snap) -> Color32 {
-    match snap {
-        Snap::Endpoint(_) => Color32::from_rgb(40, 200, 80),
-        Snap::Midpoint(_) | Snap::Center(_) => Color32::from_rgb(60, 200, 220),
-        Snap::OnEdge(_) => Color32::from_rgb(220, 70, 60),
-        Snap::OnFace(_) => Color32::from_rgb(70, 130, 230),
-        Snap::OnAxis(_) | Snap::Ground | Snap::Along => Color32::from_rgb(160, 160, 160),
-    }
 }
 
 /// The preview is dark; a non-ground draw plane tints it to show its normal.
