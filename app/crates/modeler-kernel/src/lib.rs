@@ -16,7 +16,11 @@ mod faces;
 pub mod format;
 pub mod geom;
 pub mod infer;
+#[path = "model_facade.rs"]
 pub mod model;
+#[path = "model.rs"]
+#[allow(dead_code)]
+mod model_base;
 pub mod select;
 pub mod shapes;
 pub mod sticky;
