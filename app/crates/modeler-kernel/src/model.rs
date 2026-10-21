@@ -861,6 +861,15 @@ impl UndoStack {
         self.redo.last().map(|(label, _)| label.as_str())
     }
 
+    /// Identifies the model state this stack has reached. Two calls return the same
+    /// value only if the same sequence of edits is applied: 0 when nothing is applied,
+    /// otherwise a value unique to the newest applied edit (each pushed edit gets a
+    /// fresh one; undo then redo returns to the earlier value; a push after an undo
+    /// never reuses a value).
+    pub fn state(&self) -> u64 {
+        unimplemented!("m2-undo-state")
+    }
+
     /// Number of edits that can be undone.
     pub fn undo_count(&self) -> usize {
         self.undo.len()

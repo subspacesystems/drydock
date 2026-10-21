@@ -46,6 +46,8 @@ pub struct Document {
     pub untitled: bool,
     /// True after `refresh` until the next successful save.
     pub modified: bool,
+    /// `UndoStack::state` of the editor's stack when the file was last opened or saved.
+    pub saved_state: u64,
 }
 
 impl Document {
@@ -68,6 +70,7 @@ impl Document {
                 stats,
                 untitled: false,
                 modified: false,
+                saved_state: 0,
             });
         }
 
@@ -86,6 +89,7 @@ impl Document {
                     scene,
                     untitled: false,
                     modified: false,
+                    saved_state: 0,
                 });
             }
         };
@@ -99,6 +103,7 @@ impl Document {
             stats,
             untitled: false,
             modified: false,
+            saved_state: 0,
         })
     }
 
@@ -120,6 +125,7 @@ impl Document {
             },
             untitled: true,
             modified: false,
+            saved_state: 0,
         }
     }
 
@@ -132,6 +138,20 @@ impl Document {
         self.scene = kernel_scene(kernel);
         self.stats = stats_from_scene(&self.scene, Some(kernel));
         self.modified = true;
+    }
+
+    /// Record that the file on disk matches the model at undo-stack state `state`
+    /// (`UndoStack::state`): sets `saved_state` and clears `modified`.
+    pub fn mark_saved_at(&mut self, state: u64) {
+        let _ = state;
+        unimplemented!("m2-undo-state")
+    }
+
+    /// Set `modified` to whether `state` differs from `saved_state`. The app calls this
+    /// after an undo or redo instead of `refresh` setting it blindly.
+    pub fn sync_modified(&mut self, state: u64) {
+        let _ = state;
+        unimplemented!("m2-undo-state")
     }
 
     /// The window title: "<file name> - modeler", with a `*` after the name while
