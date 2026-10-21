@@ -153,3 +153,95 @@ fn failed_save_leaves_flags() {
     assert!(doc.modified);
     assert_eq!(doc.path, PathBuf::from("untitled.modeler"));
 }
+
+/// One more edge away from the origin: another undoable edit.
+fn push_edit(model: &mut modeler_kernel::model::Model, undo: &mut UndoStack, x: f64) {
+    let mut target = Target {
+        model,
+        body: BodyId::Root,
+        undo,
+        unit: Unit::Meter,
+    };
+    draw_segments(
+        &mut target,
+        &[(DVec3::new(5.0, 5.0, 0.0), DVec3::new(5.0 + x, 5.0, 0.0))],
+        "edge",
+    )
+    .expect("edge draws");
+}
+
+#[test]
+fn modified_follows_the_saved_undo_state() {
+    let dir = temp_dir("sync");
+    let mut doc = Document::open(&slab()).expect("slab opens");
+    let mut undo = UndoStack::new();
+    assert_eq!(doc.saved_state, 0);
+
+    push_edit(doc.kernel.as_mut().unwrap(), &mut undo, 1.0);
+    doc.refresh();
+    doc.sync_modified(undo.state());
+    assert!(doc.modified);
+
+    doc.save_as(&dir.join("saved.modeler")).expect("saves");
+    doc.mark_saved_at(undo.state());
+    assert!(!doc.modified);
+    assert_eq!(doc.saved_state, undo.state());
+    assert!(!doc.title().contains('*'));
+
+    // Undo: differs from the saved state.
+    undo.undo(doc.kernel.as_mut().unwrap()).unwrap();
+    doc.refresh();
+    doc.sync_modified(undo.state());
+    assert!(doc.modified);
+    assert!(doc.title().contains('*'));
+
+    // Redo: back at the saved state, so clean again.
+    undo.redo(doc.kernel.as_mut().unwrap()).unwrap();
+    doc.refresh();
+    doc.sync_modified(undo.state());
+    assert!(!doc.modified);
+    assert!(!doc.title().contains('*'));
+}
+
+#[test]
+fn undoing_back_to_the_open_state_is_clean() {
+    let mut doc = Document::open(&slab()).expect("slab opens");
+    let mut undo = UndoStack::new();
+    push_edit(doc.kernel.as_mut().unwrap(), &mut undo, 1.0);
+    doc.refresh();
+    doc.sync_modified(undo.state());
+    assert!(doc.modified);
+    undo.undo(doc.kernel.as_mut().unwrap()).unwrap();
+    doc.refresh();
+    doc.sync_modified(undo.state());
+    assert!(!doc.modified, "back at the opened state");
+}
+
+#[test]
+fn a_different_edit_after_undo_is_not_the_saved_state() {
+    let dir = temp_dir("branch");
+    let mut doc = Document::open(&slab()).expect("slab opens");
+    let mut undo = UndoStack::new();
+    push_edit(doc.kernel.as_mut().unwrap(), &mut undo, 1.0);
+    push_edit(doc.kernel.as_mut().unwrap(), &mut undo, 2.0);
+    doc.save_as(&dir.join("b.modeler")).expect("saves");
+    doc.mark_saved_at(undo.state());
+    undo.undo(doc.kernel.as_mut().unwrap()).unwrap();
+    push_edit(doc.kernel.as_mut().unwrap(), &mut undo, 3.0);
+    doc.refresh();
+    doc.sync_modified(undo.state());
+    assert!(doc.modified, "same undo depth, different content");
+}
+
+#[test]
+fn mark_saved_at_clears_modified_and_records_state() {
+    let mut doc = Document::new_empty();
+    doc.modified = true;
+    doc.mark_saved_at(7);
+    assert!(!doc.modified);
+    assert_eq!(doc.saved_state, 7);
+    doc.sync_modified(7);
+    assert!(!doc.modified);
+    doc.sync_modified(8);
+    assert!(doc.modified);
+}
