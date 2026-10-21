@@ -10,6 +10,7 @@
 use std::collections::BTreeSet;
 
 use crate::geom::{self, Containment};
+use crate::model::Model;
 use crate::select::Entity;
 use crate::topology::{Context, EdgeId, FaceId, VertexId};
 use glam::{DVec2, DVec3};
@@ -530,4 +531,25 @@ fn segment_point_nearest_ray(a: DVec3, b: DVec3, origin: DVec3, d: DVec3) -> Opt
     }
     let s = line_param(a, u, origin, d)?;
     Some(a + u * s.clamp(0.0, 1.0))
+}
+
+/// Like [`pick`], for the root body of `model` including the geometry inside instances (at any
+/// depth, with their transforms). A hit inside an instance is reported as the root-level
+/// instance that holds it, `Entity::Instance`.
+///
+/// Behaviour: `docs/specs/m2-pick-imported.md`.
+pub fn pick_model(model: &Model, probe: &Probe) -> Option<Entity> {
+    let _ = (model, probe);
+    unimplemented!("m2-pick-imported")
+}
+
+/// Like [`infer`], for the root body of `model` including the geometry inside instances:
+/// endpoints, midpoints, points on edges and on faces there snap like root geometry. Ids in
+/// `Snap` for geometry inside an instance are the ids in the definition's own context; callers
+/// use the kind and the point only.
+///
+/// Behaviour: `docs/specs/m2-pick-imported.md`.
+pub fn infer_model(model: &Model, probe: &Probe) -> Option<Inference> {
+    let _ = (model, probe);
+    unimplemented!("m2-pick-imported")
 }

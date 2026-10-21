@@ -398,3 +398,14 @@ pub fn connected(ctx: &Context, entity: Entity) -> Vec<Entity> {
     }
     visited.into_iter().collect()
 }
+
+/// The edges of instance `id` of `body`, as segments in `body` coordinates: every edge of the
+/// definition's geometry and, recursively, of the instances inside it, each with the composed
+/// transforms. In no particular order; empty when the body or instance
+/// doesn't exist. The app draws the selection highlight from this.
+///
+/// Behaviour: `docs/specs/m2-pick-imported.md`.
+pub fn instance_segments(model: &Model, body: BodyId, id: InstanceId) -> Vec<(DVec3, DVec3)> {
+    let _ = (model, body, id);
+    unimplemented!("m2-pick-imported")
+}
