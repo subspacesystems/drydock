@@ -62,6 +62,7 @@ Done when: `modeler` on the reference house model opens in under 5 s on modeler-
 | `m2-hints` | Inference feedback in the window: axis lock color and snap name next to the cursor | `m2-app-ui` |
 | `m2-arc-3pt` | Three-point arc tool in the kernel (`Arc3Tool`, `three_point_arc`): start, end, bulge point; typed chord and bulge height | `m2-tool-shapes` |
 | `m2-arc-3pt-app` | Three-point arc in the editor and window: tool, key, toolbar button | `m2-arc-3pt`, `m2-app-shapes` |
+| `m2-infer-cache` | Pick and snap flatten the model once per revision, not on every pointer move; `Model::revision` | `m2-pick-imported` |
 
 ## M3: Modify
 
