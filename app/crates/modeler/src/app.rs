@@ -484,7 +484,7 @@ impl App {
         };
         let drawing = matches!(
             tool,
-            Tool::Select | Tool::Line | Tool::Rectangle | Tool::Circle | Tool::Arc
+            Tool::Select | Tool::Line | Tool::Rectangle | Tool::Circle | Tool::Arc | Tool::Arc3
         );
         if !drawing {
             return;
@@ -806,6 +806,7 @@ impl App {
                 (Tool::Rectangle, "Rectangle"),
                 (Tool::Circle, "Circle"),
                 (Tool::Arc, "Arc"),
+                (Tool::Arc3, "3-Point Arc"),
                 (Tool::Orbit, "Orbit"),
                 (Tool::Pan, "Pan"),
                 (Tool::Zoom, "Zoom"),
@@ -947,6 +948,7 @@ impl App {
                     Tool::Rectangle => "Rectangle",
                     Tool::Circle => "Circle",
                     Tool::Arc => "Arc",
+                    Tool::Arc3 => "3-Point Arc",
                 });
             });
         });
