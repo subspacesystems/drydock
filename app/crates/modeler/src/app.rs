@@ -952,6 +952,7 @@ impl App {
                     Tool::PushPull => "Push/Pull",
                     Tool::Rotate => "Rotate",
                     Tool::Move => "Move",
+                    Tool::Scale => "Scale",
                 });
             });
         });

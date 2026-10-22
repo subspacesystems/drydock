@@ -7,7 +7,7 @@
 //!
 //! Behaviour: `docs/specs/m2-app-editor.md`, shape tools: `docs/specs/m2-app-shapes.md`,
 //! Push/Pull: `docs/specs/m3-app-pushpull.md`, Rotate: `docs/specs/m3-app-rotate.md`,
-//! Move: `docs/specs/m3-app-move.md`.
+//! Move: `docs/specs/m3-app-move.md`, Scale and Flip: `docs/specs/m3-app-scale-flip.md`.
 
 use std::collections::BTreeSet;
 
@@ -24,6 +24,7 @@ use modeler_kernel::tools::line::LineTool;
 use modeler_kernel::tools::plane::DrawPlane;
 use modeler_kernel::tools::rectangle::RectTool;
 use modeler_kernel::tools::rotate::{RotateError, RotateStage, RotateTool};
+use modeler_kernel::tools::scale::{Handle, ScaleTool};
 use modeler_kernel::tools::translate::{MoveError, MoveStage, MoveTool};
 use modeler_kernel::tools::{Input, Target, ToolError};
 use modeler_kernel::topology::FaceId;
@@ -179,6 +180,9 @@ pub struct Editor {
     rotate_segments: Vec<(DVec3, DVec3)>,
     translate: MoveTool,
     move_segments: Vec<(DVec3, DVec3)>,
+    scale: ScaleTool,
+    scale_hover: Option<Handle>,
+    scale_segments: Vec<(DVec3, DVec3)>,
 }
 
 fn click_mods(mods: Modifiers) -> ClickMods {
@@ -243,6 +247,9 @@ impl Editor {
             rotate_segments: Vec::new(),
             translate: MoveTool::new(),
             move_segments: Vec::new(),
+            scale: ScaleTool::new(),
+            scale_hover: None,
+            scale_segments: Vec::new(),
         }
     }
 
@@ -267,6 +274,9 @@ impl Editor {
         self.rotate_segments.clear();
         self.translate = MoveTool::new();
         self.move_segments.clear();
+        self.scale = ScaleTool::new();
+        self.scale_hover = None;
+        self.scale_segments.clear();
     }
 
     /// Sorted, no duplicates; only entities of the root body.
@@ -312,6 +322,10 @@ impl Editor {
         }
         if self.tool == Tool::Move {
             self.move_move(model, view, cursor);
+            return;
+        }
+        if self.tool == Tool::Scale {
+            self.move_scale(model, view, cursor, mods);
             return;
         }
         if self.tool != Tool::Line {
@@ -396,6 +410,7 @@ impl Editor {
             Tool::PushPull => self.click_push(model, view, cursor, count),
             Tool::Rotate => self.click_rotate(model, view, cursor),
             Tool::Move => self.click_move(model, view, cursor),
+            Tool::Scale => self.click_scale(model, view, cursor, mods),
             Tool::Rectangle | Tool::Circle | Tool::Arc | Tool::Arc3 => {
                 let before = self.undo.undo_count();
                 let (origin, dir) = view.ray(cursor);
@@ -716,6 +731,7 @@ impl Editor {
                 };
                 Some(("Distance", value))
             }
+            Tool::Scale => unimplemented!("m3-app-scale-flip"),
             Tool::Orbit | Tool::Pan | Tool::Zoom | Tool::Select => None,
         }
     }
@@ -803,6 +819,7 @@ impl Editor {
                 }
                 segments
             }
+            Tool::Scale => unimplemented!("m3-app-scale-flip"),
             Tool::Orbit | Tool::Pan | Tool::Zoom | Tool::Select => Vec::new(),
         }
     }
@@ -821,7 +838,8 @@ impl Editor {
             | Tool::Select
             | Tool::Line
             | Tool::PushPull
-            | Tool::Move => None,
+            | Tool::Move
+            | Tool::Scale => None,
         }
     }
 
@@ -865,6 +883,27 @@ impl Editor {
     /// other tools.
     pub fn move_tool(&self) -> Option<&MoveTool> {
         (self.tool == Tool::Move).then_some(&self.translate)
+    }
+
+    /// Scale: the tool, for drawing the box and its handles (`docs/specs/m3-app-scale-flip.md`).
+    /// `None` for other tools.
+    pub fn scale_tool(&self) -> Option<&ScaleTool> {
+        (self.tool == Tool::Scale).then_some(&self.scale)
+    }
+
+    /// Scale: the handle under the cursor while no scale is in progress.
+    pub fn scale_hover(&self) -> Option<Handle> {
+        if self.tool == Tool::Scale {
+            self.scale_hover
+        } else {
+            None
+        }
+    }
+
+    /// Flip the selection about the plane through the centre of its bounding box that is
+    /// perpendicular to axis `axis` (0 red, 1 green, 2 blue). True when the model changed.
+    pub fn flip(&mut self, _axis: usize, _model: &mut Model) -> bool {
+        unimplemented!("m3-app-scale-flip")
     }
 
     /// Why the last input was refused, for the status bar.
@@ -1278,6 +1317,26 @@ impl Editor {
         }
         segments.extend(instances);
         segments
+    }
+
+    fn move_scale(
+        &mut self,
+        _model: &mut Model,
+        _view: &Viewport,
+        _cursor: DVec2,
+        _mods: Modifiers,
+    ) {
+        unimplemented!("m3-app-scale-flip")
+    }
+
+    fn click_scale(
+        &mut self,
+        _model: &mut Model,
+        _view: &Viewport,
+        _cursor: DVec2,
+        _mods: Modifiers,
+    ) -> bool {
+        unimplemented!("m3-app-scale-flip")
     }
 
     fn move_move(&mut self, model: &mut Model, view: &Viewport, cursor: DVec2) {

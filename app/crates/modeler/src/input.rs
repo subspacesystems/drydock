@@ -32,6 +32,8 @@ pub enum Tool {
     Rotate,
     /// Move the selection (`docs/specs/m3-app-move.md`).
     Move,
+    /// Scale the selection from a handle (`docs/specs/m3-app-scale-flip.md`).
+    Scale,
 }
 
 /// A key for the editor (`docs/specs/m2-app-editor.md`).
@@ -144,7 +146,8 @@ pub fn drag(
             | Tool::Arc3
             | Tool::PushPull
             | Tool::Rotate
-            | Tool::Move => None,
+            | Tool::Move
+            | Tool::Scale => None,
         },
         Button::Right => None,
     }
