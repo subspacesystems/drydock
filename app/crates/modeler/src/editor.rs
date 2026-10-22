@@ -6,7 +6,8 @@
 //! measurement box. No egui, no GPU: the window code feeds it pointer and key events.
 //!
 //! Behaviour: `docs/specs/m2-app-editor.md`, shape tools: `docs/specs/m2-app-shapes.md`,
-//! Push/Pull: `docs/specs/m3-app-pushpull.md`, Rotate: `docs/specs/m3-app-rotate.md`.
+//! Push/Pull: `docs/specs/m3-app-pushpull.md`, Rotate: `docs/specs/m3-app-rotate.md`,
+//! Move: `docs/specs/m3-app-move.md`.
 
 use std::collections::BTreeSet;
 
@@ -23,6 +24,7 @@ use modeler_kernel::tools::line::LineTool;
 use modeler_kernel::tools::plane::DrawPlane;
 use modeler_kernel::tools::rectangle::RectTool;
 use modeler_kernel::tools::rotate::{RotateError, RotateStage, RotateTool};
+use modeler_kernel::tools::translate::MoveTool;
 use modeler_kernel::tools::{Input, Target, ToolError};
 use modeler_kernel::topology::FaceId;
 use modeler_kernel::units::{self, Unit};
@@ -175,6 +177,7 @@ pub struct Editor {
     last_push: Option<LastPush>,
     rotate: RotateTool,
     rotate_segments: Vec<(DVec3, DVec3)>,
+    translate: MoveTool,
 }
 
 fn click_mods(mods: Modifiers) -> ClickMods {
@@ -227,6 +230,7 @@ impl Editor {
             last_push: None,
             rotate: RotateTool::new(plane_for_normal(DVec3::Z)),
             rotate_segments: Vec::new(),
+            translate: MoveTool::new(),
         }
     }
 
@@ -373,6 +377,7 @@ impl Editor {
             Tool::Orbit | Tool::Pan | Tool::Zoom => false,
             Tool::PushPull => self.click_push(model, view, cursor, count),
             Tool::Rotate => self.click_rotate(model, view, cursor),
+            Tool::Move => unimplemented!("m3-app-move"),
             Tool::Rectangle | Tool::Circle | Tool::Arc | Tool::Arc3 => {
                 let before = self.undo.undo_count();
                 let (origin, dir) = view.ray(cursor);
@@ -677,6 +682,7 @@ impl Editor {
                 };
                 Some(("Angle", value))
             }
+            Tool::Move => unimplemented!("m3-app-move"),
             Tool::Orbit | Tool::Pan | Tool::Zoom | Tool::Select => None,
         }
     }
@@ -755,6 +761,7 @@ impl Editor {
                 }
                 segments
             }
+            Tool::Move => unimplemented!("m3-app-move"),
             Tool::Orbit | Tool::Pan | Tool::Zoom | Tool::Select => Vec::new(),
         }
     }
@@ -767,9 +774,13 @@ impl Editor {
             Tool::Arc => Some(self.arc.plane()),
             Tool::Arc3 => Some(self.arc3.plane()),
             Tool::Rotate => Some(self.rotate.plane()),
-            Tool::Orbit | Tool::Pan | Tool::Zoom | Tool::Select | Tool::Line | Tool::PushPull => {
-                None
-            }
+            Tool::Orbit
+            | Tool::Pan
+            | Tool::Zoom
+            | Tool::Select
+            | Tool::Line
+            | Tool::PushPull
+            | Tool::Move => None,
         }
     }
 
@@ -807,6 +818,12 @@ impl Editor {
     /// for other tools.
     pub fn rotate_tool(&self) -> Option<&RotateTool> {
         (self.tool == Tool::Rotate).then_some(&self.rotate)
+    }
+
+    /// Move: the tool, for drawing the from point (`docs/specs/m3-app-move.md`). `None` for
+    /// other tools.
+    pub fn move_tool(&self) -> Option<&MoveTool> {
+        (self.tool == Tool::Move).then_some(&self.translate)
     }
 
     /// Why the last input was refused, for the status bar.

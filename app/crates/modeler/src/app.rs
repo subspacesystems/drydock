@@ -951,6 +951,7 @@ impl App {
                     Tool::Arc3 => "3-Point Arc",
                     Tool::PushPull => "Push/Pull",
                     Tool::Rotate => "Rotate",
+                    Tool::Move => "Move",
                 });
             });
         });
