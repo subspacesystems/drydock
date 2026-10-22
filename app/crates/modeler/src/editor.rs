@@ -24,7 +24,7 @@ use modeler_kernel::tools::line::LineTool;
 use modeler_kernel::tools::plane::DrawPlane;
 use modeler_kernel::tools::rectangle::RectTool;
 use modeler_kernel::tools::rotate::{RotateError, RotateStage, RotateTool};
-use modeler_kernel::tools::translate::MoveTool;
+use modeler_kernel::tools::translate::{MoveError, MoveStage, MoveTool};
 use modeler_kernel::tools::{Input, Target, ToolError};
 use modeler_kernel::topology::FaceId;
 use modeler_kernel::units::{self, Unit};
@@ -74,7 +74,7 @@ fn is_drawing(tool: Tool) -> bool {
 }
 
 fn takes_text(tool: Tool) -> bool {
-    is_drawing(tool) || tool == Tool::PushPull || tool == Tool::Rotate
+    is_drawing(tool) || tool == Tool::PushPull || tool == Tool::Rotate || tool == Tool::Move
 }
 
 /// The parameter along `start + t·n` of the point closest to the ray `origin + u·dir`.
@@ -178,6 +178,7 @@ pub struct Editor {
     rotate: RotateTool,
     rotate_segments: Vec<(DVec3, DVec3)>,
     translate: MoveTool,
+    move_segments: Vec<(DVec3, DVec3)>,
 }
 
 fn click_mods(mods: Modifiers) -> ClickMods {
@@ -206,6 +207,16 @@ fn rotate_error_message(error: &RotateError) -> &'static str {
     }
 }
 
+fn move_error_message(error: &MoveError) -> &'static str {
+    match error {
+        MoveError::Parse(_) => "Not a length",
+        MoveError::NotStarted => "Click a start point first",
+        MoveError::NoDirection => "Move the cursor to show the direction",
+        MoveError::Empty => "Select something to move",
+        MoveError::NotFinite | MoveError::Transform(_) => "Can't move that",
+    }
+}
+
 impl Editor {
     /// Orbit tool, nothing selected, empty undo stack, inches.
     pub fn new() -> Editor {
@@ -231,6 +242,7 @@ impl Editor {
             rotate: RotateTool::new(plane_for_normal(DVec3::Z)),
             rotate_segments: Vec::new(),
             translate: MoveTool::new(),
+            move_segments: Vec::new(),
         }
     }
 
@@ -253,6 +265,8 @@ impl Editor {
         self.push_hover = None;
         self.rotate = RotateTool::new(plane_for_normal(DVec3::Z));
         self.rotate_segments.clear();
+        self.translate = MoveTool::new();
+        self.move_segments.clear();
     }
 
     /// Sorted, no duplicates; only entities of the root body.
@@ -294,6 +308,10 @@ impl Editor {
         }
         if self.tool == Tool::Rotate {
             self.move_rotate(model, view, cursor);
+            return;
+        }
+        if self.tool == Tool::Move {
+            self.move_move(model, view, cursor);
             return;
         }
         if self.tool != Tool::Line {
@@ -377,7 +395,7 @@ impl Editor {
             Tool::Orbit | Tool::Pan | Tool::Zoom => false,
             Tool::PushPull => self.click_push(model, view, cursor, count),
             Tool::Rotate => self.click_rotate(model, view, cursor),
-            Tool::Move => unimplemented!("m3-app-move"),
+            Tool::Move => self.click_move(model, view, cursor),
             Tool::Rectangle | Tool::Circle | Tool::Arc | Tool::Arc3 => {
                 let before = self.undo.undo_count();
                 let (origin, dir) = view.ray(cursor);
@@ -456,6 +474,7 @@ impl Editor {
                 self.line = LineTool::new();
                 self.idle_shapes();
                 self.idle_rotate();
+                self.idle_move();
                 self.typed.clear();
                 self.arrow_lock = None;
                 self.shift_lock = None;
@@ -477,6 +496,9 @@ impl Editor {
                 }
                 if self.tool == Tool::Rotate {
                     return self.enter_rotate(text, model);
+                }
+                if self.tool == Tool::Move {
+                    return self.enter_move(text, model);
                 }
                 if !is_drawing(self.tool) {
                     return false;
@@ -517,6 +539,7 @@ impl Editor {
                 self.line = LineTool::new();
                 self.idle_shapes();
                 self.idle_rotate();
+                self.idle_move();
                 self.typed.clear();
                 self.push = None;
                 if self.tool == Tool::PushPull {
@@ -538,6 +561,7 @@ impl Editor {
                 self.line = LineTool::new();
                 self.idle_shapes();
                 self.idle_rotate();
+                self.idle_move();
                 self.typed.clear();
                 self.push = None;
                 if self.tool == Tool::PushPull {
@@ -682,7 +706,16 @@ impl Editor {
                 };
                 Some(("Angle", value))
             }
-            Tool::Move => unimplemented!("m3-app-move"),
+            Tool::Move => {
+                let value = match self.translate.offset() {
+                    Some(offset) => length(offset.length()),
+                    None => match self.translate.last_offset(&self.undo) {
+                        Some(offset) => length(offset.length()),
+                        None => String::new(),
+                    },
+                };
+                Some(("Distance", value))
+            }
             Tool::Orbit | Tool::Pan | Tool::Zoom | Tool::Select => None,
         }
     }
@@ -761,7 +794,15 @@ impl Editor {
                 }
                 segments
             }
-            Tool::Move => unimplemented!("m3-app-move"),
+            Tool::Move => {
+                let mut segments = self.translate.preview();
+                if let Some(matrix) = self.translate.matrix() {
+                    for &(a, b) in &self.move_segments {
+                        segments.push((matrix.transform_point3(a), matrix.transform_point3(b)));
+                    }
+                }
+                segments
+            }
             Tool::Orbit | Tool::Pan | Tool::Zoom | Tool::Select => Vec::new(),
         }
     }
@@ -1239,6 +1280,107 @@ impl Editor {
         segments
     }
 
+    fn move_move(&mut self, model: &mut Model, view: &Viewport, cursor: DVec2) {
+        let Some(inf) = self.infer_move_at(model, view, cursor) else {
+            self.hint = None;
+            return;
+        };
+        self.hint = Some(inf);
+        let mut target = Target {
+            model,
+            body: BodyId::Root,
+            undo: &mut self.undo,
+            unit: self.unit,
+        };
+        let _ = self
+            .translate
+            .handle(Input::Move(inf.point), &self.selection, &mut target);
+    }
+
+    fn click_move(&mut self, model: &mut Model, view: &Viewport, cursor: DVec2) -> bool {
+        let before = self.undo.undo_count();
+        let was_from = self.translate.stage() == MoveStage::From;
+        if was_from && self.selection.is_empty() {
+            let Some(entity) = self.pick_at(model, view, cursor) else {
+                self.message = Some("Select something to move".to_string());
+                return false;
+            };
+            self.selection = click::apply_click(
+                &self.selection,
+                Some(entity),
+                click_mods(Modifiers::default()),
+            );
+        }
+        let Some(inf) = self.infer_move_at(model, view, cursor) else {
+            self.hint = None;
+            return false;
+        };
+        self.hint = Some(inf);
+        let result = {
+            let mut target = Target {
+                model,
+                body: BodyId::Root,
+                undo: &mut self.undo,
+                unit: self.unit,
+            };
+            self.translate
+                .handle(Input::Click(inf.point), &self.selection, &mut target)
+        };
+        match result {
+            Ok(()) => {
+                self.message = None;
+                if was_from {
+                    self.move_segments = self.collect_rotate_segments(model);
+                }
+            }
+            Err(error) => self.message = Some(move_error_message(&error).to_string()),
+        }
+        let changed = self.undo.undo_count() != before;
+        if changed {
+            self.prune(model);
+        }
+        changed
+    }
+
+    fn enter_move(&mut self, text: String, model: &mut Model) -> bool {
+        let before = self.undo.undo_count();
+        let before_offset = self.translate.last_offset(&self.undo);
+        let result = {
+            let mut target = Target {
+                model,
+                body: BodyId::Root,
+                undo: &mut self.undo,
+                unit: self.unit,
+            };
+            self.translate
+                .handle(Input::Typed(text), &self.selection, &mut target)
+        };
+        match result {
+            Ok(()) => self.message = None,
+            Err(error) => self.message = Some(move_error_message(&error).to_string()),
+        }
+        let after_offset = self.translate.last_offset(&self.undo);
+        let retyped = before_offset.zip(after_offset).is_some_and(|(a, b)| a != b);
+        let changed = self.undo.undo_count() != before || retyped;
+        if changed {
+            self.prune(model);
+        }
+        changed
+    }
+
+    fn idle_move(&mut self) {
+        let mut model = Model::new();
+        let mut undo = UndoStack::new();
+        let mut target = Target {
+            model: &mut model,
+            body: BodyId::Root,
+            undo: &mut undo,
+            unit: self.unit,
+        };
+        let _ = self.translate.handle(Input::Cancel, &[], &mut target);
+        self.move_segments.clear();
+    }
+
     fn pick_shape_plane(&mut self, model: &Model, origin: DVec3, dir: DVec3) {
         let plane = self.picked_plane(model, origin, dir);
         self.set_shape_plane(plane);
@@ -1313,6 +1455,25 @@ impl Editor {
             project: &project,
             radius: SNAP_RADIUS_PX,
             anchor: self.rotate.center(),
+            axes: AXES,
+            centers: &centers,
+            lock: None,
+        };
+        infer::infer_model(model, &probe)
+    }
+
+    fn infer_move_at(&self, model: &Model, view: &Viewport, cursor: DVec2) -> Option<Inference> {
+        let (origin, dir) = view.ray(cursor);
+        let project = |p: DVec3| view.project(p);
+        let centers: [DVec3; 0] = [];
+        let probe = Probe {
+            cursor,
+            origin,
+            dir,
+            parallel: view.camera.projection == Projection::Parallel,
+            project: &project,
+            radius: SNAP_RADIUS_PX,
+            anchor: self.translate.from(),
             axes: AXES,
             centers: &centers,
             lock: None,
