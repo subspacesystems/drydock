@@ -167,3 +167,14 @@ fn degenerate_viewport_does_not_panic_or_produce_nan() {
     let c = s.camera;
     assert!(c.target.is_finite() && c.distance.is_finite() && c.distance > 0.0);
 }
+
+#[test]
+fn flip_is_passed_to_the_caller_untouched() {
+    let mut s = ViewState::new();
+    let before = s.camera;
+    for axis in 0..3 {
+        assert_eq!(s.apply(Action::Flip(axis), VP), Effect::Flip(axis));
+    }
+    assert_eq!(s.camera, before);
+    assert_eq!(s.tool, Tool::Orbit);
+}

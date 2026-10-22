@@ -209,7 +209,12 @@ fn key_table() {
         ("H", NONE, Action::SelectTool(Tool::Pan)),
         ("Z", NONE, Action::SelectTool(Tool::Zoom)),
         ("Z", SHIFT, Action::ZoomExtents),
-        ("P", NONE, Action::ToggleProjection),
+        ("P", SHIFT, Action::ToggleProjection),
+        ("P", NONE, Action::SelectTool(Tool::PushPull)),
+        ("M", NONE, Action::SelectTool(Tool::Move)),
+        ("Q", NONE, Action::SelectTool(Tool::Rotate)),
+        ("S", NONE, Action::SelectTool(Tool::Scale)),
+        ("T", NONE, Action::SelectTool(Tool::Tape)),
         ("O", CTRL, Action::Open),
         ("S", CTRL, Action::Save),
         ("S", CTRL_SHIFT, Action::SaveAs),
@@ -261,13 +266,19 @@ fn unlisted_keys_and_modifier_sets_do_nothing() {
         ("Right", SHIFT),
         ("Left", CTRL),
         ("Up", ALT),
-        ("P", SHIFT),
+        ("P", CTRL),
+        ("P", ALT),
+        ("M", SHIFT),
+        ("M", CTRL),
+        ("Q", SHIFT),
+        ("Q", CTRL),
+        ("T", SHIFT),
+        ("T", ALT),
+        ("p", NONE),
         ("F2", SHIFT),
         ("F3", CTRL),
         ("F1", NONE),
         ("F9", NONE),
-        ("Q", NONE),
-        ("S", NONE),
         ("S", SHIFT),
         ("S", ALT),
         ("S", CTRL_ALT),
@@ -277,4 +288,26 @@ fn unlisted_keys_and_modifier_sets_do_nothing() {
     ] {
         assert_eq!(key(name, mods), None, "{name:?} {mods:?}");
     }
+}
+
+#[test]
+fn flip_is_menu_only_and_new_keys_do_not_shadow_old_ones() {
+    // No plain letter flips; every letter bound before M3 still does what it did.
+    for name in ["F", "X", "Y", "G", "B"] {
+        assert_eq!(key(name, NONE), None, "{name}");
+    }
+    for (name, tool) in [
+        ("L", Tool::Line),
+        ("R", Tool::Rectangle),
+        ("C", Tool::Circle),
+        ("A", Tool::Arc),
+        ("O", Tool::Orbit),
+        ("H", Tool::Pan),
+        ("Z", Tool::Zoom),
+    ] {
+        assert_eq!(key(name, NONE), Some(Action::SelectTool(tool)), "{name}");
+    }
+    assert_eq!(key("A", SHIFT), Some(Action::SelectTool(Tool::Arc3)));
+    assert_eq!(key("S", CTRL), Some(Action::Save));
+    assert_eq!(key("S", CTRL_SHIFT), Some(Action::SaveAs));
 }
