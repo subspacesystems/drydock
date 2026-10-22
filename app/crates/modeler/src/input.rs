@@ -34,6 +34,8 @@ pub enum Tool {
     Move,
     /// Scale the selection from a handle (`docs/specs/m3-app-scale-flip.md`).
     Scale,
+    /// Measure distances and leave guides (`docs/specs/m3-app-tape.md`).
+    Tape,
 }
 
 /// A key for the editor (`docs/specs/m2-app-editor.md`).
@@ -147,7 +149,8 @@ pub fn drag(
             | Tool::PushPull
             | Tool::Rotate
             | Tool::Move
-            | Tool::Scale => None,
+            | Tool::Scale
+            | Tool::Tape => None,
         },
         Button::Right => None,
     }

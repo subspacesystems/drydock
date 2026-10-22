@@ -953,6 +953,7 @@ impl App {
                     Tool::Rotate => "Rotate",
                     Tool::Move => "Move",
                     Tool::Scale => "Scale",
+                    Tool::Tape => "Tape Measure",
                 });
             });
         });

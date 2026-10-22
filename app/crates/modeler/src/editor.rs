@@ -7,7 +7,8 @@
 //!
 //! Behaviour: `docs/specs/m2-app-editor.md`, shape tools: `docs/specs/m2-app-shapes.md`,
 //! Push/Pull: `docs/specs/m3-app-pushpull.md`, Rotate: `docs/specs/m3-app-rotate.md`,
-//! Move: `docs/specs/m3-app-move.md`, Scale and Flip: `docs/specs/m3-app-scale-flip.md`.
+//! Move: `docs/specs/m3-app-move.md`, Scale and Flip: `docs/specs/m3-app-scale-flip.md`,
+//! Tape: `docs/specs/m3-app-tape.md`.
 
 use std::collections::BTreeSet;
 
@@ -27,6 +28,7 @@ use modeler_kernel::tools::rotate::{RotateError, RotateStage, RotateTool};
 use modeler_kernel::tools::scale::{
     Bounds, Handle, ScaleError, ScaleStage, ScaleTool, bounds, handles,
 };
+use modeler_kernel::tools::tape::TapeTool;
 use modeler_kernel::tools::translate::{MoveError, MoveStage, MoveTool};
 use modeler_kernel::tools::{Input, Target, ToolError};
 use modeler_kernel::topology::FaceId;
@@ -83,6 +85,7 @@ fn takes_text(tool: Tool) -> bool {
         || tool == Tool::Rotate
         || tool == Tool::Move
         || tool == Tool::Scale
+        || tool == Tool::Tape
 }
 
 /// The parameter along `start + t·n` of the point closest to the ray `origin + u·dir`.
@@ -189,6 +192,8 @@ pub struct Editor {
     move_segments: Vec<(DVec3, DVec3)>,
     scale: ScaleTool,
     scale_hover: Option<Handle>,
+    tape: TapeTool,
+    tape_point_guides: bool,
     scale_segments: Vec<(DVec3, DVec3)>,
 }
 
@@ -307,6 +312,8 @@ impl Editor {
             move_segments: Vec::new(),
             scale: ScaleTool::new(),
             scale_hover: None,
+            tape: TapeTool::new(),
+            tape_point_guides: false,
             scale_segments: Vec::new(),
         }
     }
@@ -335,6 +342,7 @@ impl Editor {
         self.scale = ScaleTool::new();
         self.scale_hover = None;
         self.scale_segments.clear();
+        self.tape = TapeTool::new();
     }
 
     /// Sorted, no duplicates; only entities of the root body.
@@ -385,6 +393,9 @@ impl Editor {
         if self.tool == Tool::Scale {
             self.move_scale(model, view, cursor, mods);
             return;
+        }
+        if self.tool == Tool::Tape {
+            unimplemented!("m3-app-tape");
         }
         if self.tool != Tool::Line {
             self.hint = None;
@@ -469,6 +480,7 @@ impl Editor {
             Tool::Rotate => self.click_rotate(model, view, cursor),
             Tool::Move => self.click_move(model, view, cursor),
             Tool::Scale => self.click_scale(model, view, cursor, mods),
+            Tool::Tape => unimplemented!("m3-app-tape"),
             Tool::Rectangle | Tool::Circle | Tool::Arc | Tool::Arc3 => {
                 let before = self.undo.undo_count();
                 let (origin, dir) = view.ray(cursor);
@@ -576,6 +588,9 @@ impl Editor {
                 }
                 if self.tool == Tool::Scale {
                     return self.enter_scale(text, model);
+                }
+                if self.tool == Tool::Tape {
+                    unimplemented!("m3-app-tape");
                 }
                 if !is_drawing(self.tool) {
                     return false;
@@ -807,6 +822,7 @@ impl Editor {
                 };
                 Some(("Scale", value))
             }
+            Tool::Tape => unimplemented!("m3-app-tape"),
             Tool::Orbit | Tool::Pan | Tool::Zoom | Tool::Select => None,
         }
     }
@@ -909,6 +925,7 @@ impl Editor {
                 }
                 segments
             }
+            Tool::Tape => unimplemented!("m3-app-tape"),
             Tool::Orbit | Tool::Pan | Tool::Zoom | Tool::Select => Vec::new(),
         }
     }
@@ -928,7 +945,8 @@ impl Editor {
             | Tool::Line
             | Tool::PushPull
             | Tool::Move
-            | Tool::Scale => None,
+            | Tool::Scale
+            | Tool::Tape => None,
         }
     }
 
@@ -972,6 +990,18 @@ impl Editor {
     /// other tools.
     pub fn move_tool(&self) -> Option<&MoveTool> {
         (self.tool == Tool::Move).then_some(&self.translate)
+    }
+
+    /// Tape: the tool, for drawing the start point (`docs/specs/m3-app-tape.md`). `None` for
+    /// other tools.
+    pub fn tape_tool(&self) -> Option<&TapeTool> {
+        (self.tool == Tool::Tape).then_some(&self.tape)
+    }
+
+    /// Tape: the point-guide modifier (Ctrl in the window): while on, a click at the start
+    /// stage leaves a guide point. Kept across `set_tool`.
+    pub fn set_point_guides(&mut self, on: bool) {
+        self.tape_point_guides = on;
     }
 
     /// Scale: the tool, for drawing the box and its handles (`docs/specs/m3-app-scale-flip.md`).
