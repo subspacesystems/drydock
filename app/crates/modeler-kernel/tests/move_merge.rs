@@ -147,7 +147,7 @@ fn moved_edge_laid_over_edges_reuses_them() {
     draw(&mut model, v(0.0, 0.0, 0.0), v(4.0, 0.0, 0.0));
     draw(&mut model, v(2.0, 0.0, 0.0), v(2.0, -3.0, 0.0));
     draw(&mut model, v(0.0, 5.0, 0.0), v(4.0, 5.0, 0.0));
-    assert_eq!(counts(&model), (5, 3, 0));
+    assert_eq!(counts(&model), (6, 4, 0));
     let moving = edge_at(&model, v(0.0, 5.0, 0.0), v(4.0, 5.0, 0.0));
     run(
         &mut model,
