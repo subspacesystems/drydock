@@ -83,7 +83,9 @@ Done when: `modeler` on the reference house model opens in under 5 s on modeler-
 | `m3-app-rotate` | Rotate tool in the editor: protractor plane from inference, wires `tools/rotate.rs` | `m3-tool-rotate`, `m3-app-pushpull` |
 | `m3-app-scale-flip` | Scale tool in the editor (wires `tools/scale.rs`) and Flip about red/green/blue | `m3-tool-scale`, `m3-app-pushpull` |
 | `m3-app-tape` | Tape tool in the editor: wires `tools/tape.rs` | `m3-tool-tape`, `m3-app-pushpull` |
-| `m3-app-ui` | Window wiring for the M3 tools: toolbar, keys, face highlight, previews, protractor, guides drawn; egui_kittest tests | all `m3-app-*` above |
+| `m3-ui-keys` | Keys P/M/Q/S/T for the new tools; projection toggle on Shift+P; `Action::Flip` | `m3-app-tape` |
+| `m3-ui-overlay` | Pure overlay primitives for the M3 tools (face highlight, scale handles, protractor, guides) | `m3-ui-keys` |
+| `m3-app-ui` | Window wiring for the M3 tools: toolbar, View/Edit menus (projection, flip), pointer events, modifiers, overlays painted; egui_kittest tests | `m3-ui-keys`, `m3-ui-overlay` |
 
 - Push/Pull with typed distance; extrudes faces, creating side faces.
 - Move (points, edges, faces, selection; with inference and typed distance; copy with modifier).
