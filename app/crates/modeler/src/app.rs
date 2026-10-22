@@ -794,7 +794,7 @@ impl App {
         {
             let preview = tool.preview();
             let (radius, start) = match preview.first() {
-                Some((_, point)) => (point.distance(center), Some(*point)),
+                Some((_, point)) => (point.distance(center), Some(*point - center)),
                 None => (0.0, None),
             };
             let primitives = overlay::protractor(center, tool.plane(), radius, start, tool.angle());
