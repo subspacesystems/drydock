@@ -359,6 +359,8 @@ impl App {
             Effect::Save => self.save(ctx, frame),
             Effect::SaveAsDialog => self.open_save_dialog(),
             Effect::Edit(key) => self.edit(key, ctx, frame),
+            // Wired in `m3-app-ui`.
+            Effect::Flip(_) => {}
         }
     }
 

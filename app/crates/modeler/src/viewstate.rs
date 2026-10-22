@@ -30,6 +30,8 @@ pub enum Effect {
     SaveAsDialog,
     /// Pass the key to the editor.
     Edit(EditKey),
+    /// Flip the selection about an axis (0 red, 1 green, 2 blue).
+    Flip(usize),
 }
 
 /// The scene's bounding box in `modeler_view` terms (`None` for an empty scene).
@@ -96,6 +98,7 @@ impl ViewState {
             Action::Save => return Effect::Save,
             Action::SaveAs => return Effect::SaveAsDialog,
             Action::Edit(key) => return Effect::Edit(key),
+            Action::Flip(axis) => return Effect::Flip(axis),
         }
         Effect::None
     }

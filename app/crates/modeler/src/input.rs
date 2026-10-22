@@ -94,6 +94,9 @@ pub enum Action {
     /// Save under a new name.
     SaveAs,
     Edit(EditKey),
+    /// Mirror the selection about the red (0), green (1) or blue (2) axis through its
+    /// box center (menu only; `docs/specs/m3-ui-keys.md`).
+    Flip(usize),
 }
 
 /// A mouse drag of `delta` pixels (screen space, y down) with `button` held.
