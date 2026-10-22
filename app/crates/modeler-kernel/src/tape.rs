@@ -27,21 +27,56 @@ pub fn measure(a: DVec3, b: DVec3) -> f64 {
 
 /// A guide line parallel to the edge `a`-`b`.
 pub fn parallel_guide(a: DVec3, b: DVec3, toward: DVec3, typed: Option<f64>) -> Option<Guide> {
-    let _ = (a, b, toward, typed);
-    unimplemented!("m3-tape")
+    use crate::geom::LINEAR_TOL;
+
+    if !a.is_finite() || !b.is_finite() || !toward.is_finite() {
+        return None;
+    }
+
+    let edge = b - a;
+    let length = edge.length();
+    if !length.is_finite() || length < LINEAR_TOL {
+        return None;
+    }
+    let dir = edge / length;
+
+    if let Some(distance) = typed
+        && (!distance.is_finite() || distance <= LINEAR_TOL)
+    {
+        return None;
+    }
+
+    let offset = toward - a;
+    let perpendicular = offset - dir * dir.dot(offset);
+    let side_distance = perpendicular.length();
+    if !side_distance.is_finite() || side_distance < LINEAR_TOL {
+        return None;
+    }
+    let side = perpendicular / side_distance;
+
+    let distance = typed.unwrap_or(side_distance);
+    Some(Guide::Line {
+        point: a + side * distance,
+        dir,
+    })
 }
 
 /// A guide point at `p`.
 pub fn point_guide(p: DVec3) -> Option<Guide> {
-    let _ = p;
-    unimplemented!("m3-tape")
+    if p.is_finite() {
+        Some(Guide::Point(p))
+    } else {
+        None
+    }
 }
 
 impl Guide {
     /// Distance from `p` to the guide.
     pub fn distance_to(&self, p: DVec3) -> f64 {
-        let _ = p;
-        unimplemented!("m3-tape")
+        match *self {
+            Guide::Line { point, dir } => (p - point).cross(dir).length(),
+            Guide::Point(point) => p.distance(point),
+        }
     }
 }
 
@@ -54,31 +89,30 @@ pub struct Guides {
 
 impl Guides {
     pub fn new() -> Self {
-        unimplemented!("m3-tape")
+        Self::default()
     }
     pub fn add(&mut self, guide: Guide) -> GuideId {
-        let _ = guide;
-        unimplemented!("m3-tape")
+        let id = GuideId(self.next);
+        self.next += 1;
+        self.items.insert(id, guide);
+        id
     }
     pub fn remove(&mut self, id: GuideId) -> Option<Guide> {
-        let _ = id;
-        unimplemented!("m3-tape")
+        self.items.remove(&id)
     }
     pub fn clear(&mut self) -> Vec<(GuideId, Guide)> {
-        unimplemented!("m3-tape")
+        std::mem::take(&mut self.items).into_iter().collect()
     }
     pub fn get(&self, id: GuideId) -> Option<&Guide> {
-        let _ = id;
-        unimplemented!("m3-tape")
+        self.items.get(&id)
     }
     pub fn iter(&self) -> impl Iterator<Item = (GuideId, &Guide)> {
-        let _ = (&self.items, self.next);
-        std::iter::empty()
+        self.items.iter().map(|(id, guide)| (*id, guide))
     }
     pub fn len(&self) -> usize {
-        unimplemented!("m3-tape")
+        self.items.len()
     }
     pub fn is_empty(&self) -> bool {
-        unimplemented!("m3-tape")
+        self.items.is_empty()
     }
 }
