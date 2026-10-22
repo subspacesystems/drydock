@@ -11,15 +11,18 @@ use std::sync::mpsc::{self, Receiver, TryRecvError};
 use eframe::egui;
 use egui::{Color32, Event, MouseWheelUnit, PointerButton, Pos2, Rect, Sense};
 use glam::{DVec2, DVec3};
+use modeler::chrome::{self, MenuState};
 use modeler::document::{Document, FileKind, format_size, native_path};
 use modeler::editor::{Editor, Viewport as EditorViewport};
 use modeler::hints::hint_label;
 use modeler::input::{self, Button, Modifiers, Tool};
+use modeler::overlay::{self, Primitive};
 use modeler::viewstate::{Effect, ViewState, scene_bounds};
 use modeler_dae::FlatScene;
 use modeler_kernel::model::BodyId;
 use modeler_kernel::select::{Entity, instance_segments};
 use modeler_kernel::tools::plane::DrawPlane;
+use modeler_kernel::tools::scale;
 use modeler_render::{GpuScene, Renderer, Style, Viewport};
 use modeler_view::Projection;
 
@@ -359,8 +362,20 @@ impl App {
             Effect::Save => self.save(ctx, frame),
             Effect::SaveAsDialog => self.open_save_dialog(),
             Effect::Edit(key) => self.edit(key, ctx, frame),
-            // Wired in `m3-app-ui`.
-            Effect::Flip(_) => {}
+            Effect::Flip(axis) => {
+                let changed =
+                    if let (Some(editor), Some(document)) = (&mut self.editor, &mut self.model) {
+                        match document.kernel.as_mut() {
+                            Some(model) => editor.flip(axis, model),
+                            None => false,
+                        }
+                    } else {
+                        false
+                    };
+                if changed {
+                    self.refresh_document(ctx, frame);
+                }
+            }
         }
     }
 
@@ -444,6 +459,7 @@ impl App {
                 i.events.clone(),
             )
         });
+        let tool = self.editor.as_ref().map(Editor::tool);
         for (egui_button, button) in [
             (PointerButton::Primary, Button::Left),
             (PointerButton::Middle, Button::Middle),
@@ -455,6 +471,15 @@ impl App {
                 self.drag_start_ndc = ndc(origin);
                 if egui_button == PointerButton::Primary {
                     self.drag_start_px = Some(local(origin));
+                    if tool == Some(Tool::Scale) {
+                        let view = EditorViewport {
+                            camera: self.view.camera,
+                            size_px: (f64::from(rect.width()), f64::from(rect.height())),
+                        };
+                        if self.editor_click(&view, local(origin), mods, 1) {
+                            self.refresh_document(ctx, frame);
+                        }
+                    }
                 }
             }
             if response.dragged_by(egui_button) {
@@ -481,12 +506,27 @@ impl App {
                 }
             }
         }
-        let Some(tool) = self.editor.as_ref().map(Editor::tool) else {
+        let Some(tool) = tool else {
             return;
         };
+        if tool == Tool::Tape
+            && let Some(editor) = &mut self.editor
+        {
+            editor.set_point_guides(mods.ctrl);
+        }
         let drawing = matches!(
             tool,
-            Tool::Select | Tool::Line | Tool::Rectangle | Tool::Circle | Tool::Arc | Tool::Arc3
+            Tool::Select
+                | Tool::Line
+                | Tool::Rectangle
+                | Tool::Circle
+                | Tool::Arc
+                | Tool::Arc3
+                | Tool::PushPull
+                | Tool::Rotate
+                | Tool::Move
+                | Tool::Scale
+                | Tool::Tape
         );
         if !drawing {
             return;
@@ -509,6 +549,13 @@ impl App {
                 ) {
                     self.editor_box_select(&view, start, end, mods);
                 }
+            } else if tool == Tool::Scale {
+                if let Some(end) = cursor
+                    && self.editor_click(&view, local(end), mods, 1)
+                {
+                    self.refresh_document(ctx, frame);
+                }
+                self.drag_start_px = None;
             } else {
                 self.drag_start_px = None;
             }
@@ -717,6 +764,42 @@ impl App {
                 }
             }
         }
+        if let Some(kernel) = &document.kernel {
+            if let Some(face) = editor.pushpull_face() {
+                let primitives = overlay::face_highlight(kernel.root().geometry(), face);
+                paint_primitives(painter, &primitives, &project);
+            }
+            if let Some(tool) = editor.scale_tool() {
+                let bounds = tool
+                    .preview()
+                    .or_else(|| scale::bounds(kernel, BodyId::Root, editor.selection()));
+                if let Some(bounds) = bounds {
+                    let primitives = overlay::scale_handles(
+                        &bounds,
+                        editor.scale_hover(),
+                        tool.handle_grabbed(),
+                    );
+                    paint_primitives(painter, &primitives, &project);
+                }
+            }
+            let primitives = overlay::guides(
+                kernel.root().guides(),
+                self.view.camera.target,
+                self.view.camera.distance * 10.0,
+            );
+            paint_primitives(painter, &primitives, &project);
+        }
+        if let Some(tool) = editor.rotate_tool()
+            && let Some(center) = tool.center()
+        {
+            let preview = tool.preview();
+            let (radius, start) = match preview.first() {
+                Some((_, point)) => (point.distance(center), Some(*point)),
+                None => (0.0, None),
+            };
+            let primitives = overlay::protractor(center, tool.plane(), radius, start, tool.angle());
+            paint_primitives(painter, &primitives, &project);
+        }
         if let Some(hint) = editor.hint()
             && let Some(point) = project(hint.point)
         {
@@ -798,87 +881,22 @@ impl App {
             });
     }
 
-    fn toolbar(&mut self, ui: &mut egui::Ui) -> Option<input::Action> {
-        let mut chosen = None;
-        ui.vertical(|ui| {
-            ui.set_width(92.0);
-            for (tool, label) in [
-                (Tool::Select, "Select"),
-                (Tool::Line, "Line"),
-                (Tool::Rectangle, "Rectangle"),
-                (Tool::Circle, "Circle"),
-                (Tool::Arc, "Arc"),
-                (Tool::Arc3, "3-Point Arc"),
-                (Tool::Orbit, "Orbit"),
-                (Tool::Pan, "Pan"),
-                (Tool::Zoom, "Zoom"),
-            ] {
-                if ui.selectable_label(self.view.tool == tool, label).clicked() {
-                    chosen = Some(input::Action::SelectTool(tool));
-                }
-            }
-        });
-        chosen
-    }
-
-    fn menu_bar(&mut self, ui: &mut egui::Ui) -> Option<input::Action> {
-        let mut chosen = None;
-        egui::MenuBar::new().ui(ui, |ui| {
-            ui.menu_button("File", |ui| {
-                if ui.button("New    Ctrl+N").clicked() {
-                    chosen = Some(input::Action::New);
-                    ui.close();
-                }
-                if ui.button("Open...    Ctrl+O").clicked() {
-                    chosen = Some(input::Action::Open);
-                    ui.close();
-                }
-                ui.separator();
-                if ui.button("Save    Ctrl+S").clicked() {
-                    chosen = Some(input::Action::Save);
-                    ui.close();
-                }
-                if ui.button("Save As...    Ctrl+Shift+S").clicked() {
-                    chosen = Some(input::Action::SaveAs);
-                    ui.close();
-                }
-            });
-            ui.menu_button("Edit", |ui| {
-                let undo = self
-                    .editor
-                    .as_ref()
-                    .and_then(|editor| editor.undo_stack().undo_label())
-                    .map(str::to_owned);
-                let redo = self
-                    .editor
-                    .as_ref()
-                    .and_then(|editor| editor.undo_stack().redo_label())
-                    .map(str::to_owned);
-                let undo_text = match &undo {
-                    Some(label) => format!("Undo {label}    Ctrl+Z"),
-                    None => "Undo    Ctrl+Z".to_owned(),
-                };
-                if ui
-                    .add_enabled(undo.is_some(), egui::Button::new(undo_text))
-                    .clicked()
-                {
-                    chosen = Some(input::Action::Edit(input::EditKey::Undo));
-                    ui.close();
-                }
-                let redo_text = match &redo {
-                    Some(label) => format!("Redo {label}    Ctrl+Y"),
-                    None => "Redo    Ctrl+Y".to_owned(),
-                };
-                if ui
-                    .add_enabled(redo.is_some(), egui::Button::new(redo_text))
-                    .clicked()
-                {
-                    chosen = Some(input::Action::Edit(input::EditKey::Redo));
-                    ui.close();
-                }
-            });
-        });
-        chosen
+    fn menu_state(&self) -> MenuState<'_> {
+        MenuState {
+            undo: self
+                .editor
+                .as_ref()
+                .and_then(|editor| editor.undo_stack().undo_label()),
+            redo: self
+                .editor
+                .as_ref()
+                .and_then(|editor| editor.undo_stack().redo_label()),
+            parallel: self.view.camera.projection == Projection::Parallel,
+            has_selection: self
+                .editor
+                .as_ref()
+                .is_some_and(|editor| !editor.selection().is_empty()),
+        }
     }
 
     fn status_bar(&self, ui: &mut egui::Ui) {
@@ -980,11 +998,11 @@ impl eframe::App for App {
 
         let mut menu_action = None;
         egui::Panel::top("menu").show(ui, |ui| {
-            menu_action = self.menu_bar(ui);
+            menu_action = chrome::menu_bar(ui, &self.menu_state());
         });
         let mut tool_action = None;
         egui::Panel::left("toolbar").show(ui, |ui| {
-            tool_action = self.toolbar(ui);
+            tool_action = chrome::toolbar(ui, self.view.tool);
         });
         if let Some(action) = menu_action.or(tool_action) {
             self.apply(action, &ctx, frame);
@@ -1106,6 +1124,85 @@ fn unsaved_dialog(ctx: &egui::Context, name: &str) -> Option<UnsavedChoice> {
         choice = Some(UnsavedChoice::Cancel);
     }
     choice
+}
+
+/// Stroke colour and width for an overlay primitive.
+fn overlay_style(style: overlay::Style) -> (Color32, f32) {
+    match style {
+        overlay::Style::FaceHighlight => (ACCENT_COLOR, 2.0),
+        overlay::Style::BoundsBox => (Color32::from_rgb(130, 140, 155), 1.0),
+        overlay::Style::Handle => (Color32::from_rgb(190, 200, 215), 1.0),
+        overlay::Style::HandleHover => (Color32::from_rgb(255, 220, 120), 1.5),
+        overlay::Style::HandleGrabbed => (Color32::from_rgb(255, 255, 255), 2.0),
+        overlay::Style::ProtractorRing => (Color32::from_rgb(120, 200, 210), 1.5),
+        overlay::Style::ProtractorTick => (Color32::from_rgb(120, 200, 210), 1.0),
+        overlay::Style::ProtractorArm => (Color32::from_rgb(220, 240, 245), 2.0),
+        overlay::Style::Guide => (Color32::from_rgb(160, 160, 160), 1.0),
+        overlay::Style::GuidePoint => (Color32::from_rgb(220, 220, 220), 1.0),
+    }
+}
+
+/// Paint overlay primitives, projecting world points into the viewport.
+fn paint_primitives(
+    painter: &egui::Painter,
+    primitives: &[Primitive],
+    project: &dyn Fn(DVec3) -> Option<Pos2>,
+) {
+    for primitive in primitives {
+        match primitive {
+            Primitive::Line { a, b, style } => {
+                let (color, width) = overlay_style(*style);
+                if let (Some(a), Some(b)) = (project(*a), project(*b)) {
+                    painter.line_segment([a, b], egui::Stroke::new(width, color));
+                }
+            }
+            Primitive::Polygon { points, style } => {
+                let (color, width) = overlay_style(*style);
+                let projected: Vec<Pos2> = points.iter().filter_map(|p| project(*p)).collect();
+                if projected.len() < 2 {
+                    continue;
+                }
+                if *style == overlay::Style::FaceHighlight {
+                    let fill = Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), 45);
+                    painter.add(egui::Shape::convex_polygon(
+                        projected.clone(),
+                        fill,
+                        egui::Stroke::NONE,
+                    ));
+                }
+                for (i, &a) in projected.iter().enumerate() {
+                    let b = projected[(i + 1) % projected.len()];
+                    painter.line_segment([a, b], egui::Stroke::new(width, color));
+                }
+            }
+            Primitive::Marker { at, style } => {
+                let (color, _) = overlay_style(*style);
+                let Some(at) = project(*at) else {
+                    continue;
+                };
+                if *style == overlay::Style::GuidePoint {
+                    let r = 3.0;
+                    painter.line_segment(
+                        [at + egui::vec2(-r, 0.0), at + egui::vec2(r, 0.0)],
+                        egui::Stroke::new(1.0, color),
+                    );
+                    painter.line_segment(
+                        [at + egui::vec2(0.0, -r), at + egui::vec2(0.0, r)],
+                        egui::Stroke::new(1.0, color),
+                    );
+                } else {
+                    let square = Rect::from_center_size(at, egui::vec2(7.0, 7.0));
+                    painter.rect_filled(square, 0.0, color);
+                    painter.rect_stroke(
+                        square,
+                        0.0,
+                        egui::Stroke::new(1.0, Color32::from_rgb(25, 25, 25)),
+                        egui::StrokeKind::Outside,
+                    );
+                }
+            }
+        }
+    }
 }
 
 /// The preview is dark; a non-ground draw plane tints it to show its normal.
