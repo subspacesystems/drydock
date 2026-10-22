@@ -6,7 +6,7 @@
 //! measurement box. No egui, no GPU: the window code feeds it pointer and key events.
 //!
 //! Behaviour: `docs/specs/m2-app-editor.md`, shape tools: `docs/specs/m2-app-shapes.md`,
-//! Push/Pull: `docs/specs/m3-app-pushpull.md`.
+//! Push/Pull: `docs/specs/m3-app-pushpull.md`, Rotate: `docs/specs/m3-app-rotate.md`.
 
 use glam::{DVec2, DVec3};
 use modeler_kernel::click::{self, ClickMods};
@@ -20,6 +20,7 @@ use modeler_kernel::tools::circle::CircleTool;
 use modeler_kernel::tools::line::LineTool;
 use modeler_kernel::tools::plane::DrawPlane;
 use modeler_kernel::tools::rectangle::RectTool;
+use modeler_kernel::tools::rotate::RotateTool;
 use modeler_kernel::tools::{Input, Target, ToolError};
 use modeler_kernel::topology::FaceId;
 use modeler_kernel::units::{self, Unit};
@@ -170,6 +171,7 @@ pub struct Editor {
     push: Option<PushState>,
     push_hover: Option<FaceId>,
     last_push: Option<LastPush>,
+    rotate: RotateTool,
 }
 
 fn click_mods(mods: Modifiers) -> ClickMods {
@@ -211,6 +213,7 @@ impl Editor {
             push: None,
             push_hover: None,
             last_push: None,
+            rotate: RotateTool::new(plane_for_normal(DVec3::Z)),
         }
     }
 
@@ -350,6 +353,7 @@ impl Editor {
             }
             Tool::Orbit | Tool::Pan | Tool::Zoom => false,
             Tool::PushPull => self.click_push(model, view, cursor, count),
+            Tool::Rotate => unimplemented!("m3-app-rotate"),
             Tool::Rectangle | Tool::Circle | Tool::Arc | Tool::Arc3 => {
                 let before = self.undo.undo_count();
                 let (origin, dir) = view.ray(cursor);
@@ -633,6 +637,7 @@ impl Editor {
                 };
                 Some(("Distance", value.unwrap_or_default()))
             }
+            Tool::Rotate => unimplemented!("m3-app-rotate"),
             Tool::Orbit | Tool::Pan | Tool::Zoom | Tool::Select => None,
         }
     }
@@ -700,6 +705,7 @@ impl Editor {
                 }
                 segments
             }
+            Tool::Rotate => unimplemented!("m3-app-rotate"),
             Tool::Orbit | Tool::Pan | Tool::Zoom | Tool::Select => Vec::new(),
         }
     }
@@ -711,6 +717,7 @@ impl Editor {
             Tool::Circle => Some(self.circle.plane()),
             Tool::Arc => Some(self.arc.plane()),
             Tool::Arc3 => Some(self.arc3.plane()),
+            Tool::Rotate => unimplemented!("m3-app-rotate"),
             Tool::Orbit | Tool::Pan | Tool::Zoom | Tool::Select | Tool::Line | Tool::PushPull => {
                 None
             }
@@ -745,6 +752,12 @@ impl Editor {
             return None;
         }
         self.push.as_ref().map(|push| push.distance)
+    }
+
+    /// Rotate: the tool, for drawing the protractor (`docs/specs/m3-app-rotate.md`). `None`
+    /// for other tools.
+    pub fn rotate_tool(&self) -> Option<&RotateTool> {
+        (self.tool == Tool::Rotate).then_some(&self.rotate)
     }
 
     /// Why the last input was refused, for the status bar.

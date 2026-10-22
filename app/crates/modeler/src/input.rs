@@ -28,6 +28,8 @@ pub enum Tool {
     Arc3,
     /// Push/Pull a face (`docs/specs/m3-app-pushpull.md`).
     PushPull,
+    /// Rotate the selection (`docs/specs/m3-app-rotate.md`).
+    Rotate,
 }
 
 /// A key for the editor (`docs/specs/m2-app-editor.md`).
@@ -138,7 +140,8 @@ pub fn drag(
             | Tool::Circle
             | Tool::Arc
             | Tool::Arc3
-            | Tool::PushPull => None,
+            | Tool::PushPull
+            | Tool::Rotate => None,
         },
         Button::Right => None,
     }
