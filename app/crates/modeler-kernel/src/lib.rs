@@ -10,7 +10,7 @@
 //! `docs/specs/m2-select-box.md` (box and connected selection), `docs/specs/m2-select-click.md`
 //! (click modifiers), `docs/specs/m2-inference.md` (snaps and picking),
 //! `docs/specs/m2-tool-line.md` (drawing tools), `docs/specs/m3-transform.md` (move, rotate, scale, flip),
-//! `docs/specs/m3-tape.md` (tape measure and guides).
+//! `docs/specs/m3-tape.md` (tape measure and guides), `docs/specs/m3-pushpull.md` (push/pull).
 
 pub mod click;
 mod faces;
@@ -18,6 +18,7 @@ pub mod format;
 pub mod geom;
 pub mod infer;
 pub mod model;
+pub mod pushpull;
 pub mod select;
 pub mod shapes;
 pub mod sticky;

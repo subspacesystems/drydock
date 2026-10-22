@@ -70,6 +70,7 @@ Done when: `modeler` on the reference house model opens in under 5 s on modeler-
 | --- | --- | --- |
 | `m3-transform` | `transform`: apply an affine matrix to a selection (move, rotate, scale, flip), one undo step, refuses results that break invariants | |
 | `m3-pushpull` | Push/Pull a face by a distance: side faces, hole punching, merge with coplanar neighbours (kernel, orchestrator) | `m3-transform` |
+| `m3-pushpull-merge` | Push/Pull follow-up: new sides merge with coplanar neighbours, hole punching through a solid, new-start-face modifier | `m3-pushpull` |
 | `m3-move-merge` | Moved geometry heals and splits against the rest (sticky) | `m3-transform` |
 | `m3-tape` | Tape measure math and guide data (`tape.rs`: measure, parallel guide, guide point, `Guides` collection) | |
 | `m3-guides-model` | Guides stored in the model: undoable add/remove/clear, native file round trip | `m3-tape` |
