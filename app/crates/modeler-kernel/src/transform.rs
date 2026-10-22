@@ -102,6 +102,33 @@ fn rollback(model: &mut Model, edit: &ModelEdit) {
     let _ = model.apply_edit(&edit.inverse());
 }
 
+/// True when `matrix` leaves every vertex of the selection where it is (a rotation of an
+/// edge about its own axis, say). Such a transform changes nothing and is not an error.
+pub(crate) fn leaves_geometry_in_place(
+    model: &Model,
+    body: BodyId,
+    selection: &[Entity],
+    matrix: DMat4,
+) -> bool {
+    let Some(target) = model.body(body) else {
+        return false;
+    };
+    if selection.iter().any(|e| matches!(e, Entity::Instance(_))) {
+        return false;
+    }
+    let ctx = target.geometry();
+    let moved = moved_vertices(ctx, selection);
+    !moved.is_empty()
+        && moved.iter().all(|&v| {
+            ctx.vertex(v).is_some_and(|vertex| {
+                matrix
+                    .transform_point3(vertex.position)
+                    .distance(vertex.position)
+                    <= 1e-9
+            })
+        })
+}
+
 /// Apply `matrix` to `selection` in `body` as one undo step labelled `label`.
 pub fn transform(
     model: &mut Model,
@@ -125,7 +152,7 @@ pub fn transform(
             return Err(TransformError::MissingEntity(entity));
         }
     }
-    if matrix == DMat4::IDENTITY {
+    if matrix == DMat4::IDENTITY || leaves_geometry_in_place(model, body, selection, matrix) {
         return Ok(());
     }
 

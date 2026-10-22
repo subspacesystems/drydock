@@ -74,3 +74,59 @@ fn rectangle_sharing_a_cube_corner_rotates_free_of_the_cube() {
     assert!(undo.undo(&mut model).is_ok());
     assert_eq!(positions(&model).len(), before.len());
 }
+
+#[test]
+fn rotating_a_cube_edge_about_its_own_axis_is_a_no_op() {
+    let mut model = Model::new();
+    let pts = [
+        v(0., 0., 0.),
+        v(1., 0., 0.),
+        v(1., 1., 0.),
+        v(0., 1., 0.),
+        v(0., 0., 1.),
+        v(1., 0., 1.),
+        v(1., 1., 1.),
+        v(0., 1., 1.),
+    ];
+    mesh(
+        &mut model,
+        &pts,
+        &[
+            &[0, 3, 2, 1],
+            &[4, 5, 6, 7],
+            &[0, 1, 5, 4],
+            &[2, 3, 7, 6],
+            &[1, 2, 6, 5],
+            &[3, 0, 4, 7],
+        ],
+    );
+    let edge = model
+        .root()
+        .geometry()
+        .edges()
+        .map(|(id, _)| id)
+        .find(|&id| {
+            let ctx = model.root().geometry();
+            let ends = ctx.edge(id).unwrap().ends;
+            let a = ctx.vertex(ends[0]).unwrap().position;
+            let b = ctx.vertex(ends[1]).unwrap().position;
+            a.distance(v(1., 1., 0.)) < 1e-9 && b.distance(v(1., 1., 1.)) < 1e-9
+                || b.distance(v(1., 1., 0.)) < 1e-9 && a.distance(v(1., 1., 1.)) < 1e-9
+        })
+        .unwrap();
+    let before = positions(&model);
+    let mut undo = UndoStack::new();
+    let m = DMat4::from_translation(v(1., 1., 0.))
+        * DMat4::from_quat(DQuat::from_rotation_z(0.7))
+        * DMat4::from_translation(v(-1., -1., 0.));
+    transform_sticky(
+        &mut model,
+        BodyId::Root,
+        &[Entity::Edge(edge)],
+        m,
+        &mut undo,
+        "Rotate",
+    )
+    .unwrap();
+    assert_eq!(positions(&model), before);
+}

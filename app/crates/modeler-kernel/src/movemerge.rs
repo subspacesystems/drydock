@@ -14,7 +14,7 @@ use crate::model::{BodyId, FaceMaterials, InstanceId, Model, ModelEdit, ModelErr
 use crate::select::Entity;
 use crate::sticky::StickyError;
 use crate::topology::{Context, EdgeId, EdgeUse, Face, FaceId, Loop, TopoError, VertexId};
-use crate::transform::{TransformError, moved_vertices};
+use crate::transform::{TransformError, leaves_geometry_in_place, moved_vertices};
 
 fn bad_matrix(matrix: &DMat4) -> bool {
     if matrix.to_cols_array().iter().any(|v| !v.is_finite()) {
@@ -430,6 +430,12 @@ pub fn transform_sticky(
     undo: &mut UndoStack,
     label: &str,
 ) -> Result<(), TransformError> {
+    if model.body(body).is_some()
+        && !selection.is_empty()
+        && leaves_geometry_in_place(model, body, selection, matrix)
+    {
+        return Ok(());
+    }
     match transform_attached(model, body, selection, matrix, undo, label) {
         Err(error @ TransformError::Invalid(_)) => {
             // Geometry glued to the rest by a vertex or two can't carry that vertex along
