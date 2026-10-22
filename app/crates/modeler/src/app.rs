@@ -202,6 +202,8 @@ impl App {
         };
         document.refresh();
         document.sync_modified(state);
+        // Zoom Extents frames the edited model, not the one that was opened.
+        self.view.bounds = scene_bounds(&document.scene);
         let title = document.title();
         if let (Some(gpu), Some(state)) = (&mut self.gpu, frame.wgpu_render_state()) {
             gpu.scene = gpu
@@ -470,7 +472,8 @@ impl App {
             {
                 self.drag_start_ndc = ndc(origin);
                 if egui_button == PointerButton::Primary {
-                    self.drag_start_px = Some(local(origin));
+                    // Only a Select drag is a box; an Orbit drag must not leave a start behind.
+                    self.drag_start_px = (tool == Some(Tool::Select)).then(|| local(origin));
                     if tool == Some(Tool::Scale) {
                         let view = EditorViewport {
                             camera: self.view.camera,
