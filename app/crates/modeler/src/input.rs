@@ -26,6 +26,8 @@ pub enum Tool {
     Arc,
     /// Three-point arc (`docs/specs/m2-arc-3pt-app.md`).
     Arc3,
+    /// Push/Pull a face (`docs/specs/m3-app-pushpull.md`).
+    PushPull,
 }
 
 /// A key for the editor (`docs/specs/m2-app-editor.md`).
@@ -130,9 +132,13 @@ pub fn drag(
                 cursor_ndc: start_ndc,
             }),
             // The editor handles left drags for these (`docs/specs/m2-app-editor.md`).
-            Tool::Select | Tool::Line | Tool::Rectangle | Tool::Circle | Tool::Arc | Tool::Arc3 => {
-                None
-            }
+            Tool::Select
+            | Tool::Line
+            | Tool::Rectangle
+            | Tool::Circle
+            | Tool::Arc
+            | Tool::Arc3
+            | Tool::PushPull => None,
         },
         Button::Right => None,
     }

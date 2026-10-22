@@ -5,7 +5,8 @@
 //! model's root body, and keeps the selection, the undo stack and the typed text of the
 //! measurement box. No egui, no GPU: the window code feeds it pointer and key events.
 //!
-//! Behaviour: `docs/specs/m2-app-editor.md`, shape tools: `docs/specs/m2-app-shapes.md`.
+//! Behaviour: `docs/specs/m2-app-editor.md`, shape tools: `docs/specs/m2-app-shapes.md`,
+//! Push/Pull: `docs/specs/m3-app-pushpull.md`.
 
 use glam::{DVec2, DVec3};
 use modeler_kernel::click::{self, ClickMods};
@@ -19,6 +20,7 @@ use modeler_kernel::tools::line::LineTool;
 use modeler_kernel::tools::plane::DrawPlane;
 use modeler_kernel::tools::rectangle::RectTool;
 use modeler_kernel::tools::{Input, Target, ToolError};
+use modeler_kernel::topology::FaceId;
 use modeler_kernel::units::{self, Unit};
 use modeler_view::{Camera, Projection};
 
@@ -303,6 +305,7 @@ impl Editor {
                 false
             }
             Tool::Orbit | Tool::Pan | Tool::Zoom => false,
+            Tool::PushPull => unimplemented!("m3-app-pushpull"),
             Tool::Rectangle | Tool::Circle | Tool::Arc | Tool::Arc3 => {
                 let before = self.undo.undo_count();
                 let (origin, dir) = view.ray(cursor);
@@ -561,6 +564,7 @@ impl Editor {
                     Some(("Bulge", value))
                 }
             },
+            Tool::PushPull => unimplemented!("m3-app-pushpull"),
             Tool::Orbit | Tool::Pan | Tool::Zoom | Tool::Select => None,
         }
     }
@@ -608,6 +612,7 @@ impl Editor {
                 .preview()
                 .map(|p| p.windows(2).map(|w| (w[0], w[1])).collect())
                 .unwrap_or_default(),
+            Tool::PushPull => unimplemented!("m3-app-pushpull"),
             Tool::Orbit | Tool::Pan | Tool::Zoom | Tool::Select => Vec::new(),
         }
     }
@@ -619,7 +624,9 @@ impl Editor {
             Tool::Circle => Some(self.circle.plane()),
             Tool::Arc => Some(self.arc.plane()),
             Tool::Arc3 => Some(self.arc3.plane()),
-            Tool::Orbit | Tool::Pan | Tool::Zoom | Tool::Select | Tool::Line => None,
+            Tool::Orbit | Tool::Pan | Tool::Zoom | Tool::Select | Tool::Line | Tool::PushPull => {
+                None
+            }
         }
     }
 
@@ -630,6 +637,18 @@ impl Editor {
         } else {
             None
         }
+    }
+
+    /// Push/Pull: the face under the cursor while idle, the face being pushed while a push
+    /// is in progress (`docs/specs/m3-app-pushpull.md`). `None` for other tools.
+    pub fn pushpull_face(&self) -> Option<FaceId> {
+        unimplemented!("m3-app-pushpull")
+    }
+
+    /// Push/Pull: the signed distance along the face's front normal that the next click
+    /// would use; `None` while no push is in progress or for other tools.
+    pub fn pushpull_distance(&self) -> Option<f64> {
+        unimplemented!("m3-app-pushpull")
     }
 
     /// Why the last input was refused, for the status bar.
