@@ -9,10 +9,10 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use glam::DVec3;
 
-use crate::geom::LINEAR_TOL;
+use crate::geom::{self, LINEAR_TOL};
 use crate::model::{BodyId, FaceMaterials, Model, ModelEdit, ModelError, UndoStack};
 use crate::topology::{
-    Context, EdgeId, EdgeUse, Face, FaceId, Loop, TopoError, VertexId, Violation,
+    Context, EdgeId, EdgeUse, Face, FaceId, Loop, Record, TopoError, VertexId, Violation,
 };
 
 /// Why a push/pull was refused. The model and the undo stack are unchanged.
@@ -64,6 +64,23 @@ fn use_ends(ctx: &Context, use_: EdgeUse) -> Option<(VertexId, VertexId)> {
         (edge.ends[1], edge.ends[0])
     } else {
         (edge.ends[0], edge.ends[1])
+    })
+}
+
+/// Every point lies strictly inside `face`'s outer loop and outside all of its holes.
+fn points_inside_face(ctx: &Context, points: &[DVec3], face: &Face, normal: DVec3) -> bool {
+    let outer = geom::to_plane_2d(&ctx.loop_points(&face.outer), normal);
+    let holes: Vec<Vec<glam::DVec2>> = face
+        .inner
+        .iter()
+        .map(|l| geom::to_plane_2d(&ctx.loop_points(l), normal))
+        .collect();
+    points.iter().all(|p| {
+        let p2d = geom::to_plane_2d(std::slice::from_ref(p), normal)[0];
+        geom::point_in_polygon_2d(p2d, &outer, LINEAR_TOL) == geom::Containment::Inside
+            && holes.iter().all(|hole| {
+                geom::point_in_polygon_2d(p2d, hole, LINEAR_TOL) == geom::Containment::Outside
+            })
     })
 }
 
@@ -262,6 +279,7 @@ pub fn push_pull(
                 log,
             )?;
 
+            let bottoms: Vec<EdgeId> = side_data.iter().map(|(old, ..)| old.edge).collect();
             let mut sides = Vec::with_capacity(side_data.len());
             for (old, top, b_bottom, a_bottom) in side_data {
                 let loop_ = Loop {
@@ -297,10 +315,10 @@ pub fn push_pull(
                 None
             };
 
-            Ok((cap, sides, base))
+            Ok((cap, sides, bottoms, base))
         })
         .map_err(PushPullError::Model)?;
-    let (cap, sides, base) = match built {
+    let (cap, mut sides, side_bottoms, base) = match built {
         Ok(v) => v,
         Err(e) => {
             roll_back(model, &edit);
@@ -315,6 +333,101 @@ pub fn push_pull(
     if cap_materials != FaceMaterials::default()
         && let Err(e) = model.set_face_materials(body, cap, cap_materials, &mut edit)
     {
+        roll_back(model, &edit);
+        return Err(PushPullError::Model(e));
+    }
+
+    let mut new_faces: BTreeSet<FaceId> = sides.iter().copied().collect();
+    new_faces.insert(cap);
+    if let Some(base) = base {
+        new_faces.insert(base);
+    }
+
+    let mut final_cap = cap;
+    let healed = model.edit_geometry(body, &mut edit, |ctx, log| -> Result<(), TopoError> {
+        for (i, side_slot) in sides.iter_mut().enumerate() {
+            let side = *side_slot;
+            let Some(&bottom) = side_bottoms.get(i) else {
+                continue;
+            };
+            let faces = ctx.faces_of_edge(bottom);
+            if faces.len() != 2 {
+                continue;
+            }
+            let Some(other) = faces.iter().copied().find(|f| *f != side) else {
+                continue;
+            };
+            if new_faces.contains(&other) {
+                continue;
+            }
+            let (Some(side_plane), Some(other_plane)) =
+                (ctx.face_plane(side), ctx.face_plane(other))
+            else {
+                continue;
+            };
+            if side_plane.normal.dot(other_plane.normal) <= 0.0
+                || !crate::faces::same_plane(&side_plane, &other_plane)
+            {
+                continue;
+            }
+            if ctx.erase_edge(bottom, log).is_err() {
+                continue;
+            }
+            *side_slot = if ctx.face(side).is_some() {
+                side
+            } else {
+                other
+            };
+        }
+
+        let Some(cap_face) = ctx.face(final_cap).cloned() else {
+            return Ok(());
+        };
+        if !cap_face.inner.is_empty() {
+            return Ok(());
+        }
+        let Some(cap_plane) = ctx.face_plane(final_cap) else {
+            return Ok(());
+        };
+        let cap_points = ctx.loop_points(&cap_face.outer);
+
+        let mut target = None;
+        for (f, face) in ctx.faces() {
+            if f == final_cap {
+                continue;
+            }
+            let Some(plane) = ctx.face_plane(f) else {
+                continue;
+            };
+            if cap_plane.normal.dot(plane.normal) >= 0.0
+                || !crate::faces::same_plane(&cap_plane, &plane)
+            {
+                continue;
+            }
+            if points_inside_face(ctx, &cap_points, face, plane.normal) {
+                target = Some(f);
+                break;
+            }
+        }
+
+        if let Some(f) = target {
+            let Some(target_face) = ctx.face(f).cloned() else {
+                return Ok(());
+            };
+            ctx.delete_face(final_cap, log)?;
+            let mut punched = target_face.clone();
+            punched.inner.push(cap_face.outer.clone());
+            let remove = Record::RemoveFace(f, target_face);
+            ctx.apply(&remove)?;
+            log.records.push(remove);
+            let add = Record::AddFace(f, punched);
+            ctx.apply(&add)?;
+            log.records.push(add);
+            final_cap = f;
+        }
+        Ok(())
+    });
+    if let Err(e) = healed {
         roll_back(model, &edit);
         return Err(PushPullError::Model(e));
     }
@@ -345,5 +458,9 @@ pub fn push_pull(
     }
 
     undo.push(label, edit);
-    Ok(PushPulled { cap, sides, base })
+    Ok(PushPulled {
+        cap: final_cap,
+        sides,
+        base,
+    })
 }
