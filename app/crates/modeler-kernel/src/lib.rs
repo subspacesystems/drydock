@@ -9,7 +9,7 @@
 //! (triangulation), `docs/specs/m2-units.md` (typed lengths), `docs/specs/m2-shapes.md` (shape points),
 //! `docs/specs/m2-select-box.md` (box and connected selection), `docs/specs/m2-select-click.md`
 //! (click modifiers), `docs/specs/m2-inference.md` (snaps and picking),
-//! `docs/specs/m2-tool-line.md` (drawing tools).
+//! `docs/specs/m2-tool-line.md` (drawing tools), `docs/specs/m3-transform.md` (move, rotate, scale, flip).
 
 pub mod click;
 mod faces;
@@ -23,4 +23,5 @@ pub mod sticky;
 pub mod tess;
 pub mod tools;
 pub mod topology;
+pub mod transform;
 pub mod units;
