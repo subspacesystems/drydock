@@ -10,8 +10,9 @@ use glam::{DMat4, DVec3};
 
 use crate::geom::LINEAR_TOL;
 use crate::model::UndoStack;
+use crate::movemerge::transform_sticky;
 use crate::select::Entity;
-use crate::transform::{self, TransformError};
+use crate::transform::TransformError;
 use crate::units::ParseError;
 
 use super::plane::DrawPlane;
@@ -374,7 +375,7 @@ impl RotateTool {
             .undo(target.model)
             .map_err(|e| RotateError::Transform(TransformError::Model(e)))?;
         let matrix = rotation(last.center, last.axis, angle);
-        if let Err(error) = transform::transform(
+        if let Err(error) = transform_sticky(
             target.model,
             target.body,
             selection,
@@ -415,7 +416,7 @@ impl RotateTool {
             return Ok(());
         };
         let axis = self.plane.normal().normalize();
-        transform::transform(
+        transform_sticky(
             target.model,
             target.body,
             selection,

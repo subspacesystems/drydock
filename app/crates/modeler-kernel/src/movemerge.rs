@@ -430,6 +430,184 @@ pub fn transform_sticky(
     undo: &mut UndoStack,
     label: &str,
 ) -> Result<(), TransformError> {
+    match transform_attached(model, body, selection, matrix, undo, label) {
+        Err(error @ TransformError::Invalid(_)) => {
+            // Geometry glued to the rest by a vertex or two can't carry that vertex along
+            // without bending its neighbours: pull the selection loose instead.
+            match transform_detached(model, body, selection, matrix, undo, label) {
+                Ok(true) => Ok(()),
+                _ => Err(error),
+            }
+        }
+        other => other,
+    }
+}
+
+/// Moves the selection and leaves everything not selected where it is, even where they
+/// share vertices. Only for selections whose faces are all selected with them. `Ok(false)`:
+/// not applicable (nothing was changed).
+fn transform_detached(
+    model: &mut Model,
+    body: BodyId,
+    selection: &[Entity],
+    matrix: DMat4,
+    undo: &mut UndoStack,
+    label: &str,
+) -> Result<bool, TransformError> {
+    let Some(target) = model.body(body) else {
+        return Err(TransformError::MissingBody(body));
+    };
+    let ctx = target.geometry();
+    if selection.iter().any(|e| matches!(e, Entity::Instance(_))) {
+        return Ok(false);
+    }
+    let mut edges: BTreeSet<EdgeId> = BTreeSet::new();
+    let mut faces: BTreeSet<FaceId> = BTreeSet::new();
+    for entity in selection {
+        match *entity {
+            Entity::Edge(id) => {
+                edges.insert(id);
+            }
+            Entity::Face(id) => {
+                let Some(face) = ctx.face(id) else {
+                    return Ok(false);
+                };
+                faces.insert(id);
+                edges.extend(
+                    std::iter::once(&face.outer)
+                        .chain(face.inner.iter())
+                        .flat_map(|l| l.uses.iter())
+                        .map(|u| u.edge),
+                );
+            }
+            Entity::Instance(_) => {}
+        }
+    }
+    let moved = moved_vertices(ctx, selection);
+    let shared = ctx
+        .edges()
+        .any(|(id, e)| !edges.contains(&id) && e.ends.iter().any(|v| moved.contains(v)));
+    // Every face on a selected edge must move with it.
+    let loose_face = edges
+        .iter()
+        .flat_map(|e| ctx.faces_of_edge(*e))
+        .any(|f| !faces.contains(&f));
+    if !shared || loose_face {
+        return Ok(false);
+    }
+    let before = ctx.validate();
+
+    let new_edges: Vec<(EdgeId, [DVec3; 2])> = edges
+        .iter()
+        .filter_map(|&e| {
+            edge_positions(ctx, e)
+                .map(|[a, b]| (e, [matrix.transform_point3(a), matrix.transform_point3(b)]))
+        })
+        .collect();
+    let old_faces: Vec<OldFace> = faces
+        .iter()
+        .filter_map(|&f| {
+            let face = ctx.face(f)?;
+            let place = |points: Vec<DVec3>| -> Vec<DVec3> {
+                points
+                    .into_iter()
+                    .map(|p| matrix.transform_point3(p))
+                    .collect()
+            };
+            Some(OldFace {
+                materials: target.face_materials(f),
+                moved: true,
+                outer: place(ctx.loop_points(&face.outer)),
+                inner: face
+                    .inner
+                    .iter()
+                    .map(|l| place(ctx.loop_points(l)))
+                    .collect(),
+            })
+        })
+        .collect();
+    let ends: BTreeSet<VertexId> = moved.clone();
+
+    let mut edit = ModelEdit::new();
+    let rebuilt = model.edit_geometry(body, &mut edit, |ctx, log| {
+        for f in &faces {
+            ctx.delete_face(*f, log)?;
+        }
+        for e in &edges {
+            ctx.delete_edge(*e, log)?;
+        }
+        for v in &ends {
+            if ctx.vertex(*v).is_some() && ctx.edges_of_vertex(*v).is_empty() {
+                ctx.delete_vertex(*v, log)?;
+            }
+        }
+        for (_, [a, b]) in &new_edges {
+            match ctx.add_edge(*a, *b, log) {
+                Ok(_) | Err(StickyError::Degenerate) => {}
+                Err(StickyError::NotFinite) => return Err(TopoError::Mismatch),
+                Err(StickyError::MissingEdge(e)) => return Err(TopoError::MissingEdge(e)),
+            }
+        }
+        Ok::<_, TopoError>(())
+    });
+    match rebuilt {
+        Ok(Ok(())) => {}
+        Ok(Err(error)) => {
+            rollback(model, &edit);
+            return Err(TransformError::Model(ModelError::Topo(error)));
+        }
+        Err(error) => {
+            rollback(model, &edit);
+            return Err(TransformError::Model(error));
+        }
+    }
+
+    let samples: Vec<(FaceId, DVec3)> = {
+        let ctx = model.body(body).map(|t| t.geometry());
+        let Some(ctx) = ctx else {
+            rollback(model, &edit);
+            return Err(TransformError::MissingBody(body));
+        };
+        ctx.faces()
+            .filter_map(|(id, _)| interior_point(ctx, id).map(|p| (id, p)))
+            .collect()
+    };
+    for (face_id, sample) in samples {
+        let materials = old_faces
+            .iter()
+            .filter(|old| old.materials != FaceMaterials::default())
+            .find(|old| old.contains(sample))
+            .map(|old| old.materials);
+        if let Some(materials) = materials
+            && let Err(error) = model.set_face_materials(body, face_id, materials, &mut edit)
+        {
+            rollback(model, &edit);
+            return Err(TransformError::Model(error));
+        }
+    }
+
+    let invalid = model.body(body).and_then(|t| {
+        t.geometry()
+            .validate()
+            .into_iter()
+            .find(|v| !before.contains(v))
+    });
+    if let Some(violation) = invalid {
+        rollback(model, &edit);
+        return Err(TransformError::Invalid(violation));
+    }
+    undo.push(label, edit);
+    Ok(true)
+}
+
+fn transform_attached(
+    model: &mut Model,
+    body: BodyId,
+    selection: &[Entity],
+    matrix: DMat4,
+    undo: &mut UndoStack,
+    label: &str,
+) -> Result<(), TransformError> {
     if model.body(body).is_none() {
         return Err(TransformError::MissingBody(body));
     }
