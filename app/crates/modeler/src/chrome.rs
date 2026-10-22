@@ -7,7 +7,8 @@
 //!
 //! Behaviour: `docs/specs/m3-app-ui.md`.
 
-use crate::input::{Action, Tool};
+use crate::input::{Action, EditKey, Tool};
+use modeler_view::StandardView;
 
 /// What the menus need to know about the editor.
 #[derive(Clone, Copy, Debug, Default)]
@@ -43,12 +44,109 @@ pub const TOOL_BUTTONS: [(Tool, &str); 14] = [
 /// The tool buttons; `current` is drawn selected. Clicking one returns
 /// `Action::SelectTool`.
 pub fn toolbar(ui: &mut eframe::egui::Ui, current: Tool) -> Option<Action> {
-    let _ = (ui, current);
-    unimplemented!("m3-app-ui")
+    let mut chosen = None;
+    ui.vertical(|ui| {
+        ui.set_width(92.0);
+        for (tool, label) in TOOL_BUTTONS {
+            if ui.selectable_label(current == tool, label).clicked() {
+                chosen = Some(Action::SelectTool(tool));
+            }
+        }
+    });
+    chosen
 }
 
 /// The File, Edit and View menus.
 pub fn menu_bar(ui: &mut eframe::egui::Ui, state: &MenuState<'_>) -> Option<Action> {
-    let _ = (ui, state);
-    unimplemented!("m3-app-ui")
+    let mut chosen = None;
+    eframe::egui::MenuBar::new().ui(ui, |ui| {
+        ui.menu_button("File", |ui| {
+            if ui.button("New    Ctrl+N").clicked() {
+                chosen = Some(Action::New);
+                ui.close();
+            }
+            if ui.button("Open...    Ctrl+O").clicked() {
+                chosen = Some(Action::Open);
+                ui.close();
+            }
+            ui.separator();
+            if ui.button("Save    Ctrl+S").clicked() {
+                chosen = Some(Action::Save);
+                ui.close();
+            }
+            if ui.button("Save As...    Ctrl+Shift+S").clicked() {
+                chosen = Some(Action::SaveAs);
+                ui.close();
+            }
+        });
+        ui.menu_button("Edit", |ui| {
+            let undo_text = match state.undo {
+                Some(label) => format!("Undo {label}    Ctrl+Z"),
+                None => "Undo    Ctrl+Z".to_owned(),
+            };
+            if ui
+                .add_enabled(state.undo.is_some(), eframe::egui::Button::new(undo_text))
+                .clicked()
+            {
+                chosen = Some(Action::Edit(EditKey::Undo));
+                ui.close();
+            }
+            let redo_text = match state.redo {
+                Some(label) => format!("Redo {label}    Ctrl+Y"),
+                None => "Redo    Ctrl+Y".to_owned(),
+            };
+            if ui
+                .add_enabled(state.redo.is_some(), eframe::egui::Button::new(redo_text))
+                .clicked()
+            {
+                chosen = Some(Action::Edit(EditKey::Redo));
+                ui.close();
+            }
+            ui.separator();
+            for (axis, label) in [
+                (0, "Flip Along Red"),
+                (1, "Flip Along Green"),
+                (2, "Flip Along Blue"),
+            ] {
+                if ui
+                    .add_enabled(state.has_selection, eframe::egui::Button::new(label))
+                    .clicked()
+                {
+                    chosen = Some(Action::Flip(axis));
+                    ui.close();
+                }
+            }
+        });
+        ui.menu_button("View", |ui| {
+            let projection = if state.parallel {
+                "Switch to Perspective    Shift+P"
+            } else {
+                "Switch to Parallel Projection    Shift+P"
+            };
+            if ui.button(projection).clicked() {
+                chosen = Some(Action::ToggleProjection);
+                ui.close();
+            }
+            if ui.button("Zoom Extents    Shift+Z").clicked() {
+                chosen = Some(Action::ZoomExtents);
+                ui.close();
+            }
+            ui.separator();
+            for (label, view) in [
+                ("Iso    F2", StandardView::Iso),
+                ("Top    F3", StandardView::Top),
+                ("Front    F4", StandardView::Front),
+                ("Right    F5", StandardView::Right),
+                ("Back    F6", StandardView::Back),
+                ("Left    F7", StandardView::Left),
+                ("Bottom    F8", StandardView::Bottom),
+            ] {
+                if ui.button(label).clicked() {
+                    chosen = Some(Action::View(view));
+                    ui.close();
+                }
+            }
+        });
+    });
+    chosen
 }
