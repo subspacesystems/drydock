@@ -80,8 +80,9 @@ impl Guide {
     }
 }
 
-/// The guides of one body, in creation order.
-#[derive(Clone, Debug, Default, PartialEq)]
+/// The guides of one body, in creation order. Equality compares the guides and their ids,
+/// not the id counter.
+#[derive(Clone, Debug, Default)]
 pub struct Guides {
     items: std::collections::BTreeMap<GuideId, Guide>,
     next: u64,
@@ -96,6 +97,16 @@ impl Guides {
         self.next += 1;
         self.items.insert(id, guide);
         id
+    }
+    /// Insert `guide` under a given id (undo, redo, file loading). Returns false and changes
+    /// nothing if the id is taken. Later `add`s never return this id.
+    pub fn insert(&mut self, id: GuideId, guide: Guide) -> bool {
+        if self.items.contains_key(&id) {
+            return false;
+        }
+        self.items.insert(id, guide);
+        self.next = self.next.max(id.0.saturating_add(1));
+        true
     }
     pub fn remove(&mut self, id: GuideId) -> Option<Guide> {
         self.items.remove(&id)
@@ -114,5 +125,11 @@ impl Guides {
     }
     pub fn is_empty(&self) -> bool {
         self.items.is_empty()
+    }
+}
+
+impl PartialEq for Guides {
+    fn eq(&self, other: &Self) -> bool {
+        self.items == other.items
     }
 }

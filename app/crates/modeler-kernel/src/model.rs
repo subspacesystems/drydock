@@ -4,7 +4,7 @@
 //! A whole model: the root body, component and group definitions with their own bodies,
 //! instances placing definitions with a transform, and materials.
 //!
-//! Behaviour: `docs/specs/m1-model.md`. Like `topology`, every change is a `ModelRecord`
+//! Behaviour: `docs/specs/m1-model.md`, guides: `docs/specs/m3-guides-model.md`. Like `topology`, every change is a `ModelRecord`
 //! that `ModelRecord::inverse` undoes; `UndoStack` keeps labelled `ModelEdit`s.
 
 use std::collections::BTreeMap;
@@ -12,6 +12,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use glam::DMat4;
 
+use crate::tape::{Guide, GuideId, Guides};
 use crate::topology::{Context, Edit, FaceId, Record, TopoError, Violation};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -64,7 +65,7 @@ pub struct DefinitionInfo {
     pub group: bool,
 }
 
-/// Geometry, instances and face materials of the root or of one definition.
+/// Geometry, instances, face materials and guides of the root or of one definition.
 ///
 /// Face material entries are keyed by face id and are kept when the face goes away, so
 /// undoing the removal brings the material back.
@@ -73,6 +74,7 @@ pub struct Body {
     geometry: Context,
     instances: BTreeMap<InstanceId, Instance>,
     face_materials: BTreeMap<FaceId, FaceMaterials>,
+    guides: Guides,
 }
 
 impl Body {
@@ -100,11 +102,18 @@ impl Body {
         self.face_materials.iter().map(|(f, m)| (*f, *m))
     }
 
-    /// True when the body has no geometry, no instances and no face material entries.
+    /// The body's guides (construction lines and points), ascending id.
+    pub fn guides(&self) -> &Guides {
+        &self.guides
+    }
+
+    /// True when the body has no geometry, no instances, no face material entries and no
+    /// guides.
     pub fn is_empty(&self) -> bool {
         self.geometry == Context::new()
             && self.instances.is_empty()
             && self.face_materials.is_empty()
+            && self.guides.is_empty()
     }
 }
 
@@ -140,6 +149,8 @@ pub enum ModelRecord {
         from: FaceMaterials,
         to: FaceMaterials,
     },
+    AddGuide(BodyId, GuideId, Guide),
+    RemoveGuide(BodyId, GuideId, Guide),
 }
 
 impl ModelRecord {
@@ -188,6 +199,8 @@ impl ModelRecord {
                 from: *to,
                 to: *from,
             },
+            ModelRecord::AddGuide(body, id, guide) => ModelRecord::RemoveGuide(*body, *id, *guide),
+            ModelRecord::RemoveGuide(body, id, guide) => ModelRecord::AddGuide(*body, *id, *guide),
         }
     }
 }
@@ -241,6 +254,9 @@ pub enum ModelError {
     DefinitionNotEmpty(DefinitionId),
     /// The instance would make a definition contain itself.
     Cycle,
+    MissingGuide(BodyId, GuideId),
+    /// A guide with a non-finite number, or a guide line whose direction isn't unit length.
+    BadGuide,
 }
 
 /// A broken model invariant found by `Model::validate`.
@@ -621,6 +637,38 @@ impl Model {
         Ok(())
     }
 
+    /// Add a guide to the body. Errors: `MissingBody`, `BadGuide`.
+    pub fn add_guide(
+        &mut self,
+        body: BodyId,
+        guide: Guide,
+        log: &mut ModelEdit,
+    ) -> Result<GuideId, ModelError> {
+        let _ = (body, guide, log);
+        unimplemented!("m3-guides-model")
+    }
+
+    /// Remove one guide; returns it. Errors: `MissingBody`, `MissingGuide`.
+    pub fn remove_guide(
+        &mut self,
+        body: BodyId,
+        id: GuideId,
+        log: &mut ModelEdit,
+    ) -> Result<Guide, ModelError> {
+        let _ = (body, id, log);
+        unimplemented!("m3-guides-model")
+    }
+
+    /// Remove every guide of the body; returns them, ascending id. Errors: `MissingBody`.
+    pub fn clear_guides(
+        &mut self,
+        body: BodyId,
+        log: &mut ModelEdit,
+    ) -> Result<Vec<(GuideId, Guide)>, ModelError> {
+        let _ = (body, log);
+        unimplemented!("m3-guides-model")
+    }
+
     /// Run `f` on the body's geometry with a fresh topology `Edit`, then append each of its
     /// records to `log` as `ModelRecord::Geometry(body, record)`.
     pub fn edit_geometry<R>(
@@ -825,6 +873,9 @@ impl Model {
                     }
                 }
                 Ok(())
+            }
+            ModelRecord::AddGuide(..) | ModelRecord::RemoveGuide(..) => {
+                unimplemented!("m3-guides-model")
             }
         }
     }

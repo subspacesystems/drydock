@@ -1,8 +1,8 @@
-# Native model file, version 1
+# Native model file, version 2
 
 The native file stores a whole `Model` (`modeler-kernel`, `src/model.rs`): materials,
 definitions, and for the root and every definition its geometry (vertices, edges, faces),
-face materials and instances. Code: `modeler_kernel::format`. Owner: orchestrator.
+face materials, instances and guides. Code: `modeler_kernel::format`. Owner: orchestrator.
 
 Design goals: exact round trip (ids and every number come back bit for bit), readable and
 diffable, no dependencies, easy to extend. Lengths are meters.
@@ -40,20 +40,24 @@ Then, one per line:
 | `face <id> <loop> [\| <loop>]...` | the first loop is the outer loop, each one after a `\|` token is a hole; a loop is a list of edge uses `+<edge id>` (forward) or `-<edge id>` (reversed), possibly empty |
 | `paint <face id> <front> <back>` | the face's materials, each a material id or `-` |
 | `instance <id> <definition> <material> <m0> ... <m15> <name>` | a placed definition; `material` is an id or `-`; the 16 numbers are the transform in column-major order (`DMat4::to_cols_array`); `name` is a string |
+| `guide <id> line <px> <py> <pz> <dx> <dy> <dz>` | (version 2) an infinite guide line through `p` with unit direction `d` |
+| `guide <id> point <x> <y> <z>` | (version 2) a guide point |
 | `end` | last record; after it only blank lines may follow |
 
 Every record is applied as soon as it is read, so everything it names must already exist
 (the material for a paint or instance, the definition for a `body` or an instance, the
 vertices of an edge, the edges of a face, the face of a paint). Ids keep their values.
+A `guide` record in a version 1 file is an unknown record.
 
 ## What writers produce
 Exactly this order, one space between tokens, every line ending in `\n`:
-1. the header;
+1. the header, with the lowest version that holds the model: `1` when no body has guides,
+   else `2`;
 2. `material` records, ascending id;
 3. `definition` records, ascending id;
 4. `body root`, then `body <id>` for every definition in ascending id (written even when
-   the body is empty); inside each body: `vertex` records, then `edge`, `face`, `paint`
-   and `instance` records, each in ascending id;
+   the body is empty); inside each body: `vertex` records, then `edge`, `face`, `paint`,
+   `instance` and `guide` records, each in ascending id;
 5. `end`.
 
 `paint` is written only for faces that exist (face material entries left behind by removed
@@ -65,6 +69,7 @@ text to `<file name>.tmp` in the same directory, flushes it to disk, then rename
 the target. If anything fails, the temporary file is removed and the target is untouched.
 
 ## Versions
-- 1 (M1): this document.
+- 1 (M1): everything here except `guide`.
+- 2 (M3): adds `guide` records.
 
 A later version may add records; a reader for version N reads every version up to N.
