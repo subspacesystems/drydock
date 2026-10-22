@@ -15,6 +15,16 @@ use glam::DMat4;
 use crate::tape::{Guide, GuideId, Guides};
 use crate::topology::{Context, Edit, FaceId, Record, TopoError, Violation};
 
+/// A good guide has only finite numbers and, for a line, a unit-length direction.
+fn guide_is_good(guide: &Guide) -> bool {
+    match guide {
+        Guide::Line { point, dir } => {
+            point.is_finite() && dir.is_finite() && (dir.length() - 1.0).abs() <= 1e-9
+        }
+        Guide::Point(point) => point.is_finite(),
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct MaterialId(pub u64);
 
@@ -644,8 +654,18 @@ impl Model {
         guide: Guide,
         log: &mut ModelEdit,
     ) -> Result<GuideId, ModelError> {
-        let _ = (body, guide, log);
-        unimplemented!("m3-guides-model")
+        let current = self.body(body).ok_or(ModelError::MissingBody(body))?;
+        if !guide_is_good(&guide) {
+            return Err(ModelError::BadGuide);
+        }
+        let id = {
+            let mut probe = current.guides().clone();
+            probe.add(guide)
+        };
+        let record = ModelRecord::AddGuide(body, id, guide);
+        self.apply(&record)?;
+        log.records.push(record);
+        Ok(id)
     }
 
     /// Remove one guide; returns it. Errors: `MissingBody`, `MissingGuide`.
@@ -655,8 +675,16 @@ impl Model {
         id: GuideId,
         log: &mut ModelEdit,
     ) -> Result<Guide, ModelError> {
-        let _ = (body, id, log);
-        unimplemented!("m3-guides-model")
+        let guide = *self
+            .body(body)
+            .ok_or(ModelError::MissingBody(body))?
+            .guides()
+            .get(id)
+            .ok_or(ModelError::MissingGuide(body, id))?;
+        let record = ModelRecord::RemoveGuide(body, id, guide);
+        self.apply(&record)?;
+        log.records.push(record);
+        Ok(guide)
     }
 
     /// Remove every guide of the body; returns them, ascending id. Errors: `MissingBody`.
@@ -665,8 +693,19 @@ impl Model {
         body: BodyId,
         log: &mut ModelEdit,
     ) -> Result<Vec<(GuideId, Guide)>, ModelError> {
-        let _ = (body, log);
-        unimplemented!("m3-guides-model")
+        let guides: Vec<(GuideId, Guide)> = self
+            .body(body)
+            .ok_or(ModelError::MissingBody(body))?
+            .guides()
+            .iter()
+            .map(|(id, guide)| (id, *guide))
+            .collect();
+        for (id, guide) in &guides {
+            let record = ModelRecord::RemoveGuide(body, *id, *guide);
+            self.apply(&record)?;
+            log.records.push(record);
+        }
+        Ok(guides)
     }
 
     /// Run `f` on the body's geometry with a fresh topology `Edit`, then append each of its
@@ -874,8 +913,28 @@ impl Model {
                 }
                 Ok(())
             }
-            ModelRecord::AddGuide(..) | ModelRecord::RemoveGuide(..) => {
-                unimplemented!("m3-guides-model")
+            ModelRecord::AddGuide(body, id, guide) => {
+                let b = self.body_mut(*body).ok_or(ModelError::MissingBody(*body))?;
+                if !guide_is_good(guide) {
+                    return Err(ModelError::BadGuide);
+                }
+                if b.guides.get(*id).is_some() {
+                    return Err(ModelError::IdInUse);
+                }
+                b.guides.insert(*id, *guide);
+                Ok(())
+            }
+            ModelRecord::RemoveGuide(body, id, guide) => {
+                let b = self.body_mut(*body).ok_or(ModelError::MissingBody(*body))?;
+                let stored = b
+                    .guides
+                    .get(*id)
+                    .ok_or(ModelError::MissingGuide(*body, *id))?;
+                if stored != guide {
+                    return Err(ModelError::Mismatch);
+                }
+                b.guides.remove(*id);
+                Ok(())
             }
         }
     }
