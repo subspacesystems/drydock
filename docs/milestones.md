@@ -74,7 +74,12 @@ Done when: `modeler` on the reference house model opens in under 5 s on modeler-
 | `m3-move-merge` | Moved geometry heals and splits against the rest (sticky) | `m3-transform` |
 | `m3-tape` | Tape measure math and guide data (`tape.rs`: measure, parallel guide, guide point, `Guides` collection) | |
 | `m3-guides-model` | Guides stored in the model: undoable add/remove/clear, native file round trip | `m3-tape` |
-| `m3-app-tools` | Editor and window: Move, Rotate, Scale, Flip, Push/Pull, Tape tools with inference, typed values, previews | all above |
+| `m3-app-pushpull` | Push/Pull tool in the editor: hover face, drag distance with snaps, typed distance (also right after), double click repeats | `m3-pushpull-merge` |
+| `m3-app-move` | Move tool in the editor: selection or hovered entity, inference, typed distance, copy modifier | `m3-move-merge` |
+| `m3-app-rotate` | Rotate tool in the editor: protractor plane, 15 degree snaps, typed angle | `m3-transform` |
+| `m3-app-scale-flip` | Scale tool (handles, typed factors, uniform and per-axis) and Flip about red/green/blue in the editor | `m3-transform` |
+| `m3-app-tape` | Tape tool in the editor: live distance, parallel guide lines, guide points, typed offset | `m3-guides-model` |
+| `m3-app-ui` | Window wiring for the M3 tools: toolbar, keys, face highlight, previews, protractor, guides drawn; egui_kittest tests | all `m3-app-*` above |
 
 - Push/Pull with typed distance; extrudes faces, creating side faces.
 - Move (points, edges, faces, selection; with inference and typed distance; copy with modifier).
