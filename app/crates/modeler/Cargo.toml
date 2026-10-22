@@ -19,6 +19,7 @@ wgpu.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true
+egui_kittest.workspace = true
 
 [lints]
 workspace = true

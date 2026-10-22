@@ -25,6 +25,7 @@ wgpu = { version = "30", default-features = false, features = ["std", "wgsl", "v
 pollster = "1"
 bytemuck = { version = "1", features = ["derive"] }
 proptest = "1"
+egui_kittest = "0.36"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
