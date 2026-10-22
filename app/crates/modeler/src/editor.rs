@@ -12,6 +12,7 @@ use glam::{DVec2, DVec3};
 use modeler_kernel::click::{self, ClickMods};
 use modeler_kernel::infer::{self, Inference, Probe, Snap};
 use modeler_kernel::model::{BodyId, Model, UndoStack};
+use modeler_kernel::pushpull::push_pull;
 use modeler_kernel::select::{self, BoxMode, Entity};
 use modeler_kernel::tools::arc::ArcTool;
 use modeler_kernel::tools::arc3::Arc3Tool;
@@ -67,6 +68,22 @@ fn is_drawing(tool: Tool) -> bool {
     tool == Tool::Line || is_shape(tool)
 }
 
+fn takes_text(tool: Tool) -> bool {
+    is_drawing(tool) || tool == Tool::PushPull
+}
+
+/// The parameter along `start + t·n` of the point closest to the ray `origin + u·dir`.
+/// `None` when the line and the ray are parallel.
+fn closest_on_line(start: DVec3, n: DVec3, origin: DVec3, dir: DVec3) -> Option<f64> {
+    let w = start - origin;
+    let b = n.dot(dir);
+    let denom = 1.0 - b * b;
+    if denom.abs() < 1e-12 {
+        return None;
+    }
+    Some((b * dir.dot(w) - n.dot(w)) / denom)
+}
+
 /// The camera and the viewport size, (width, height) in pixels.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Viewport {
@@ -118,6 +135,21 @@ impl Viewport {
     }
 }
 
+struct PushState {
+    face: FaceId,
+    start: DVec3,
+    normal: DVec3,
+    distance: f64,
+    loops: Vec<Vec<DVec3>>,
+}
+
+#[derive(Clone, Copy)]
+struct LastPush {
+    face: FaceId,
+    distance: f64,
+    undo_count: usize,
+}
+
 pub struct Editor {
     /// The unit for typed numbers without a unit, and for the measurement display.
     pub unit: Unit,
@@ -135,6 +167,9 @@ pub struct Editor {
     circle: CircleTool,
     arc: ArcTool,
     arc3: Arc3Tool,
+    push: Option<PushState>,
+    push_hover: Option<FaceId>,
+    last_push: Option<LastPush>,
 }
 
 fn click_mods(mods: Modifiers) -> ClickMods {
@@ -173,6 +208,9 @@ impl Editor {
             circle: CircleTool::new(plane_for_normal(DVec3::Z)),
             arc: ArcTool::new(plane_for_normal(DVec3::Z)),
             arc3: Arc3Tool::new(plane_for_normal(DVec3::Z)),
+            push: None,
+            push_hover: None,
+            last_push: None,
         }
     }
 
@@ -191,6 +229,8 @@ impl Editor {
         self.plane_lock = None;
         self.hint = None;
         self.message = None;
+        self.push = None;
+        self.push_hover = None;
     }
 
     /// Sorted, no duplicates; only entities of the root body.
@@ -224,6 +264,10 @@ impl Editor {
                 }
                 None => self.hint = None,
             }
+            return;
+        }
+        if self.tool == Tool::PushPull {
+            self.move_push(model, view, cursor);
             return;
         }
         if self.tool != Tool::Line {
@@ -305,7 +349,7 @@ impl Editor {
                 false
             }
             Tool::Orbit | Tool::Pan | Tool::Zoom => false,
-            Tool::PushPull => unimplemented!("m3-app-pushpull"),
+            Tool::PushPull => self.click_push(model, view, cursor, count),
             Tool::Rectangle | Tool::Circle | Tool::Arc | Tool::Arc3 => {
                 let before = self.undo.undo_count();
                 let (origin, dir) = view.ray(cursor);
@@ -358,7 +402,7 @@ impl Editor {
 
     /// Typed characters for the measurement box. True when they were taken.
     pub fn text(&mut self, text: &str) -> bool {
-        if !is_drawing(self.tool) {
+        if !takes_text(self.tool) {
             return false;
         }
         let filtered: String = text.chars().filter(|c| !c.is_control()).collect();
@@ -388,6 +432,10 @@ impl Editor {
                 self.shift_lock = None;
                 self.plane_lock = None;
                 self.message = None;
+                self.push = None;
+                if self.tool == Tool::PushPull {
+                    self.hint = None;
+                }
                 false
             }
             EditKey::Enter => {
@@ -395,6 +443,9 @@ impl Editor {
                     return false;
                 }
                 let text = std::mem::take(&mut self.typed);
+                if self.tool == Tool::PushPull {
+                    return self.enter_push(text, model);
+                }
                 if !is_drawing(self.tool) {
                     return false;
                 }
@@ -434,6 +485,10 @@ impl Editor {
                 self.line = LineTool::new();
                 self.idle_shapes();
                 self.typed.clear();
+                self.push = None;
+                if self.tool == Tool::PushPull {
+                    self.hint = None;
+                }
                 match self.undo.undo(model) {
                     Ok(Some(_)) => {
                         self.prune(model);
@@ -450,6 +505,10 @@ impl Editor {
                 self.line = LineTool::new();
                 self.idle_shapes();
                 self.typed.clear();
+                self.push = None;
+                if self.tool == Tool::PushPull {
+                    self.hint = None;
+                }
                 match self.undo.redo(model) {
                     Ok(Some(_)) => {
                         self.prune(model);
@@ -564,7 +623,16 @@ impl Editor {
                     Some(("Bulge", value))
                 }
             },
-            Tool::PushPull => unimplemented!("m3-app-pushpull"),
+            Tool::PushPull => {
+                let value = match self.push.as_ref() {
+                    Some(push) => Some(length(push.distance.abs())),
+                    None => self
+                        .last_push
+                        .as_ref()
+                        .map(|last| length(last.distance.abs())),
+                };
+                Some(("Distance", value.unwrap_or_default()))
+            }
             Tool::Orbit | Tool::Pan | Tool::Zoom | Tool::Select => None,
         }
     }
@@ -612,7 +680,26 @@ impl Editor {
                 .preview()
                 .map(|p| p.windows(2).map(|w| (w[0], w[1])).collect())
                 .unwrap_or_default(),
-            Tool::PushPull => unimplemented!("m3-app-pushpull"),
+            Tool::PushPull => {
+                let Some(push) = self.push.as_ref() else {
+                    return Vec::new();
+                };
+                let offset = push.normal * push.distance;
+                let mut segments = Vec::new();
+                for points in &push.loops {
+                    let n = points.len();
+                    if n < 2 {
+                        continue;
+                    }
+                    for i in 0..n {
+                        let a = points[i];
+                        let b = points[(i + 1) % n];
+                        segments.push((a + offset, b + offset));
+                        segments.push((a, a + offset));
+                    }
+                }
+                segments
+            }
             Tool::Orbit | Tool::Pan | Tool::Zoom | Tool::Select => Vec::new(),
         }
     }
@@ -642,18 +729,221 @@ impl Editor {
     /// Push/Pull: the face under the cursor while idle, the face being pushed while a push
     /// is in progress (`docs/specs/m3-app-pushpull.md`). `None` for other tools.
     pub fn pushpull_face(&self) -> Option<FaceId> {
-        unimplemented!("m3-app-pushpull")
+        if self.tool != Tool::PushPull {
+            return None;
+        }
+        match self.push.as_ref() {
+            Some(push) => Some(push.face),
+            None => self.push_hover,
+        }
     }
 
     /// Push/Pull: the signed distance along the face's front normal that the next click
     /// would use; `None` while no push is in progress or for other tools.
     pub fn pushpull_distance(&self) -> Option<f64> {
-        unimplemented!("m3-app-pushpull")
+        if self.tool != Tool::PushPull {
+            return None;
+        }
+        self.push.as_ref().map(|push| push.distance)
     }
 
     /// Why the last input was refused, for the status bar.
     pub fn message(&self) -> Option<&str> {
         self.message.as_deref()
+    }
+
+    /// The face under the cursor at `cursor`, with where the ray met it and its front normal.
+    fn face_under(
+        &self,
+        model: &Model,
+        view: &Viewport,
+        cursor: DVec2,
+    ) -> Option<(FaceId, DVec3, DVec3)> {
+        let (origin, dir) = view.ray(cursor);
+        let ctx = model.root().geometry();
+        let (face, t) = infer::ray_face(ctx, origin, dir)?;
+        let normal = ctx.face_plane(face)?.normal;
+        let start = origin + unit_or(dir, DVec3::Z) * t;
+        Some((face, start, normal))
+    }
+
+    fn move_push(&mut self, model: &mut Model, view: &Viewport, cursor: DVec2) {
+        let (origin, dir) = view.ray(cursor);
+        self.push_hover =
+            infer::ray_face(model.root().geometry(), origin, dir).map(|(face, _)| face);
+        if self.push.is_none() {
+            self.hint = None;
+            return;
+        }
+
+        let inf = self.infer_at(model, view, cursor);
+        let (snap, axis) = match inf {
+            Some(inf) => (inf.snap, inf.axis),
+            None => (Snap::Along, None),
+        };
+        let distance = {
+            let push = self.push.as_ref().expect("pushing");
+            match inf {
+                Some(inf) if matches!(inf.snap, Snap::Endpoint(_) | Snap::Midpoint(_)) => {
+                    Some((inf.point - push.start).dot(push.normal))
+                }
+                _ => {
+                    let (origin, dir) = view.ray(cursor);
+                    closest_on_line(push.start, push.normal, origin, dir)
+                }
+            }
+        };
+        if let Some(distance) = distance
+            && let Some(push) = self.push.as_mut()
+        {
+            push.distance = distance;
+        }
+
+        let push = self.push.as_ref().expect("pushing");
+        self.hint = Some(Inference {
+            point: push.start + push.normal * push.distance,
+            snap,
+            axis,
+        });
+    }
+
+    fn click_push(
+        &mut self,
+        model: &mut Model,
+        view: &Viewport,
+        cursor: DVec2,
+        count: u32,
+    ) -> bool {
+        if count >= 2 {
+            self.push = None;
+            self.hint = None;
+            let Some(last) = self.last_push else {
+                return false;
+            };
+            let Some((face, _, _)) = self.face_under(model, view, cursor) else {
+                return false;
+            };
+            return self.commit_push(model, face, last.distance);
+        }
+
+        if let Some(push) = self.push.as_ref() {
+            let (face, distance) = (push.face, push.distance);
+            if distance.abs() <= TOL {
+                return false;
+            }
+            return self.commit_push(model, face, distance);
+        }
+
+        let Some((face, start, normal)) = self.face_under(model, view, cursor) else {
+            return false;
+        };
+        let ctx = model.root().geometry();
+        let Some(face_data) = ctx.face(face) else {
+            return false;
+        };
+        let mut loops = vec![ctx.loop_points(&face_data.outer)];
+        for inner in &face_data.inner {
+            loops.push(ctx.loop_points(inner));
+        }
+        self.push = Some(PushState {
+            face,
+            start,
+            normal,
+            distance: 0.0,
+            loops,
+        });
+        self.hint = Some(Inference {
+            point: start,
+            snap: Snap::OnFace(face),
+            axis: None,
+        });
+        false
+    }
+
+    fn enter_push(&mut self, text: String, model: &mut Model) -> bool {
+        let length = match units::parse_length(&text, self.unit) {
+            Ok(length) => length,
+            Err(_) => {
+                self.message = Some("Not a length".to_string());
+                return false;
+            }
+        };
+
+        if let Some(push) = self.push.as_ref() {
+            let direction = if push.distance < 0.0 { -1.0 } else { 1.0 };
+            let flip = if length < 0.0 { -1.0 } else { 1.0 };
+            return self.commit_push(model, push.face, length.abs() * direction * flip);
+        }
+
+        let Some(last) = self.last_push else {
+            return false;
+        };
+        if self.undo.undo_count() != last.undo_count || self.undo.redo_count() != 0 {
+            return false;
+        }
+        if self.undo.undo(model).ok().flatten().is_none() {
+            return false;
+        }
+
+        let direction = if last.distance < 0.0 { -1.0 } else { 1.0 };
+        let flip = if length < 0.0 { -1.0 } else { 1.0 };
+        let distance = length.abs() * direction * flip;
+        match push_pull(
+            model,
+            BodyId::Root,
+            last.face,
+            distance,
+            &mut self.undo,
+            "Push/Pull",
+        ) {
+            Ok(_) => {
+                self.message = None;
+                self.push = None;
+                self.hint = None;
+                self.last_push = Some(LastPush {
+                    face: last.face,
+                    distance,
+                    undo_count: self.undo.undo_count(),
+                });
+                self.prune(model);
+                true
+            }
+            Err(_) => {
+                let _ = self.undo.redo(model);
+                self.message = Some("Can't push/pull that".to_string());
+                false
+            }
+        }
+    }
+
+    fn commit_push(&mut self, model: &mut Model, face: FaceId, distance: f64) -> bool {
+        match push_pull(
+            model,
+            BodyId::Root,
+            face,
+            distance,
+            &mut self.undo,
+            "Push/Pull",
+        ) {
+            Ok(_) => {
+                self.push = None;
+                self.push_hover = None;
+                self.hint = None;
+                self.message = None;
+                self.typed.clear();
+                self.last_push = Some(LastPush {
+                    face,
+                    distance,
+                    undo_count: self.undo.undo_count(),
+                });
+                self.prune(model);
+                true
+            }
+            Err(_) => {
+                self.message = Some("Can't push/pull that".to_string());
+                false
+            }
+        }
     }
 
     fn shape_anchor(&self) -> Option<DVec3> {
