@@ -8,6 +8,7 @@
 
 use glam::{DMat4, DVec3};
 
+use crate::model::UndoStack;
 use crate::select::Entity;
 use crate::transform::TransformError;
 use crate::units::ParseError;
@@ -90,8 +91,9 @@ impl RotateTool {
     }
 
     /// The angle in degrees of the last finished rotation, while a typed angle can still
-    /// change it.
-    pub fn last_angle(&self) -> Option<f64> {
+    /// change it (`undo` still shows it on top).
+    pub fn last_angle(&self, undo: &UndoStack) -> Option<f64> {
+        let _ = undo;
         unimplemented!("m3-tool-rotate")
     }
 
