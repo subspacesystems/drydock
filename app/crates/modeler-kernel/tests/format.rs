@@ -226,8 +226,9 @@ fn bad_field(body: &str) {
 // -- writer ------------------------------------------------------------------------------
 
 #[test]
-fn version_is_one() {
-    assert_eq!(FORMAT_VERSION, 1);
+fn version_is_two() {
+    // Version 2 (m3-guides-model) adds guide records; files without guides still say 1.
+    assert_eq!(FORMAT_VERSION, 2);
 }
 
 #[test]
@@ -600,9 +601,9 @@ fn not_a_model_file() {
 #[test]
 fn unsupported_version() {
     kind_at(
-        "modeler-model 2\nend\n",
+        "modeler-model 3\nend\n",
         1,
-        ReadErrorKind::UnsupportedVersion(2),
+        ReadErrorKind::UnsupportedVersion(3),
     );
     kind_at(
         "modeler-model 0\nend\n",
