@@ -8,6 +8,8 @@
 //! Behaviour: `docs/specs/m2-app-editor.md`, shape tools: `docs/specs/m2-app-shapes.md`,
 //! Push/Pull: `docs/specs/m3-app-pushpull.md`, Rotate: `docs/specs/m3-app-rotate.md`.
 
+use std::collections::BTreeSet;
+
 use glam::{DVec2, DVec3};
 use modeler_kernel::click::{self, ClickMods};
 use modeler_kernel::infer::{self, Inference, Probe, Snap};
@@ -20,7 +22,7 @@ use modeler_kernel::tools::circle::CircleTool;
 use modeler_kernel::tools::line::LineTool;
 use modeler_kernel::tools::plane::DrawPlane;
 use modeler_kernel::tools::rectangle::RectTool;
-use modeler_kernel::tools::rotate::RotateTool;
+use modeler_kernel::tools::rotate::{RotateError, RotateStage, RotateTool};
 use modeler_kernel::tools::{Input, Target, ToolError};
 use modeler_kernel::topology::FaceId;
 use modeler_kernel::units::{self, Unit};
@@ -70,7 +72,7 @@ fn is_drawing(tool: Tool) -> bool {
 }
 
 fn takes_text(tool: Tool) -> bool {
-    is_drawing(tool) || tool == Tool::PushPull
+    is_drawing(tool) || tool == Tool::PushPull || tool == Tool::Rotate
 }
 
 /// The parameter along `start + t·n` of the point closest to the ray `origin + u·dir`.
@@ -172,6 +174,7 @@ pub struct Editor {
     push_hover: Option<FaceId>,
     last_push: Option<LastPush>,
     rotate: RotateTool,
+    rotate_segments: Vec<(DVec3, DVec3)>,
 }
 
 fn click_mods(mods: Modifiers) -> ClickMods {
@@ -188,6 +191,15 @@ fn error_message(error: &ToolError) -> &'static str {
         ToolError::NotStarted => "Click a start point first",
         ToolError::NoDirection => "Move the cursor to show the direction",
         ToolError::Geometry(_) | ToolError::Model(_) => "Can't draw that here",
+    }
+}
+
+fn rotate_error_message(error: &RotateError) -> &'static str {
+    match error {
+        RotateError::Parse(_) => "Not an angle",
+        RotateError::NotStarted => "Click the center first",
+        RotateError::Empty => "Select something to rotate",
+        RotateError::NotFinite | RotateError::Transform(_) => "Can't rotate that",
     }
 }
 
@@ -214,6 +226,7 @@ impl Editor {
             push_hover: None,
             last_push: None,
             rotate: RotateTool::new(plane_for_normal(DVec3::Z)),
+            rotate_segments: Vec::new(),
         }
     }
 
@@ -234,6 +247,8 @@ impl Editor {
         self.message = None;
         self.push = None;
         self.push_hover = None;
+        self.rotate = RotateTool::new(plane_for_normal(DVec3::Z));
+        self.rotate_segments.clear();
     }
 
     /// Sorted, no duplicates; only entities of the root body.
@@ -271,6 +286,10 @@ impl Editor {
         }
         if self.tool == Tool::PushPull {
             self.move_push(model, view, cursor);
+            return;
+        }
+        if self.tool == Tool::Rotate {
+            self.move_rotate(model, view, cursor);
             return;
         }
         if self.tool != Tool::Line {
@@ -353,7 +372,7 @@ impl Editor {
             }
             Tool::Orbit | Tool::Pan | Tool::Zoom => false,
             Tool::PushPull => self.click_push(model, view, cursor, count),
-            Tool::Rotate => unimplemented!("m3-app-rotate"),
+            Tool::Rotate => self.click_rotate(model, view, cursor),
             Tool::Rectangle | Tool::Circle | Tool::Arc | Tool::Arc3 => {
                 let before = self.undo.undo_count();
                 let (origin, dir) = view.ray(cursor);
@@ -431,6 +450,7 @@ impl Editor {
             EditKey::Cancel => {
                 self.line = LineTool::new();
                 self.idle_shapes();
+                self.idle_rotate();
                 self.typed.clear();
                 self.arrow_lock = None;
                 self.shift_lock = None;
@@ -449,6 +469,9 @@ impl Editor {
                 let text = std::mem::take(&mut self.typed);
                 if self.tool == Tool::PushPull {
                     return self.enter_push(text, model);
+                }
+                if self.tool == Tool::Rotate {
+                    return self.enter_rotate(text, model);
                 }
                 if !is_drawing(self.tool) {
                     return false;
@@ -488,6 +511,7 @@ impl Editor {
             EditKey::Undo => {
                 self.line = LineTool::new();
                 self.idle_shapes();
+                self.idle_rotate();
                 self.typed.clear();
                 self.push = None;
                 if self.tool == Tool::PushPull {
@@ -508,6 +532,7 @@ impl Editor {
             EditKey::Redo => {
                 self.line = LineTool::new();
                 self.idle_shapes();
+                self.idle_rotate();
                 self.typed.clear();
                 self.push = None;
                 if self.tool == Tool::PushPull {
@@ -526,13 +551,18 @@ impl Editor {
                 }
             }
             EditKey::Lock(i) => {
-                if is_shape(self.tool) {
-                    if self.shape_idle() && i < AXES.len() {
-                        if self.plane_lock == Some(i) {
-                            self.plane_lock = None;
-                        } else {
-                            self.plane_lock = Some(i);
-                        }
+                let plane_idle = if is_shape(self.tool) {
+                    self.shape_idle()
+                } else if self.tool == Tool::Rotate {
+                    self.rotate.stage() == RotateStage::Center
+                } else {
+                    false
+                };
+                if plane_idle && i < AXES.len() {
+                    if self.plane_lock == Some(i) {
+                        self.plane_lock = None;
+                    } else {
+                        self.plane_lock = Some(i);
                     }
                 } else if self.tool == Tool::Line && i < AXES.len() {
                     if self.arrow_lock == Some(i) {
@@ -637,7 +667,16 @@ impl Editor {
                 };
                 Some(("Distance", value.unwrap_or_default()))
             }
-            Tool::Rotate => unimplemented!("m3-app-rotate"),
+            Tool::Rotate => {
+                let value = match self.rotate.angle() {
+                    Some(angle) => format!("{:.1}°", angle),
+                    None => match self.rotate.last_angle(&self.undo) {
+                        Some(angle) => format!("{:.1}°", angle),
+                        None => String::new(),
+                    },
+                };
+                Some(("Angle", value))
+            }
             Tool::Orbit | Tool::Pan | Tool::Zoom | Tool::Select => None,
         }
     }
@@ -705,7 +744,17 @@ impl Editor {
                 }
                 segments
             }
-            Tool::Rotate => unimplemented!("m3-app-rotate"),
+            Tool::Rotate => {
+                let mut segments = self.rotate.preview();
+                if self.rotate.stage() == RotateStage::Angle
+                    && let Some(matrix) = self.rotate.matrix()
+                {
+                    for &(a, b) in &self.rotate_segments {
+                        segments.push((matrix.transform_point3(a), matrix.transform_point3(b)));
+                    }
+                }
+                segments
+            }
             Tool::Orbit | Tool::Pan | Tool::Zoom | Tool::Select => Vec::new(),
         }
     }
@@ -717,7 +766,7 @@ impl Editor {
             Tool::Circle => Some(self.circle.plane()),
             Tool::Arc => Some(self.arc.plane()),
             Tool::Arc3 => Some(self.arc3.plane()),
-            Tool::Rotate => unimplemented!("m3-app-rotate"),
+            Tool::Rotate => Some(self.rotate.plane()),
             Tool::Orbit | Tool::Pan | Tool::Zoom | Tool::Select | Tool::Line | Tool::PushPull => {
                 None
             }
@@ -726,7 +775,7 @@ impl Editor {
 
     /// The axis the shape tool's plane normal is locked to (arrow keys), if any.
     pub fn plane_lock(&self) -> Option<usize> {
-        if is_shape(self.tool) {
+        if is_shape(self.tool) || self.tool == Tool::Rotate {
             self.plane_lock
         } else {
             None
@@ -1024,7 +1073,166 @@ impl Editor {
         let _ = self.arc3.handle(Input::Cancel, &mut target);
     }
 
+    fn move_rotate(&mut self, model: &mut Model, view: &Viewport, cursor: DVec2) {
+        let (origin, dir) = view.ray(cursor);
+        if self.rotate.stage() == RotateStage::Center {
+            self.pick_rotate_plane(model, origin, dir);
+        }
+        let Some(inf) = self.infer_rotate_at(model, view, cursor) else {
+            self.hint = None;
+            return;
+        };
+        let point = self.rotate_input_point(inf, origin, dir);
+        self.hint = Some(Inference { point, ..inf });
+        let mut target = Target {
+            model,
+            body: BodyId::Root,
+            undo: &mut self.undo,
+            unit: self.unit,
+        };
+        let _ = self
+            .rotate
+            .handle(Input::Move(point), &self.selection, &mut target);
+    }
+
+    fn click_rotate(&mut self, model: &mut Model, view: &Viewport, cursor: DVec2) -> bool {
+        let before = self.undo.undo_count();
+        let was_center = self.rotate.stage() == RotateStage::Center;
+        let (origin, dir) = view.ray(cursor);
+        if was_center {
+            self.pick_rotate_plane(model, origin, dir);
+            if self.selection.is_empty() {
+                let Some(entity) = self.pick_at(model, view, cursor) else {
+                    self.message = Some("Select something to rotate".to_string());
+                    return false;
+                };
+                self.selection = click::apply_click(
+                    &self.selection,
+                    Some(entity),
+                    click_mods(Modifiers::default()),
+                );
+            }
+        }
+        let Some(inf) = self.infer_rotate_at(model, view, cursor) else {
+            self.hint = None;
+            return false;
+        };
+        let point = self.rotate_input_point(inf, origin, dir);
+        self.hint = Some(Inference { point, ..inf });
+        let result = {
+            let mut target = Target {
+                model,
+                body: BodyId::Root,
+                undo: &mut self.undo,
+                unit: self.unit,
+            };
+            self.rotate
+                .handle(Input::Click(point), &self.selection, &mut target)
+        };
+        match result {
+            Ok(()) => {
+                self.message = None;
+                if was_center {
+                    self.rotate_segments = self.collect_rotate_segments(model);
+                }
+            }
+            Err(error) => self.message = Some(rotate_error_message(&error).to_string()),
+        }
+        let changed = self.undo.undo_count() != before;
+        if changed {
+            self.prune(model);
+        }
+        changed
+    }
+
+    fn enter_rotate(&mut self, text: String, model: &mut Model) -> bool {
+        let before = self.undo.undo_count();
+        let before_angle = self.rotate.last_angle(&self.undo);
+        let result = {
+            let mut target = Target {
+                model,
+                body: BodyId::Root,
+                undo: &mut self.undo,
+                unit: self.unit,
+            };
+            self.rotate
+                .handle(Input::Typed(text), &self.selection, &mut target)
+        };
+        match result {
+            Ok(()) => self.message = None,
+            Err(error) => self.message = Some(rotate_error_message(&error).to_string()),
+        }
+        let after_angle = self.rotate.last_angle(&self.undo);
+        let retyped = before_angle.zip(after_angle).is_some_and(|(a, b)| a != b);
+        let changed = self.undo.undo_count() != before || retyped;
+        if changed {
+            self.prune(model);
+        }
+        changed
+    }
+
+    fn idle_rotate(&mut self) {
+        let mut model = Model::new();
+        let mut undo = UndoStack::new();
+        let mut target = Target {
+            model: &mut model,
+            body: BodyId::Root,
+            undo: &mut undo,
+            unit: self.unit,
+        };
+        let _ = self.rotate.handle(Input::Cancel, &[], &mut target);
+        self.rotate_segments.clear();
+    }
+
+    fn collect_rotate_segments(&self, model: &Model) -> Vec<(DVec3, DVec3)> {
+        let ctx = model.root().geometry();
+        let mut edges = BTreeSet::new();
+        let mut instances = Vec::new();
+        for entity in &self.selection {
+            match *entity {
+                Entity::Edge(id) => {
+                    edges.insert(id);
+                }
+                Entity::Face(id) => {
+                    let Some(face) = ctx.face(id) else {
+                        continue;
+                    };
+                    for l in std::iter::once(&face.outer).chain(face.inner.iter()) {
+                        for u in &l.uses {
+                            edges.insert(u.edge);
+                        }
+                    }
+                }
+                Entity::Instance(id) => {
+                    instances.extend(select::instance_segments(model, BodyId::Root, id));
+                }
+            }
+        }
+        let mut segments = Vec::with_capacity(edges.len() + instances.len());
+        for id in edges {
+            let Some(edge) = ctx.edge(id) else {
+                continue;
+            };
+            let (Some(a), Some(b)) = (ctx.vertex(edge.ends[0]), ctx.vertex(edge.ends[1])) else {
+                continue;
+            };
+            segments.push((a.position, b.position));
+        }
+        segments.extend(instances);
+        segments
+    }
+
     fn pick_shape_plane(&mut self, model: &Model, origin: DVec3, dir: DVec3) {
+        let plane = self.picked_plane(model, origin, dir);
+        self.set_shape_plane(plane);
+    }
+
+    fn pick_rotate_plane(&mut self, model: &Model, origin: DVec3, dir: DVec3) {
+        let plane = self.picked_plane(model, origin, dir);
+        self.rotate.set_plane(plane);
+    }
+
+    fn picked_plane(&self, model: &Model, origin: DVec3, dir: DVec3) -> DrawPlane {
         let n = match self.plane_lock.and_then(|i| AXES.get(i).copied()) {
             Some(axis) => axis,
             None => {
@@ -1036,14 +1244,17 @@ impl Editor {
             }
         };
         let n = if n.dot(dir) > 0.0 { -n } else { n };
-        self.set_shape_plane(plane_for_normal(unit_or(n, DVec3::Z)));
+        plane_for_normal(unit_or(n, DVec3::Z))
     }
 
-    fn shape_input_point(&self, inf: Inference, origin: DVec3, dir: DVec3) -> DVec3 {
-        if !self.shape_idle()
-            && matches!(inf.snap, Snap::OnFace(_) | Snap::Ground | Snap::Along)
-            && let (Some(anchor), Some(plane)) = (self.shape_anchor(), self.shape_plane())
-        {
+    fn plane_input_point(
+        inf: Inference,
+        origin: DVec3,
+        dir: DVec3,
+        anchor: DVec3,
+        plane: DrawPlane,
+    ) -> DVec3 {
+        if matches!(inf.snap, Snap::OnFace(_) | Snap::Ground | Snap::Along) {
             let n = plane.normal();
             let denom = dir.dot(n);
             if denom.abs() > 1e-9 {
@@ -1055,6 +1266,41 @@ impl Editor {
             }
         }
         inf.point
+    }
+
+    fn shape_input_point(&self, inf: Inference, origin: DVec3, dir: DVec3) -> DVec3 {
+        if !self.shape_idle()
+            && let (Some(anchor), Some(plane)) = (self.shape_anchor(), self.shape_plane())
+        {
+            return Self::plane_input_point(inf, origin, dir, anchor, plane);
+        }
+        inf.point
+    }
+
+    fn rotate_input_point(&self, inf: Inference, origin: DVec3, dir: DVec3) -> DVec3 {
+        if let Some(center) = self.rotate.center() {
+            return Self::plane_input_point(inf, origin, dir, center, self.rotate.plane());
+        }
+        inf.point
+    }
+
+    fn infer_rotate_at(&self, model: &Model, view: &Viewport, cursor: DVec2) -> Option<Inference> {
+        let (origin, dir) = view.ray(cursor);
+        let project = |p: DVec3| view.project(p);
+        let centers: [DVec3; 0] = [];
+        let probe = Probe {
+            cursor,
+            origin,
+            dir,
+            parallel: view.camera.projection == Projection::Parallel,
+            project: &project,
+            radius: SNAP_RADIUS_PX,
+            anchor: self.rotate.center(),
+            axes: AXES,
+            centers: &centers,
+            lock: None,
+        };
+        infer::infer_model(model, &probe)
     }
 
     fn infer_shape_at(&self, model: &Model, view: &Viewport, cursor: DVec2) -> Option<Inference> {
