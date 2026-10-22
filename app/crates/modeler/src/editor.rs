@@ -11,7 +11,7 @@
 
 use std::collections::BTreeSet;
 
-use glam::{DVec2, DVec3};
+use glam::{DMat4, DVec2, DVec3};
 use modeler_kernel::click::{self, ClickMods};
 use modeler_kernel::infer::{self, Inference, Probe, Snap};
 use modeler_kernel::model::{BodyId, Model, UndoStack};
@@ -24,10 +24,13 @@ use modeler_kernel::tools::line::LineTool;
 use modeler_kernel::tools::plane::DrawPlane;
 use modeler_kernel::tools::rectangle::RectTool;
 use modeler_kernel::tools::rotate::{RotateError, RotateStage, RotateTool};
-use modeler_kernel::tools::scale::{Handle, ScaleTool};
+use modeler_kernel::tools::scale::{
+    Bounds, Handle, ScaleError, ScaleStage, ScaleTool, bounds, handles,
+};
 use modeler_kernel::tools::translate::{MoveError, MoveStage, MoveTool};
 use modeler_kernel::tools::{Input, Target, ToolError};
 use modeler_kernel::topology::FaceId;
+use modeler_kernel::transform;
 use modeler_kernel::units::{self, Unit};
 use modeler_view::{Camera, Projection};
 
@@ -75,7 +78,11 @@ fn is_drawing(tool: Tool) -> bool {
 }
 
 fn takes_text(tool: Tool) -> bool {
-    is_drawing(tool) || tool == Tool::PushPull || tool == Tool::Rotate || tool == Tool::Move
+    is_drawing(tool)
+        || tool == Tool::PushPull
+        || tool == Tool::Rotate
+        || tool == Tool::Move
+        || tool == Tool::Scale
 }
 
 /// The parameter along `start + t·n` of the point closest to the ray `origin + u·dir`.
@@ -219,6 +226,57 @@ fn move_error_message(error: &MoveError) -> &'static str {
         MoveError::Empty => "Select something to move",
         MoveError::NotFinite | MoveError::Transform(_) => "Can't move that",
     }
+}
+
+fn scale_error_message(error: &ScaleError) -> &'static str {
+    match error {
+        ScaleError::Parse(_) => "Not a scale factor",
+        ScaleError::WrongCount => "Wrong number of factors",
+        ScaleError::ZeroFactor => "Can't scale to nothing",
+        ScaleError::NotStarted => "Click a handle first",
+        ScaleError::Empty => "Select something to scale",
+        ScaleError::NoHandle => "Click a handle to scale",
+        ScaleError::NotFinite | ScaleError::Transform(_) => "Can't scale that",
+    }
+}
+
+fn format_factors(factors: DVec3) -> String {
+    if (factors.x - factors.y).abs() <= 1e-9 && (factors.y - factors.z).abs() <= 1e-9 {
+        format!("{:.3}", factors.x)
+    } else {
+        format!("{:.3}, {:.3}, {:.3}", factors.x, factors.y, factors.z)
+    }
+}
+
+fn box_edges(bounds: Bounds) -> Vec<(DVec3, DVec3)> {
+    let corner = |i: usize| {
+        DVec3::new(
+            if i & 1 != 0 {
+                bounds.max.x
+            } else {
+                bounds.min.x
+            },
+            if i & 2 != 0 {
+                bounds.max.y
+            } else {
+                bounds.min.y
+            },
+            if i & 4 != 0 {
+                bounds.max.z
+            } else {
+                bounds.min.z
+            },
+        )
+    };
+    let mut edges = Vec::with_capacity(12);
+    for i in 0..8 {
+        for bit in [1, 2, 4] {
+            if i & bit == 0 {
+                edges.push((corner(i), corner(i | bit)));
+            }
+        }
+    }
+    edges
 }
 
 impl Editor {
@@ -490,6 +548,7 @@ impl Editor {
                 self.idle_shapes();
                 self.idle_rotate();
                 self.idle_move();
+                self.idle_scale();
                 self.typed.clear();
                 self.arrow_lock = None;
                 self.shift_lock = None;
@@ -514,6 +573,9 @@ impl Editor {
                 }
                 if self.tool == Tool::Move {
                     return self.enter_move(text, model);
+                }
+                if self.tool == Tool::Scale {
+                    return self.enter_scale(text, model);
                 }
                 if !is_drawing(self.tool) {
                     return false;
@@ -555,6 +617,7 @@ impl Editor {
                 self.idle_shapes();
                 self.idle_rotate();
                 self.idle_move();
+                self.idle_scale();
                 self.typed.clear();
                 self.push = None;
                 if self.tool == Tool::PushPull {
@@ -577,6 +640,7 @@ impl Editor {
                 self.idle_shapes();
                 self.idle_rotate();
                 self.idle_move();
+                self.idle_scale();
                 self.typed.clear();
                 self.push = None;
                 if self.tool == Tool::PushPull {
@@ -731,7 +795,18 @@ impl Editor {
                 };
                 Some(("Distance", value))
             }
-            Tool::Scale => unimplemented!("m3-app-scale-flip"),
+            Tool::Scale => {
+                let factors = if self.scale.stage() == ScaleStage::Drag {
+                    self.scale.factors()
+                } else {
+                    self.scale.last_factors(&self.undo)
+                };
+                let value = match factors {
+                    Some(factors) => format_factors(factors),
+                    None => String::new(),
+                };
+                Some(("Scale", value))
+            }
             Tool::Orbit | Tool::Pan | Tool::Zoom | Tool::Select => None,
         }
     }
@@ -819,7 +894,21 @@ impl Editor {
                 }
                 segments
             }
-            Tool::Scale => unimplemented!("m3-app-scale-flip"),
+            Tool::Scale => {
+                if self.scale.stage() != ScaleStage::Drag {
+                    return Vec::new();
+                }
+                let Some(bounds) = self.scale.preview() else {
+                    return Vec::new();
+                };
+                let mut segments = box_edges(bounds);
+                if let Some(matrix) = self.scale.matrix() {
+                    for &(a, b) in &self.scale_segments {
+                        segments.push((matrix.transform_point3(a), matrix.transform_point3(b)));
+                    }
+                }
+                segments
+            }
             Tool::Orbit | Tool::Pan | Tool::Zoom | Tool::Select => Vec::new(),
         }
     }
@@ -902,8 +991,45 @@ impl Editor {
 
     /// Flip the selection about the plane through the centre of its bounding box that is
     /// perpendicular to axis `axis` (0 red, 1 green, 2 blue). True when the model changed.
-    pub fn flip(&mut self, _axis: usize, _model: &mut Model) -> bool {
-        unimplemented!("m3-app-scale-flip")
+    pub fn flip(&mut self, axis: usize, model: &mut Model) -> bool {
+        if axis >= 3 || self.scale.stage() == ScaleStage::Drag {
+            return false;
+        }
+        if self.selection.is_empty() {
+            self.message = Some("Select something to flip".to_string());
+            return false;
+        }
+        let Some(bounds) = bounds(model, BodyId::Root, &self.selection) else {
+            self.message = Some("Select something to flip".to_string());
+            return false;
+        };
+        let center = bounds.center();
+        let factors = match axis {
+            0 => DVec3::new(-1.0, 1.0, 1.0),
+            1 => DVec3::new(1.0, -1.0, 1.0),
+            _ => DVec3::new(1.0, 1.0, -1.0),
+        };
+        let matrix = DMat4::from_translation(center)
+            * DMat4::from_scale(factors)
+            * DMat4::from_translation(-center);
+        match transform::transform(
+            model,
+            BodyId::Root,
+            &self.selection,
+            matrix,
+            &mut self.undo,
+            "Flip",
+        ) {
+            Ok(()) => {
+                self.message = None;
+                self.prune(model);
+                true
+            }
+            Err(_) => {
+                self.message = Some("Can't flip that".to_string());
+                false
+            }
+        }
     }
 
     /// Why the last input was refused, for the status bar.
@@ -1319,24 +1445,165 @@ impl Editor {
         segments
     }
 
-    fn move_scale(
-        &mut self,
-        _model: &mut Model,
-        _view: &Viewport,
-        _cursor: DVec2,
-        _mods: Modifiers,
-    ) {
-        unimplemented!("m3-app-scale-flip")
+    fn move_scale(&mut self, model: &mut Model, view: &Viewport, cursor: DVec2, mods: Modifiers) {
+        self.scale.set_about_center(mods.ctrl);
+        self.scale.set_invert_uniform(mods.shift);
+        if self.scale.stage() == ScaleStage::Pick {
+            self.scale_hover = self.hovered_handle(model, view, cursor);
+            self.hint = None;
+            return;
+        }
+        self.scale_hover = None;
+        let Some(inf) = self.infer_scale_at(model, view, cursor) else {
+            self.hint = None;
+            return;
+        };
+        self.hint = Some(inf);
+        let mut target = Target {
+            model,
+            body: BodyId::Root,
+            undo: &mut self.undo,
+            unit: self.unit,
+        };
+        let _ = self
+            .scale
+            .handle(Input::Move(inf.point), &self.selection, &mut target);
     }
 
     fn click_scale(
         &mut self,
-        _model: &mut Model,
-        _view: &Viewport,
-        _cursor: DVec2,
-        _mods: Modifiers,
+        model: &mut Model,
+        view: &Viewport,
+        cursor: DVec2,
+        mods: Modifiers,
     ) -> bool {
-        unimplemented!("m3-app-scale-flip")
+        self.scale.set_about_center(mods.ctrl);
+        self.scale.set_invert_uniform(mods.shift);
+        if self.scale.stage() == ScaleStage::Pick {
+            if self.selection.is_empty() {
+                self.message = Some("Select something to scale".to_string());
+                return false;
+            }
+            let Some(handle) = self.hovered_handle(model, view, cursor) else {
+                self.message = Some("Click a handle to scale".to_string());
+                return false;
+            };
+            match self
+                .scale
+                .grab(handle, model, BodyId::Root, &self.selection)
+            {
+                Ok(()) => {
+                    self.message = None;
+                    self.scale_segments = self.collect_rotate_segments(model);
+                    self.scale_hover = None;
+                }
+                Err(error) => self.message = Some(scale_error_message(&error).to_string()),
+            }
+            return false;
+        }
+        let Some(inf) = self.infer_scale_at(model, view, cursor) else {
+            self.hint = None;
+            return false;
+        };
+        self.hint = Some(inf);
+        let before = self.undo.undo_count();
+        let result = {
+            let mut target = Target {
+                model,
+                body: BodyId::Root,
+                undo: &mut self.undo,
+                unit: self.unit,
+            };
+            self.scale
+                .handle(Input::Click(inf.point), &self.selection, &mut target)
+        };
+        match result {
+            Ok(()) => self.message = None,
+            Err(error) => self.message = Some(scale_error_message(&error).to_string()),
+        }
+        let changed = self.undo.undo_count() != before;
+        if changed {
+            self.prune(model);
+        }
+        changed
+    }
+
+    fn enter_scale(&mut self, text: String, model: &mut Model) -> bool {
+        let before = self.undo.undo_count();
+        let before_factors = self.scale.last_factors(&self.undo);
+        let result = {
+            let mut target = Target {
+                model,
+                body: BodyId::Root,
+                undo: &mut self.undo,
+                unit: self.unit,
+            };
+            self.scale
+                .handle(Input::Typed(text), &self.selection, &mut target)
+        };
+        match result {
+            Ok(()) => self.message = None,
+            Err(error) => self.message = Some(scale_error_message(&error).to_string()),
+        }
+        let after_factors = self.scale.last_factors(&self.undo);
+        let retyped = before_factors
+            .zip(after_factors)
+            .is_some_and(|(a, b)| a != b);
+        let changed = self.undo.undo_count() != before || retyped;
+        if changed {
+            self.prune(model);
+        }
+        changed
+    }
+
+    fn idle_scale(&mut self) {
+        let mut model = Model::new();
+        let mut undo = UndoStack::new();
+        let mut target = Target {
+            model: &mut model,
+            body: BodyId::Root,
+            undo: &mut undo,
+            unit: self.unit,
+        };
+        let _ = self.scale.handle(Input::Cancel, &[], &mut target);
+        self.scale_segments.clear();
+    }
+
+    fn hovered_handle(&self, model: &Model, view: &Viewport, cursor: DVec2) -> Option<Handle> {
+        if self.selection.is_empty() {
+            return None;
+        }
+        let bounds = bounds(model, BodyId::Root, &self.selection)?;
+        let mut best: Option<(f64, Handle)> = None;
+        for handle in handles(&bounds) {
+            let Some(point) = view.project(bounds.point(handle)) else {
+                continue;
+            };
+            let distance = point.distance(cursor);
+            if distance <= SNAP_RADIUS_PX && best.is_none_or(|(nearest, _)| distance < nearest) {
+                best = Some((distance, handle));
+            }
+        }
+        best.map(|(_, handle)| handle)
+    }
+
+    fn infer_scale_at(&self, model: &Model, view: &Viewport, cursor: DVec2) -> Option<Inference> {
+        let (origin, dir) = view.ray(cursor);
+        let project = |p: DVec3| view.project(p);
+        let centers: [DVec3; 0] = [];
+        let probe = Probe {
+            cursor,
+            origin,
+            dir,
+            parallel: view.camera.projection == Projection::Parallel,
+            project: &project,
+            radius: SNAP_RADIUS_PX,
+            anchor: self.scale.fixed_point(),
+            axes: AXES,
+            centers: &centers,
+            lock: None,
+        };
+        infer::infer_model(model, &probe)
     }
 
     fn move_move(&mut self, model: &mut Model, view: &Viewport, cursor: DVec2) {
