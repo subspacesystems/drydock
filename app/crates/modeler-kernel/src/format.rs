@@ -17,12 +17,13 @@ use crate::model::{
     Body, BodyId, DefinitionId, DefinitionInfo, FaceMaterials, Instance, InstanceId, Material,
     MaterialId, Model, ModelError, ModelRecord,
 };
+use crate::tape::{Guide, GuideId};
 use crate::topology::{
     Edge, EdgeId, EdgeUse, Face, FaceId, Loop, Record, TopoError, Vertex, VertexId,
 };
 
 /// The version this code writes, and the newest it reads.
-pub const FORMAT_VERSION: u32 = 1;
+pub const FORMAT_VERSION: u32 = 2;
 
 /// Why a model can't be written. Nothing was written.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -178,13 +179,49 @@ fn write_body(out: &mut String, id: BodyId, body: &Body) -> Result<(), WriteErro
         out.push('\n');
     }
 
+    for (gid, guide) in body.guides().iter() {
+        match guide {
+            Guide::Line { point, dir } => {
+                check_finite(point.x)?;
+                check_finite(point.y)?;
+                check_finite(point.z)?;
+                check_finite(dir.x)?;
+                check_finite(dir.y)?;
+                check_finite(dir.z)?;
+                out.push_str(&format!(
+                    "guide {} line {} {} {} {} {} {}\n",
+                    gid.0, point.x, point.y, point.z, dir.x, dir.y, dir.z
+                ));
+            }
+            Guide::Point(point) => {
+                check_finite(point.x)?;
+                check_finite(point.y)?;
+                check_finite(point.z)?;
+                out.push_str(&format!(
+                    "guide {} point {} {} {}\n",
+                    gid.0, point.x, point.y, point.z
+                ));
+            }
+        }
+    }
+
     Ok(())
 }
 
 /// The model as file text.
 pub fn to_text(model: &Model) -> Result<String, WriteError> {
     let mut out = String::new();
-    out.push_str(&format!("modeler-model {FORMAT_VERSION}\n"));
+    let version = if model.root().guides().is_empty()
+        && model.definitions().all(|(id, _)| {
+            model
+                .body(BodyId::Definition(id))
+                .is_none_or(|b| b.guides().is_empty())
+        }) {
+        1
+    } else {
+        FORMAT_VERSION
+    };
+    out.push_str(&format!("modeler-model {version}\n"));
 
     for (id, material) in model.materials() {
         for component in material.color {
@@ -395,6 +432,7 @@ fn rejected(error: ModelError) -> ReadErrorKind {
 
 fn apply_line(
     model: &mut Model,
+    version: u32,
     current: &mut Option<BodyId>,
     seen: &mut BTreeSet<BodyId>,
     tokens: &[Token],
@@ -582,6 +620,47 @@ fn apply_line(
                 .map_err(rejected)?;
             Ok(false)
         }
+        "guide" => {
+            if version < 2 {
+                return Err(ReadErrorKind::UnknownRecord);
+            }
+            if tokens.len() < 3 {
+                return Err(ReadErrorKind::BadField);
+            }
+            let id = GuideId(parse_u64(&tokens[1])?);
+            let kind = bare(&tokens[2])?;
+            let guide = match kind {
+                "line" => {
+                    expect_count(tokens, 9)?;
+                    Guide::Line {
+                        point: glam::DVec3::new(
+                            parse_f64(&tokens[3])?,
+                            parse_f64(&tokens[4])?,
+                            parse_f64(&tokens[5])?,
+                        ),
+                        dir: glam::DVec3::new(
+                            parse_f64(&tokens[6])?,
+                            parse_f64(&tokens[7])?,
+                            parse_f64(&tokens[8])?,
+                        ),
+                    }
+                }
+                "point" => {
+                    expect_count(tokens, 6)?;
+                    Guide::Point(glam::DVec3::new(
+                        parse_f64(&tokens[3])?,
+                        parse_f64(&tokens[4])?,
+                        parse_f64(&tokens[5])?,
+                    ))
+                }
+                _ => return Err(ReadErrorKind::BadField),
+            };
+            let body = current.ok_or(ReadErrorKind::NoBody)?;
+            model
+                .apply(&ModelRecord::AddGuide(body, id, guide))
+                .map_err(rejected)?;
+            Ok(false)
+        }
         _ => Err(ReadErrorKind::UnknownRecord),
     }
 }
@@ -616,7 +695,7 @@ pub fn from_text(text: &str) -> Result<Model, ReadError> {
         line: 1,
         kind: ReadErrorKind::NotAModelFile,
     })?;
-    if version != FORMAT_VERSION {
+    if version != 1 && version != FORMAT_VERSION {
         return Err(ReadError {
             line: 1,
             kind: ReadErrorKind::UnsupportedVersion(version),
@@ -646,9 +725,11 @@ pub fn from_text(text: &str) -> Result<Model, ReadError> {
             line: line_number,
             kind,
         })?;
-        if apply_line(&mut model, &mut current, &mut seen, &tokens).map_err(|kind| ReadError {
-            line: line_number,
-            kind,
+        if apply_line(&mut model, version, &mut current, &mut seen, &tokens).map_err(|kind| {
+            ReadError {
+                line: line_number,
+                kind,
+            }
         })? {
             ended = true;
         }
