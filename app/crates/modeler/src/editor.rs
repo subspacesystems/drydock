@@ -18,6 +18,7 @@ use modeler_kernel::infer::{self, Inference, Probe, Snap};
 use modeler_kernel::model::{BodyId, Model, UndoStack};
 use modeler_kernel::pushpull::push_pull;
 use modeler_kernel::select::{self, BoxMode, Entity};
+use modeler_kernel::tape::Guide;
 use modeler_kernel::tools::arc::ArcTool;
 use modeler_kernel::tools::arc3::Arc3Tool;
 use modeler_kernel::tools::circle::CircleTool;
@@ -28,7 +29,7 @@ use modeler_kernel::tools::rotate::{RotateError, RotateStage, RotateTool};
 use modeler_kernel::tools::scale::{
     Bounds, Handle, ScaleError, ScaleStage, ScaleTool, bounds, handles,
 };
-use modeler_kernel::tools::tape::TapeTool;
+use modeler_kernel::tools::tape::{TapeError, TapeStage, TapeTool};
 use modeler_kernel::tools::translate::{MoveError, MoveStage, MoveTool};
 use modeler_kernel::tools::{Input, Target, ToolError};
 use modeler_kernel::topology::FaceId;
@@ -233,6 +234,18 @@ fn move_error_message(error: &MoveError) -> &'static str {
     }
 }
 
+fn tape_error_message(error: &TapeError) -> &'static str {
+    match error {
+        TapeError::Parse(_) => "Not a length",
+        TapeError::NotStarted => "Click a start point first",
+        TapeError::NotParallel => "Start on an edge to place a guide",
+        TapeError::NotFinite => "Can't measure that",
+        TapeError::NoDirection => "Move the cursor to show the side",
+        TapeError::BadLength => "Length must be more than zero",
+        TapeError::Model(_) => "Can't add that guide",
+    }
+}
+
 fn scale_error_message(error: &ScaleError) -> &'static str {
     match error {
         ScaleError::Parse(_) => "Not a scale factor",
@@ -395,7 +408,8 @@ impl Editor {
             return;
         }
         if self.tool == Tool::Tape {
-            unimplemented!("m3-app-tape");
+            self.move_tape(model, view, cursor);
+            return;
         }
         if self.tool != Tool::Line {
             self.hint = None;
@@ -480,7 +494,7 @@ impl Editor {
             Tool::Rotate => self.click_rotate(model, view, cursor),
             Tool::Move => self.click_move(model, view, cursor),
             Tool::Scale => self.click_scale(model, view, cursor, mods),
-            Tool::Tape => unimplemented!("m3-app-tape"),
+            Tool::Tape => self.click_tape(model, view, cursor),
             Tool::Rectangle | Tool::Circle | Tool::Arc | Tool::Arc3 => {
                 let before = self.undo.undo_count();
                 let (origin, dir) = view.ray(cursor);
@@ -561,6 +575,7 @@ impl Editor {
                 self.idle_rotate();
                 self.idle_move();
                 self.idle_scale();
+                self.idle_tape();
                 self.typed.clear();
                 self.arrow_lock = None;
                 self.shift_lock = None;
@@ -590,7 +605,7 @@ impl Editor {
                     return self.enter_scale(text, model);
                 }
                 if self.tool == Tool::Tape {
-                    unimplemented!("m3-app-tape");
+                    return self.enter_tape(text, model);
                 }
                 if !is_drawing(self.tool) {
                     return false;
@@ -633,6 +648,7 @@ impl Editor {
                 self.idle_rotate();
                 self.idle_move();
                 self.idle_scale();
+                self.idle_tape();
                 self.typed.clear();
                 self.push = None;
                 if self.tool == Tool::PushPull {
@@ -656,6 +672,7 @@ impl Editor {
                 self.idle_rotate();
                 self.idle_move();
                 self.idle_scale();
+                self.idle_tape();
                 self.typed.clear();
                 self.push = None;
                 if self.tool == Tool::PushPull {
@@ -822,7 +839,13 @@ impl Editor {
                 };
                 Some(("Scale", value))
             }
-            Tool::Tape => unimplemented!("m3-app-tape"),
+            Tool::Tape => {
+                let value = match self.tape.stage() {
+                    TapeStage::End => self.tape.distance(),
+                    TapeStage::Start => self.tape.last_distance(),
+                };
+                Some(("Length", value.map(length).unwrap_or_default()))
+            }
             Tool::Orbit | Tool::Pan | Tool::Zoom | Tool::Select => None,
         }
     }
@@ -925,7 +948,27 @@ impl Editor {
                 }
                 segments
             }
-            Tool::Tape => unimplemented!("m3-app-tape"),
+            Tool::Tape => {
+                if self.tape.stage() != TapeStage::End {
+                    return Vec::new();
+                }
+                if self.tape.edge().is_none() {
+                    return match (self.tape.start(), self.hint) {
+                        (Some(start), Some(hint)) => vec![(start, hint.point)],
+                        _ => Vec::new(),
+                    };
+                }
+                let Some((a, b)) = self.tape.edge() else {
+                    return Vec::new();
+                };
+                match self.tape.preview() {
+                    Some(Guide::Line { point, dir }) => {
+                        let onto = |p: DVec3| point + dir * dir.dot(p - point);
+                        vec![(onto(a), onto(b))]
+                    }
+                    _ => Vec::new(),
+                }
+            }
             Tool::Orbit | Tool::Pan | Tool::Zoom | Tool::Select => Vec::new(),
         }
     }
@@ -1735,6 +1778,114 @@ impl Editor {
         };
         let _ = self.translate.handle(Input::Cancel, &[], &mut target);
         self.move_segments.clear();
+    }
+
+    fn move_tape(&mut self, model: &mut Model, view: &Viewport, cursor: DVec2) {
+        self.refresh_hover_edge(model, view, cursor);
+        let Some(inf) = self.infer_tape_at(model, view, cursor) else {
+            self.hint = None;
+            return;
+        };
+        self.hint = Some(inf);
+        let mut target = Target {
+            model,
+            body: BodyId::Root,
+            undo: &mut self.undo,
+            unit: self.unit,
+        };
+        let _ = self.tape.handle(Input::Move(inf.point), &mut target);
+    }
+
+    fn click_tape(&mut self, model: &mut Model, view: &Viewport, cursor: DVec2) -> bool {
+        let before = self.undo.undo_count();
+        self.refresh_hover_edge(model, view, cursor);
+        self.tape.set_point_guides(self.tape_point_guides);
+        let Some(inf) = self.infer_tape_at(model, view, cursor) else {
+            self.hint = None;
+            return false;
+        };
+        self.hint = Some(inf);
+        let result = {
+            let mut target = Target {
+                model,
+                body: BodyId::Root,
+                undo: &mut self.undo,
+                unit: self.unit,
+            };
+            self.tape.handle(Input::Click(inf.point), &mut target)
+        };
+        match result {
+            Ok(()) => self.message = None,
+            Err(error) => self.message = Some(tape_error_message(&error).to_string()),
+        }
+        self.undo.undo_count() != before
+    }
+
+    fn enter_tape(&mut self, text: String, model: &mut Model) -> bool {
+        let before = self.undo.undo_count();
+        let result = {
+            let mut target = Target {
+                model,
+                body: BodyId::Root,
+                undo: &mut self.undo,
+                unit: self.unit,
+            };
+            self.tape.handle(Input::Typed(text), &mut target)
+        };
+        match result {
+            Ok(()) => self.message = None,
+            Err(error) => self.message = Some(tape_error_message(&error).to_string()),
+        }
+        self.undo.undo_count() != before
+    }
+
+    fn idle_tape(&mut self) {
+        let mut model = Model::new();
+        let mut undo = UndoStack::new();
+        let mut target = Target {
+            model: &mut model,
+            body: BodyId::Root,
+            undo: &mut undo,
+            unit: self.unit,
+        };
+        let _ = self.tape.handle(Input::Cancel, &mut target);
+    }
+
+    fn refresh_hover_edge(&mut self, model: &Model, view: &Viewport, cursor: DVec2) {
+        if self.tape.stage() != TapeStage::Start {
+            return;
+        }
+        let edge = match self.pick_at(model, view, cursor) {
+            Some(Entity::Edge(id)) => {
+                let ctx = model.root().geometry();
+                ctx.edge(id).and_then(|edge| {
+                    let a = ctx.vertex(edge.ends[0])?;
+                    let b = ctx.vertex(edge.ends[1])?;
+                    Some((a.position, b.position))
+                })
+            }
+            _ => None,
+        };
+        self.tape.set_hover_edge(edge);
+    }
+
+    fn infer_tape_at(&self, model: &Model, view: &Viewport, cursor: DVec2) -> Option<Inference> {
+        let (origin, dir) = view.ray(cursor);
+        let project = |p: DVec3| view.project(p);
+        let centers: [DVec3; 0] = [];
+        let probe = Probe {
+            cursor,
+            origin,
+            dir,
+            parallel: view.camera.projection == Projection::Parallel,
+            project: &project,
+            radius: SNAP_RADIUS_PX,
+            anchor: self.tape.start(),
+            axes: AXES,
+            centers: &centers,
+            lock: None,
+        };
+        infer::infer_model(model, &probe)
     }
 
     fn pick_shape_plane(&mut self, model: &Model, origin: DVec3, dir: DVec3) {
