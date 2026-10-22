@@ -11,6 +11,7 @@ pub mod document;
 pub mod editor;
 pub mod hints;
 pub mod input;
+pub mod overlay;
 pub mod viewstate;
 
 /// One-line product banner.
