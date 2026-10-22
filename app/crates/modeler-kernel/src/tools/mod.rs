@@ -19,6 +19,7 @@ pub mod circle;
 pub mod line;
 pub mod plane;
 pub mod rectangle;
+pub mod rotate;
 
 /// One event for a tool. Points are in the body's coordinates.
 #[derive(Clone, Debug, PartialEq)]
