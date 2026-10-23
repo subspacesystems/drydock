@@ -174,7 +174,7 @@ fn tri_count(b: &Batch) -> usize {
 /// and every normal has unit length.
 fn assert_facing(b: &Batch) {
     assert_eq!(b.positions.len(), b.normals.len());
-    assert!(b.texcoords.is_empty());
+    assert!(b.texcoords.is_empty() || b.texcoords.len() == b.positions.len());
     for n in &b.normals {
         assert!((Vec3::from(*n).length() - 1.0).abs() < 1e-5, "normal {n:?}");
     }
@@ -434,7 +434,7 @@ fn materials_convert_in_id_order() {
     assert_eq!(m1.name, "wood");
     assert_eq!(m1.color, [0.6, 0.4, 0.2, 1.0]);
     assert_eq!(m1.opacity, 1.0);
-    assert_eq!(m1.texture, None, "no texture coordinates yet");
+    assert_eq!(m1.texture, Some("wood.jpg".into()));
 }
 
 #[test]
