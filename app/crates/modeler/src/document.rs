@@ -95,6 +95,12 @@ impl Document {
                 });
             }
         };
+        let mut kernel = kernel;
+        if let Some(model) = kernel.as_mut() {
+            map_texture_paths(model, |texture| {
+                resolve_texture_path(texture, Path::new(""))
+            });
+        }
         let stats = stats_from_scene(&scene, kernel.as_ref());
         Ok(Document {
             path: path.to_path_buf(),
@@ -280,11 +286,36 @@ pub fn native_path(path: &Path) -> PathBuf {
 /// A texture path as the document keeps it in memory: `texture` as is when it is absolute,
 /// else joined onto `dir` (the folder of the file it was read from), as one string.
 pub fn resolve_texture_path(texture: &str, dir: &Path) -> String {
-    if Path::new(texture).is_absolute() {
-        texture.to_owned()
+    let joined = if Path::new(texture).is_absolute() {
+        PathBuf::from(texture)
     } else {
-        dir.join(texture).to_string_lossy().into_owned()
+        dir.join(texture)
+    };
+    collapse_path(&joined).to_string_lossy().into_owned()
+}
+
+/// `path` with `.` removed and `a/..` pairs cancelled, textually (nothing touches the disk
+/// and a relative path stays relative).
+fn collapse_path(path: &Path) -> PathBuf {
+    let mut out = PathBuf::new();
+    for part in path.components() {
+        match part {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                let normal = matches!(
+                    out.components().next_back(),
+                    Some(std::path::Component::Normal(_))
+                );
+                if normal {
+                    out.pop();
+                } else if !out.has_root() {
+                    out.push(part.as_os_str());
+                }
+            }
+            _ => out.push(part.as_os_str()),
+        }
     }
+    out
 }
 
 /// The text to write for an in-memory texture path in a model file saved into `dir`: the
