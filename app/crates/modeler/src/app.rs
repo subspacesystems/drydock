@@ -19,7 +19,8 @@ use modeler::input::{self, Button, Modifiers, Tool};
 use modeler::materials_panel::{MaterialAction, MaterialsPanel, materials_panel};
 use modeler::overlay::{self, Primitive};
 use modeler::viewstate::{Effect, ViewState, scene_bounds};
-use modeler_dae::FlatScene;
+use modeler_dae::{FlatScene, RestView};
+use modeler_kernel::editpath::EditPath;
 use modeler_kernel::model::{BodyId, Material};
 use modeler_kernel::select::{Entity, instance_segments};
 use modeler_kernel::tools::plane::DrawPlane;
@@ -95,6 +96,8 @@ pub struct App {
     drag_start_px: Option<DVec2>,
     /// The rendered image is out of date.
     dirty: bool,
+    /// The editor path the uploaded scene was built for.
+    shown_path: EditPath,
 }
 
 impl App {
@@ -132,6 +135,7 @@ impl App {
             drag_start_ndc: DVec2::ZERO,
             drag_start_px: None,
             dirty: true,
+            shown_path: EditPath::root(),
         };
         if app.gpu.is_none() {
             app.error = Some("No wgpu render state: cannot draw the viewport".to_owned());
@@ -185,6 +189,7 @@ impl App {
             .set_bounds(scene_bounds(&document.scene), self.viewport_pt);
         self.editor = Some(Editor::new());
         self.materials = MaterialsPanel::default();
+        self.shown_path = EditPath::root();
         if let Some(editor) = &mut self.editor {
             editor.set_tool(self.view.tool);
         }
@@ -210,12 +215,24 @@ impl App {
     /// Rebuild the scene after an editor change and upload it.
     fn refresh_document(&mut self, ctx: &egui::Context, frame: &eframe::Frame) {
         let state = self.undo_state();
+        let (path, rest) = self.editor.as_ref().map_or_else(
+            || (EditPath::root(), RestView::Faded),
+            |editor| {
+                let rest = if editor.hide_rest() {
+                    RestView::Hidden
+                } else {
+                    RestView::Faded
+                };
+                (editor.path().clone(), rest)
+            },
+        );
         let Some(document) = &mut self.model else {
             return;
         };
-        document.refresh();
+        document.refresh_editing(&path, rest);
         document.sync_modified(state);
-        // Zoom Extents frames the edited model, not the one that was opened.
+        self.shown_path = path;
+        // Zoom Extents frames what is drawn, not the whole model.
         self.view.bounds = scene_bounds(&document.scene);
         let title = document.title();
         if let (Some(gpu), Some(state)) = (&mut self.gpu, frame.wgpu_render_state()) {
@@ -228,6 +245,16 @@ impl App {
         self.dirty = true;
     }
 
+    /// Rebuild the scene when the editor's open path changed without a model edit.
+    fn sync_editor_path(&mut self, ctx: &egui::Context, frame: &eframe::Frame) {
+        let Some(path) = self.editor.as_ref().map(|editor| editor.path().clone()) else {
+            return;
+        };
+        if path != self.shown_path {
+            self.refresh_document(ctx, frame);
+        }
+    }
+
     /// Replace the document with a new, empty one and a default view.
     fn new_document(&mut self, ctx: &egui::Context, frame: &eframe::Frame) {
         let document = Document::new_empty();
@@ -235,6 +262,7 @@ impl App {
         self.view = ViewState::new();
         self.editor = Some(Editor::new());
         self.materials = MaterialsPanel::default();
+        self.shown_path = EditPath::root();
         self.loading = None;
         self.error = None;
         self.saved = None;
@@ -456,7 +484,13 @@ impl App {
             Effect::SaveAsDialog => self.open_save_dialog(),
             Effect::Edit(key) => self.edit(key, ctx, frame),
             Effect::About => self.about_open = true,
-            Effect::ToggleHideRest => unimplemented!("m4-app-edit-view"),
+            Effect::ToggleHideRest => {
+                if let Some(editor) = &mut self.editor {
+                    let hide = !editor.hide_rest();
+                    editor.set_hide_rest(hide);
+                }
+                self.refresh_document(ctx, frame);
+            }
             Effect::MakeComponent { group } => {
                 self.name_prompt = Some(chrome::NamePrompt::new(group));
             }
@@ -1180,6 +1214,7 @@ impl eframe::App for App {
             || self.name_prompt.is_some();
         if !dialog_open {
             self.global_input(&ctx, frame);
+            self.sync_editor_path(&ctx, frame);
         }
         egui::Panel::bottom("status").show(ui, |ui| self.status_bar(ui));
         egui::CentralPanel::no_frame().show(ui, |ui| {
@@ -1188,6 +1223,7 @@ impl eframe::App for App {
             self.viewport_pt = (f64::from(rect.width()), f64::from(rect.height()));
             if !dialog_open {
                 self.viewport_input(&ctx, frame, ui, rect, &response);
+                self.sync_editor_path(&ctx, frame);
             }
             self.paint_viewport(ui, frame, rect);
             self.paint_overlays(ui, rect);
