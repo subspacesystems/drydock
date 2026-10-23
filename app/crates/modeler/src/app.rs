@@ -1446,6 +1446,7 @@ fn overlay_style(style: overlay::Style) -> (Color32, f32) {
         overlay::Style::ProtractorArm => (Color32::from_rgb(220, 240, 245), 2.0),
         overlay::Style::Guide => (Color32::from_rgb(160, 160, 160), 1.0),
         overlay::Style::GuidePoint => (Color32::from_rgb(220, 220, 220), 1.0),
+        overlay::Style::Selected | overlay::Style::SelectedFace => (ACCENT_COLOR, 3.0),
     }
 }
 

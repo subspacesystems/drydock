@@ -6,7 +6,9 @@
 //!
 //! Behaviour: `docs/specs/m3-ui-overlay.md`.
 
-use glam::DVec3;
+use glam::{DMat4, DVec3};
+use modeler_kernel::model::{BodyId, Model};
+use modeler_kernel::select::Entity;
 use modeler_kernel::tape::{Guide, Guides};
 use modeler_kernel::tools::plane::DrawPlane;
 use modeler_kernel::tools::scale::{Bounds, Handle, handles};
@@ -38,6 +40,10 @@ pub enum Style {
     Guide,
     /// A guide point.
     GuidePoint,
+    /// A selected edge, or an edge of a selected instance.
+    Selected,
+    /// One triangle of a selected face: filled as a tint, no outline.
+    SelectedFace,
 }
 
 /// One thing to draw, in world coordinates.
@@ -77,6 +83,26 @@ pub fn face_highlight(ctx: &Context, face: FaceId) -> Vec<Primitive> {
         });
     }
     out
+}
+
+/// The highlight for `selection`, entities of `body`, drawn in world coordinates: every
+/// point is mapped through `transform` (body to world; the open instance's placement while
+/// editing inside one). Missing entities are skipped. Behaviour:
+/// `docs/specs/m4-fix-edit-overlays.md`.
+pub fn selection(
+    model: &Model,
+    body: BodyId,
+    transform: DMat4,
+    selection: &[Entity],
+) -> Vec<Primitive> {
+    let _ = (model, body, transform, selection);
+    unimplemented!()
+}
+
+/// `primitives` with every point mapped through `transform`; styles unchanged.
+pub fn transformed(primitives: Vec<Primitive>, transform: DMat4) -> Vec<Primitive> {
+    let _ = (primitives, transform);
+    unimplemented!()
 }
 
 fn push_box_edge(out: &mut Vec<Primitive>, seen: &mut Vec<(DVec3, DVec3)>, a: DVec3, b: DVec3) {
