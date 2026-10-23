@@ -56,8 +56,44 @@ pub enum PromptOutcome {
 /// The name prompt window; `Some` on the frame it is answered.
 /// Behaviour: `docs/specs/m4-app-components-ui.md`.
 pub fn name_prompt(ctx: &eframe::egui::Context, prompt: &mut NamePrompt) -> Option<PromptOutcome> {
-    let _ = (ctx, prompt);
-    unimplemented!("m4-app-components-ui")
+    use eframe::egui::{self, Key};
+
+    let title = if prompt.group {
+        "Make Group"
+    } else {
+        "Make Component"
+    };
+    let mut open = true;
+    let mut outcome = None;
+    egui::Window::new(title)
+        .id(egui::Id::new("name_prompt"))
+        .collapsible(false)
+        .resizable(false)
+        .open(&mut open)
+        .show(ctx, |ui| {
+            ui.label("Name");
+            let field = ui.add(egui::TextEdit::singleline(&mut prompt.name));
+            field.request_focus();
+            ui.horizontal(|ui| {
+                if ui.button("OK").clicked() {
+                    outcome = Some(PromptOutcome::Ok(prompt.name.trim().to_owned()));
+                }
+                if ui.button("Cancel").clicked() {
+                    outcome = Some(PromptOutcome::Cancel);
+                }
+            });
+        });
+
+    if outcome.is_none() {
+        let (enter, escape) =
+            ctx.input(|i| (i.key_pressed(Key::Enter), i.key_pressed(Key::Escape)));
+        if enter {
+            outcome = Some(PromptOutcome::Ok(prompt.name.trim().to_owned()));
+        } else if escape || !open {
+            outcome = Some(PromptOutcome::Cancel);
+        }
+    }
+    outcome
 }
 
 /// The toolbar's buttons, top to bottom: tool and button label.
@@ -179,6 +215,34 @@ pub fn menu_bar(ui: &mut eframe::egui::Ui, state: &MenuState<'_>) -> Option<Acti
                 .clicked()
             {
                 chosen = Some(Action::Erase);
+                ui.close();
+            }
+            ui.separator();
+            if ui
+                .add_enabled(
+                    state.has_selection,
+                    eframe::egui::Button::new("Make Component..."),
+                )
+                .clicked()
+            {
+                chosen = Some(Action::MakeComponent);
+                ui.close();
+            }
+            if ui
+                .add_enabled(
+                    state.has_selection,
+                    eframe::egui::Button::new("Make Group..."),
+                )
+                .clicked()
+            {
+                chosen = Some(Action::MakeGroup);
+                ui.close();
+            }
+            if ui
+                .add_enabled(state.can_explode, eframe::egui::Button::new("Explode"))
+                .clicked()
+            {
+                chosen = Some(Action::Explode);
                 ui.close();
             }
             ui.separator();
