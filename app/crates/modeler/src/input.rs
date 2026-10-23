@@ -106,6 +106,13 @@ pub enum Action {
     Erase,
     /// Show the About window (Help menu).
     About,
+    /// Make the selection a component, after asking for its name (Edit menu;
+    /// `docs/specs/m4-app-components-ui.md`).
+    MakeComponent,
+    /// Make the selection a group, after asking for its name (Edit menu).
+    MakeGroup,
+    /// Explode the selected group or component (Edit menu).
+    Explode,
 }
 
 /// A mouse drag of `delta` pixels (screen space, y down) with `button` held.

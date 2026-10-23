@@ -66,6 +66,8 @@ pub struct App {
     view: ViewState,
     /// The Help > About window is showing.
     about_open: bool,
+    /// The Make Component / Make Group name prompt is showing.
+    name_prompt: Option<chrome::NamePrompt>,
     style: Style,
     gpu: Option<Gpu>,
     model: Option<Document>,
@@ -108,6 +110,7 @@ impl App {
         let mut app = App {
             view: ViewState::new(),
             about_open: false,
+            name_prompt: None,
             style: Style::default(),
             gpu,
             model: None,
@@ -370,6 +373,23 @@ impl App {
             Effect::SaveAsDialog => self.open_save_dialog(),
             Effect::Edit(key) => self.edit(key, ctx, frame),
             Effect::About => self.about_open = true,
+            Effect::MakeComponent { group } => {
+                self.name_prompt = Some(chrome::NamePrompt::new(group));
+            }
+            Effect::Explode => {
+                let changed =
+                    if let (Some(editor), Some(document)) = (&mut self.editor, &mut self.model) {
+                        match document.kernel.as_mut() {
+                            Some(model) => editor.explode_selection(model),
+                            None => false,
+                        }
+                    } else {
+                        false
+                    };
+                if changed {
+                    self.refresh_document(ctx, frame);
+                }
+            }
             Effect::Erase => {
                 let changed =
                     if let (Some(editor), Some(document)) = (&mut self.editor, &mut self.model) {
@@ -928,6 +948,12 @@ impl App {
                 .editor
                 .as_ref()
                 .is_some_and(|editor| !editor.selection().is_empty()),
+            can_explode: self.editor.as_ref().is_some_and(|editor| {
+                matches!(
+                    editor.selection(),
+                    [modeler_kernel::select::Entity::Instance(_)]
+                )
+            }),
         }
     }
 
@@ -1042,8 +1068,10 @@ impl eframe::App for App {
             self.apply(action, &ctx, frame);
         }
 
-        let dialog_open =
-            self.dialog.is_some() || self.save_dialog.is_some() || self.confirm.is_some();
+        let dialog_open = self.dialog.is_some()
+            || self.save_dialog.is_some()
+            || self.confirm.is_some()
+            || self.name_prompt.is_some();
         if !dialog_open {
             self.global_input(&ctx, frame);
         }
@@ -1060,6 +1088,33 @@ impl eframe::App for App {
             self.measurement_box(&ctx, rect);
         });
         chrome::about_window(&ctx, &mut self.about_open);
+        if let Some(prompt) = &mut self.name_prompt {
+            match chrome::name_prompt(&ctx, prompt) {
+                Some(chrome::PromptOutcome::Ok(name)) => {
+                    let group = prompt.group;
+                    self.name_prompt = None;
+                    let changed = if let (Some(editor), Some(document)) =
+                        (&mut self.editor, &mut self.model)
+                    {
+                        match document.kernel.as_mut() {
+                            Some(model) => editor.make_component(model, &name, group),
+                            None => false,
+                        }
+                    } else {
+                        false
+                    };
+                    if changed {
+                        self.refresh_document(&ctx, frame);
+                    }
+                    self.dirty = true;
+                }
+                Some(chrome::PromptOutcome::Cancel) => {
+                    self.name_prompt = None;
+                    self.dirty = true;
+                }
+                None => {}
+            }
+        }
         if let Some(dialog) = &mut self.dialog {
             match dialog.show(&ctx) {
                 DialogOutcome::Open(path) => {

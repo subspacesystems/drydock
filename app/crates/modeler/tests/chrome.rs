@@ -37,6 +37,7 @@ fn state() -> MenuState<'static> {
         redo: Some("Move"),
         parallel: false,
         has_selection: true,
+        can_explode: false,
     }
 }
 

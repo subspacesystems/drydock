@@ -36,6 +36,12 @@ pub enum Effect {
     Erase,
     /// Show the About window.
     About,
+    /// Ask for a name, then make the selection a component (or a group when `group`).
+    MakeComponent {
+        group: bool,
+    },
+    /// Explode the selected instance.
+    Explode,
 }
 
 /// The scene's bounding box in `modeler_view` terms (`None` for an empty scene).
@@ -105,6 +111,9 @@ impl ViewState {
             Action::Flip(axis) => return Effect::Flip(axis),
             Action::Erase => return Effect::Erase,
             Action::About => return Effect::About,
+            Action::MakeComponent => return Effect::MakeComponent { group: false },
+            Action::MakeGroup => return Effect::MakeComponent { group: true },
+            Action::Explode => return Effect::Explode,
         }
         Effect::None
     }

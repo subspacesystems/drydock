@@ -21,6 +21,43 @@ pub struct MenuState<'a> {
     pub parallel: bool,
     /// Something is selected (Flip and Erase need it).
     pub has_selection: bool,
+    /// Exactly one group or component is selected (Explode needs it).
+    pub can_explode: bool,
+}
+
+/// The name prompt shown before Make Component / Make Group.
+#[derive(Clone, Debug, PartialEq)]
+pub struct NamePrompt {
+    /// Making a group (else a component).
+    pub group: bool,
+    /// The text in the name field.
+    pub name: String,
+}
+
+impl NamePrompt {
+    /// A prompt with an empty name field.
+    pub fn new(group: bool) -> NamePrompt {
+        NamePrompt {
+            group,
+            name: String::new(),
+        }
+    }
+}
+
+/// How the name prompt was answered.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum PromptOutcome {
+    /// OK or Enter, with the name as typed (trimmed).
+    Ok(String),
+    /// Cancel, Escape or the window's close button.
+    Cancel,
+}
+
+/// The name prompt window; `Some` on the frame it is answered.
+/// Behaviour: `docs/specs/m4-app-components-ui.md`.
+pub fn name_prompt(ctx: &eframe::egui::Context, prompt: &mut NamePrompt) -> Option<PromptOutcome> {
+    let _ = (ctx, prompt);
+    unimplemented!("m4-app-components-ui")
 }
 
 /// The toolbar's buttons, top to bottom: tool and button label.
