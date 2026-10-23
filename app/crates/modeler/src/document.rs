@@ -250,6 +250,22 @@ pub fn native_path(path: &Path) -> PathBuf {
     }
 }
 
+/// A texture path as the document keeps it in memory: `texture` as is when it is absolute,
+/// else joined onto `dir` (the folder of the file it was read from), as one string.
+pub fn resolve_texture_path(texture: &str, dir: &Path) -> String {
+    let _ = (texture, dir);
+    unimplemented!()
+}
+
+/// The text to write for an in-memory texture path in a model file saved into `dir`: the
+/// path from `dir` to the image, with `/` separators and no `.` or `..` that cancel out,
+/// or the absolute path when the two have no common root. Both are made absolute first
+/// (relative ones against the current directory); nothing touches the disk.
+pub fn texture_path_for_file(texture: &str, dir: &Path) -> String {
+    let _ = (texture, dir);
+    unimplemented!()
+}
+
 /// Status bar text for a size, e.g. "4.115 x 6.706 x 2.438 m".
 pub fn format_size(size_m: [f64; 3]) -> String {
     format!("{:.3} x {:.3} x {:.3} m", size_m[0], size_m[1], size_m[2])
