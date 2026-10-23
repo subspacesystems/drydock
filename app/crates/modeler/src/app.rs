@@ -10,7 +10,7 @@ use std::sync::mpsc::{self, Receiver, TryRecvError};
 
 use eframe::egui;
 use egui::{Color32, Event, MouseWheelUnit, PointerButton, Pos2, Rect, Sense};
-use glam::{DVec2, DVec3};
+use glam::{DMat4, DVec2, DVec3};
 use modeler::chrome::{self, MenuState};
 use modeler::document::{Document, FileKind, format_size, native_path, resolve_texture_path};
 use modeler::editor::{Editor, Viewport as EditorViewport};
@@ -24,7 +24,7 @@ use modeler_dae::{FlatScene, RestView};
 use modeler_kernel::editpath::EditPath;
 use modeler_kernel::model::{BodyId, Material, Model};
 use modeler_kernel::paint::Side;
-use modeler_kernel::select::{Entity, instance_segments};
+use modeler_kernel::select::Entity;
 use modeler_kernel::tools::plane::DrawPlane;
 use modeler_kernel::tools::scale;
 use modeler_kernel::topology::FaceId;
@@ -920,74 +920,30 @@ impl App {
                 painter.line_segment([a, b], egui::Stroke::new(1.5, preview_color));
             }
         }
-        if let Some(kernel) = &document.kernel
-            && let Some(body) = kernel.body(BodyId::Root)
-        {
-            let geometry = body.geometry();
-            for entity in editor.selection() {
-                match *entity {
-                    Entity::Edge(id) => {
-                        let Some(edge) = geometry.edge(id) else {
-                            continue;
-                        };
-                        let (Some(a), Some(b)) =
-                            (geometry.vertex(edge.ends[0]), geometry.vertex(edge.ends[1]))
-                        else {
-                            continue;
-                        };
-                        if let (Some(a), Some(b)) = (project(a.position), project(b.position)) {
-                            painter.line_segment([a, b], egui::Stroke::new(3.0, ACCENT_COLOR));
-                        }
-                    }
-                    Entity::Face(id) => {
-                        let Some(face) = geometry.face(id) else {
-                            continue;
-                        };
-                        let points: Vec<Pos2> = geometry
-                            .loop_points(&face.outer)
-                            .into_iter()
-                            .filter_map(project)
-                            .collect();
-                        if points.len() >= 3 {
-                            let fill = Color32::from_rgba_unmultiplied(
-                                ACCENT_COLOR.r(),
-                                ACCENT_COLOR.g(),
-                                ACCENT_COLOR.b(),
-                                55,
-                            );
-                            // A tint only: the face's own edges keep their look.
-                            painter.add(egui::Shape::convex_polygon(
-                                points,
-                                fill,
-                                egui::Stroke::NONE,
-                            ));
-                        }
-                    }
-                    Entity::Instance(id) => {
-                        for (a, b) in instance_segments(kernel, BodyId::Root, id) {
-                            if let (Some(a), Some(b)) = (project(a), project(b)) {
-                                painter.line_segment([a, b], egui::Stroke::new(3.0, ACCENT_COLOR));
-                            }
-                        }
-                    }
-                }
-            }
-        }
         if let Some(kernel) = &document.kernel {
-            if let Some(face) = editor.pushpull_face() {
-                let primitives = overlay::face_highlight(kernel.root().geometry(), face);
+            let open_body = editor.path().body(kernel).unwrap_or(BodyId::Root);
+            let open_transform = editor.path().transform(kernel).unwrap_or(DMat4::IDENTITY);
+            let primitives =
+                overlay::selection(kernel, open_body, open_transform, editor.selection());
+            paint_primitives(painter, &primitives, &project);
+            if let Some(face) = editor.pushpull_face()
+                && let Some(body) = kernel.body(open_body)
+            {
+                let primitives = overlay::face_highlight(body.geometry(), face);
+                let primitives = overlay::transformed(primitives, open_transform);
                 paint_primitives(painter, &primitives, &project);
             }
             if let Some(tool) = editor.scale_tool() {
                 let bounds = tool
                     .preview()
-                    .or_else(|| scale::bounds(kernel, BodyId::Root, editor.selection()));
+                    .or_else(|| scale::bounds(kernel, open_body, editor.selection()));
                 if let Some(bounds) = bounds {
                     let primitives = overlay::scale_handles(
                         &bounds,
                         editor.scale_hover(),
                         tool.handle_grabbed(),
                     );
+                    let primitives = overlay::transformed(primitives, open_transform);
                     paint_primitives(painter, &primitives, &project);
                 }
             }
@@ -1482,6 +1438,15 @@ fn paint_primitives(
                 let (color, width) = overlay_style(*style);
                 let projected: Vec<Pos2> = points.iter().filter_map(|p| project(*p)).collect();
                 if projected.len() < 2 {
+                    continue;
+                }
+                if *style == overlay::Style::SelectedFace {
+                    let fill = Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), 55);
+                    painter.add(egui::Shape::convex_polygon(
+                        projected.clone(),
+                        fill,
+                        egui::Stroke::NONE,
+                    ));
                     continue;
                 }
                 if *style == overlay::Style::FaceHighlight {

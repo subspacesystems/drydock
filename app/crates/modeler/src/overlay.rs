@@ -7,9 +7,11 @@
 //! Behaviour: `docs/specs/m3-ui-overlay.md`.
 
 use glam::{DMat4, DVec3};
+use modeler_kernel::geom;
 use modeler_kernel::model::{BodyId, Model};
-use modeler_kernel::select::Entity;
+use modeler_kernel::select::{Entity, instance_segments};
 use modeler_kernel::tape::{Guide, Guides};
+use modeler_kernel::tess;
 use modeler_kernel::tools::plane::DrawPlane;
 use modeler_kernel::tools::scale::{Bounds, Handle, handles};
 use modeler_kernel::topology::{Context, FaceId};
@@ -95,14 +97,98 @@ pub fn selection(
     transform: DMat4,
     selection: &[Entity],
 ) -> Vec<Primitive> {
-    let _ = (model, body, transform, selection);
-    unimplemented!()
+    let Some(target) = model.body(body) else {
+        return Vec::new();
+    };
+    let ctx = target.geometry();
+    let mut out = Vec::new();
+    for entity in selection {
+        match *entity {
+            Entity::Edge(id) => {
+                let Some(edge) = ctx.edge(id) else {
+                    continue;
+                };
+                let (Some(a), Some(b)) = (ctx.vertex(edge.ends[0]), ctx.vertex(edge.ends[1]))
+                else {
+                    continue;
+                };
+                out.push(Primitive::Line {
+                    a: transform.transform_point3(a.position),
+                    b: transform.transform_point3(b.position),
+                    style: Style::Selected,
+                });
+            }
+            Entity::Face(id) => {
+                let Some(face) = ctx.face(id) else {
+                    continue;
+                };
+                let Some(plane) = ctx.face_plane(id) else {
+                    continue;
+                };
+                let normal = plane.normal;
+                let outer = ctx.loop_points(&face.outer);
+                let holes: Vec<Vec<DVec3>> = face
+                    .inner
+                    .iter()
+                    .map(|hole| ctx.loop_points(hole))
+                    .collect();
+                let outer_2d = geom::to_plane_2d(&outer, normal);
+                let holes_2d: Vec<Vec<_>> = holes
+                    .iter()
+                    .map(|hole| geom::to_plane_2d(hole, normal))
+                    .collect();
+                let points: Vec<DVec3> = outer
+                    .iter()
+                    .chain(holes.iter().flatten())
+                    .copied()
+                    .collect();
+                for triangle in tess::triangulate(&outer_2d, &holes_2d) {
+                    out.push(Primitive::Polygon {
+                        points: triangle
+                            .iter()
+                            .map(|&i| transform.transform_point3(points[i]))
+                            .collect(),
+                        style: Style::SelectedFace,
+                    });
+                }
+            }
+            Entity::Instance(id) => {
+                for (a, b) in instance_segments(model, body, id) {
+                    out.push(Primitive::Line {
+                        a: transform.transform_point3(a),
+                        b: transform.transform_point3(b),
+                        style: Style::Selected,
+                    });
+                }
+            }
+        }
+    }
+    out
 }
 
 /// `primitives` with every point mapped through `transform`; styles unchanged.
 pub fn transformed(primitives: Vec<Primitive>, transform: DMat4) -> Vec<Primitive> {
-    let _ = (primitives, transform);
-    unimplemented!()
+    primitives
+        .into_iter()
+        .map(|primitive| match primitive {
+            Primitive::Line { a, b, style } => Primitive::Line {
+                a: transform.transform_point3(a),
+                b: transform.transform_point3(b),
+                style,
+            },
+            Primitive::Polygon { points, style } => Primitive::Polygon {
+                points: points
+                    .into_iter()
+                    .map(|p| transform.transform_point3(p))
+                    .collect(),
+                style,
+            },
+            Primitive::Marker { at, style } => Primitive::Marker {
+                at: transform.transform_point3(at),
+                style,
+            },
+        })
+        .collect()
 }
 
 fn push_box_edge(out: &mut Vec<Primitive>, seen: &mut Vec<(DVec3, DVec3)>, a: DVec3, b: DVec3) {
