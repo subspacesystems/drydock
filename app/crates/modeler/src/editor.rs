@@ -14,10 +14,12 @@ use std::collections::BTreeSet;
 
 use glam::{DMat4, DVec2, DVec3};
 use modeler_kernel::click::{self, ClickMods};
+use modeler_kernel::component::make_component;
 use modeler_kernel::editpath::EditPath;
 use modeler_kernel::erase::erase;
+use modeler_kernel::explode::explode;
 use modeler_kernel::infer::{self, Inference, Probe, Snap};
-use modeler_kernel::model::{BodyId, InstanceId, MaterialId, Model, UndoStack};
+use modeler_kernel::model::{BodyId, DefinitionInfo, InstanceId, MaterialId, Model, UndoStack};
 use modeler_kernel::paint::{self, Side};
 use modeler_kernel::pushpull::push_pull;
 use modeler_kernel::select::{self, BoxMode, Entity};
@@ -1388,16 +1390,93 @@ impl Editor {
     /// "Make Group". The new instance becomes the selection. True when the model changed.
     /// Behaviour: `docs/specs/m4-app-components.md`.
     pub fn make_component(&mut self, model: &mut Model, name: &str, group: bool) -> bool {
-        let _ = (model, name, group);
-        unimplemented!("m4-app-components")
+        self.line = LineTool::new();
+        self.idle_shapes();
+        self.idle_rotate();
+        self.idle_move();
+        self.idle_scale();
+        self.idle_tape();
+        self.typed.clear();
+        self.push = None;
+        self.hint = None;
+        if self.selection.is_empty() {
+            self.message = Some(
+                if group {
+                    "Select something to group"
+                } else {
+                    "Select something to make a component of"
+                }
+                .to_string(),
+            );
+            return false;
+        }
+        let info = DefinitionInfo {
+            name: name.to_string(),
+            group,
+        };
+        let label = if group {
+            "Make Group"
+        } else {
+            "Make Component"
+        };
+        match make_component(
+            model,
+            self.body(model),
+            &self.selection,
+            info,
+            &mut self.undo,
+            label,
+        ) {
+            Ok(instance) => {
+                self.selection = vec![Entity::Instance(instance)];
+                self.message = None;
+                true
+            }
+            Err(_) => {
+                self.message = Some(
+                    if group {
+                        "Can't group that"
+                    } else {
+                        "Can't make that a component"
+                    }
+                    .to_string(),
+                );
+                false
+            }
+        }
     }
 
     /// Explode the selected instance into the open body. One undo step "Explode"; the
     /// entities that came out become the selection. True when the model changed.
     /// Behaviour: `docs/specs/m4-app-components.md`.
     pub fn explode_selection(&mut self, model: &mut Model) -> bool {
-        let _ = model;
-        unimplemented!("m4-app-components")
+        self.line = LineTool::new();
+        self.idle_shapes();
+        self.idle_rotate();
+        self.idle_move();
+        self.idle_scale();
+        self.idle_tape();
+        self.typed.clear();
+        self.push = None;
+        self.hint = None;
+        let instance = match self.selection.as_slice() {
+            [Entity::Instance(instance)] => *instance,
+            _ => {
+                self.message = Some("Select one group or component to explode".to_string());
+                return false;
+            }
+        };
+        match explode(model, self.body(model), instance, &mut self.undo, "Explode") {
+            Ok(entities) => {
+                self.selection = entities;
+                self.message = None;
+                true
+            }
+            Err(_) => {
+                self.message = Some("Can't explode that".to_string());
+                false
+            }
+        }
     }
 
     /// The Paint Bucket's current material (`None` = the default material).
