@@ -76,6 +76,16 @@ impl From<&str> for Texture {
     }
 }
 
+/// Whether the material's texture size (if any) is finite and positive on both axes.
+pub(crate) fn texture_size_is_good(material: &Material) -> bool {
+    material.texture.as_ref().is_none_or(|texture| {
+        texture.size.x.is_finite()
+            && texture.size.x > 0.0
+            && texture.size.y.is_finite()
+            && texture.size.y > 0.0
+    })
+}
+
 impl Material {
     /// A plain color material without a texture.
     pub fn new(name: &str, color: [f32; 4]) -> Material {
@@ -789,6 +799,9 @@ impl Model {
                 b.geometry.apply(r).map_err(ModelError::Topo)
             }
             ModelRecord::AddMaterial(id, material) => {
+                if !texture_size_is_good(material) {
+                    return Err(ModelError::BadTexture);
+                }
                 if self.materials.contains_key(id) {
                     return Err(ModelError::IdInUse);
                 }
@@ -811,6 +824,9 @@ impl Model {
                 Ok(())
             }
             ModelRecord::SetMaterial { id, from, to } => {
+                if !texture_size_is_good(to) {
+                    return Err(ModelError::BadTexture);
+                }
                 let stored = self
                     .materials
                     .get(id)
@@ -938,6 +954,13 @@ impl Model {
                     .face_materials(*face);
                 if current != *from {
                     return Err(ModelError::Mismatch);
+                }
+                if to
+                    .front_map
+                    .is_some_and(|map| !map.is_finite())
+                    || to.back_map.is_some_and(|map| !map.is_finite())
+                {
+                    return Err(ModelError::BadTextureMap);
                 }
                 if let Some(material) = to.front
                     && !self.materials.contains_key(&material)

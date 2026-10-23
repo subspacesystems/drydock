@@ -9,7 +9,8 @@
 use std::collections::BTreeSet;
 
 use crate::model::{
-    BodyId, FaceMaterials, Material, MaterialId, Model, ModelEdit, ModelError, UndoStack,
+    texture_size_is_good, BodyId, FaceMaterials, Material, MaterialId, Model, ModelEdit,
+    ModelError, UndoStack,
 };
 use crate::select::Entity;
 use crate::topology::FaceId;
@@ -203,6 +204,9 @@ pub fn create_material(
     if !good_color(material.color) {
         return Err(PaintError::BadColor);
     }
+    if !texture_size_is_good(&material) {
+        return Err(PaintError::Model(ModelError::BadTexture));
+    }
     let mut material = material;
     material.name = unique_material_name(model, &material.name);
     let mut log = ModelEdit::new();
@@ -226,6 +230,9 @@ pub fn edit_material(
         .ok_or(PaintError::Model(ModelError::MissingMaterial(id)))?;
     if !good_color(material.color) {
         return Err(PaintError::BadColor);
+    }
+    if !texture_size_is_good(&material) {
+        return Err(PaintError::Model(ModelError::BadTexture));
     }
     let mut material = material;
     material.name = name_with_base(&material.name, |name| {
