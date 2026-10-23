@@ -12,7 +12,7 @@
 
 use std::collections::BTreeSet;
 
-use glam::{DMat4, DVec2, DVec3};
+use glam::{DAffine2, DMat4, DVec2, DVec3};
 use modeler_kernel::click::{self, ClickMods};
 use modeler_kernel::component::make_component;
 use modeler_kernel::editpath::EditPath;
@@ -26,7 +26,7 @@ use modeler_kernel::paint::{self, Side};
 use modeler_kernel::pushpull::push_pull;
 use modeler_kernel::select::{self, BoxMode, Entity};
 use modeler_kernel::tape::Guide;
-use modeler_kernel::texture::{self, TextureMap};
+use modeler_kernel::texture;
 use modeler_kernel::tools::arc::ArcTool;
 use modeler_kernel::tools::arc3::Arc3Tool;
 use modeler_kernel::tools::circle::CircleTool;
@@ -1563,15 +1563,77 @@ impl Editor {
         side: Side,
         op: TextureOp,
     ) -> bool {
-        let _ = (
-            model,
-            face,
-            side,
-            op,
-            texture::side_map,
-            TextureMap::is_finite,
-        );
-        unimplemented!("m4-app-texture-position")
+        let body = self.body(model);
+        let materials = model
+            .body(body)
+            .filter(|body| body.geometry().face(face).is_some())
+            .map(|body| body.face_materials(face));
+        let stored = materials.and_then(|materials| match side {
+            Side::Front => materials.front_map,
+            Side::Back => materials.back_map,
+        });
+        let material = materials.and_then(|materials| match side {
+            Side::Front => materials.front,
+            Side::Back => materials.back,
+        });
+        let textured = material
+            .and_then(|id| model.material(id))
+            .is_some_and(|material| material.texture.is_some());
+        if !textured {
+            self.message = Some("That side has no texture".to_string());
+            return false;
+        }
+
+        let finite = match op {
+            TextureOp::Move(d) => d.is_finite(),
+            TextureOp::Rotate { angle, about } => angle.is_finite() && about.is_finite(),
+            TextureOp::Scale { factor, about } => {
+                factor.is_finite() && factor.x > 0.0 && factor.y > 0.0 && about.is_finite()
+            }
+            TextureOp::Reset => true,
+        };
+        if !finite {
+            self.message = Some("Can't position that texture".to_string());
+            return false;
+        }
+
+        let Some(current) = texture::side_map(model, body, face, side) else {
+            self.message = Some("Can't position that texture".to_string());
+            return false;
+        };
+        let (map, label) = match op {
+            TextureOp::Move(d) => (
+                Some(current.then(DAffine2::from_translation(d))),
+                "Position Texture",
+            ),
+            TextureOp::Rotate { angle, about } => {
+                let affine = DAffine2::from_translation(about)
+                    * DAffine2::from_angle(angle)
+                    * DAffine2::from_translation(-about);
+                (Some(current.then(affine)), "Position Texture")
+            }
+            TextureOp::Scale { factor, about } => {
+                let affine = DAffine2::from_translation(about)
+                    * DAffine2::from_scale(factor)
+                    * DAffine2::from_translation(-about);
+                (Some(current.then(affine)), "Position Texture")
+            }
+            TextureOp::Reset => (None, "Reset Texture"),
+        };
+        if stored == map || (stored.is_none() && map == Some(current)) {
+            self.message = None;
+            return false;
+        }
+        match texture::set_texture_maps(model, body, &[(face, side, map)], &mut self.undo, label) {
+            Ok(changed) => {
+                self.message = None;
+                changed > 0
+            }
+            Err(_) => {
+                self.message = Some("Can't position that texture".to_string());
+                false
+            }
+        }
     }
 
     /// The Paint Bucket's current material (`None` = the default material).
