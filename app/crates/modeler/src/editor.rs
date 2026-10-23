@@ -26,6 +26,7 @@ use modeler_kernel::paint::{self, Side};
 use modeler_kernel::pushpull::push_pull;
 use modeler_kernel::select::{self, BoxMode, Entity};
 use modeler_kernel::tape::Guide;
+use modeler_kernel::texture::{self, TextureMap};
 use modeler_kernel::tools::arc::ArcTool;
 use modeler_kernel::tools::arc3::Arc3Tool;
 use modeler_kernel::tools::circle::CircleTool;
@@ -45,6 +46,19 @@ use modeler_kernel::units::{self, Unit};
 use modeler_view::{Camera, Projection};
 
 use crate::input::{EditKey, Modifiers, Tool};
+
+/// A change to how a texture lies on a face, in texture space (meters).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum TextureOp {
+    /// Slide the image by this much.
+    Move(DVec2),
+    /// Turn the image by `angle` radians (counter-clockwise on the image) about `about`.
+    Rotate { angle: f64, about: DVec2 },
+    /// Stretch the image by `factor` (per axis, > 0) about `about`.
+    Scale { factor: DVec2, about: DVec2 },
+    /// Back to the default placement.
+    Reset,
+}
 
 /// Snap radius for inference and picking, pixels.
 pub const SNAP_RADIUS_PX: f64 = 10.0;
@@ -1537,6 +1551,27 @@ impl Editor {
                 0
             }
         }
+    }
+
+    /// Position the texture on `side` of `face` in the open body: apply `op` to the map in
+    /// use there. One undo step "Position Texture" ("Reset Texture" for `Reset`). True when
+    /// the model changed. Behaviour: `docs/specs/m4-app-texture-position.md`.
+    pub fn position_texture(
+        &mut self,
+        model: &mut Model,
+        face: FaceId,
+        side: Side,
+        op: TextureOp,
+    ) -> bool {
+        let _ = (
+            model,
+            face,
+            side,
+            op,
+            texture::side_map,
+            TextureMap::is_finite,
+        );
+        unimplemented!("m4-app-texture-position")
     }
 
     /// The Paint Bucket's current material (`None` = the default material).
