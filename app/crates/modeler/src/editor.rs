@@ -215,12 +215,14 @@ fn error_message(error: &ToolError) -> &'static str {
     }
 }
 
-fn rotate_error_message(error: &RotateError) -> &'static str {
+fn rotate_error_message(error: &RotateError) -> String {
     match error {
-        RotateError::Parse(_) => "Not an angle",
-        RotateError::NotStarted => "Click the center first",
-        RotateError::Empty => "Select something to rotate",
-        RotateError::NotFinite | RotateError::Transform(_) => "Can't rotate that",
+        RotateError::Parse(_) => "Not an angle".to_string(),
+        RotateError::NotStarted => "Click the center first".to_string(),
+        RotateError::Empty => "Select something to rotate".to_string(),
+        RotateError::NotFinite => "Can't rotate that".to_string(),
+        // The reason is shown until the refusals are understood well enough to word them.
+        RotateError::Transform(why) => format!("Can't rotate that ({why:?})"),
     }
 }
 
@@ -1432,7 +1434,7 @@ impl Editor {
                     self.rotate_segments = self.collect_rotate_segments(model);
                 }
             }
-            Err(error) => self.message = Some(rotate_error_message(&error).to_string()),
+            Err(error) => self.message = Some(rotate_error_message(&error)),
         }
         let changed = self.undo.undo_count() != before;
         if changed {
@@ -1456,7 +1458,7 @@ impl Editor {
         };
         match result {
             Ok(()) => self.message = None,
-            Err(error) => self.message = Some(rotate_error_message(&error).to_string()),
+            Err(error) => self.message = Some(rotate_error_message(&error)),
         }
         let after_angle = self.rotate.last_angle(&self.undo);
         let retyped = before_angle.zip(after_angle).is_some_and(|(a, b)| a != b);
