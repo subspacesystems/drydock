@@ -1485,24 +1485,58 @@ impl Editor {
     /// Paint Bucket's current material. `None` with a message when the kernel refuses.
     /// Behaviour: `docs/specs/m4-app-materials.md`.
     pub fn create_material(&mut self, model: &mut Model, material: Material) -> Option<MaterialId> {
-        let _ = (model, material);
-        unimplemented!("m4-app-materials")
+        match paint::create_material(model, material, &mut self.undo, "New Material") {
+            Ok(id) => {
+                self.material = Some(id);
+                self.message = None;
+                Some(id)
+            }
+            Err(_) => {
+                self.message = Some("Can't make that material".to_string());
+                None
+            }
+        }
     }
 
     /// Replace material `id` as one undo step "Edit Material". True when accepted (also
     /// when nothing changed); false with a message when refused.
     /// Behaviour: `docs/specs/m4-app-materials.md`.
     pub fn edit_material(&mut self, model: &mut Model, id: MaterialId, material: Material) -> bool {
-        let _ = (model, id, material);
-        unimplemented!("m4-app-materials")
+        match paint::edit_material(model, id, material, &mut self.undo, "Edit Material") {
+            Ok(()) => {
+                self.message = None;
+                true
+            }
+            Err(_) => {
+                self.message = Some("Can't change that material".to_string());
+                false
+            }
+        }
     }
 
     /// Remove materials nothing uses as one undo step "Purge Materials"; resets the current
     /// material if it went. Returns how many were removed.
     /// Behaviour: `docs/specs/m4-app-materials.md`.
     pub fn purge_materials(&mut self, model: &mut Model) -> usize {
-        let _ = model;
-        unimplemented!("m4-app-materials")
+        match paint::purge_materials(model, &mut self.undo, "Purge Materials") {
+            Ok(removed) => {
+                if removed.is_empty() {
+                    self.message = Some("No unused materials".to_string());
+                    return 0;
+                }
+                if let Some(current) = self.material
+                    && removed.contains(&current)
+                {
+                    self.material = None;
+                }
+                self.message = None;
+                removed.len()
+            }
+            Err(_) => {
+                self.message = Some("Can't purge materials".to_string());
+                0
+            }
+        }
     }
 
     /// The Paint Bucket's current material (`None` = the default material).
