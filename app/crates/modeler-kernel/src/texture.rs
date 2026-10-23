@@ -193,8 +193,33 @@ pub fn moved_maps(
     front_normal: DVec3,
     m: DMat4,
 ) -> FaceMaterials {
-    let _ = (model, materials, front_normal, m);
-    unimplemented!("m4-texture-follow")
+    if !m.to_cols_array().iter().all(|value| value.is_finite()) || m.determinant().abs() < 1e-12 {
+        return materials;
+    }
+
+    let side = |stored: Option<TextureMap>,
+                material: Option<crate::model::MaterialId>,
+                normal: DVec3|
+     -> Option<TextureMap> {
+        if let Some(map) = stored {
+            return map.transformed(m);
+        }
+        let textured = material
+            .and_then(|id| model.material(id))
+            .is_some_and(|material| material.texture.is_some());
+        if textured {
+            TextureMap::default_for(normal).transformed(m)
+        } else {
+            None
+        }
+    };
+
+    FaceMaterials {
+        front: materials.front,
+        back: materials.back,
+        front_map: side(materials.front_map, materials.front, front_normal),
+        back_map: side(materials.back_map, materials.back, -front_normal),
+    }
 }
 
 /// Store `map` (`None` = back to the default) on the given side of each face, as one undo

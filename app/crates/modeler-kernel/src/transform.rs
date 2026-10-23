@@ -9,8 +9,10 @@ use std::collections::BTreeSet;
 
 use glam::{DMat4, DVec3};
 
+use crate::geom;
 use crate::model::{BodyId, FaceMaterials, InstanceId, Model, ModelEdit, ModelError, UndoStack};
 use crate::select::Entity;
+use crate::texture::moved_maps;
 use crate::topology::{Context, EdgeUse, Face, FaceId, Loop, TopoError, VertexId, Violation};
 
 /// Why a transform was refused. The model and the undo stack are unchanged.
@@ -102,6 +104,35 @@ fn rollback(model: &mut Model, edit: &ModelEdit) {
     let _ = model.apply_edit(&edit.inverse());
 }
 
+/// The materials to store on each face whose every vertex moves, after carrying its maps by
+/// `matrix`. Faces that move only in part are left out.
+pub(crate) fn moved_face_materials(
+    model: &Model,
+    body: BodyId,
+    moved: &BTreeSet<VertexId>,
+    matrix: DMat4,
+) -> Vec<(FaceId, FaceMaterials)> {
+    let Some(target) = model.body(body) else {
+        return Vec::new();
+    };
+    let ctx = target.geometry();
+    ctx.faces()
+        .filter_map(|(id, face)| {
+            let mut vertices = Vec::new();
+            for l in std::iter::once(&face.outer).chain(face.inner.iter()) {
+                vertices.extend(ctx.loop_vertices(l));
+            }
+            if vertices.is_empty() || !vertices.iter().all(|v| moved.contains(v)) {
+                return None;
+            }
+            let normal = geom::polygon_normal(&ctx.loop_points(&face.outer));
+            let old = target.face_materials(id);
+            let new = moved_maps(model, old, normal, matrix);
+            (new != old).then_some((id, new))
+        })
+        .collect()
+}
+
 /// True when `matrix` leaves every vertex of the selection where it is (a rotation of an
 /// edge about its own axis, say). Such a transform changes nothing and is not an error.
 pub(crate) fn leaves_geometry_in_place(
@@ -173,6 +204,7 @@ pub fn transform(
     };
 
     let mut edit = ModelEdit::new();
+    let face_changes = moved_face_materials(model, body, &moved, matrix);
 
     let moves: Vec<(VertexId, DVec3)> = {
         let Some(target) = model.body(body) else {
@@ -204,6 +236,13 @@ pub fn transform(
                 rollback(model, &edit);
                 return Err(TransformError::Model(error));
             }
+        }
+    }
+
+    for (face, materials) in face_changes {
+        if let Err(error) = model.set_face_materials(body, face, materials, &mut edit) {
+            rollback(model, &edit);
+            return Err(TransformError::Model(error));
         }
     }
 

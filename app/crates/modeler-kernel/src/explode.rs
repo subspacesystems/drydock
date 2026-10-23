@@ -17,6 +17,7 @@ use crate::model::{
 };
 use crate::movemerge::{interior_point, restick};
 use crate::select::Entity;
+use crate::texture::moved_maps;
 use crate::topology::{Context, EdgeId, EdgeUse, Face, FaceId, Loop, TopoError, VertexId};
 
 /// Why an explode was refused. The model and the undo stack are unchanged.
@@ -253,14 +254,16 @@ fn explode_inner(
         let faces: Vec<(Face, FaceMaterials)> = src
             .faces()
             .map(|(id, face)| {
-                let materials = source.face_materials(id);
+                let base = source.face_materials(id);
+                let materials = FaceMaterials {
+                    front: base.front.or(material),
+                    back: base.back.or(material),
+                    ..base
+                };
+                let normal = geom::polygon_normal(&src.loop_points(&face.outer));
                 (
                     face.clone(),
-                    FaceMaterials {
-                        front: materials.front.or(material),
-                        back: materials.back.or(material),
-                        ..materials
-                    },
+                    moved_maps(model, materials, normal, data.transform),
                 )
             })
             .collect();
