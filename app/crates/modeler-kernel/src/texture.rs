@@ -179,6 +179,24 @@ pub fn side_map(model: &Model, body: BodyId, face: FaceId, side: Side) -> Option
     Some(TextureMap::default_for(normal))
 }
 
+/// `materials` of a face whose geometry moves by `m`, with each side's map carried along so
+/// every moved point keeps its texture coordinates. A stored map becomes
+/// `map.transformed(m)`; a side without one whose material (in `model`) has a texture gets
+/// the default placement for that side carried along (`front_normal` is the front's outward
+/// normal before the move; the back uses its opposite). Sides with neither keep no map. The
+/// material ids don't change, and nothing changes when `m` can't be inverted.
+///
+/// Behaviour: `docs/specs/m4-texture-follow.md`.
+pub fn moved_maps(
+    model: &Model,
+    materials: FaceMaterials,
+    front_normal: DVec3,
+    m: DMat4,
+) -> FaceMaterials {
+    let _ = (model, materials, front_normal, m);
+    unimplemented!("m4-texture-follow")
+}
+
 /// Store `map` (`None` = back to the default) on the given side of each face, as one undo
 /// step named `label`. Returns how many sides changed; no step when that is zero.
 pub fn set_texture_maps(
