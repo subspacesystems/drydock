@@ -18,12 +18,15 @@ use modeler::hints::hint_label;
 use modeler::input::{self, Button, Modifiers, Tool};
 use modeler::materials_panel::{MaterialAction, MaterialsPanel, materials_panel};
 use modeler::overlay::{self, Primitive};
+use modeler::texture_panel::{TextureForm, texture_panel};
 use modeler::viewstate::{Effect, ViewState, scene_bounds};
 use modeler_dae::FlatScene;
-use modeler_kernel::model::{BodyId, Material};
+use modeler_kernel::model::{BodyId, Material, Model};
+use modeler_kernel::paint::Side;
 use modeler_kernel::select::{Entity, instance_segments};
 use modeler_kernel::tools::plane::DrawPlane;
 use modeler_kernel::tools::scale;
+use modeler_kernel::topology::FaceId;
 use modeler_render::{GpuScene, Renderer, Style, Viewport};
 use modeler_view::Projection;
 
@@ -71,6 +74,8 @@ pub struct App {
     name_prompt: Option<chrome::NamePrompt>,
     /// The Materials panel and its open form.
     materials: MaterialsPanel,
+    /// The Texture Position panel's typed values.
+    texture: TextureForm,
     style: Style,
     gpu: Option<Gpu>,
     model: Option<Document>,
@@ -115,6 +120,7 @@ impl App {
             about_open: false,
             name_prompt: None,
             materials: MaterialsPanel::default(),
+            texture: TextureForm::default(),
             style: Style::default(),
             gpu,
             model: None,
@@ -185,6 +191,7 @@ impl App {
             .set_bounds(scene_bounds(&document.scene), self.viewport_pt);
         self.editor = Some(Editor::new());
         self.materials = MaterialsPanel::default();
+        self.texture = TextureForm::default();
         if let Some(editor) = &mut self.editor {
             editor.set_tool(self.view.tool);
         }
@@ -235,6 +242,7 @@ impl App {
         self.view = ViewState::new();
         self.editor = Some(Editor::new());
         self.materials = MaterialsPanel::default();
+        self.texture = TextureForm::default();
         self.loading = None;
         self.error = None;
         self.saved = None;
@@ -376,6 +384,43 @@ impl App {
             texture.path = resolve_texture_path(&texture.path, folder);
         }
         material
+    }
+
+    /// The selected face side the Texture Position panel acts on: exactly one selected
+    /// face, with a texture on the side facing the camera.
+    fn texture_target(&self, model: &Model) -> Option<(FaceId, Side)> {
+        let editor = self.editor.as_ref()?;
+        let [Entity::Face(face)] = editor.selection() else {
+            return None;
+        };
+        let face = *face;
+        let body = editor.path().body(model)?;
+        let transform = editor.path().transform(model)?;
+        let plane = model.body(body)?.geometry().face_plane(face)?;
+        let camera = self.view.camera;
+        let (forward, _, _) = camera.basis();
+        let direction = match camera.projection {
+            Projection::Perspective => {
+                let eye = transform.inverse().transform_point3(camera.eye());
+                (plane.point - eye).normalize_or_zero()
+            }
+            Projection::Parallel => transform
+                .inverse()
+                .transform_vector3(forward)
+                .normalize_or_zero(),
+        };
+        let side = if direction.dot(plane.normal) > 0.0 {
+            Side::Back
+        } else {
+            Side::Front
+        };
+        let materials = model.body(body)?.face_materials(face);
+        let material = match side {
+            Side::Front => materials.front,
+            Side::Back => materials.back,
+        }?;
+        model.material(material)?.texture.as_ref()?;
+        Some((face, side))
     }
 
     /// Apply what the Materials panel asked for.
@@ -1157,21 +1202,42 @@ impl eframe::App for App {
         }
 
         let mut material_action = None;
+        let mut texture_action = None;
         if let Some(model) = self
             .model
             .as_ref()
             .and_then(|document| document.kernel.as_ref())
         {
             let current = self.editor.as_ref().and_then(Editor::material);
+            let target = self.texture_target(model);
             egui::Panel::right("materials")
                 .resizable(true)
                 .default_size(180.0)
                 .show(ui, |ui| {
                     material_action = materials_panel(ui, &mut self.materials, model, current);
+                    if let Some(op) = texture_panel(ui, &mut self.texture, target.is_some())
+                        && let Some((face, side)) = target
+                    {
+                        texture_action = Some((face, side, op));
+                    }
                 });
         }
         if let Some(action) = material_action {
             self.apply_material_action(action, &ctx, frame);
+        }
+        if let Some((face, side, op)) = texture_action {
+            let changed =
+                if let (Some(editor), Some(document)) = (&mut self.editor, &mut self.model) {
+                    match document.kernel.as_mut() {
+                        Some(model) => editor.position_texture(model, face, side, op),
+                        None => false,
+                    }
+                } else {
+                    false
+                };
+            if changed {
+                self.refresh_document(&ctx, frame);
+            }
         }
 
         let dialog_open = self.dialog.is_some()
