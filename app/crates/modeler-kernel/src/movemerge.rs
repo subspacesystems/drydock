@@ -489,6 +489,21 @@ fn transform_detached(
             Entity::Instance(_) => {}
         }
     }
+    // A face whose every edge is selected moves with them even if it wasn't picked itself.
+    let enclosed: Vec<FaceId> = edges
+        .iter()
+        .flat_map(|e| ctx.faces_of_edge(*e))
+        .filter(|f| !faces.contains(f))
+        .filter(|f| {
+            ctx.face(*f).is_some_and(|face| {
+                std::iter::once(&face.outer)
+                    .chain(face.inner.iter())
+                    .flat_map(|l| l.uses.iter())
+                    .all(|u| edges.contains(&u.edge))
+            })
+        })
+        .collect();
+    faces.extend(enclosed);
     let moved = moved_vertices(ctx, selection);
     let shared = ctx
         .edges()

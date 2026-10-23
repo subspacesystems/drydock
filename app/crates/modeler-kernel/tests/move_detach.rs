@@ -130,3 +130,55 @@ fn rotating_a_cube_edge_about_its_own_axis_is_a_no_op() {
     .unwrap();
     assert_eq!(positions(&model), before);
 }
+
+#[test]
+fn rectangle_selected_by_its_edges_only_still_rotates_onto_the_cube() {
+    let mut model = Model::new();
+    let pts = [
+        v(0., 0., 0.),
+        v(1., 0., 0.),
+        v(1., 1., 0.),
+        v(0., 1., 0.),
+        v(0., 0., 1.),
+        v(1., 0., 1.),
+        v(1., 1., 1.),
+        v(0., 1., 1.),
+        v(1.5, 1., 1.),
+        v(1.5, 1.8, 1.),
+        v(1., 1.8, 1.),
+    ];
+    let f = mesh(
+        &mut model,
+        &pts,
+        &[
+            &[0, 3, 2, 1],
+            &[4, 5, 6, 7],
+            &[0, 1, 5, 4],
+            &[2, 3, 7, 6],
+            &[1, 2, 6, 5],
+            &[3, 0, 4, 7],
+            &[6, 8, 9, 10],
+        ],
+    );
+    let ctx = model.root().geometry();
+    let face = ctx.face(f[6]).unwrap();
+    let edges: Vec<Entity> = face
+        .outer
+        .uses
+        .iter()
+        .map(|u| Entity::Edge(u.edge))
+        .collect();
+    // Swing the rectangle, flush with the cube's top, across it, about the shared corner.
+    for deg in [
+        30.0_f64, 60., 90., 120., 150., 180., 210., 240., 270., 300., 330.,
+    ] {
+        let mut model = model.clone();
+        let m = DMat4::from_translation(v(1., 1., 1.))
+            * DMat4::from_quat(DQuat::from_rotation_z(deg.to_radians()))
+            * DMat4::from_translation(v(-1., -1., -1.));
+        let mut undo = UndoStack::new();
+        transform_sticky(&mut model, BodyId::Root, &edges, m, &mut undo, "Rotate")
+            .unwrap_or_else(|e| panic!("{deg} degrees: {e:?}"));
+        assert!(model.root().geometry().validate().is_empty());
+    }
+}
