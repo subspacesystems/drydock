@@ -32,6 +32,8 @@ pub enum Effect {
     Edit(EditKey),
     /// Flip the selection about an axis (0 red, 1 green, 2 blue).
     Flip(usize),
+    /// Show the About window.
+    About,
 }
 
 /// The scene's bounding box in `modeler_view` terms (`None` for an empty scene).
@@ -99,6 +101,7 @@ impl ViewState {
             Action::SaveAs => return Effect::SaveAsDialog,
             Action::Edit(key) => return Effect::Edit(key),
             Action::Flip(axis) => return Effect::Flip(axis),
+            Action::About => return Effect::About,
         }
         Effect::None
     }

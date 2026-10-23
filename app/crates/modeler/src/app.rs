@@ -64,6 +64,8 @@ struct Loading {
 
 pub struct App {
     view: ViewState,
+    /// The Help > About window is showing.
+    about_open: bool,
     style: Style,
     gpu: Option<Gpu>,
     model: Option<Document>,
@@ -105,6 +107,7 @@ impl App {
         });
         let mut app = App {
             view: ViewState::new(),
+            about_open: false,
             style: Style::default(),
             gpu,
             model: None,
@@ -366,6 +369,7 @@ impl App {
             Effect::Save => self.save(ctx, frame),
             Effect::SaveAsDialog => self.open_save_dialog(),
             Effect::Edit(key) => self.edit(key, ctx, frame),
+            Effect::About => self.about_open = true,
             Effect::Flip(axis) => {
                 let changed =
                     if let (Some(editor), Some(document)) = (&mut self.editor, &mut self.model) {
@@ -1037,6 +1041,7 @@ impl eframe::App for App {
             self.paint_overlays(ui, rect);
             self.measurement_box(&ctx, rect);
         });
+        chrome::about_window(&ctx, &mut self.about_open);
         if let Some(dialog) = &mut self.dialog {
             match dialog.show(&ctx) {
                 DialogOutcome::Open(path) => {

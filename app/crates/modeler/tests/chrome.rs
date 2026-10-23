@@ -246,3 +246,38 @@ fn menus_choose_nothing_until_clicked() {
     h.run();
     assert!(seen.borrow().is_empty());
 }
+
+#[test]
+fn help_about_returns_the_about_action() {
+    let seen = Seen::default();
+    let mut h = menu_harness(state(), &seen);
+    h.run();
+    choose(&mut h, "Help", "About modeler");
+    assert_eq!(*seen.borrow(), vec![Action::About]);
+}
+
+#[test]
+fn about_text_names_the_version_and_commit() {
+    use modeler::chrome::{GIT_HASH, about_text};
+    let text = about_text();
+    assert!(text.contains(env!("CARGO_PKG_VERSION")), "{text}");
+    assert!(!GIT_HASH.is_empty());
+    assert!(text.contains(GIT_HASH), "{text}");
+}
+
+#[test]
+fn about_window_shows_the_text_and_closes() {
+    use modeler::chrome::{about_text, about_window};
+    let open = Rc::new(RefCell::new(true));
+    let flag = open.clone();
+    let mut h = Harness::new_ui(move |ui| {
+        let mut o = *flag.borrow();
+        about_window(ui.ctx(), &mut o);
+        *flag.borrow_mut() = o;
+    });
+    h.run();
+    h.get_by_label(&about_text());
+    h.get_by_label("Close").click();
+    h.run();
+    assert!(!*open.borrow());
+}

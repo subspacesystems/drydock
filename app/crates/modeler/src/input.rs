@@ -97,6 +97,8 @@ pub enum Action {
     /// Mirror the selection about the red (0), green (1) or blue (2) axis through its
     /// box center (menu only; `docs/specs/m3-ui-keys.md`).
     Flip(usize),
+    /// Show the About window (Help menu).
+    About,
 }
 
 /// A mouse drag of `delta` pixels (screen space, y down) with `button` held.

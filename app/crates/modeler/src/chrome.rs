@@ -56,7 +56,36 @@ pub fn toolbar(ui: &mut eframe::egui::Ui, current: Tool) -> Option<Action> {
     chosen
 }
 
-/// The File, Edit and View menus.
+/// The commit the binary was built from (short hash, or "unknown").
+pub const GIT_HASH: &str = env!("MODELER_GIT_HASH");
+
+/// One line for the About window: name, version and commit.
+pub fn about_text() -> String {
+    format!("modeler {} ({GIT_HASH})", env!("CARGO_PKG_VERSION"))
+}
+
+/// The About window while `open`; its Close button clears `open`.
+pub fn about_window(ctx: &eframe::egui::Context, open: &mut bool) {
+    if !*open {
+        return;
+    }
+    let mut close = false;
+    eframe::egui::Window::new("About modeler")
+        .collapsible(false)
+        .resizable(false)
+        .open(open)
+        .show(ctx, |ui| {
+            ui.label(about_text());
+            if ui.button("Close").clicked() {
+                close = true;
+            }
+        });
+    if close {
+        *open = false;
+    }
+}
+
+/// The File, Edit, View and Help menus.
 pub fn menu_bar(ui: &mut eframe::egui::Ui, state: &MenuState<'_>) -> Option<Action> {
     let mut chosen = None;
     eframe::egui::MenuBar::new().ui(ui, |ui| {
@@ -145,6 +174,12 @@ pub fn menu_bar(ui: &mut eframe::egui::Ui, state: &MenuState<'_>) -> Option<Acti
                     chosen = Some(Action::View(view));
                     ui.close();
                 }
+            }
+        });
+        ui.menu_button("Help", |ui| {
+            if ui.button("About modeler").clicked() {
+                chosen = Some(Action::About);
+                ui.close();
             }
         });
     });
