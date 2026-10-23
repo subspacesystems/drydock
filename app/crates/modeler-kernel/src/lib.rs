@@ -12,9 +12,11 @@
 //! `docs/specs/m2-tool-line.md` (drawing tools), `docs/specs/m3-transform.md` (move, rotate, scale, flip),
 //! `docs/specs/m3-tape.md` (tape measure and guides), `docs/specs/m3-pushpull.md` (push/pull),
 //! `docs/specs/m3-move-merge.md` (sticky move), `docs/specs/m3-erase.md` (erase),
-//! `docs/specs/m4-paint.md` (paint and materials).
+//! `docs/specs/m4-paint.md` (paint and materials), `docs/specs/m4-make-component.md`
+//! (make component and group).
 
 pub mod click;
+pub mod component;
 pub mod erase;
 mod faces;
 pub mod format;
