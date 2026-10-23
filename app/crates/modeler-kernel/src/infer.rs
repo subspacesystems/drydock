@@ -11,6 +11,7 @@ use std::cell::RefCell;
 use std::collections::BTreeSet;
 use std::rc::Rc;
 
+use crate::editpath::EditPath;
 use crate::geom::{self, Containment};
 use crate::model::{BodyId, DefinitionId, InstanceId, Model};
 use crate::select::Entity;
@@ -1079,4 +1080,25 @@ pub fn infer_model(model: &Model, probe: &Probe) -> Option<Inference> {
     }
 
     None
+}
+
+/// Like [`pick_model`], for the body open at `path` (`docs/specs/m4-edit-path.md`). The probe
+/// is in the open body's coordinates. The open body's edges and faces are reported as
+/// themselves and geometry inside its instances as the instance of the open body that holds
+/// it. With `rest`, the rest of the model takes part too, and a hit on it gives `None` (a
+/// click outside the open instance). `None` when the path doesn't resolve or its transform
+/// can't be inverted.
+pub fn pick_in(model: &Model, path: &EditPath, rest: bool, probe: &Probe) -> Option<Entity> {
+    let _ = (model, path, rest, probe);
+    unimplemented!()
+}
+
+/// Like [`infer_model`], for the body open at `path` (`docs/specs/m4-edit-path.md`). The probe
+/// and the result are in the open body's coordinates. Snaps to the open body's geometry and
+/// the geometry inside its instances and, with `rest`, to every other geometry of the model
+/// placed where it shows. `None` when the path doesn't resolve or its transform can't be
+/// inverted.
+pub fn infer_in(model: &Model, path: &EditPath, rest: bool, probe: &Probe) -> Option<Inference> {
+    let _ = (model, path, rest, probe);
+    unimplemented!()
 }
