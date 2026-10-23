@@ -1248,12 +1248,21 @@ impl eframe::App for App {
                 .resizable(true)
                 .default_size(180.0)
                 .show(ui, |ui| {
-                    material_action = materials_panel(ui, &mut self.materials, model, current);
-                    if let Some(op) = texture_panel(ui, &mut self.texture, target.is_some())
-                        && let Some((face, side)) = target
-                    {
-                        texture_action = Some((face, side, op));
-                    }
+                    // Texture Position stays in view at the bottom; a model's material
+                    // list can be far taller than the window, so it scrolls.
+                    egui::Panel::bottom("texture-position").show(ui, |ui| {
+                        if let Some(op) = texture_panel(ui, &mut self.texture, target.is_some())
+                            && let Some((face, side)) = target
+                        {
+                            texture_action = Some((face, side, op));
+                        }
+                    });
+                    egui::ScrollArea::vertical()
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            material_action =
+                                materials_panel(ui, &mut self.materials, model, current);
+                        });
                 });
         }
         if let Some(action) = material_action {
