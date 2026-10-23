@@ -119,6 +119,15 @@ Done when: `modeler` on the reference house model opens in under 5 s on modeler-
 | `m4-app-texture-position-ui` | Texture position UI: typed move/turn/scale values and reset for the selected face's textured side | `m4-app-texture-position` |
 | `m4-app-materials` | Editor: create (becomes current), edit and purge materials, one undo step each, messages | `m4-paint`, `m4-texture-model` |
 | `m4-app-materials-ui` | Materials panel: list with swatches, new and edit (name, color, opacity, texture image and size), purge unused | `m4-app-materials` |
+| `m4-fix-edit-overlays` | selection, Push/Pull face and Scale box drawn in world coordinates inside an open instance (`overlay::selection`, `transformed`) | |
+| `m4-fix-refresh-speed` | renderer keeps loaded textures across uploads; opening/closing an instance only redraws (`Document::show_path`) | |
+| `m4-fix-materials-width` | long material names and paths don't widen the Materials column | |
+| `m4-orbit-pivot` | orbit about the model point under the cursor (`Camera::orbit_about`, `FlatScene::raycast`, `ViewState::pivot`) | |
+| `m4-dae-pinch-faces` | DAE import splits merged faces whose outline touches itself into a few clean faces instead of raw triangles (kernel import, orchestrator) | |
+| `m4-copy` | duplicate a selection with a transform into a body (sticky), and clipboard extract/insert (kernel, orchestrator) | |
+| `m4-app-move-copy` | Move tool: Ctrl toggles copy, the originals stay | `m4-copy` |
+| `m4-app-copy-paste` | Edit > Cut / Copy / Paste (Ctrl+X/C/V); the pasted copy follows the cursor until a click places it | `m4-copy` |
+| `m4-app-texture-handles` | texture position with handles on the face in the viewport (move, turn and scale) instead of typed values | |
 
 - Make component from selection; edit in place (all instances update); option to hide the rest of the model while editing; groups.
 - Materials: create/edit colors and image textures; paint bucket; texture positioning basics; materials survive save/load and DAE import.
