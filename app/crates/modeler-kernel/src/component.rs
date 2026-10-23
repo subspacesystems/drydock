@@ -10,11 +10,13 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use glam::{DMat4, DVec3};
 
+use crate::geom;
 use crate::model::{
     BodyId, DefinitionInfo, FaceMaterials, Instance, InstanceId, Model, ModelEdit, ModelError,
     ModelViolation, UndoStack,
 };
 use crate::select::Entity;
+use crate::texture::moved_maps;
 use crate::tools::scale;
 use crate::topology::{EdgeId, EdgeUse, Face, FaceId, Loop, TopoError, VertexId};
 
@@ -213,6 +215,17 @@ pub fn make_component(
     }
 
     for &(old, materials) in &material_data {
+        let normal = {
+            let target = model.body(body).expect("body checked above");
+            let ctx = target.geometry();
+            let face = face_data
+                .iter()
+                .find(|(id, _)| *id == old)
+                .map(|(_, face)| face)
+                .expect("material data comes from a face");
+            geom::polygon_normal(&ctx.loop_points(&face.outer))
+        };
+        let materials = moved_maps(model, materials, normal, inverse);
         let new = face_map[&old];
         if let Err(error) = model.set_face_materials(inside, new, materials, &mut edit) {
             rollback(model, &edit);

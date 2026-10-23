@@ -13,8 +13,11 @@ use crate::geom::{self, LINEAR_TOL, SegmentHit};
 use crate::model::{BodyId, FaceMaterials, InstanceId, Model, ModelEdit, ModelError, UndoStack};
 use crate::select::Entity;
 use crate::sticky::StickyError;
+use crate::texture::moved_maps;
 use crate::topology::{Context, EdgeId, EdgeUse, Face, FaceId, Loop, TopoError, VertexId};
-use crate::transform::{TransformError, leaves_geometry_in_place, moved_vertices};
+use crate::transform::{
+    TransformError, leaves_geometry_in_place, moved_face_materials, moved_vertices,
+};
 
 fn bad_matrix(matrix: &DMat4) -> bool {
     if matrix.to_cols_array().iter().any(|v| !v.is_finite()) {
@@ -547,6 +550,7 @@ fn transform_detached(
         .iter()
         .filter_map(|&f| {
             let face = ctx.face(f)?;
+            let normal = geom::polygon_normal(&ctx.loop_points(&face.outer));
             let place = |points: Vec<DVec3>| -> Vec<DVec3> {
                 points
                     .into_iter()
@@ -554,7 +558,7 @@ fn transform_detached(
                     .collect()
             };
             Some(OldFace {
-                materials: target.face_materials(f),
+                materials: moved_maps(model, target.face_materials(f), normal, matrix),
                 moved: true,
                 outer: place(ctx.loop_points(&face.outer)),
                 inner: face
@@ -682,6 +686,7 @@ fn transform_attached(
     };
 
     let mut edit = ModelEdit::new();
+    let face_changes = moved_face_materials(model, body, &moved, matrix);
 
     let moves: Vec<(VertexId, DVec3)> = {
         let Some(target) = model.body(body) else {
@@ -713,6 +718,13 @@ fn transform_attached(
                 rollback(model, &edit);
                 return Err(TransformError::Model(error));
             }
+        }
+    }
+
+    for (face, materials) in face_changes {
+        if let Err(error) = model.set_face_materials(body, face, materials, &mut edit) {
+            rollback(model, &edit);
+            return Err(TransformError::Model(error));
         }
     }
 
