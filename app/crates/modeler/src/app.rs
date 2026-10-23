@@ -12,14 +12,15 @@ use eframe::egui;
 use egui::{Color32, Event, MouseWheelUnit, PointerButton, Pos2, Rect, Sense};
 use glam::{DVec2, DVec3};
 use modeler::chrome::{self, MenuState};
-use modeler::document::{Document, FileKind, format_size, native_path};
+use modeler::document::{Document, FileKind, format_size, native_path, resolve_texture_path};
 use modeler::editor::{Editor, Viewport as EditorViewport};
 use modeler::hints::hint_label;
 use modeler::input::{self, Button, Modifiers, Tool};
+use modeler::materials_panel::{MaterialAction, MaterialsPanel, materials_panel};
 use modeler::overlay::{self, Primitive};
 use modeler::viewstate::{Effect, ViewState, scene_bounds};
 use modeler_dae::FlatScene;
-use modeler_kernel::model::BodyId;
+use modeler_kernel::model::{BodyId, Material};
 use modeler_kernel::select::{Entity, instance_segments};
 use modeler_kernel::tools::plane::DrawPlane;
 use modeler_kernel::tools::scale;
@@ -68,6 +69,8 @@ pub struct App {
     about_open: bool,
     /// The Make Component / Make Group name prompt is showing.
     name_prompt: Option<chrome::NamePrompt>,
+    /// The Materials panel and its open form.
+    materials: MaterialsPanel,
     style: Style,
     gpu: Option<Gpu>,
     model: Option<Document>,
@@ -111,6 +114,7 @@ impl App {
             view: ViewState::new(),
             about_open: false,
             name_prompt: None,
+            materials: MaterialsPanel::default(),
             style: Style::default(),
             gpu,
             model: None,
@@ -180,6 +184,7 @@ impl App {
         self.view
             .set_bounds(scene_bounds(&document.scene), self.viewport_pt);
         self.editor = Some(Editor::new());
+        self.materials = MaterialsPanel::default();
         if let Some(editor) = &mut self.editor {
             editor.set_tool(self.view.tool);
         }
@@ -229,6 +234,7 @@ impl App {
         self.upload_scene(frame, &document.scene);
         self.view = ViewState::new();
         self.editor = Some(Editor::new());
+        self.materials = MaterialsPanel::default();
         self.loading = None;
         self.error = None;
         self.saved = None;
@@ -353,6 +359,83 @@ impl App {
         };
         if editor.key(key, model) {
             self.refresh_document(ctx, frame);
+        }
+    }
+
+    /// Resolve a form material's relative texture path against the document's folder.
+    fn resolve_material_texture(&self, mut material: Material) -> Material {
+        let Some(texture) = &mut material.texture else {
+            return material;
+        };
+        if Path::new(&texture.path).is_relative() {
+            let folder = self
+                .model
+                .as_ref()
+                .and_then(|document| document.path.parent())
+                .unwrap_or_else(|| Path::new(""));
+            texture.path = resolve_texture_path(&texture.path, folder);
+        }
+        material
+    }
+
+    /// Apply what the Materials panel asked for.
+    fn apply_material_action(
+        &mut self,
+        action: MaterialAction,
+        ctx: &egui::Context,
+        frame: &eframe::Frame,
+    ) {
+        match action {
+            MaterialAction::Choose(material) => {
+                if let Some(editor) = &mut self.editor {
+                    editor.set_material(material);
+                }
+                self.apply(input::Action::SelectTool(Tool::Paint), ctx, frame);
+            }
+            MaterialAction::Create(material) => {
+                let material = self.resolve_material_texture(material);
+                let created =
+                    if let (Some(editor), Some(document)) = (&mut self.editor, &mut self.model) {
+                        match document.kernel.as_mut() {
+                            Some(model) => editor.create_material(model, material).is_some(),
+                            None => false,
+                        }
+                    } else {
+                        false
+                    };
+                if created {
+                    self.refresh_document(ctx, frame);
+                }
+            }
+            MaterialAction::Edit(id, material) => {
+                let material = self.resolve_material_texture(material);
+                let changed =
+                    if let (Some(editor), Some(document)) = (&mut self.editor, &mut self.model) {
+                        match document.kernel.as_mut() {
+                            Some(model) => editor.edit_material(model, id, material),
+                            None => false,
+                        }
+                    } else {
+                        false
+                    };
+                if changed {
+                    self.refresh_document(ctx, frame);
+                }
+            }
+            MaterialAction::Purge => {
+                let removed =
+                    if let (Some(editor), Some(document)) = (&mut self.editor, &mut self.model) {
+                        match document.kernel.as_mut() {
+                            Some(model) => editor.purge_materials(model),
+                            None => 0,
+                        }
+                    } else {
+                        0
+                    };
+                if removed > 0 {
+                    self.refresh_document(ctx, frame);
+                }
+            }
         }
     }
 
@@ -1066,6 +1149,24 @@ impl eframe::App for App {
         });
         if let Some(action) = menu_action.or(tool_action) {
             self.apply(action, &ctx, frame);
+        }
+
+        let mut material_action = None;
+        if let Some(model) = self
+            .model
+            .as_ref()
+            .and_then(|document| document.kernel.as_ref())
+        {
+            let current = self.editor.as_ref().and_then(Editor::material);
+            egui::Panel::right("materials")
+                .resizable(true)
+                .default_size(180.0)
+                .show(ui, |ui| {
+                    material_action = materials_panel(ui, &mut self.materials, model, current);
+                });
+        }
+        if let Some(action) = material_action {
+            self.apply_material_action(action, &ctx, frame);
         }
 
         let dialog_open = self.dialog.is_some()
