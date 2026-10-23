@@ -158,8 +158,15 @@ impl Document {
         let Some(kernel) = &self.kernel else {
             return;
         };
-        self.scene = kernel_scene_editing(kernel, path, rest);
-        self.stats = stats_from_scene(&kernel_scene(kernel), Some(kernel));
+        let scene = kernel_scene_editing(kernel, path, rest);
+        // At the root the editing scene is the whole model, so its stats can come from
+        // the scene already built. Inside an instance the drawn scene is partial.
+        self.stats = if path.is_root() {
+            stats_from_scene(&scene, Some(kernel))
+        } else {
+            stats_from_scene(&kernel_scene(kernel), Some(kernel))
+        };
+        self.scene = scene;
         self.modified = true;
     }
 
@@ -167,8 +174,10 @@ impl Document {
     /// model edit: `stats` and `modified` stay as they are. Behaviour:
     /// `docs/specs/m4-fix-refresh-speed.md`.
     pub fn show_path(&mut self, path: &EditPath, rest: RestView) {
-        let _ = (path, rest);
-        unimplemented!()
+        let Some(kernel) = &self.kernel else {
+            return;
+        };
+        self.scene = kernel_scene_editing(kernel, path, rest);
     }
 
     /// Record that the file on disk matches the model at undo-stack state `state`

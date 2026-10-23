@@ -253,13 +253,42 @@ impl App {
     }
 
     /// Rebuild the scene when the editor's open path changed without a model edit.
-    fn sync_editor_path(&mut self, ctx: &egui::Context, frame: &eframe::Frame) {
+    fn sync_editor_path(&mut self, _ctx: &egui::Context, frame: &eframe::Frame) {
         let Some(path) = self.editor.as_ref().map(|editor| editor.path().clone()) else {
             return;
         };
         if path != self.shown_path {
-            self.refresh_document(ctx, frame);
+            self.show_editor_path(frame);
         }
+    }
+
+    /// Redraw for the current open path without rebuilding stats, the title or the
+    /// modified flag.
+    fn show_editor_path(&mut self, frame: &eframe::Frame) {
+        let Some((path, rest)) = self.editor.as_ref().map(|editor| {
+            let rest = if editor.hide_rest() {
+                RestView::Hidden
+            } else {
+                RestView::Faded
+            };
+            (editor.path().clone(), rest)
+        }) else {
+            return;
+        };
+        let Some(document) = &mut self.model else {
+            return;
+        };
+        document.show_path(&path, rest);
+        self.shown_path = path;
+        // Zoom Extents frames what is drawn, not the whole model.
+        self.view.bounds = scene_bounds(&document.scene);
+        if let (Some(gpu), Some(state)) = (&mut self.gpu, frame.wgpu_render_state()) {
+            gpu.scene = gpu
+                .renderer
+                .upload(&state.device, &state.queue, &document.scene);
+            self.warnings = gpu.scene.warnings.clone();
+        }
+        self.dirty = true;
     }
 
     /// Replace the document with a new, empty one and a default view.
@@ -534,7 +563,7 @@ impl App {
                     let hide = !editor.hide_rest();
                     editor.set_hide_rest(hide);
                 }
-                self.refresh_document(ctx, frame);
+                self.show_editor_path(frame);
             }
             Effect::MakeComponent { group } => {
                 self.name_prompt = Some(chrome::NamePrompt::new(group));
