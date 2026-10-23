@@ -14,6 +14,7 @@ use std::collections::BTreeSet;
 
 use glam::{DMat4, DVec2, DVec3};
 use modeler_kernel::click::{self, ClickMods};
+use modeler_kernel::erase::erase;
 use modeler_kernel::infer::{self, Inference, Probe, Snap};
 use modeler_kernel::model::{BodyId, Model, UndoStack};
 use modeler_kernel::pushpull::push_pull;
@@ -648,8 +649,15 @@ impl Editor {
                 changed
             }
             EditKey::Backspace => {
-                self.typed.pop();
-                false
+                if !self.typed.is_empty() {
+                    self.typed.pop();
+                    return false;
+                }
+                if matches!(self.tool, Tool::Select | Tool::Erase) {
+                    self.erase_selection(model)
+                } else {
+                    false
+                }
             }
             EditKey::Undo => {
                 self.line = LineTool::new();
@@ -1118,14 +1126,54 @@ impl Editor {
     /// Erase the selection (one undo step "Erase"). True when the model changed.
     /// Behaviour: `docs/specs/m3-app-erase.md`.
     pub fn erase_selection(&mut self, model: &mut Model) -> bool {
-        let _ = model;
-        unimplemented!("m3-app-erase")
+        self.line = LineTool::new();
+        self.idle_shapes();
+        self.idle_rotate();
+        self.idle_move();
+        self.idle_scale();
+        self.idle_tape();
+        self.typed.clear();
+        self.push = None;
+        self.hint = None;
+        if self.selection.is_empty() {
+            self.message = Some("Select something to erase".to_string());
+            return false;
+        }
+        match erase(
+            model,
+            BodyId::Root,
+            &self.selection,
+            &mut self.undo,
+            "Erase",
+        ) {
+            Ok(()) => {
+                self.message = None;
+                self.prune(model);
+                true
+            }
+            Err(_) => {
+                self.message = Some("Can't erase that".to_string());
+                false
+            }
+        }
     }
 
     /// Erase tool: erase the entity under the cursor.
     fn click_erase(&mut self, model: &mut Model, view: &Viewport, cursor: DVec2) -> bool {
-        let _ = (model, view, cursor);
-        unimplemented!("m3-app-erase")
+        let Some(entity) = self.pick_at(model, view, cursor) else {
+            return false;
+        };
+        match erase(model, BodyId::Root, &[entity], &mut self.undo, "Erase") {
+            Ok(()) => {
+                self.message = None;
+                self.prune(model);
+                true
+            }
+            Err(_) => {
+                self.message = Some("Can't erase that".to_string());
+                false
+            }
+        }
     }
 
     /// Why the last input was refused, for the status bar.
