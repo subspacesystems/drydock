@@ -89,8 +89,7 @@ impl TextureMap {
     /// The map for geometry moved by `m`: the moved point `m · p` gets what `p` had.
     /// `None` when `m` has a non-finite entry or `|det| < 1e-12`.
     pub fn transformed(&self, m: DMat4) -> Option<TextureMap> {
-        if !m.to_cols_array().iter().all(|value| value.is_finite())
-            || m.determinant().abs() < 1e-12
+        if !m.to_cols_array().iter().all(|value| value.is_finite()) || m.determinant().abs() < 1e-12
         {
             return None;
         }
@@ -114,9 +113,7 @@ impl TextureMap {
     pub fn fit(points: &[DVec3], st: &[DVec2]) -> Option<TextureMap> {
         if points.len() != st.len()
             || points.len() < 3
-            || points
-                .iter()
-                .any(|p| !p.is_finite())
+            || points.iter().any(|p| !p.is_finite())
             || st.iter().any(|p| !p.is_finite())
         {
             return None;
@@ -194,11 +191,12 @@ pub fn set_texture_maps(
     if changes.is_empty() {
         return Err(PaintError::Empty);
     }
-    let current = model
-        .body(body)
-        .ok_or(PaintError::Model(crate::model::ModelError::MissingBody(
-            body,
-        )))?;
+    let current =
+        model
+            .body(body)
+            .ok_or(PaintError::Model(crate::model::ModelError::MissingBody(
+                body,
+            )))?;
     for &(face, _, _) in changes {
         if current.geometry().face(face).is_none() {
             return Err(PaintError::Missing(Entity::Face(face)));
@@ -206,9 +204,7 @@ pub fn set_texture_maps(
     }
     for &(_, _, map) in changes {
         if map.is_some_and(|map| !map.is_finite()) {
-            return Err(PaintError::Model(
-                crate::model::ModelError::BadTextureMap,
-            ));
+            return Err(PaintError::Model(crate::model::ModelError::BadTextureMap));
         }
     }
 
@@ -282,8 +278,10 @@ fn solve3(mut matrix: [[f64; 3]; 3], mut rhs: [f64; 3]) -> Option<[f64; 3]> {
             if factor == 0.0 {
                 continue;
             }
-            for k in column..3 {
-                matrix[row][k] -= factor * matrix[column][k];
+            let (before, after) = matrix.split_at_mut(row);
+            let pivot = &before[column][column..];
+            for (value, pivot) in after[0][column..].iter_mut().zip(pivot) {
+                *value -= factor * pivot;
             }
             rhs[row] -= factor * rhs[column];
         }

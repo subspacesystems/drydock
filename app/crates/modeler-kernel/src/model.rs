@@ -955,9 +955,7 @@ impl Model {
                 if current != *from {
                     return Err(ModelError::Mismatch);
                 }
-                if to
-                    .front_map
-                    .is_some_and(|map| !map.is_finite())
+                if to.front_map.is_some_and(|map| !map.is_finite())
                     || to.back_map.is_some_and(|map| !map.is_finite())
                 {
                     return Err(ModelError::BadTextureMap);

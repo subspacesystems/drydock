@@ -9,8 +9,8 @@
 use std::collections::BTreeSet;
 
 use crate::model::{
-    texture_size_is_good, BodyId, FaceMaterials, Material, MaterialId, Model, ModelEdit,
-    ModelError, UndoStack,
+    BodyId, FaceMaterials, Material, MaterialId, Model, ModelEdit, ModelError, UndoStack,
+    texture_size_is_good,
 };
 use crate::select::Entity;
 use crate::topology::FaceId;
