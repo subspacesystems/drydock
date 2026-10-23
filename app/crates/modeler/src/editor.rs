@@ -19,7 +19,9 @@ use modeler_kernel::editpath::EditPath;
 use modeler_kernel::erase::erase;
 use modeler_kernel::explode::explode;
 use modeler_kernel::infer::{self, Inference, Probe, Snap};
-use modeler_kernel::model::{BodyId, DefinitionInfo, InstanceId, MaterialId, Model, UndoStack};
+use modeler_kernel::model::{
+    BodyId, DefinitionInfo, InstanceId, Material, MaterialId, Model, UndoStack,
+};
 use modeler_kernel::paint::{self, Side};
 use modeler_kernel::pushpull::push_pull;
 use modeler_kernel::select::{self, BoxMode, Entity};
@@ -1477,6 +1479,30 @@ impl Editor {
                 false
             }
         }
+    }
+
+    /// Add `material` (name made unique) as one undo step "New Material" and make it the
+    /// Paint Bucket's current material. `None` with a message when the kernel refuses.
+    /// Behaviour: `docs/specs/m4-app-materials.md`.
+    pub fn create_material(&mut self, model: &mut Model, material: Material) -> Option<MaterialId> {
+        let _ = (model, material);
+        unimplemented!("m4-app-materials")
+    }
+
+    /// Replace material `id` as one undo step "Edit Material". True when accepted (also
+    /// when nothing changed); false with a message when refused.
+    /// Behaviour: `docs/specs/m4-app-materials.md`.
+    pub fn edit_material(&mut self, model: &mut Model, id: MaterialId, material: Material) -> bool {
+        let _ = (model, id, material);
+        unimplemented!("m4-app-materials")
+    }
+
+    /// Remove materials nothing uses as one undo step "Purge Materials"; resets the current
+    /// material if it went. Returns how many were removed.
+    /// Behaviour: `docs/specs/m4-app-materials.md`.
+    pub fn purge_materials(&mut self, model: &mut Model) -> usize {
+        let _ = model;
+        unimplemented!("m4-app-materials")
     }
 
     /// The Paint Bucket's current material (`None` = the default material).
