@@ -17,6 +17,7 @@ use modeler_kernel::click::{self, ClickMods};
 use modeler_kernel::erase::erase;
 use modeler_kernel::infer::{self, Inference, Probe, Snap};
 use modeler_kernel::model::{BodyId, MaterialId, Model, UndoStack};
+use modeler_kernel::paint::{self, Side};
 use modeler_kernel::pushpull::push_pull;
 use modeler_kernel::select::{self, BoxMode, Entity};
 use modeler_kernel::tape::Guide;
@@ -1201,8 +1202,56 @@ impl Editor {
         cursor: DVec2,
         mods: Modifiers,
     ) -> bool {
-        let _ = (model, view, cursor, mods);
-        unimplemented!()
+        let Some(entity) = self.pick_at(model, view, cursor) else {
+            return false;
+        };
+        let seen = match entity {
+            Entity::Face(face) => {
+                let (_, dir) = view.ray(cursor);
+                let plane = model.root().geometry().face_plane(face);
+                match plane {
+                    Some(plane) if dir.dot(plane.normal) > 0.0 => Side::Back,
+                    _ => Side::Front,
+                }
+            }
+            Entity::Edge(_) | Entity::Instance(_) => Side::Front,
+        };
+        if mods.alt {
+            match entity {
+                Entity::Face(_) | Entity::Instance(_) => {
+                    self.material = paint::sample(model, BodyId::Root, entity, seen).flatten();
+                    self.message = None;
+                }
+                Entity::Edge(_) => {}
+            }
+            return false;
+        }
+        if matches!(entity, Entity::Edge(_)) && !self.selection.contains(&entity) {
+            return false;
+        }
+        let targets = if self.selection.contains(&entity) {
+            self.selection.clone()
+        } else {
+            vec![entity]
+        };
+        match paint::paint(
+            model,
+            BodyId::Root,
+            &targets,
+            seen,
+            self.material,
+            &mut self.undo,
+            "Paint",
+        ) {
+            Ok(n) => {
+                self.message = None;
+                n > 0
+            }
+            Err(_) => {
+                self.message = Some("Can't paint that".to_string());
+                false
+            }
+        }
     }
 
     /// Why the last input was refused, for the status bar.
