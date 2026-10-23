@@ -14,9 +14,10 @@ use std::collections::BTreeSet;
 
 use glam::{DMat4, DVec2, DVec3};
 use modeler_kernel::click::{self, ClickMods};
+use modeler_kernel::editpath::EditPath;
 use modeler_kernel::erase::erase;
 use modeler_kernel::infer::{self, Inference, Probe, Snap};
-use modeler_kernel::model::{BodyId, MaterialId, Model, UndoStack};
+use modeler_kernel::model::{BodyId, InstanceId, MaterialId, Model, UndoStack};
 use modeler_kernel::paint::{self, Side};
 use modeler_kernel::pushpull::push_pull;
 use modeler_kernel::select::{self, BoxMode, Entity};
@@ -199,6 +200,8 @@ pub struct Editor {
     tape_point_guides: bool,
     scale_segments: Vec<(DVec3, DVec3)>,
     material: Option<MaterialId>,
+    path: EditPath,
+    hide_rest: bool,
 }
 
 fn click_mods(mods: Modifiers) -> ClickMods {
@@ -340,6 +343,8 @@ impl Editor {
             tape_point_guides: false,
             scale_segments: Vec::new(),
             material: None,
+            path: EditPath::root(),
+            hide_rest: false,
         }
     }
 
@@ -1181,6 +1186,37 @@ impl Editor {
                 false
             }
         }
+    }
+
+    /// The instances opened for editing (empty: the root is open). Behaviour:
+    /// `docs/specs/m4-app-edit-context.md`.
+    pub fn path(&self) -> &EditPath {
+        let _ = &self.path;
+        unimplemented!()
+    }
+
+    /// Open `instance`, an instance of the open body, for editing. False (nothing changes)
+    /// when the open body has no such instance.
+    pub fn open_instance(&mut self, model: &Model, instance: InstanceId) -> bool {
+        let _ = (model, instance);
+        unimplemented!()
+    }
+
+    /// Close the innermost open instance; the root stays open.
+    pub fn close_path(&mut self) {
+        unimplemented!()
+    }
+
+    /// Whether the rest of the model is ignored (not snapped to, not picked) while an
+    /// instance is open.
+    pub fn hide_rest(&self) -> bool {
+        let _ = self.hide_rest;
+        unimplemented!()
+    }
+
+    pub fn set_hide_rest(&mut self, hide: bool) {
+        let _ = hide;
+        unimplemented!()
     }
 
     /// The Paint Bucket's current material (`None` = the default material).
