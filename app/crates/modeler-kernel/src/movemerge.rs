@@ -246,7 +246,7 @@ fn centroid_2d(points: &[DVec2]) -> Option<DVec2> {
 }
 
 /// A representative point strictly inside the face, when one is easy to find.
-fn interior_point(ctx: &Context, f: FaceId) -> Option<DVec3> {
+pub(crate) fn interior_point(ctx: &Context, f: FaceId) -> Option<DVec3> {
     let face = ctx.face(f)?;
     let plane = ctx.face_plane(f)?;
     let n = plane.normal;
@@ -286,7 +286,10 @@ fn interior_point(ctx: &Context, f: FaceId) -> Option<DVec3> {
     Some((a + b) * 0.5 + inward * (LINEAR_TOL * 10.0))
 }
 
-fn restick(
+/// Re-stick the edges at `moved` vertices to the rest of the body: delete them and the faces
+/// over them, re-add them with `Context::add_edge` (welds, splits, re-forms faces), then put
+/// the old faces' materials back on the regions they covered. Also used by explode.
+pub(crate) fn restick(
     model: &mut Model,
     body: BodyId,
     moved: &BTreeSet<VertexId>,

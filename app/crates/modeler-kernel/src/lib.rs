@@ -13,11 +13,12 @@
 //! `docs/specs/m3-tape.md` (tape measure and guides), `docs/specs/m3-pushpull.md` (push/pull),
 //! `docs/specs/m3-move-merge.md` (sticky move), `docs/specs/m3-erase.md` (erase),
 //! `docs/specs/m4-paint.md` (paint and materials), `docs/specs/m4-make-component.md`
-//! (make component and group).
+//! (make component and group), `docs/specs/m4-explode.md` (explode).
 
 pub mod click;
 pub mod component;
 pub mod erase;
+pub mod explode;
 mod faces;
 pub mod format;
 pub mod geom;
