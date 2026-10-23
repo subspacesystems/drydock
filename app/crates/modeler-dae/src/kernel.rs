@@ -8,9 +8,10 @@
 
 use std::collections::{HashMap, HashSet, VecDeque};
 
-use glam::{DMat4, DVec3};
+use glam::{DMat4, DVec2, DVec3};
 use modeler_kernel::geom::{self, LINEAR_TOL};
 use modeler_kernel::model as km;
+use modeler_kernel::texture::TextureMap;
 use modeler_kernel::topology::{Context, EdgeId, EdgeUse, Edit, Face, Loop, VertexId};
 
 use crate::{Model, Node, PrimitiveKind};
@@ -163,7 +164,7 @@ impl Conv<'_> {
 
     fn geometry(&mut self, n: &Node, body: km::BodyId) -> Result<(), ConvertError> {
         let mut w = Welder::default();
-        let mut tris: Vec<([usize; 3], Option<km::MaterialId>)> = Vec::new();
+        let mut tris: Vec<([usize; 3], Option<km::MaterialId>, Option<TextureMap>)> = Vec::new();
         let mut segs: Vec<[usize; 2]> = Vec::new();
         for gi in &n.geometry {
             let Some(mesh) = self.doc.meshes.get(gi.mesh) else {
@@ -190,7 +191,19 @@ impl Conv<'_> {
                                 continue;
                             };
                             let s = [w.slot(a), w.slot(b), w.slot(cc)];
-                            tris.push((s, mat));
+                            let map = mat
+                                .and_then(|id| self.out.material(id))
+                                .and_then(|material| material.texture.as_ref())
+                                .and_then(|texture| {
+                                    let mut st = [DVec2::ZERO; 3];
+                                    for (k, &index) in t.iter().enumerate() {
+                                        let uv = p.texcoords.get(index as usize)?;
+                                        st[k] =
+                                            DVec2::new(uv[0] as f64, uv[1] as f64) * texture.size;
+                                    }
+                                    TextureMap::fit(&[w.pos[s[0]], w.pos[s[1]], w.pos[s[2]]], &st)
+                                });
+                            tris.push((s, mat, map));
                         }
                     }
                     PrimitiveKind::Lines => {
@@ -206,7 +219,7 @@ impl Conv<'_> {
         }
         let pos = &w.pos;
         // Degenerate.
-        tris.retain(|(s, _)| {
+        tris.retain(|(s, _, _)| {
             if s[0] == s[1] || s[1] == s[2] || s[0] == s[2] {
                 return false;
             }
@@ -219,7 +232,7 @@ impl Conv<'_> {
         // Twins.
         let mut kept: Vec<T> = Vec::new();
         let mut by_set: HashMap<[usize; 3], usize> = HashMap::new();
-        for (s, mat) in tris {
+        for (s, mat, map) in tris {
             let mut key = s;
             key.sort();
             if let Some(&k) = by_set.get(&key) {
@@ -227,6 +240,7 @@ impl Conv<'_> {
                 if !same && !kept[k].twinned {
                     kept[k].twinned = true;
                     kept[k].fm.back = mat;
+                    kept[k].fm.back_map = map;
                 }
                 continue;
             }
@@ -235,6 +249,7 @@ impl Conv<'_> {
                 s,
                 fm: km::FaceMaterials {
                     front: mat,
+                    front_map: map,
                     ..Default::default()
                 },
                 twinned: false,
@@ -254,7 +269,7 @@ impl Conv<'_> {
             if u.len() != 2 || u[0].1 == u[1].1 || segset.contains(&pair) {
                 return None;
             }
-            if kept[u[0].0].fm != kept[u[1].0].fm {
+            if !same_look(&kept, u[0].0, u[1].0, pos) {
                 return None;
             }
             Some((u[0].0, u[1].0))
@@ -383,6 +398,41 @@ impl Conv<'_> {
         }
         Ok(())
     }
+}
+
+fn maps_agree(a: Option<TextureMap>, b: Option<TextureMap>, points: &[DVec3]) -> bool {
+    match (a, b) {
+        (None, None) => true,
+        (Some(a), Some(b)) => points.iter().all(|&p| {
+            let x = a.apply(p);
+            let y = b.apply(p);
+            let tolerance = 1e-3
+                * 1.0f64
+                    .max(x.x.abs())
+                    .max(x.y.abs())
+                    .max(y.x.abs())
+                    .max(y.y.abs());
+            (x.x - y.x).abs() <= tolerance && (x.y - y.y).abs() <= tolerance
+        }),
+        _ => false,
+    }
+}
+
+fn same_look(kept: &[T], a: usize, b: usize, pos: &[DVec3]) -> bool {
+    let (a, b) = (&kept[a], &kept[b]);
+    if a.fm.front != b.fm.front || a.fm.back != b.fm.back {
+        return false;
+    }
+    let points = [
+        pos[a.s[0]],
+        pos[a.s[1]],
+        pos[a.s[2]],
+        pos[b.s[0]],
+        pos[b.s[1]],
+        pos[b.s[2]],
+    ];
+    maps_agree(a.fm.front_map, b.fm.front_map, &points)
+        && maps_agree(a.fm.back_map, b.fm.back_map, &points)
 }
 
 fn upair(a: usize, b: usize) -> (usize, usize) {

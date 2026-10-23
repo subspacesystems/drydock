@@ -11,6 +11,7 @@ use glam::{DMat3, DMat4, DVec2, DVec3};
 use modeler_kernel::geom::{polygon_normal, to_plane_2d};
 use modeler_kernel::model as km;
 use modeler_kernel::tess::triangulate;
+use modeler_kernel::texture::TextureMap;
 
 use crate::{Aabb, Batch, FlatScene, LineBatch, Material};
 
@@ -22,21 +23,27 @@ const MAX_DEPTH: usize = 64;
 pub fn kernel_scene(model: &km::Model) -> FlatScene {
     let mut material_index = BTreeMap::new();
     let mut materials = Vec::new();
+    let mut texture_sizes = Vec::new();
     for (index, (id, material)) in model.materials().enumerate() {
         material_index.insert(id, index);
         materials.push(Material {
             id: id.0.to_string(),
             name: material.name.clone(),
             color: [material.color[0], material.color[1], material.color[2], 1.0],
-            texture: None,
+            texture: material
+                .texture
+                .as_ref()
+                .map(|texture| std::path::PathBuf::from(&texture.path)),
             opacity: material.color[3],
             unlit: false,
         });
+        texture_sizes.push(material.texture.as_ref().map(|texture| texture.size));
     }
 
     let mut draw = Draw {
         model,
         material_index,
+        texture_sizes,
         batches: BTreeMap::new(),
         default_batch: Batch::default(),
         line: LineBatch::default(),
@@ -85,11 +92,14 @@ struct FaceDraw {
     holes: Vec<Vec<DVec3>>,
     front: Option<usize>,
     back: Option<usize>,
+    front_map: Option<(TextureMap, DVec2)>,
+    back_map: Option<(TextureMap, DVec2)>,
 }
 
 struct Draw<'a> {
     model: &'a km::Model,
     material_index: BTreeMap<km::MaterialId, usize>,
+    texture_sizes: Vec<Option<DVec2>>,
     batches: BTreeMap<usize, Batch>,
     default_batch: Batch,
     line: LineBatch,
@@ -115,15 +125,27 @@ impl Draw<'_> {
                 .faces()
                 .map(|(id, face)| {
                     let materials = body.face_materials(id);
+                    let outer = geometry.loop_points(&face.outer);
+                    let normal = polygon_normal(&outer);
+                    let front = self.material(materials.front).or(inherited);
+                    let back = self.material(materials.back).or(inherited);
+                    let side =
+                        |material: Option<usize>, stored: Option<TextureMap>, normal: DVec3| {
+                            let size = material.and_then(|index| self.texture_sizes[index])?;
+                            let map = stored.unwrap_or_else(|| TextureMap::default_for(normal));
+                            Some((map, size))
+                        };
                     FaceDraw {
-                        outer: geometry.loop_points(&face.outer),
+                        outer,
                         holes: face
                             .inner
                             .iter()
                             .map(|hole| geometry.loop_points(hole))
                             .collect(),
-                        front: self.material(materials.front).or(inherited),
-                        back: self.material(materials.back).or(inherited),
+                        front,
+                        back,
+                        front_map: side(front, materials.front_map, normal),
+                        back_map: side(back, materials.back_map, -normal),
                     }
                 })
                 .collect();
@@ -161,6 +183,8 @@ impl Draw<'_> {
                 &face.holes,
                 face.front,
                 face.back,
+                face.front_map,
+                face.back_map,
             );
         }
 
@@ -201,6 +225,8 @@ fn draw_face(
     holes: &[Vec<DVec3>],
     front: Option<usize>,
     back: Option<usize>,
+    front_map: Option<(TextureMap, DVec2)>,
+    back_map: Option<(TextureMap, DVec2)>,
 ) {
     let normal = polygon_normal(outer);
     if normal == DVec3::ZERO {
@@ -254,21 +280,42 @@ fn draw_face(
         })
         .collect();
 
+    let body_positions: Vec<DVec3> = outer
+        .iter()
+        .chain(holes.iter().flatten())
+        .copied()
+        .collect();
+    let texcoords = |side: Option<(TextureMap, DVec2)>| {
+        side.map(|(map, size)| {
+            body_positions
+                .iter()
+                .map(|&point| {
+                    let uv = map.apply(point) / size;
+                    [uv.x as f32, uv.y as f32]
+                })
+                .collect::<Vec<[f32; 2]>>()
+        })
+    };
+    let front_texcoords = texcoords(front_map);
+
     append(
         batch(batches, default_batch, front),
         &positions,
         normal,
         &front_triangles,
+        front_texcoords.as_deref(),
     );
 
     if let Some(back) = back {
         let back_triangles: Vec<[usize; 3]> =
             front_triangles.iter().map(|&[a, b, c]| [a, c, b]).collect();
+        let back_texcoords = texcoords(back_map);
         append(
             batch(batches, default_batch, Some(back)),
             &positions,
             -normal,
             &back_triangles,
+            back_texcoords.as_deref(),
         );
     }
 }
@@ -287,12 +334,21 @@ fn batch<'a>(
     }
 }
 
-fn append(batch: &mut Batch, positions: &[[f32; 3]], normal: DVec3, triangles: &[[usize; 3]]) {
+fn append(
+    batch: &mut Batch,
+    positions: &[[f32; 3]],
+    normal: DVec3,
+    triangles: &[[usize; 3]],
+    texcoords: Option<&[[f32; 2]]>,
+) {
     let base = batch.positions.len() as u32;
     let normal = as_f32(normal);
-    for &position in positions {
+    for (index, &position) in positions.iter().enumerate() {
         batch.positions.push(position);
         batch.normals.push(normal);
+        if let Some(texcoords) = texcoords {
+            batch.texcoords.push(texcoords[index]);
+        }
     }
     for &[a, b, c] in triangles {
         batch.indices.push(base + a as u32);
