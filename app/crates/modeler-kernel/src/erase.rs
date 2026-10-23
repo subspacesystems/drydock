@@ -7,7 +7,7 @@
 
 use std::collections::BTreeSet;
 
-use crate::model::{BodyId, Model, ModelEdit, ModelError, UndoStack};
+use crate::model::{BodyId, InstanceId, Model, ModelEdit, ModelError, UndoStack};
 use crate::select::Entity;
 use crate::sticky::StickyError;
 use crate::topology::{EdgeId, FaceId};
@@ -36,69 +36,68 @@ pub fn erase(
     if selection.is_empty() {
         return Err(EraseError::Empty);
     }
-    let Some(current) = model.body(body) else {
-        return Err(EraseError::Model(ModelError::MissingBody(body)));
-    };
+    let current = model
+        .body(body)
+        .ok_or(EraseError::Model(ModelError::MissingBody(body)))?;
     for &entity in selection {
         let present = match entity {
-            Entity::Edge(id) => current.geometry().edge(id).is_some(),
-            Entity::Face(id) => current.geometry().face(id).is_some(),
-            Entity::Instance(id) => current.instance(id).is_some(),
+            Entity::Edge(e) => current.geometry().edge(e).is_some(),
+            Entity::Face(f) => current.geometry().face(f).is_some(),
+            Entity::Instance(i) => current.instance(i).is_some(),
         };
         if !present {
             return Err(EraseError::Missing(entity));
         }
     }
 
-    let faces: BTreeSet<FaceId> = selection
-        .iter()
-        .filter_map(|entity| match entity {
-            Entity::Face(id) => Some(*id),
-            _ => None,
-        })
-        .collect();
-    let edges: BTreeSet<EdgeId> = selection
-        .iter()
-        .filter_map(|entity| match entity {
-            Entity::Edge(id) => Some(*id),
-            _ => None,
-        })
-        .collect();
-    let instances: BTreeSet<_> = selection
-        .iter()
-        .filter_map(|entity| match entity {
-            Entity::Instance(id) => Some(*id),
-            _ => None,
-        })
-        .collect();
+    let mut faces: BTreeSet<FaceId> = BTreeSet::new();
+    let mut edges: BTreeSet<EdgeId> = BTreeSet::new();
+    let mut instances: BTreeSet<InstanceId> = BTreeSet::new();
+    for &entity in selection {
+        match entity {
+            Entity::Edge(e) => {
+                edges.insert(e);
+            }
+            Entity::Face(f) => {
+                faces.insert(f);
+            }
+            Entity::Instance(i) => {
+                instances.insert(i);
+            }
+        }
+    }
 
-    let mut edit = ModelEdit::new();
-    let geometry = model
-        .edit_geometry(body, &mut edit, |ctx, log| {
-            for face in faces {
-                ctx.delete_face(face, log)
-                    .map_err(|error| EraseError::Model(ModelError::Topo(error)))?;
+    let mut log = ModelEdit::new();
+    let result = model.edit_geometry(body, &mut log, |ctx, edit| {
+        for &f in &faces {
+            if ctx.face(f).is_some() {
+                ctx.delete_face(f, edit)
+                    .map_err(|e| EraseError::Model(ModelError::Topo(e)))?;
             }
-            for edge in edges {
-                if ctx.edge(edge).is_some() {
-                    ctx.erase_edge(edge, log).map_err(EraseError::Sticky)?;
-                }
+        }
+        for &e in &edges {
+            if ctx.edge(e).is_some() {
+                ctx.erase_edge(e, edit).map_err(EraseError::Sticky)?;
             }
-            Ok(())
-        })
-        .map_err(EraseError::Model)?;
-    if let Err(error) = geometry {
-        let _ = model.apply_edit(&edit.inverse());
+        }
+        Ok::<(), EraseError>(())
+    });
+    let result = match result {
+        Ok(inner) => inner,
+        Err(error) => Err(EraseError::Model(error)),
+    };
+    if let Err(error) = result {
+        let _ = model.apply_edit(&log.inverse());
         return Err(error);
     }
 
-    for instance in instances {
-        if let Err(error) = model.remove_instance(body, instance, &mut edit) {
-            let _ = model.apply_edit(&edit.inverse());
+    for &instance in &instances {
+        if let Err(error) = model.remove_instance(body, instance, &mut log) {
+            let _ = model.apply_edit(&log.inverse());
             return Err(EraseError::Model(error));
         }
     }
 
-    undo.push(label, edit);
+    undo.push(label, log);
     Ok(())
 }
