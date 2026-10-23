@@ -38,6 +38,9 @@ pub enum Tool {
     Tape,
     /// Click an edge, face or instance to erase it (`docs/specs/m3-app-erase.md`).
     Erase,
+    /// Paint Bucket: paint the clicked side or the selection; Alt samples
+    /// (`docs/specs/m4-app-paint.md`).
+    Paint,
 }
 
 /// A key for the editor (`docs/specs/m2-app-editor.md`).
@@ -160,7 +163,8 @@ pub fn drag(
             | Tool::Move
             | Tool::Scale
             | Tool::Tape
-            | Tool::Erase => None,
+            | Tool::Erase
+            | Tool::Paint => None,
         },
         Button::Right => None,
     }
@@ -193,6 +197,7 @@ pub fn key(key: &str, mods: Modifiers) -> Option<Action> {
         "S" if plain => Some(Action::SelectTool(Tool::Scale)),
         "T" if plain => Some(Action::SelectTool(Tool::Tape)),
         "E" if plain => Some(Action::SelectTool(Tool::Erase)),
+        "B" if plain => Some(Action::SelectTool(Tool::Paint)),
         "Delete" if plain => Some(Action::Erase),
         "N" if ctrl => Some(Action::New),
         "O" if ctrl => Some(Action::Open),

@@ -292,8 +292,9 @@ fn unlisted_keys_and_modifier_sets_do_nothing() {
 
 #[test]
 fn flip_is_menu_only_and_new_keys_do_not_shadow_old_ones() {
-    // No plain letter flips; every letter bound before M3 still does what it did.
-    for name in ["F", "X", "Y", "G", "B"] {
+    // No plain letter flips; every letter bound before M3 still does what it did. (B became
+    // the Paint Bucket in M4, `docs/specs/m4-app-paint.md`.)
+    for name in ["F", "X", "Y", "G"] {
         assert_eq!(key(name, NONE), None, "{name}");
     }
     for (name, tool) in [

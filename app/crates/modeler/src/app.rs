@@ -551,6 +551,7 @@ impl App {
                 | Tool::Scale
                 | Tool::Tape
                 | Tool::Erase
+                | Tool::Paint
         );
         if !drawing {
             return;
@@ -1006,6 +1007,7 @@ impl App {
                     Tool::Scale => "Scale",
                     Tool::Tape => "Tape Measure",
                     Tool::Erase => "Erase",
+                    Tool::Paint => "Paint Bucket",
                 });
             });
         });

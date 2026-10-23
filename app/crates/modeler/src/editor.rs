@@ -8,7 +8,7 @@
 //! Behaviour: `docs/specs/m2-app-editor.md`, shape tools: `docs/specs/m2-app-shapes.md`,
 //! Push/Pull: `docs/specs/m3-app-pushpull.md`, Rotate: `docs/specs/m3-app-rotate.md`,
 //! Move: `docs/specs/m3-app-move.md`, Scale and Flip: `docs/specs/m3-app-scale-flip.md`,
-//! Tape: `docs/specs/m3-app-tape.md`.
+//! Tape: `docs/specs/m3-app-tape.md`, Paint Bucket: `docs/specs/m4-app-paint.md`.
 
 use std::collections::BTreeSet;
 
@@ -16,7 +16,7 @@ use glam::{DMat4, DVec2, DVec3};
 use modeler_kernel::click::{self, ClickMods};
 use modeler_kernel::erase::erase;
 use modeler_kernel::infer::{self, Inference, Probe, Snap};
-use modeler_kernel::model::{BodyId, Model, UndoStack};
+use modeler_kernel::model::{BodyId, MaterialId, Model, UndoStack};
 use modeler_kernel::pushpull::push_pull;
 use modeler_kernel::select::{self, BoxMode, Entity};
 use modeler_kernel::tape::Guide;
@@ -197,6 +197,7 @@ pub struct Editor {
     tape: TapeTool,
     tape_point_guides: bool,
     scale_segments: Vec<(DVec3, DVec3)>,
+    material: Option<MaterialId>,
 }
 
 fn click_mods(mods: Modifiers) -> ClickMods {
@@ -337,6 +338,7 @@ impl Editor {
             tape: TapeTool::new(),
             tape_point_guides: false,
             scale_segments: Vec::new(),
+            material: None,
         }
     }
 
@@ -505,6 +507,7 @@ impl Editor {
             Tool::Scale => self.click_scale(model, view, cursor, mods),
             Tool::Tape => self.click_tape(model, view, cursor),
             Tool::Erase => self.click_erase(model, view, cursor),
+            Tool::Paint => self.click_paint(model, view, cursor, mods),
             Tool::Rectangle | Tool::Circle | Tool::Arc | Tool::Arc3 => {
                 let before = self.undo.undo_count();
                 let (origin, dir) = view.ray(cursor);
@@ -863,7 +866,7 @@ impl Editor {
                 };
                 Some(("Length", value.map(length).unwrap_or_default()))
             }
-            Tool::Orbit | Tool::Pan | Tool::Zoom | Tool::Select | Tool::Erase => None,
+            Tool::Orbit | Tool::Pan | Tool::Zoom | Tool::Select | Tool::Erase | Tool::Paint => None,
         }
     }
 
@@ -986,7 +989,9 @@ impl Editor {
                     _ => Vec::new(),
                 }
             }
-            Tool::Orbit | Tool::Pan | Tool::Zoom | Tool::Select | Tool::Erase => Vec::new(),
+            Tool::Orbit | Tool::Pan | Tool::Zoom | Tool::Select | Tool::Erase | Tool::Paint => {
+                Vec::new()
+            }
         }
     }
 
@@ -1007,7 +1012,8 @@ impl Editor {
             | Tool::Move
             | Tool::Scale
             | Tool::Tape
-            | Tool::Erase => None,
+            | Tool::Erase
+            | Tool::Paint => None,
         }
     }
 
@@ -1174,6 +1180,29 @@ impl Editor {
                 false
             }
         }
+    }
+
+    /// The Paint Bucket's current material (`None` = the default material).
+    pub fn material(&self) -> Option<MaterialId> {
+        self.material
+    }
+
+    /// Choose the Paint Bucket's material; kept across tool changes.
+    pub fn set_material(&mut self, material: Option<MaterialId>) {
+        self.material = material;
+    }
+
+    /// Paint Bucket click: paint the clicked side, or the selection when the clicked
+    /// entity is selected; Alt samples instead. Behaviour: `docs/specs/m4-app-paint.md`.
+    fn click_paint(
+        &mut self,
+        model: &mut Model,
+        view: &Viewport,
+        cursor: DVec2,
+        mods: Modifiers,
+    ) -> bool {
+        let _ = (model, view, cursor, mods);
+        unimplemented!()
     }
 
     /// Why the last input was refused, for the status bar.

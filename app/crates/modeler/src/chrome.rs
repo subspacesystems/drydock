@@ -24,7 +24,7 @@ pub struct MenuState<'a> {
 }
 
 /// The toolbar's buttons, top to bottom: tool and button label.
-pub const TOOL_BUTTONS: [(Tool, &str); 15] = [
+pub const TOOL_BUTTONS: [(Tool, &str); 16] = [
     (Tool::Select, "Select"),
     (Tool::Line, "Line"),
     (Tool::Rectangle, "Rectangle"),
@@ -37,6 +37,7 @@ pub const TOOL_BUTTONS: [(Tool, &str); 15] = [
     (Tool::Scale, "Scale"),
     (Tool::Tape, "Tape Measure"),
     (Tool::Erase, "Erase"),
+    (Tool::Paint, "Paint Bucket"),
     (Tool::Orbit, "Orbit"),
     (Tool::Pan, "Pan"),
     (Tool::Zoom, "Zoom"),
