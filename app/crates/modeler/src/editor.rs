@@ -1383,6 +1383,23 @@ impl Editor {
         self.hide_rest = hide;
     }
 
+    /// Make the selection (in the open body) into a new component, or a group when `group`,
+    /// named `name` (made unique; blank gets a default). One undo step "Make Component" /
+    /// "Make Group". The new instance becomes the selection. True when the model changed.
+    /// Behaviour: `docs/specs/m4-app-components.md`.
+    pub fn make_component(&mut self, model: &mut Model, name: &str, group: bool) -> bool {
+        let _ = (model, name, group);
+        unimplemented!("m4-app-components")
+    }
+
+    /// Explode the selected instance into the open body. One undo step "Explode"; the
+    /// entities that came out become the selection. True when the model changed.
+    /// Behaviour: `docs/specs/m4-app-components.md`.
+    pub fn explode_selection(&mut self, model: &mut Model) -> bool {
+        let _ = model;
+        unimplemented!("m4-app-components")
+    }
+
     /// The Paint Bucket's current material (`None` = the default material).
     pub fn material(&self) -> Option<MaterialId> {
         self.material
