@@ -123,6 +123,7 @@ Done when: `modeler` on the reference house model opens in under 5 s on modeler-
 | `m4-fix-refresh-speed` | renderer keeps loaded textures across uploads; opening/closing an instance only redraws (`Document::show_path`) | |
 | `m4-fix-materials-width` | long material names and paths don't widen the Materials column | |
 | `m4-orbit-pivot` | orbit about the model point under the cursor (`Camera::orbit_about`, `FlatScene::raycast`, `ViewState::pivot`) | |
+| `m4-orbit-ground` | orbit over empty space pivots on the ground (z = 0) under the cursor (`Camera::ground_pivot`); orchestrator wires the fallback after `m4-orbit-pivot` merges | |
 | `m4-dae-pinch-faces` | DAE import splits merged faces whose outline touches itself into a few clean faces instead of raw triangles (kernel import, orchestrator) | |
 | `m4-copy` | duplicate a selection with a transform into a body (sticky), and clipboard extract/insert (kernel, orchestrator) | |
 | `m4-app-move-copy` | Move tool: Ctrl toggles copy, the originals stay | `m4-copy` |
