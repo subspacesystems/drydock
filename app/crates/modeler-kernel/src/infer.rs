@@ -270,6 +270,7 @@ fn is_hidden(
 enum Owner {
     Root,
     Instance(InstanceId),
+    Rest,
 }
 
 impl Owner {
@@ -277,6 +278,7 @@ impl Owner {
         match self {
             Owner::Root => (0, 0),
             Owner::Instance(id) => (1, id.0),
+            Owner::Rest => (2, 0),
         }
     }
 }
@@ -653,13 +655,12 @@ fn cached_flat(model: &Model) -> Rc<Flat> {
     })
 }
 
-fn gather_flat_body(
+fn gather_own_geometry(
     model: &Model,
     body: BodyId,
     xform: DMat4,
     owner: Owner,
     context: u64,
-    path: &mut Vec<DefinitionId>,
     flat: &mut Flat,
 ) {
     let Some(b) = model.body(body) else {
@@ -730,6 +731,21 @@ fn gather_flat_body(
             touching,
         });
     }
+}
+
+fn gather_flat_body(
+    model: &Model,
+    body: BodyId,
+    xform: DMat4,
+    owner: Owner,
+    context: u64,
+    path: &mut Vec<DefinitionId>,
+    flat: &mut Flat,
+) {
+    gather_own_geometry(model, body, xform, owner, context, flat);
+    let Some(b) = model.body(body) else {
+        return;
+    };
 
     for (id, inst) in b.instances() {
         if path.contains(&inst.definition) {
@@ -739,6 +755,7 @@ fn gather_flat_body(
         let child_owner = match owner {
             Owner::Root => Owner::Instance(id),
             Owner::Instance(root) => Owner::Instance(root),
+            Owner::Rest => Owner::Rest,
         };
         let child_context = flat.next_context;
         flat.next_context += 1;
@@ -753,6 +770,125 @@ fn gather_flat_body(
         );
         path.pop();
     }
+}
+
+fn gather_flat_rest(
+    model: &Model,
+    body: BodyId,
+    xform: DMat4,
+    context: u64,
+    path: &mut Vec<DefinitionId>,
+    flat: &mut Flat,
+) {
+    gather_own_geometry(model, body, xform, Owner::Rest, context, flat);
+    let Some(b) = model.body(body) else {
+        return;
+    };
+    for (_, inst) in b.instances() {
+        if path.contains(&inst.definition) {
+            continue;
+        }
+        path.push(inst.definition);
+        let child_context = flat.next_context;
+        flat.next_context += 1;
+        gather_flat_rest(
+            model,
+            BodyId::Definition(inst.definition),
+            xform * inst.transform,
+            child_context,
+            path,
+            flat,
+        );
+        path.pop();
+    }
+}
+
+fn flatten_in(model: &Model, path: &EditPath, rest: bool) -> Option<Flat> {
+    let open_body = path.body(model)?;
+    let open_xform = path.transform(model)?;
+    let mut flat = Flat {
+        next_context: 1,
+        ..Flat::default()
+    };
+    let mut def_path = Vec::new();
+    gather_flat_body(
+        model,
+        open_body,
+        DMat4::IDENTITY,
+        Owner::Root,
+        0,
+        &mut def_path,
+        &mut flat,
+    );
+    if rest {
+        let to_local = open_xform.inverse();
+        if !to_local.is_finite() {
+            return None;
+        }
+        let mut body = BodyId::Root;
+        let mut world = DMat4::IDENTITY;
+        for &step in &path.steps {
+            let context = flat.next_context;
+            flat.next_context += 1;
+            gather_own_geometry(
+                model,
+                body,
+                to_local * world,
+                Owner::Rest,
+                context,
+                &mut flat,
+            );
+
+            let b = model.body(body)?;
+            for (id, inst) in b.instances() {
+                if id == step {
+                    continue;
+                }
+                let child_context = flat.next_context;
+                flat.next_context += 1;
+                gather_flat_rest(
+                    model,
+                    BodyId::Definition(inst.definition),
+                    to_local * world * inst.transform,
+                    child_context,
+                    &mut Vec::new(),
+                    &mut flat,
+                );
+            }
+            let instance = b.instance(step)?;
+            world *= instance.transform;
+            body = BodyId::Definition(instance.definition);
+        }
+    }
+    Some(flat)
+}
+
+struct CachedFlatIn {
+    key: (u64, u64, Vec<InstanceId>, bool),
+    flat: Rc<Flat>,
+}
+
+thread_local! {
+    static FLAT_IN_CACHE: RefCell<Option<CachedFlatIn>> = const { RefCell::new(None) };
+}
+
+fn cached_flat_in(model: &Model, path: &EditPath, rest: bool) -> Option<Rc<Flat>> {
+    let (id, revision) = model.cache_key();
+    let key = (id, revision, path.steps.clone(), rest);
+    FLAT_IN_CACHE.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        if let Some(cached) = cache.as_ref()
+            && cached.key == key
+        {
+            return Some(Rc::clone(&cached.flat));
+        }
+        let flat = Rc::new(flatten_in(model, path, rest)?);
+        *cache = Some(CachedFlatIn {
+            key,
+            flat: Rc::clone(&flat),
+        });
+        Some(flat)
+    })
 }
 
 fn flat_face_t(face: &FlatFace, origin: DVec3, d: DVec3) -> Option<f64> {
@@ -1030,11 +1166,13 @@ pub fn pick_model(model: &Model, probe: &Probe) -> Option<Entity> {
         return Some(match owner {
             Owner::Root => Entity::Edge(edge),
             Owner::Instance(id) => Entity::Instance(id),
+            Owner::Rest => return None,
         });
     }
     flat_ray_face(&flat, probe.origin, d).map(|(face, _)| match face.owner {
         Owner::Root => Entity::Face(face.id),
         Owner::Instance(id) => Entity::Instance(id),
+        Owner::Rest => Entity::Face(face.id),
     })
 }
 
@@ -1089,8 +1227,29 @@ pub fn infer_model(model: &Model, probe: &Probe) -> Option<Inference> {
 /// click outside the open instance). `None` when the path doesn't resolve or its transform
 /// can't be inverted.
 pub fn pick_in(model: &Model, path: &EditPath, rest: bool, probe: &Probe) -> Option<Entity> {
-    let _ = (model, path, rest, probe);
-    unimplemented!()
+    if path.is_root() {
+        return pick_model(model, probe);
+    }
+    open_transform(model, path)?;
+    let d = valid_probe(probe)?;
+    let flat = cached_flat_in(model, path, rest)?;
+    if let Some(Hit {
+        snap: Snap::OnEdge(edge),
+        owner,
+        ..
+    }) = flat_on_edge_best(&flat, probe, d)
+    {
+        return match owner {
+            Owner::Root => Some(Entity::Edge(edge)),
+            Owner::Instance(id) => Some(Entity::Instance(id)),
+            Owner::Rest => None,
+        };
+    }
+    flat_ray_face(&flat, probe.origin, d).and_then(|(face, _)| match face.owner {
+        Owner::Root => Some(Entity::Face(face.id)),
+        Owner::Instance(id) => Some(Entity::Instance(id)),
+        Owner::Rest => None,
+    })
 }
 
 /// Like [`infer_model`], for the body open at `path` (`docs/specs/m4-edit-path.md`). The probe
@@ -1099,6 +1258,53 @@ pub fn pick_in(model: &Model, path: &EditPath, rest: bool, probe: &Probe) -> Opt
 /// placed where it shows. `None` when the path doesn't resolve or its transform can't be
 /// inverted.
 pub fn infer_in(model: &Model, path: &EditPath, rest: bool, probe: &Probe) -> Option<Inference> {
-    let _ = (model, path, rest, probe);
-    unimplemented!()
+    if path.is_root() {
+        return infer_model(model, probe);
+    }
+    open_transform(model, path)?;
+    let d = valid_probe(probe)?;
+    let flat = cached_flat_in(model, path, rest)?;
+
+    if let (Some(anchor), Some(a)) = (probe.anchor, probe.lock.and_then(unit)) {
+        if let Some(hit) = flat_point_categories(&flat, probe, d) {
+            let point = anchor + a * ((hit.point - anchor).dot(a));
+            return Some(inference(probe, hit.snap, point));
+        }
+        let point = match line_param(anchor, a, probe.origin, d) {
+            Some(s) if d.cross(a).length() >= 1e-9 => anchor + a * s,
+            _ => anchor,
+        };
+        return Some(inference(probe, Snap::Along, point));
+    }
+
+    if let Some(hit) = flat_point_categories(&flat, probe, d)
+        .or_else(|| flat_on_edge_best(&flat, probe, d))
+        .or_else(|| flat_on_axis_best(&flat, probe, d))
+    {
+        return Some(inference(probe, hit.snap, hit.point));
+    }
+
+    if let Some((face, t)) = flat_ray_face(&flat, probe.origin, d) {
+        let point = probe.origin + d * t;
+        return Some(inference(probe, Snap::OnFace(face.id), point));
+    }
+
+    if let Some(point) = ground_point(probe, d) {
+        return Some(inference(probe, Snap::Ground, point));
+    }
+
+    None
+}
+
+/// The open body and its world transform, unless the path doesn't resolve or the transform
+/// can't be used to map between the open body and world coordinates.
+fn open_transform(model: &Model, path: &EditPath) -> Option<(BodyId, DMat4)> {
+    let body = path.body(model)?;
+    let transform = path.transform(model)?;
+    if !transform.to_cols_array().iter().all(|v| v.is_finite())
+        || transform.determinant().abs() < 1e-12
+    {
+        return None;
+    }
+    Some((body, transform))
 }
