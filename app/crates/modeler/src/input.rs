@@ -113,6 +113,9 @@ pub enum Action {
     MakeGroup,
     /// Explode the selected group or component (Edit menu).
     Explode,
+    /// Hide (or show again) the rest of the model while editing inside an instance
+    /// (View menu; `docs/specs/m4-app-edit-view.md`).
+    ToggleHideRest,
 }
 
 /// A mouse drag of `delta` pixels (screen space, y down) with `button` held.

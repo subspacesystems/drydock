@@ -42,6 +42,8 @@ pub enum Effect {
     },
     /// Explode the selected instance.
     Explode,
+    /// Flip the editor's hide-the-rest option.
+    ToggleHideRest,
 }
 
 /// The scene's bounding box in `modeler_view` terms (`None` for an empty scene).
@@ -114,6 +116,7 @@ impl ViewState {
             Action::MakeComponent => return Effect::MakeComponent { group: false },
             Action::MakeGroup => return Effect::MakeComponent { group: true },
             Action::Explode => return Effect::Explode,
+            Action::ToggleHideRest => return Effect::ToggleHideRest,
         }
         Effect::None
     }

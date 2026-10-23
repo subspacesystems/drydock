@@ -456,6 +456,7 @@ impl App {
             Effect::SaveAsDialog => self.open_save_dialog(),
             Effect::Edit(key) => self.edit(key, ctx, frame),
             Effect::About => self.about_open = true,
+            Effect::ToggleHideRest => unimplemented!("m4-app-edit-view"),
             Effect::MakeComponent { group } => {
                 self.name_prompt = Some(chrome::NamePrompt::new(group));
             }
@@ -1037,6 +1038,10 @@ impl App {
                     [modeler_kernel::select::Entity::Instance(_)]
                 )
             }),
+            hide_rest: self
+                .editor
+                .as_ref()
+                .is_some_and(|editor| editor.hide_rest()),
         }
     }
 

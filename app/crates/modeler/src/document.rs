@@ -7,7 +7,8 @@
 
 use std::path::{Path, PathBuf};
 
-use modeler_dae::{FlatScene, flatten, import_file, kernel_scene, to_kernel};
+use modeler_dae::{FlatScene, RestView, flatten, import_file, kernel_scene, to_kernel};
+use modeler_kernel::editpath::EditPath;
 use modeler_kernel::format::{self, FileError, ReadErrorKind};
 use modeler_kernel::model as km;
 
@@ -146,6 +147,14 @@ impl Document {
         self.scene = kernel_scene(kernel);
         self.stats = stats_from_scene(&self.scene, Some(kernel));
         self.modified = true;
+    }
+
+    /// Like `refresh`, but draws the scene for editing inside `path`: the rest of the model
+    /// as `rest` says (`modeler_dae::kernel_scene_editing`). At the root path it equals
+    /// `refresh`. Behaviour: `docs/specs/m4-app-edit-view.md`.
+    pub fn refresh_editing(&mut self, path: &EditPath, rest: RestView) {
+        let _ = (path, rest);
+        unimplemented!("m4-app-edit-view")
     }
 
     /// Record that the file on disk matches the model at undo-stack state `state`

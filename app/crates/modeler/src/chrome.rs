@@ -23,6 +23,9 @@ pub struct MenuState<'a> {
     pub has_selection: bool,
     /// Exactly one group or component is selected (Explode needs it).
     pub can_explode: bool,
+    /// The rest of the model is hidden while editing inside an instance (the View menu
+    /// item offers the opposite).
+    pub hide_rest: bool,
 }
 
 /// The name prompt shown before Make Component / Make Group.

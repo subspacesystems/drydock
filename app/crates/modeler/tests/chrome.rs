@@ -38,6 +38,7 @@ fn state() -> MenuState<'static> {
         parallel: false,
         has_selection: true,
         can_explode: false,
+        hide_rest: false,
     }
 }
 
