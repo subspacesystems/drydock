@@ -12,6 +12,7 @@ pub mod document;
 pub mod editor;
 pub mod hints;
 pub mod input;
+pub mod materials_panel;
 pub mod overlay;
 pub mod viewstate;
 
