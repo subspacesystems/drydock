@@ -163,6 +163,14 @@ impl Document {
         self.modified = true;
     }
 
+    /// Redraw `scene` for editing inside `path` after the open path changed without a
+    /// model edit: `stats` and `modified` stay as they are. Behaviour:
+    /// `docs/specs/m4-fix-refresh-speed.md`.
+    pub fn show_path(&mut self, path: &EditPath, rest: RestView) {
+        let _ = (path, rest);
+        unimplemented!()
+    }
+
     /// Record that the file on disk matches the model at undo-stack state `state`
     /// (`UndoStack::state`): sets `saved_state` and clears `modified`.
     pub fn mark_saved_at(&mut self, state: u64) {

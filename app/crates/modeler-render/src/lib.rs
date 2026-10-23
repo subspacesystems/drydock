@@ -463,6 +463,13 @@ impl Renderer {
         }
     }
 
+    /// How many times this renderer has tried to read a texture image file (decoded or
+    /// failed). Uploads reuse textures already loaded from an unchanged file. Behaviour:
+    /// `docs/specs/m4-fix-refresh-speed.md`.
+    pub fn texture_loads(&self) -> usize {
+        unimplemented!()
+    }
+
     /// Upload geometry, and load and upload each material's texture.
     pub fn upload(
         &self,
