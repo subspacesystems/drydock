@@ -180,8 +180,20 @@ impl Camera {
     /// `orbit`, and the eye and target turn with them about `pivot`, so the pivot keeps
     /// its place on screen. Behaviour: `docs/specs/m4-orbit-pivot.md`.
     pub fn orbit_about(&mut self, pivot: DVec3, dx: f64, dy: f64) {
-        let _ = (pivot, dx, dy);
-        unimplemented!()
+        if !pivot.is_finite() {
+            self.orbit(dx, dy);
+            return;
+        }
+        let target_before = self.target;
+        let yaw_before = self.yaw;
+        let pitch_before = self.pitch;
+        self.orbit(dx, dy);
+        let d_yaw = self.yaw - yaw_before;
+        let d_pitch = self.pitch - pitch_before;
+        let right = DVec3::new(-self.yaw.sin(), self.yaw.cos(), 0.0);
+        let rotation =
+            glam::DMat3::from_axis_angle(right, -d_pitch) * glam::DMat3::from_rotation_z(d_yaw);
+        self.target = pivot + rotation * (target_before - pivot);
     }
 
     /// Pan by a mouse drag of (dx, dy) pixels in a viewport `height_px` tall.

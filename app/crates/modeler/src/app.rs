@@ -674,6 +674,22 @@ impl App {
                 && let Some(origin) = press_origin.or(response.interact_pointer_pos())
             {
                 self.drag_start_ndc = ndc(origin);
+                let orbits = match button {
+                    Button::Middle => !mods.shift,
+                    Button::Left => self.view.tool == Tool::Orbit && !mods.shift,
+                    Button::Right => false,
+                };
+                if orbits {
+                    let view = EditorViewport {
+                        camera: self.view.camera,
+                        size_px: (f64::from(rect.width()), f64::from(rect.height())),
+                    };
+                    let (ray_origin, ray_dir) = view.ray(local(origin));
+                    self.view.pivot = self
+                        .model
+                        .as_ref()
+                        .and_then(|document| document.scene.raycast(ray_origin, ray_dir));
+                }
                 if egui_button == PointerButton::Primary {
                     // Only a Select drag is a box; an Orbit drag must not leave a start behind.
                     self.drag_start_px = (tool == Some(Tool::Select)).then(|| local(origin));
@@ -697,6 +713,9 @@ impl App {
                     self.apply(action, ctx, frame);
                 }
             }
+        }
+        if response.drag_stopped() {
+            self.view.pivot = None;
         }
         if let Some(cursor) = response.hover_pos() {
             for event in events {
