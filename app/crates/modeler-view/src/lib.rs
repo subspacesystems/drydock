@@ -176,6 +176,14 @@ impl Camera {
             .clamp(-std::f64::consts::FRAC_PI_2, std::f64::consts::FRAC_PI_2);
     }
 
+    /// Orbit about `pivot` by a mouse drag of (dx, dy) pixels: yaw and pitch change as in
+    /// `orbit`, and the eye and target turn with them about `pivot`, so the pivot keeps
+    /// its place on screen. Behaviour: `docs/specs/m4-orbit-pivot.md`.
+    pub fn orbit_about(&mut self, pivot: DVec3, dx: f64, dy: f64) {
+        let _ = (pivot, dx, dy);
+        unimplemented!()
+    }
+
     /// Pan by a mouse drag of (dx, dy) pixels in a viewport `height_px` tall.
     pub fn pan(&mut self, dx: f64, dy: f64, height_px: f64) {
         let (_, right, up) = self.basis();

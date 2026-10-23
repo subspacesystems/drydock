@@ -14,6 +14,9 @@ pub struct ViewState {
     pub tool: Tool,
     /// Bounds of the open model, if any.
     pub bounds: Option<Bounds>,
+    /// The point the current orbit drag turns about (what was under the cursor when the
+    /// drag started); `None` orbits about the camera target. `docs/specs/m4-orbit-pivot.md`.
+    pub pivot: Option<DVec3>,
 }
 
 /// What the caller must do after an action.
@@ -72,6 +75,7 @@ impl ViewState {
             camera: Camera::default(),
             tool: Tool::Orbit,
             bounds: None,
+            pivot: None,
         }
     }
 

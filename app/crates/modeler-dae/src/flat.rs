@@ -56,6 +56,14 @@ impl FlatScene {
     pub fn line_count(&self) -> usize {
         self.lines.iter().map(|l| l.positions.len() / 2).sum()
     }
+
+    /// The nearest point where the ray from `origin` along `dir` hits a triangle of the
+    /// scene (either side), in front of `origin`. Lines don't count. Behaviour:
+    /// `docs/specs/m4-orbit-pivot.md`.
+    pub fn raycast(&self, origin: DVec3, dir: DVec3) -> Option<DVec3> {
+        let _ = (origin, dir);
+        unimplemented!()
+    }
 }
 
 /// Expand every instance into world space.
