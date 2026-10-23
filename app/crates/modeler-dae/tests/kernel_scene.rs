@@ -93,7 +93,16 @@ impl Builder {
         back: Option<MaterialId>,
     ) {
         self.m
-            .set_face_materials(body, face, FaceMaterials { front, back }, &mut self.log)
+            .set_face_materials(
+                body,
+                face,
+                FaceMaterials {
+                    front,
+                    back,
+                    ..Default::default()
+                },
+                &mut self.log,
+            )
             .expect("face materials set");
     }
 

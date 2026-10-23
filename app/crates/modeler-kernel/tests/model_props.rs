@@ -120,7 +120,7 @@ fn run_op(m: &mut Model, op: &Op, draws: &mut u32, log: &mut ModelEdit) -> Resul
                 texture: None,
             });
             mat.color[0] += 0.125;
-            mat.texture = Some(format!("t{i}.png"));
+            mat.texture = Some(Texture::from(format!("t{i}.png").as_str()));
             m.set_material(id, mat, log)
         }
         Op::RemoveMaterial(i) => m.remove_material(pick_material(m, *i), log),
@@ -184,6 +184,7 @@ fn run_op(m: &mut Model, op: &Op, draws: &mut u32, log: &mut ModelEdit) -> Resul
             let fm = FaceMaterials {
                 front: front.map(|i| pick_material(m, i)),
                 back: back.map(|i| pick_material(m, i)),
+                ..Default::default()
             };
             m.set_face_materials(b, FaceId(*face), fm, log)
         }

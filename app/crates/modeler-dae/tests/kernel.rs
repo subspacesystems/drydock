@@ -352,6 +352,7 @@ fn twin_triangles_give_back_material() {
         FaceMaterials {
             front: Some(ids[0]),
             back: Some(ids[1]),
+            ..Default::default()
         }
     );
     assert!(normal(ctx, face).distance(DVec3::Z) < 1e-12);
@@ -574,7 +575,10 @@ fn materials_convert_in_order() {
     assert_eq!(mats.len(), 2);
     assert_eq!(mats[0].name, "Alpha");
     assert_eq!(mats[0].color, [0.25, 0.5, 0.75, 0.5]);
-    assert_eq!(mats[0].texture.as_deref(), Some("/x/model/wood.jpg"));
+    assert_eq!(
+        mats[0].texture.as_ref().map(|t| t.path.as_str()),
+        Some("/x/model/wood.jpg")
+    );
     assert_eq!(mats[1].name, "m-b");
     assert_eq!(mats[1].color, [0.1, 0.2, 0.3, 1.0]);
     assert_eq!(mats[1].texture, None);

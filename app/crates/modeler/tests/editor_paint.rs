@@ -180,10 +180,12 @@ fn on(side: Side, m: Option<MaterialId>) -> FaceMaterials {
         Side::Front => FaceMaterials {
             front: m,
             back: None,
+            ..Default::default()
         },
         Side::Back => FaceMaterials {
             front: None,
             back: m,
+            ..Default::default()
         },
     }
 }

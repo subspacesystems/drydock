@@ -88,7 +88,8 @@ fn paints_the_front_of_one_face() {
         fm(&model, faces[1]),
         FaceMaterials {
             front: Some(red),
-            back: None
+            back: None,
+            ..Default::default()
         }
     );
     assert_eq!(fm(&model, faces[0]), FaceMaterials::default());
@@ -125,7 +126,8 @@ fn painting_the_back_keeps_the_front() {
         fm(&model, faces[2]),
         FaceMaterials {
             front: Some(red),
-            back: Some(blue)
+            back: Some(blue),
+            ..Default::default()
         }
     );
     assert_eq!(undo.undo_count(), 2);
@@ -171,7 +173,8 @@ fn painting_none_clears_one_side() {
         fm(&model, faces[0]),
         FaceMaterials {
             front: None,
-            back: Some(blue)
+            back: Some(blue),
+            ..Default::default()
         }
     );
 }
@@ -517,7 +520,10 @@ fn create_material_uses_a_unique_name_and_one_step() {
     let stored = model.material(id).unwrap();
     assert_eq!(stored.name, "Glass 2");
     assert_eq!(stored.color, GLASS);
-    assert_eq!(stored.texture.as_deref(), Some("textures/glass.png"));
+    assert_eq!(
+        stored.texture.as_ref().map(|t| t.path.as_str()),
+        Some("textures/glass.png")
+    );
     assert_eq!(undo.undo_count(), 1);
     assert_eq!(undo.undo_label(), Some("New Material"));
     undo.undo(&mut model).unwrap();
@@ -778,7 +784,8 @@ fn purge_drops_paint_of_deleted_faces_and_undo_brings_it_back() {
         fm(&model, faces[1]),
         FaceMaterials {
             front: None,
-            back: Some(blue)
+            back: Some(blue),
+            ..Default::default()
         }
     );
     assert!(model.validate().is_empty());
@@ -790,7 +797,8 @@ fn purge_drops_paint_of_deleted_faces_and_undo_brings_it_back() {
         fm(&model, faces[1]),
         FaceMaterials {
             front: Some(red),
-            back: Some(blue)
+            back: Some(blue),
+            ..Default::default()
         }
     );
 }

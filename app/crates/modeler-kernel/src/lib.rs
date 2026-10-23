@@ -14,7 +14,7 @@
 //! `docs/specs/m3-move-merge.md` (sticky move), `docs/specs/m3-erase.md` (erase),
 //! `docs/specs/m4-paint.md` (paint and materials), `docs/specs/m4-make-component.md`
 //! (make component and group), `docs/specs/m4-explode.md` (explode), `docs/specs/m4-edit-path.md`
-//! (editing inside an instance).
+//! (editing inside an instance), `docs/specs/m4-texture-model.md` (texture size and placement).
 
 pub mod click;
 pub mod component;
@@ -34,6 +34,7 @@ pub mod shapes;
 pub mod sticky;
 pub mod tape;
 pub mod tess;
+pub mod texture;
 pub mod tools;
 pub mod topology;
 pub mod transform;

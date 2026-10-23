@@ -283,6 +283,7 @@ fn flip_keeps_each_faces_materials() {
             FaceMaterials {
                 front: Some(red),
                 back: None,
+                ..Default::default()
             },
             &mut edit,
         )
@@ -303,7 +304,8 @@ fn flip_keeps_each_faces_materials() {
         model.root().face_materials(nf),
         FaceMaterials {
             front: Some(red),
-            back: None
+            back: None,
+            ..Default::default()
         }
     );
     assert!(c.face_plane(nf).unwrap().normal.z > 0.99);
@@ -313,7 +315,8 @@ fn flip_keeps_each_faces_materials() {
         model.root().face_materials(f),
         FaceMaterials {
             front: Some(red),
-            back: None
+            back: None,
+            ..Default::default()
         }
     );
 }

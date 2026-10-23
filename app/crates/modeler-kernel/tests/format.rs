@@ -111,6 +111,7 @@ fn sample(stale: bool) -> Model {
         FaceMaterials {
             front: Some(brick),
             back: None,
+            ..Default::default()
         },
         &mut log,
     )
@@ -121,6 +122,7 @@ fn sample(stale: bool) -> Model {
         FaceMaterials {
             front: None,
             back: Some(glass),
+            ..Default::default()
         },
         &mut log,
     )
@@ -132,6 +134,7 @@ fn sample(stale: bool) -> Model {
             FaceMaterials {
                 front: Some(glass),
                 back: Some(glass),
+                ..Default::default()
             },
             &mut log,
         )
@@ -226,9 +229,10 @@ fn bad_field(body: &str) {
 // -- writer ------------------------------------------------------------------------------
 
 #[test]
-fn version_is_two() {
+fn version_is_at_least_two() {
     // Version 2 (m3-guides-model) adds guide records; files without guides still say 1.
-    assert_eq!(FORMAT_VERSION, 2);
+    // Version 3 (m4-texture-model) has its own test.
+    const { assert!(FORMAT_VERSION >= 2) };
 }
 
 #[test]
@@ -443,7 +447,11 @@ fn reads_bodies_in_any_order_and_definitions_late() {
     assert_eq!(inst.transform, DMat4::IDENTITY);
     assert_eq!(inst.name, "only");
     assert_eq!(
-        m.material(MaterialId(0)).unwrap().texture.as_deref(),
+        m.material(MaterialId(0))
+            .unwrap()
+            .texture
+            .as_ref()
+            .map(|t| t.path.as_str()),
         Some("t.png")
     );
     // The definition with no body section has an empty body.
@@ -533,7 +541,8 @@ fn paint_replaces_and_clears() {
         m.root().face_materials(FaceId(0)),
         FaceMaterials {
             front: None,
-            back: Some(MaterialId(1))
+            back: Some(MaterialId(1)),
+            ..Default::default()
         }
     );
     let text = format!("{H}{mats}body root\n{tri}paint 0 0 1\npaint 0 - -\nend\n");
@@ -559,7 +568,7 @@ fn reads_escapes() {
     let m = from_text(&text).unwrap();
     let mat = m.material(MaterialId(0)).unwrap();
     assert_eq!(mat.name, "A\u{1F600}é\t\\\"");
-    assert_eq!(mat.texture.as_deref(), Some("\n"));
+    assert_eq!(mat.texture.as_ref().map(|t| t.path.as_str()), Some("\n"));
 }
 
 #[test]
@@ -567,7 +576,11 @@ fn quoted_dash_is_a_texture_named_dash() {
     let text = format!("{H}material 0 1 1 1 1 \"m\" \"-\"\nend\n");
     let m = from_text(&text).unwrap();
     assert_eq!(
-        m.material(MaterialId(0)).unwrap().texture.as_deref(),
+        m.material(MaterialId(0))
+            .unwrap()
+            .texture
+            .as_ref()
+            .map(|t| t.path.as_str()),
         Some("-")
     );
     assert!(
@@ -601,9 +614,9 @@ fn not_a_model_file() {
 #[test]
 fn unsupported_version() {
     kind_at(
-        "modeler-model 3\nend\n",
+        "modeler-model 99\nend\n",
         1,
-        ReadErrorKind::UnsupportedVersion(3),
+        ReadErrorKind::UnsupportedVersion(99),
     );
     kind_at(
         "modeler-model 0\nend\n",

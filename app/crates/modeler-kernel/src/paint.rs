@@ -116,11 +116,11 @@ pub fn paint(
             let to = match side {
                 Side::Front => FaceMaterials {
                     front: material,
-                    back: from.back,
+                    ..from
                 },
                 Side::Back => FaceMaterials {
-                    front: from.front,
                     back: material,
+                    ..from
                 },
             };
             if to == from {

@@ -126,7 +126,7 @@ fn apply_op(m: &mut Model, op: &Op) {
                 Material {
                     name: name.clone(),
                     color: *color,
-                    texture: texture.clone(),
+                    texture: texture.as_deref().map(Texture::from),
                 },
                 &mut log,
             );
@@ -188,6 +188,7 @@ fn apply_op(m: &mut Model, op: &Op) {
             let fm = FaceMaterials {
                 front: front.and_then(|i| pick(&materials, i)),
                 back: back.and_then(|i| pick(&materials, i)),
+                ..Default::default()
             };
             m.set_face_materials(body, FaceId(*face), fm, &mut log)
                 .unwrap();

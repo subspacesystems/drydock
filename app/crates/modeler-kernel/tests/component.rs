@@ -443,6 +443,7 @@ fn face_materials_come_along() {
     let painted = FaceMaterials {
         front: Some(red),
         back: Some(blue),
+        ..Default::default()
     };
     model
         .set_face_materials(BodyId::Root, faces[1], painted, &mut log)

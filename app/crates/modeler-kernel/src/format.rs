@@ -15,7 +15,7 @@ use glam::DMat4;
 
 use crate::model::{
     Body, BodyId, DefinitionId, DefinitionInfo, FaceMaterials, Instance, InstanceId, Material,
-    MaterialId, Model, ModelError, ModelRecord,
+    MaterialId, Model, ModelError, ModelRecord, Texture,
 };
 use crate::tape::{Guide, GuideId};
 use crate::topology::{
@@ -234,7 +234,7 @@ pub fn to_text(model: &Model) -> Result<String, WriteError> {
         push_quoted(&mut out, &material.name);
         out.push(' ');
         match &material.texture {
-            Some(texture) => push_quoted(&mut out, texture),
+            Some(texture) => push_quoted(&mut out, &texture.path),
             None => out.push('-'),
         }
         out.push('\n');
@@ -458,7 +458,7 @@ fn apply_line(
             ];
             let name = quoted(&tokens[6])?.to_string();
             let texture = match &tokens[7] {
-                Token::Quoted(text) => Some(text.clone()),
+                Token::Quoted(text) => Some(Texture::from(text.as_str())),
                 Token::Bare(text) if text == "-" => None,
                 Token::Bare(_) => return Err(ReadErrorKind::BadField),
             };
@@ -593,7 +593,11 @@ fn apply_line(
                     body,
                     face,
                     from,
-                    to: FaceMaterials { front, back },
+                    to: FaceMaterials {
+                        front,
+                        back,
+                        ..from
+                    },
                 })
                 .map_err(rejected)?;
             Ok(false)

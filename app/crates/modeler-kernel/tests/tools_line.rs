@@ -97,6 +97,7 @@ impl World {
         let fm = FaceMaterials {
             front: Some(red),
             back: Some(blue),
+            ..Default::default()
         };
         self.model
             .set_face_materials(self.body, f, fm, &mut log)

@@ -264,6 +264,7 @@ fn group_definition_goes_away() {
             FaceMaterials {
                 front: Some(red),
                 back: None,
+                ..Default::default()
             },
             &mut edit,
         )
@@ -355,6 +356,7 @@ fn mirrored_instance_keeps_painted_sides() {
             FaceMaterials {
                 front: Some(red),
                 back: Some(blue),
+                ..Default::default()
             },
             &mut edit,
         )
@@ -371,6 +373,7 @@ fn mirrored_instance_keeps_painted_sides() {
         FaceMaterials {
             front: Some(red),
             back: Some(blue),
+            ..Default::default()
         }
     );
 }
@@ -389,6 +392,7 @@ fn face_materials_come_along_and_the_instance_material_fills_defaults() {
             FaceMaterials {
                 front: Some(red),
                 back: None,
+                ..Default::default()
             },
             &mut edit,
         )
@@ -407,6 +411,7 @@ fn face_materials_come_along_and_the_instance_material_fills_defaults() {
         FaceMaterials {
             front: Some(red),
             back: Some(blue),
+            ..Default::default()
         }
     );
     let bottom = face_with_centroid(&model, BodyId::Root, v(0.5, 0.5, 0.0));
@@ -415,6 +420,7 @@ fn face_materials_come_along_and_the_instance_material_fills_defaults() {
         FaceMaterials {
             front: Some(blue),
             back: Some(blue),
+            ..Default::default()
         }
     );
 }
@@ -710,6 +716,7 @@ fn box_dropped_on_a_painted_face_keeps_both_materials() {
             FaceMaterials {
                 front: Some(green),
                 back: None,
+                ..Default::default()
             },
             &mut edit,
         )
@@ -722,6 +729,7 @@ fn box_dropped_on_a_painted_face_keeps_both_materials() {
             FaceMaterials {
                 front: Some(red),
                 back: None,
+                ..Default::default()
             },
             &mut edit,
         )

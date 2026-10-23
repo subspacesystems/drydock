@@ -99,6 +99,8 @@ fn swap_materials(materials: FaceMaterials) -> FaceMaterials {
     FaceMaterials {
         front: materials.back,
         back: materials.front,
+        front_map: materials.back_map,
+        back_map: materials.front_map,
     }
 }
 
@@ -257,6 +259,7 @@ fn explode_inner(
                     FaceMaterials {
                         front: materials.front.or(material),
                         back: materials.back.or(material),
+                        ..materials
                     },
                 )
             })

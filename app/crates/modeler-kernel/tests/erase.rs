@@ -177,6 +177,7 @@ fn erasing_a_face_keeps_its_material_for_undo() {
     let paint = FaceMaterials {
         front: Some(red),
         back: None,
+        ..Default::default()
     };
     model
         .set_face_materials(BodyId::Root, f[2], paint, &mut edit)

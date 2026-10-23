@@ -37,6 +37,7 @@ fn mats(front: u64, back: u64) -> FaceMaterials {
     FaceMaterials {
         front: Some(MaterialId(front)),
         back: Some(MaterialId(back)),
+        ..Default::default()
     }
 }
 

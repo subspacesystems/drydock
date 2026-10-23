@@ -10,9 +10,10 @@
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use glam::DMat4;
+use glam::{DMat4, DVec2};
 
 use crate::tape::{Guide, GuideId, Guides};
+use crate::texture::TextureMap;
 use crate::topology::{Context, Edit, FaceId, Record, TopoError, Violation};
 
 /// A good guide has only finite numbers and, for a line, a unit-length direction.
@@ -46,8 +47,33 @@ pub struct Material {
     pub name: String,
     /// sRGB color, straight alpha; alpha is the opacity (1 = opaque).
     pub color: [f32; 4],
-    /// Image file of the texture, if any, as a path relative to the model file.
-    pub texture: Option<String>,
+    /// The texture image, if any.
+    pub texture: Option<Texture>,
+}
+
+/// A material's texture image and its size in the model.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Texture {
+    /// Image file, as a path relative to the model file.
+    pub path: String,
+    /// Width and height in meters that one copy of the image covers; both finite and > 0.
+    pub size: DVec2,
+}
+
+impl Texture {
+    pub fn new(path: &str, size: DVec2) -> Texture {
+        Texture {
+            path: path.to_string(),
+            size,
+        }
+    }
+}
+
+/// A texture of `path` covering 1 m by 1 m.
+impl From<&str> for Texture {
+    fn from(path: &str) -> Texture {
+        Texture::new(path, DVec2::ONE)
+    }
 }
 
 impl Material {
@@ -61,11 +87,15 @@ impl Material {
     }
 }
 
-/// The materials painted on the two sides of a face. `None` is the default material.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+/// The materials painted on the two sides of a face, and how a texture lies on each side.
+/// `None` is the default material, and for a map the default placement
+/// (`docs/specs/m4-texture-model.md`).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct FaceMaterials {
     pub front: Option<MaterialId>,
     pub back: Option<MaterialId>,
+    pub front_map: Option<TextureMap>,
+    pub back_map: Option<TextureMap>,
 }
 
 /// A placed copy of a definition's body.
@@ -278,6 +308,10 @@ pub enum ModelError {
     MissingGuide(BodyId, GuideId),
     /// A guide with a non-finite number, or a guide line whose direction isn't unit length.
     BadGuide,
+    /// A material's texture size has a non-finite or non-positive entry.
+    BadTexture,
+    /// A face's texture map has a non-finite entry.
+    BadTextureMap,
 }
 
 /// A broken model invariant found by `Model::validate`.

@@ -236,6 +236,7 @@ fn material_in_use_by_instance_or_face_entry() {
     let fm = FaceMaterials {
         front: None,
         back: Some(b),
+        ..Default::default()
     };
     m.set_face_materials(body(d), FaceId(42), fm, &mut log)
         .unwrap();
@@ -346,6 +347,7 @@ fn definition_errors() {
     let fm = FaceMaterials {
         front: Some(a),
         back: None,
+        ..Default::default()
     };
     m.set_face_materials(body(e), FaceId(0), fm, &mut log)
         .unwrap();
@@ -568,6 +570,7 @@ fn face_materials_set_and_clear() {
     let fm = FaceMaterials {
         front: Some(a),
         back: Some(b),
+        ..Default::default()
     };
     m.set_face_materials(BodyId::Root, f, fm, &mut log).unwrap();
     assert_eq!(m.root().face_materials(f), fm);
@@ -604,6 +607,7 @@ fn face_material_errors() {
     let fm = FaceMaterials {
         front: Some(a),
         back: None,
+        ..Default::default()
     };
     assert_eq!(
         m.set_face_materials(nowhere, FaceId(0), fm, &mut log),
@@ -612,6 +616,7 @@ fn face_material_errors() {
     let bad = FaceMaterials {
         front: Some(MaterialId(7)),
         back: Some(MaterialId(8)),
+        ..Default::default()
     };
     assert_eq!(
         m.set_face_materials(BodyId::Root, FaceId(0), bad, &mut log),
@@ -620,6 +625,7 @@ fn face_material_errors() {
     let bad_back = FaceMaterials {
         front: Some(a),
         back: Some(MaterialId(8)),
+        ..Default::default()
     };
     assert_eq!(
         m.set_face_materials(BodyId::Root, FaceId(0), bad_back, &mut log),
@@ -647,6 +653,7 @@ fn paint_survives_removing_and_restoring_a_face() {
     let fm = FaceMaterials {
         front: Some(a),
         back: None,
+        ..Default::default()
     };
     m.set_face_materials(BodyId::Root, f, fm, &mut log).unwrap();
     let painted = m.clone();
@@ -740,6 +747,7 @@ fn record_inverses() {
     let fm = FaceMaterials {
         front: Some(MaterialId(1)),
         back: None,
+        ..Default::default()
     };
     let pairs = [
         (
@@ -863,6 +871,7 @@ fn apply_edit_rolls_back_on_error() {
                 to: FaceMaterials {
                     front: Some(MaterialId(9)),
                     back: None,
+                    ..Default::default()
                 },
             },
         ],
@@ -966,6 +975,7 @@ fn undo_stack_walks_back_and_forth() {
         FaceMaterials {
             front: Some(a),
             back: None,
+            ..Default::default()
         },
         &mut log,
     )

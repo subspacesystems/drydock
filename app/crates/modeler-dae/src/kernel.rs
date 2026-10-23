@@ -47,7 +47,10 @@ pub fn to_kernel(model: &Model) -> Result<km::Model, ConvertError> {
             km::Material {
                 name,
                 color: [m.color[0], m.color[1], m.color[2], m.opacity],
-                texture: m.texture.as_ref().map(|p| p.to_string_lossy().into_owned()),
+                texture: m
+                    .texture
+                    .as_ref()
+                    .map(|p| km::Texture::from(p.to_string_lossy().as_ref())),
             },
             &mut cv.log,
         );
@@ -232,7 +235,7 @@ impl Conv<'_> {
                 s,
                 fm: km::FaceMaterials {
                     front: mat,
-                    back: None,
+                    ..Default::default()
                 },
                 twinned: false,
             });

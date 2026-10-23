@@ -78,8 +78,8 @@ end
 ";
 
 #[test]
-fn version_constant_is_two() {
-    assert_eq!(FORMAT_VERSION, 2);
+fn version_constant_is_at_least_two() {
+    const { assert!(FORMAT_VERSION >= 2) };
 }
 
 #[test]
@@ -171,7 +171,7 @@ fn reads_both_versions() {
     let v1 = "modeler-model 1\nbody root\nvertex 0 1 2 3\nend\n";
     let v2 = "modeler-model 2\nbody root\nvertex 0 1 2 3\nend\n";
     assert_eq!(from_text(v1).unwrap(), from_text(v2).unwrap());
-    for v in [0, 3, 99] {
+    for v in [0, 99] {
         kind_at(
             &format!("modeler-model {v}\nend\n"),
             1,
