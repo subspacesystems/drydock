@@ -170,11 +170,7 @@ impl Document {
             return Err(file_error(&self.path, "nothing to save".to_owned()));
         };
         let folder = target.parent().unwrap_or(Path::new(""));
-        let model = if self.kind == FileKind::Dae {
-            kernel.clone()
-        } else {
-            model_for_file(kernel, folder)
-        };
+        let model = model_for_file(kernel, folder);
         format::save(&model, &target).map_err(|err| file_format_error(&target, err))?;
         self.path = target.clone();
         self.kind = FileKind::Native;
