@@ -292,6 +292,16 @@ pub fn menu_bar(ui: &mut eframe::egui::Ui, state: &MenuState<'_>) -> Option<Acti
                     ui.close();
                 }
             }
+            ui.separator();
+            let label = if state.hide_rest {
+                "Show Rest of Model"
+            } else {
+                "Hide Rest of Model"
+            };
+            if ui.button(label).clicked() {
+                chosen = Some(Action::ToggleHideRest);
+                ui.close();
+            }
         });
         ui.menu_button("Help", |ui| {
             if ui.button("About modeler").clicked() {

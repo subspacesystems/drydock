@@ -7,7 +7,9 @@
 
 use std::path::{Path, PathBuf};
 
-use modeler_dae::{FlatScene, RestView, flatten, import_file, kernel_scene, to_kernel};
+use modeler_dae::{
+    FlatScene, RestView, flatten, import_file, kernel_scene, kernel_scene_editing, to_kernel,
+};
 use modeler_kernel::editpath::EditPath;
 use modeler_kernel::format::{self, FileError, ReadErrorKind};
 use modeler_kernel::model as km;
@@ -153,8 +155,12 @@ impl Document {
     /// as `rest` says (`modeler_dae::kernel_scene_editing`). At the root path it equals
     /// `refresh`. Behaviour: `docs/specs/m4-app-edit-view.md`.
     pub fn refresh_editing(&mut self, path: &EditPath, rest: RestView) {
-        let _ = (path, rest);
-        unimplemented!("m4-app-edit-view")
+        let Some(kernel) = &self.kernel else {
+            return;
+        };
+        self.scene = kernel_scene_editing(kernel, path, rest);
+        self.stats = stats_from_scene(&kernel_scene(kernel), Some(kernel));
+        self.modified = true;
     }
 
     /// Record that the file on disk matches the model at undo-stack state `state`
@@ -255,10 +261,24 @@ fn stats_from_scene(scene: &FlatScene, kernel: Option<&km::Model>) -> Stats {
         Some(model) => {
             let mut faces = model.root().geometry().face_count();
             let mut edges = model.root().geometry().edge_count();
-            for (id, _) in model.definitions() {
+            let mut reachable = std::collections::BTreeSet::new();
+            let mut stack: Vec<km::DefinitionId> = Vec::new();
+            let push_instances =
+                |body: &km::Body,
+                 stack: &mut Vec<km::DefinitionId>,
+                 reachable: &mut std::collections::BTreeSet<_>| {
+                    for (_, instance) in body.instances() {
+                        if reachable.insert(instance.definition) {
+                            stack.push(instance.definition);
+                        }
+                    }
+                };
+            push_instances(model.root(), &mut stack, &mut reachable);
+            while let Some(id) = stack.pop() {
                 if let Some(body) = model.body(km::BodyId::Definition(id)) {
                     faces += body.geometry().face_count();
                     edges += body.geometry().edge_count();
+                    push_instances(body, &mut stack, &mut reachable);
                 }
             }
             (faces, edges)
