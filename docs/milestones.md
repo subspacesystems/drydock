@@ -86,6 +86,10 @@ Done when: `modeler` on the reference house model opens in under 5 s on modeler-
 | `m3-ui-keys` | Keys P/M/Q/S/T for the new tools; projection toggle on Shift+P; `Action::Flip` | `m3-app-tape` |
 | `m3-ui-overlay` | Pure overlay primitives for the M3 tools (face highlight, scale handles, protractor, guides) | `m3-ui-keys` |
 | `m3-app-ui` | Window wiring for the M3 tools: toolbar, View/Edit menus (projection, flip), pointer events, modifiers, overlays painted; egui_kittest tests | `m3-ui-keys`, `m3-ui-overlay` |
+| `m3-erase` | Erase in the kernel (`erase.rs`): selected edges, faces and instances deleted, edges that leave faces open take them along, one undo step (kernel, orchestrator) | |
+| `m3-app-erase` | Del and Backspace erase the selection, Erase tool in the sidebar, Edit menu item | `m3-erase`, `m3-app-ui` |
+| `m3-about` | Help > About with the git hash and version (build.rs embeds it) | `m3-app-ui` |
+| `m3-sel-look` | Selected faces show as a tint only, no outline; selected edges keep the highlight | `m3-app-ui` |
 
 - Push/Pull with typed distance; extrudes faces, creating side faces.
 - Move (points, edges, faces, selection; with inference and typed distance; copy with modifier).
