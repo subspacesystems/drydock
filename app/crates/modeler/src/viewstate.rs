@@ -32,6 +32,8 @@ pub enum Effect {
     Edit(EditKey),
     /// Flip the selection about an axis (0 red, 1 green, 2 blue).
     Flip(usize),
+    /// Erase the selection.
+    Erase,
     /// Show the About window.
     About,
 }
@@ -101,6 +103,7 @@ impl ViewState {
             Action::SaveAs => return Effect::SaveAsDialog,
             Action::Edit(key) => return Effect::Edit(key),
             Action::Flip(axis) => return Effect::Flip(axis),
+            Action::Erase => return Effect::Erase,
             Action::About => return Effect::About,
         }
         Effect::None

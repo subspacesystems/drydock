@@ -503,6 +503,7 @@ impl Editor {
             Tool::Move => self.click_move(model, view, cursor),
             Tool::Scale => self.click_scale(model, view, cursor, mods),
             Tool::Tape => self.click_tape(model, view, cursor),
+            Tool::Erase => self.click_erase(model, view, cursor),
             Tool::Rectangle | Tool::Circle | Tool::Arc | Tool::Arc3 => {
                 let before = self.undo.undo_count();
                 let (origin, dir) = view.ray(cursor);
@@ -854,7 +855,7 @@ impl Editor {
                 };
                 Some(("Length", value.map(length).unwrap_or_default()))
             }
-            Tool::Orbit | Tool::Pan | Tool::Zoom | Tool::Select => None,
+            Tool::Orbit | Tool::Pan | Tool::Zoom | Tool::Select | Tool::Erase => None,
         }
     }
 
@@ -977,7 +978,7 @@ impl Editor {
                     _ => Vec::new(),
                 }
             }
-            Tool::Orbit | Tool::Pan | Tool::Zoom | Tool::Select => Vec::new(),
+            Tool::Orbit | Tool::Pan | Tool::Zoom | Tool::Select | Tool::Erase => Vec::new(),
         }
     }
 
@@ -997,7 +998,8 @@ impl Editor {
             | Tool::PushPull
             | Tool::Move
             | Tool::Scale
-            | Tool::Tape => None,
+            | Tool::Tape
+            | Tool::Erase => None,
         }
     }
 
@@ -1111,6 +1113,19 @@ impl Editor {
                 false
             }
         }
+    }
+
+    /// Erase the selection (one undo step "Erase"). True when the model changed.
+    /// Behaviour: `docs/specs/m3-app-erase.md`.
+    pub fn erase_selection(&mut self, model: &mut Model) -> bool {
+        let _ = model;
+        unimplemented!("m3-app-erase")
+    }
+
+    /// Erase tool: erase the entity under the cursor.
+    fn click_erase(&mut self, model: &mut Model, view: &Viewport, cursor: DVec2) -> bool {
+        let _ = (model, view, cursor);
+        unimplemented!("m3-app-erase")
     }
 
     /// Why the last input was refused, for the status bar.

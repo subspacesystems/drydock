@@ -19,12 +19,12 @@ pub struct MenuState<'a> {
     pub redo: Option<&'a str>,
     /// The camera is in parallel projection.
     pub parallel: bool,
-    /// Something is selected (Flip needs it).
+    /// Something is selected (Flip and Erase need it).
     pub has_selection: bool,
 }
 
 /// The toolbar's buttons, top to bottom: tool and button label.
-pub const TOOL_BUTTONS: [(Tool, &str); 14] = [
+pub const TOOL_BUTTONS: [(Tool, &str); 15] = [
     (Tool::Select, "Select"),
     (Tool::Line, "Line"),
     (Tool::Rectangle, "Rectangle"),
@@ -36,6 +36,7 @@ pub const TOOL_BUTTONS: [(Tool, &str); 14] = [
     (Tool::Rotate, "Rotate"),
     (Tool::Scale, "Scale"),
     (Tool::Tape, "Tape Measure"),
+    (Tool::Erase, "Erase"),
     (Tool::Orbit, "Orbit"),
     (Tool::Pan, "Pan"),
     (Tool::Zoom, "Zoom"),
@@ -129,6 +130,17 @@ pub fn menu_bar(ui: &mut eframe::egui::Ui, state: &MenuState<'_>) -> Option<Acti
                 .clicked()
             {
                 chosen = Some(Action::Edit(EditKey::Redo));
+                ui.close();
+            }
+            ui.separator();
+            if ui
+                .add_enabled(
+                    state.has_selection,
+                    eframe::egui::Button::new("Erase    Delete"),
+                )
+                .clicked()
+            {
+                chosen = Some(Action::Erase);
                 ui.close();
             }
             ui.separator();

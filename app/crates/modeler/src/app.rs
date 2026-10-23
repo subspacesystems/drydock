@@ -370,6 +370,20 @@ impl App {
             Effect::SaveAsDialog => self.open_save_dialog(),
             Effect::Edit(key) => self.edit(key, ctx, frame),
             Effect::About => self.about_open = true,
+            Effect::Erase => {
+                let changed =
+                    if let (Some(editor), Some(document)) = (&mut self.editor, &mut self.model) {
+                        match document.kernel.as_mut() {
+                            Some(model) => editor.erase_selection(model),
+                            None => false,
+                        }
+                    } else {
+                        false
+                    };
+                if changed {
+                    self.refresh_document(ctx, frame);
+                }
+            }
             Effect::Flip(axis) => {
                 let changed =
                     if let (Some(editor), Some(document)) = (&mut self.editor, &mut self.model) {
@@ -536,6 +550,7 @@ impl App {
                 | Tool::Move
                 | Tool::Scale
                 | Tool::Tape
+                | Tool::Erase
         );
         if !drawing {
             return;
@@ -990,6 +1005,7 @@ impl App {
                     Tool::Move => "Move",
                     Tool::Scale => "Scale",
                     Tool::Tape => "Tape Measure",
+                    Tool::Erase => "Erase",
                 });
             });
         });

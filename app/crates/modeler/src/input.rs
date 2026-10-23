@@ -36,6 +36,8 @@ pub enum Tool {
     Scale,
     /// Measure distances and leave guides (`docs/specs/m3-app-tape.md`).
     Tape,
+    /// Click an edge, face or instance to erase it (`docs/specs/m3-app-erase.md`).
+    Erase,
 }
 
 /// A key for the editor (`docs/specs/m2-app-editor.md`).
@@ -97,6 +99,8 @@ pub enum Action {
     /// Mirror the selection about the red (0), green (1) or blue (2) axis through its
     /// box center (menu only; `docs/specs/m3-ui-keys.md`).
     Flip(usize),
+    /// Erase the selection (Delete key, Edit menu; `docs/specs/m3-app-erase.md`).
+    Erase,
     /// Show the About window (Help menu).
     About,
 }
@@ -155,7 +159,8 @@ pub fn drag(
             | Tool::Rotate
             | Tool::Move
             | Tool::Scale
-            | Tool::Tape => None,
+            | Tool::Tape
+            | Tool::Erase => None,
         },
         Button::Right => None,
     }
@@ -187,6 +192,8 @@ pub fn key(key: &str, mods: Modifiers) -> Option<Action> {
         "Q" if plain => Some(Action::SelectTool(Tool::Rotate)),
         "S" if plain => Some(Action::SelectTool(Tool::Scale)),
         "T" if plain => Some(Action::SelectTool(Tool::Tape)),
+        "E" if plain => Some(Action::SelectTool(Tool::Erase)),
+        "Delete" if plain => Some(Action::Erase),
         "N" if ctrl => Some(Action::New),
         "O" if ctrl => Some(Action::Open),
         "S" if ctrl => Some(Action::Save),
