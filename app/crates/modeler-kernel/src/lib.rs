@@ -11,7 +11,8 @@
 //! (click modifiers), `docs/specs/m2-inference.md` (snaps and picking),
 //! `docs/specs/m2-tool-line.md` (drawing tools), `docs/specs/m3-transform.md` (move, rotate, scale, flip),
 //! `docs/specs/m3-tape.md` (tape measure and guides), `docs/specs/m3-pushpull.md` (push/pull),
-//! `docs/specs/m3-move-merge.md` (sticky move), `docs/specs/m3-erase.md` (erase).
+//! `docs/specs/m3-move-merge.md` (sticky move), `docs/specs/m3-erase.md` (erase),
+//! `docs/specs/m4-paint.md` (paint and materials).
 
 pub mod click;
 pub mod erase;
@@ -21,6 +22,7 @@ pub mod geom;
 pub mod infer;
 pub mod model;
 pub mod movemerge;
+pub mod paint;
 pub mod pushpull;
 pub mod select;
 pub mod shapes;

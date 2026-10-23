@@ -50,6 +50,17 @@ pub struct Material {
     pub texture: Option<String>,
 }
 
+impl Material {
+    /// A plain color material without a texture.
+    pub fn new(name: &str, color: [f32; 4]) -> Material {
+        Material {
+            name: name.to_string(),
+            color,
+            texture: None,
+        }
+    }
+}
+
 /// The materials painted on the two sides of a face. `None` is the default material.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct FaceMaterials {
