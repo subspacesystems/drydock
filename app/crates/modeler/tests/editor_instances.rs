@@ -118,11 +118,11 @@ fn clicking_empty_space_clears_the_selection() {
 }
 
 #[test]
-fn double_and_triple_click_keep_the_instance_selected() {
+fn a_triple_click_keeps_the_instance_selected() {
     let (mut model, i, mut editor, view) = world();
     editor.set_tool(Tool::Select);
     let c = px(&view, v(8.0, 2.0, 0.0));
-    for count in [1, 2, 3] {
+    for count in [1, 3] {
         editor.click(&mut model, &view, c, NONE, count);
         assert_eq!(editor.selection(), &[Entity::Instance(i)], "click {count}");
     }

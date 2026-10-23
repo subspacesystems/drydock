@@ -1,4 +1,4 @@
-# Native model file, version 2
+# Native model file, version 3
 
 The native file stores a whole `Model` (`modeler-kernel`, `src/model.rs`): materials,
 definitions, and for the root and every definition its geometry (vertices, edges, faces),
@@ -32,13 +32,15 @@ Then, one per line:
 
 | Record | Meaning |
 |---|---|
-| `material <id> <r> <g> <b> <a> <name> <texture>` | sRGB color with straight alpha (alpha is opacity); `name` is a string; `texture` is a string (image path relative to the model file) or `-` |
+| `material <id> <r> <g> <b> <a> <name> <texture>` | sRGB color with straight alpha (alpha is opacity); `name` is a string; `texture` is a string (image path relative to the model file) or `-`; in version 3 a texture is followed by its width and height in meters |
+| `material <id> <r> <g> <b> <a> <name> <texture> <width> <height>` | (version 3) the material's texture and the size one copy of it covers, in meters; both finite and `> 0` |
 | `definition <id> <kind> <name>` | `kind` is `component` or `group`; the new definition's body is empty |
 | `body root` / `body <definition id>` | the following geometry, paint and instance records belong to this body; each body appears at most once |
 | `vertex <id> <x> <y> <z>` | a vertex |
 | `edge <id> <v1> <v2>` | an edge from `v1` to `v2` (order kept) |
 | `face <id> <loop> [\| <loop>]...` | the first loop is the outer loop, each one after a `\|` token is a hole; a loop is a list of edge uses `+<edge id>` (forward) or `-<edge id>` (reversed), possibly empty |
 | `paint <face id> <front> <back>` | the face's materials, each a material id or `-` |
+| `texmap <face id> <side> <u.x> <u.y> <u.z> <u.w> <v.x> <v.y> <v.z> <v.w>` | (version 3) the texture map of one side of the face in the current body; `side` is `front` or `back`; the face must exist |
 | `instance <id> <definition> <material> <m0> ... <m15> <name>` | a placed definition; `material` is an id or `-`; the 16 numbers are the transform in column-major order (`DMat4::to_cols_array`); `name` is a string |
 | `guide <id> line <px> <py> <pz> <dx> <dy> <dz>` | (version 2) an infinite guide line through `p` with unit direction `d` |
 | `guide <id> point <x> <y> <z>` | (version 2) a guide point |
@@ -46,22 +48,32 @@ Then, one per line:
 
 Every record is applied as soon as it is read, so everything it names must already exist
 (the material for a paint or instance, the definition for a `body` or an instance, the
-vertices of an edge, the edges of a face, the face of a paint). Ids keep their values.
-A `guide` record in a version 1 file is an unknown record.
+vertices of an edge, the edges of a face, the face of a paint or texmap). Ids keep their
+values. A `guide` record in a version 1 file is an unknown record; a `texmap` record in a
+version 1 or 2 file is too.
+
+In versions 1 and 2 the material record has exactly 8 tokens and a texture's size reads as
+`1` by `1` meters. In version 3 a material with a texture has exactly 10 tokens; without
+one it has 8 and the texture token is `-`. Any other shape is a bad field. A size the
+model refuses (non-finite or not positive) is rejected.
 
 ## What writers produce
 Exactly this order, one space between tokens, every line ending in `\n`:
-1. the header, with the lowest version that holds the model: `1` when no body has guides,
-   else `2`;
-2. `material` records, ascending id;
+1. the header, with the lowest version that holds the model: `3` when a material's texture
+   size isn't exactly `1` by `1`, or an existing face has a stored texture map; else `2`
+   when a body has guides; else `1`;
+2. `material` records, ascending id; in version 3 a texture also writes its width and
+   height;
 3. `definition` records, ascending id;
 4. `body root`, then `body <id>` for every definition in ascending id (written even when
    the body is empty); inside each body: `vertex` records, then `edge`, `face`, `paint`,
-   `instance` and `guide` records, each in ascending id;
+   `texmap`, `instance` and `guide` records, each in ascending id; `texmap` is written for
+   each existing face with a stored map, `front` before `back`;
 5. `end`.
 
-`paint` is written only for faces that exist (face material entries left behind by removed
-faces are dropped). No comments or blank lines.
+`paint` is written only for faces that exist and have a material on either side.
+`texmap` is written only for faces that exist (face material entries left behind by
+removed faces are dropped, and their maps with them). No comments or blank lines.
 
 ## Saving
 The writer never leaves a half-written file under the target name: it writes the whole
@@ -71,5 +83,6 @@ the target. If anything fails, the temporary file is removed and the target is u
 ## Versions
 - 1 (M1): everything here except `guide`.
 - 2 (M3): adds `guide` records.
+- 3 (M4): adds texture sizes to `material` records and `texmap` records.
 
 A later version may add records; a reader for version N reads every version up to N.

@@ -14,10 +14,14 @@ use std::collections::BTreeSet;
 
 use glam::{DMat4, DVec2, DVec3};
 use modeler_kernel::click::{self, ClickMods};
+use modeler_kernel::component::make_component;
 use modeler_kernel::editpath::EditPath;
 use modeler_kernel::erase::erase;
+use modeler_kernel::explode::explode;
 use modeler_kernel::infer::{self, Inference, Probe, Snap};
-use modeler_kernel::model::{BodyId, InstanceId, MaterialId, Model, UndoStack};
+use modeler_kernel::model::{
+    BodyId, DefinitionInfo, InstanceId, Material, MaterialId, Model, UndoStack,
+};
 use modeler_kernel::paint::{self, Side};
 use modeler_kernel::pushpull::push_pull;
 use modeler_kernel::select::{self, BoxMode, Entity};
@@ -201,6 +205,9 @@ pub struct Editor {
     scale_segments: Vec<(DVec3, DVec3)>,
     material: Option<MaterialId>,
     path: EditPath,
+    /// Cumulative world transforms of the path's steps; the last one maps the open body to
+    /// the world. Kept next to the path so the getters can map points without the model.
+    transforms: Vec<DMat4>,
     hide_rest: bool,
 }
 
@@ -344,8 +351,118 @@ impl Editor {
             scale_segments: Vec::new(),
             material: None,
             path: EditPath::root(),
+            transforms: Vec::new(),
             hide_rest: false,
         }
+    }
+
+    /// The open body: `path`'s body, or the root when the path doesn't resolve.
+    fn body(&self, model: &Model) -> BodyId {
+        self.path.body(model).unwrap_or(BodyId::Root)
+    }
+
+    /// The open body's world transform (identity at the root).
+    fn world(&self) -> DMat4 {
+        self.transforms.last().copied().unwrap_or(DMat4::IDENTITY)
+    }
+
+    fn to_world(&self, point: DVec3) -> DVec3 {
+        self.world().transform_point3(point)
+    }
+
+    fn to_body(&self, point: DVec3) -> DVec3 {
+        self.world().inverse().transform_point3(point)
+    }
+
+    fn dir_to_world(&self, dir: DVec3) -> DVec3 {
+        self.world().transform_vector3(dir)
+    }
+
+    fn dir_to_body(&self, dir: DVec3) -> DVec3 {
+        self.world().inverse().transform_vector3(dir)
+    }
+
+    fn body_axes(&self) -> [DVec3; 3] {
+        AXES.map(|axis| unit_or(self.dir_to_body(axis), axis))
+    }
+
+    /// The cursor ray in the open body's coordinates.
+    fn body_ray(&self, view: &Viewport, cursor: DVec2) -> (DVec3, DVec3) {
+        let (origin, dir) = view.ray(cursor);
+        (self.to_body(origin), unit_or(self.dir_to_body(dir), dir))
+    }
+
+    /// Rebuild the cached world transforms by walking the path from the root.
+    fn recompute_transforms(&mut self, model: &Model) {
+        self.transforms.clear();
+        let mut body = BodyId::Root;
+        let mut transform = DMat4::IDENTITY;
+        for &step in &self.path.steps {
+            let Some(instance) = model.body(body).and_then(|b| b.instance(step)) else {
+                break;
+            };
+            transform *= instance.transform;
+            self.transforms.push(transform);
+            body = BodyId::Definition(instance.definition);
+        }
+    }
+
+    /// Drop steps that no longer resolve; clear the selection when the path got shorter.
+    fn refresh_path(&mut self, model: &Model) {
+        let prefix = self.path.valid_prefix(model);
+        let shortened = prefix.steps.len() < self.path.steps.len();
+        self.path = prefix;
+        self.recompute_transforms(model);
+        if shortened {
+            self.selection.clear();
+        }
+    }
+
+    fn infer_with(
+        &self,
+        model: &Model,
+        view: &Viewport,
+        cursor: DVec2,
+        anchor: Option<DVec3>,
+        lock: Option<DVec3>,
+    ) -> Option<Inference> {
+        let (origin, dir) = self.body_ray(view, cursor);
+        let project = |p: DVec3| view.project(self.to_world(p));
+        let centers: [DVec3; 0] = [];
+        let axes = self.body_axes();
+        let probe = Probe {
+            cursor,
+            origin,
+            dir,
+            parallel: view.camera.projection == Projection::Parallel,
+            project: &project,
+            radius: SNAP_RADIUS_PX,
+            anchor,
+            axes,
+            centers: &centers,
+            lock,
+        };
+        infer::infer_in(model, &self.path, !self.hide_rest, &probe)
+    }
+
+    fn pick_with(&self, model: &Model, view: &Viewport, cursor: DVec2) -> Option<Entity> {
+        let (origin, dir) = self.body_ray(view, cursor);
+        let project = |p: DVec3| view.project(self.to_world(p));
+        let centers: [DVec3; 0] = [];
+        let axes = self.body_axes();
+        let probe = Probe {
+            cursor,
+            origin,
+            dir,
+            parallel: view.camera.projection == Projection::Parallel,
+            project: &project,
+            radius: SNAP_RADIUS_PX,
+            anchor: self.line.anchor(),
+            axes,
+            centers: &centers,
+            lock: self.lock_body(),
+        };
+        infer::pick_in(model, &self.path, !self.hide_rest, &probe)
     }
 
     pub fn tool(&self) -> Tool {
@@ -393,8 +510,9 @@ impl Editor {
         cursor: DVec2,
         mods: Modifiers,
     ) {
+        self.refresh_path(model);
         if is_shape(self.tool) {
-            let (origin, dir) = view.ray(cursor);
+            let (origin, dir) = self.body_ray(view, cursor);
             match self.infer_shape_at(model, view, cursor) {
                 Some(inf) => {
                     if self.shape_idle() {
@@ -437,9 +555,10 @@ impl Editor {
         match inf {
             Some(inf) => {
                 self.hint = Some(inf);
+                let body = self.body(model);
                 let mut target = Target {
                     model,
-                    body: BodyId::Root,
+                    body,
                     undo: &mut self.undo,
                     unit: self.unit,
                 };
@@ -459,6 +578,7 @@ impl Editor {
         mods: Modifiers,
         count: u32,
     ) -> bool {
+        self.refresh_path(model);
         match self.tool {
             Tool::Line => {
                 let before = self.undo.undo_count();
@@ -467,9 +587,10 @@ impl Editor {
                 };
                 self.hint = Some(inf);
                 let result = {
+                    let body = self.body(model);
                     let mut target = Target {
                         model,
-                        body: BodyId::Root,
+                        body,
                         undo: &mut self.undo,
                         unit: self.unit,
                     };
@@ -491,10 +612,24 @@ impl Editor {
             }
             Tool::Select => {
                 let hit = self.pick_at(model, view, cursor);
+                if count == 2
+                    && let Some(Entity::Instance(instance)) = hit
+                {
+                    self.open_instance(model, instance);
+                    return false;
+                }
+                if count == 2 && hit.is_none() && !self.path.is_root() {
+                    self.close_path();
+                    return false;
+                }
                 let mods = click_mods(mods);
                 self.selection = match hit {
                     Some(entity) if count >= 2 => {
-                        let ctx = model.root().geometry();
+                        let body = self.body(model);
+                        let ctx = model
+                            .body(body)
+                            .map(|body| body.geometry())
+                            .unwrap_or(model.root().geometry());
                         let picked = if count == 2 {
                             select::bounded(ctx, entity)
                         } else {
@@ -516,7 +651,7 @@ impl Editor {
             Tool::Paint => self.click_paint(model, view, cursor, mods),
             Tool::Rectangle | Tool::Circle | Tool::Arc | Tool::Arc3 => {
                 let before = self.undo.undo_count();
-                let (origin, dir) = view.ray(cursor);
+                let (origin, dir) = self.body_ray(view, cursor);
                 let Some(inf) = self.infer_shape_at(model, view, cursor) else {
                     self.hint = None;
                     return false;
@@ -549,13 +684,14 @@ impl Editor {
         end: DVec2,
         mods: Modifiers,
     ) {
+        self.refresh_path(model);
         if self.tool != Tool::Select {
             return;
         }
-        let project = |p: DVec3| view.project(p);
+        let project = |p: DVec3| view.project(self.to_world(p));
         let picked = select::box_select(
             model,
-            BodyId::Root,
+            self.body(model),
             &project,
             start,
             end,
@@ -587,6 +723,7 @@ impl Editor {
 
     /// An editor key. True when the model changed.
     pub fn key(&mut self, key: EditKey, model: &mut Model) -> bool {
+        self.refresh_path(model);
         match key {
             EditKey::Cancel => {
                 self.line = LineTool::new();
@@ -603,6 +740,13 @@ impl Editor {
                 self.push = None;
                 if self.tool == Tool::PushPull {
                     self.hint = None;
+                }
+                if matches!(
+                    self.tool,
+                    Tool::Select | Tool::Orbit | Tool::Pan | Tool::Zoom
+                ) && !self.path.is_root()
+                {
+                    self.close_path();
                 }
                 false
             }
@@ -631,9 +775,10 @@ impl Editor {
                 }
                 let before = self.undo.undo_count();
                 let result = if self.tool == Tool::Line {
+                    let body = self.body(model);
                     let mut target = Target {
                         model,
-                        body: BodyId::Root,
+                        body,
                         undo: &mut self.undo,
                         unit: self.unit,
                     };
@@ -749,7 +894,9 @@ impl Editor {
 
     /// The measurement box's label and value for the shape in progress.
     pub fn measurement(&self) -> Option<(&'static str, String)> {
-        let length = |value: f64| units::format_length(value, self.unit, 2);
+        let scale = self.world().to_scale_rotation_translation().0;
+        let factor = scale.length() / 3f64.sqrt();
+        let length = |value: f64| units::format_length(value * factor, self.unit, 2);
         match self.tool {
             Tool::Line => {
                 let value = match self.line.length() {
@@ -878,11 +1025,18 @@ impl Editor {
 
     /// The last inferred point, for the hint.
     pub fn hint(&self) -> Option<Inference> {
-        self.hint
+        self.hint.map(|hint| Inference {
+            point: self.to_world(hint.point),
+            ..hint
+        })
     }
 
     /// The direction the drawing is locked to, if any.
     pub fn lock(&self) -> Option<DVec3> {
+        self.lock_body().map(|dir| self.dir_to_world(dir))
+    }
+
+    fn lock_body(&self) -> Option<DVec3> {
         if is_shape(self.tool) {
             return None;
         }
@@ -894,6 +1048,13 @@ impl Editor {
 
     /// Edges of the shape in progress, as the next click would draw them.
     pub fn preview(&self) -> Vec<(DVec3, DVec3)> {
+        self.preview_body()
+            .into_iter()
+            .map(|(a, b)| (self.to_world(a), self.to_world(b)))
+            .collect()
+    }
+
+    fn preview_body(&self) -> Vec<(DVec3, DVec3)> {
         match self.tool {
             Tool::Line => self.line.preview().into_iter().collect(),
             Tool::Rectangle => self
@@ -1102,7 +1263,7 @@ impl Editor {
             self.message = Some("Select something to flip".to_string());
             return false;
         }
-        let Some(bounds) = bounds(model, BodyId::Root, &self.selection) else {
+        let Some(bounds) = bounds(model, self.body(model), &self.selection) else {
             self.message = Some("Select something to flip".to_string());
             return false;
         };
@@ -1117,7 +1278,7 @@ impl Editor {
             * DMat4::from_translation(-center);
         match transform::transform(
             model,
-            BodyId::Root,
+            self.body(model),
             &self.selection,
             matrix,
             &mut self.undo,
@@ -1153,7 +1314,7 @@ impl Editor {
         }
         match erase(
             model,
-            BodyId::Root,
+            self.body(model),
             &self.selection,
             &mut self.undo,
             "Erase",
@@ -1175,7 +1336,7 @@ impl Editor {
         let Some(entity) = self.pick_at(model, view, cursor) else {
             return false;
         };
-        match erase(model, BodyId::Root, &[entity], &mut self.undo, "Erase") {
+        match erase(model, self.body(model), &[entity], &mut self.undo, "Erase") {
             Ok(()) => {
                 self.message = None;
                 self.prune(model);
@@ -1191,32 +1352,157 @@ impl Editor {
     /// The instances opened for editing (empty: the root is open). Behaviour:
     /// `docs/specs/m4-app-edit-context.md`.
     pub fn path(&self) -> &EditPath {
-        let _ = &self.path;
-        unimplemented!()
+        &self.path
     }
 
     /// Open `instance`, an instance of the open body, for editing. False (nothing changes)
     /// when the open body has no such instance.
     pub fn open_instance(&mut self, model: &Model, instance: InstanceId) -> bool {
-        let _ = (model, instance);
-        unimplemented!()
+        let Some(path) = self.path.open(model, instance) else {
+            return false;
+        };
+        self.path = path;
+        self.recompute_transforms(model);
+        self.selection.clear();
+        true
     }
 
     /// Close the innermost open instance; the root stays open.
     pub fn close_path(&mut self) {
-        unimplemented!()
+        if self.path.is_root() {
+            return;
+        }
+        self.path = self.path.close();
+        self.transforms.pop();
+        self.selection.clear();
     }
 
     /// Whether the rest of the model is ignored (not snapped to, not picked) while an
     /// instance is open.
     pub fn hide_rest(&self) -> bool {
-        let _ = self.hide_rest;
-        unimplemented!()
+        self.hide_rest
     }
 
     pub fn set_hide_rest(&mut self, hide: bool) {
-        let _ = hide;
-        unimplemented!()
+        self.hide_rest = hide;
+    }
+
+    /// Make the selection (in the open body) into a new component, or a group when `group`,
+    /// named `name` (made unique; blank gets a default). One undo step "Make Component" /
+    /// "Make Group". The new instance becomes the selection. True when the model changed.
+    /// Behaviour: `docs/specs/m4-app-components.md`.
+    pub fn make_component(&mut self, model: &mut Model, name: &str, group: bool) -> bool {
+        self.line = LineTool::new();
+        self.idle_shapes();
+        self.idle_rotate();
+        self.idle_move();
+        self.idle_scale();
+        self.idle_tape();
+        self.typed.clear();
+        self.push = None;
+        self.hint = None;
+        if self.selection.is_empty() {
+            self.message = Some(
+                if group {
+                    "Select something to group"
+                } else {
+                    "Select something to make a component of"
+                }
+                .to_string(),
+            );
+            return false;
+        }
+        let info = DefinitionInfo {
+            name: name.to_string(),
+            group,
+        };
+        let label = if group {
+            "Make Group"
+        } else {
+            "Make Component"
+        };
+        match make_component(
+            model,
+            self.body(model),
+            &self.selection,
+            info,
+            &mut self.undo,
+            label,
+        ) {
+            Ok(instance) => {
+                self.selection = vec![Entity::Instance(instance)];
+                self.message = None;
+                true
+            }
+            Err(_) => {
+                self.message = Some(
+                    if group {
+                        "Can't group that"
+                    } else {
+                        "Can't make that a component"
+                    }
+                    .to_string(),
+                );
+                false
+            }
+        }
+    }
+
+    /// Explode the selected instance into the open body. One undo step "Explode"; the
+    /// entities that came out become the selection. True when the model changed.
+    /// Behaviour: `docs/specs/m4-app-components.md`.
+    pub fn explode_selection(&mut self, model: &mut Model) -> bool {
+        self.line = LineTool::new();
+        self.idle_shapes();
+        self.idle_rotate();
+        self.idle_move();
+        self.idle_scale();
+        self.idle_tape();
+        self.typed.clear();
+        self.push = None;
+        self.hint = None;
+        let instance = match self.selection.as_slice() {
+            [Entity::Instance(instance)] => *instance,
+            _ => {
+                self.message = Some("Select one group or component to explode".to_string());
+                return false;
+            }
+        };
+        match explode(model, self.body(model), instance, &mut self.undo, "Explode") {
+            Ok(entities) => {
+                self.selection = entities;
+                self.message = None;
+                true
+            }
+            Err(_) => {
+                self.message = Some("Can't explode that".to_string());
+                false
+            }
+        }
+    }
+
+    /// Add `material` (name made unique) as one undo step "New Material" and make it the
+    /// Paint Bucket's current material. `None` with a message when the kernel refuses.
+    /// Behaviour: `docs/specs/m4-app-materials.md`.
+    pub fn create_material(&mut self, model: &mut Model, material: Material) -> Option<MaterialId> {
+        let _ = (model, material);
+        unimplemented!("m4-app-materials")
+    }
+
+    /// Replace material `id` as one undo step "Edit Material". True when accepted (also
+    /// when nothing changed); false with a message when refused.
+    /// Behaviour: `docs/specs/m4-app-materials.md`.
+    pub fn edit_material(&mut self, model: &mut Model, id: MaterialId, material: Material) -> bool {
+        let _ = (model, id, material);
+        unimplemented!("m4-app-materials")
+    }
+
+    /// Remove materials nothing uses as one undo step "Purge Materials"; resets the current
+    /// material if it went. Returns how many were removed.
+    /// Behaviour: `docs/specs/m4-app-materials.md`.
+    pub fn purge_materials(&mut self, model: &mut Model) -> usize {
+        let _ = model;
+        unimplemented!("m4-app-materials")
     }
 
     /// The Paint Bucket's current material (`None` = the default material).
@@ -1243,8 +1529,10 @@ impl Editor {
         };
         let seen = match entity {
             Entity::Face(face) => {
-                let (_, dir) = view.ray(cursor);
-                let plane = model.root().geometry().face_plane(face);
+                let (_, dir) = self.body_ray(view, cursor);
+                let plane = model
+                    .body(self.body(model))
+                    .and_then(|body| body.geometry().face_plane(face));
                 match plane {
                     Some(plane) if dir.dot(plane.normal) > 0.0 => Side::Back,
                     _ => Side::Front,
@@ -1255,7 +1543,7 @@ impl Editor {
         if mods.alt {
             match entity {
                 Entity::Face(_) | Entity::Instance(_) => {
-                    self.material = paint::sample(model, BodyId::Root, entity, seen).flatten();
+                    self.material = paint::sample(model, self.body(model), entity, seen).flatten();
                     self.message = None;
                 }
                 Entity::Edge(_) => {}
@@ -1272,7 +1560,7 @@ impl Editor {
         };
         match paint::paint(
             model,
-            BodyId::Root,
+            self.body(model),
             &targets,
             seen,
             self.material,
@@ -1302,8 +1590,8 @@ impl Editor {
         view: &Viewport,
         cursor: DVec2,
     ) -> Option<(FaceId, DVec3, DVec3)> {
-        let (origin, dir) = view.ray(cursor);
-        let ctx = model.root().geometry();
+        let (origin, dir) = self.body_ray(view, cursor);
+        let ctx = model.body(self.body(model))?.geometry();
         let (face, t) = infer::ray_face(ctx, origin, dir)?;
         let normal = ctx.face_plane(face)?.normal;
         let start = origin + unit_or(dir, DVec3::Z) * t;
@@ -1311,9 +1599,11 @@ impl Editor {
     }
 
     fn move_push(&mut self, model: &mut Model, view: &Viewport, cursor: DVec2) {
-        let (origin, dir) = view.ray(cursor);
-        self.push_hover =
-            infer::ray_face(model.root().geometry(), origin, dir).map(|(face, _)| face);
+        let (origin, dir) = self.body_ray(view, cursor);
+        self.push_hover = model
+            .body(self.body(model))
+            .and_then(|body| infer::ray_face(body.geometry(), origin, dir))
+            .map(|(face, _)| face);
         if self.push.is_none() {
             self.hint = None;
             return;
@@ -1331,7 +1621,7 @@ impl Editor {
                     Some((inf.point - push.start).dot(push.normal))
                 }
                 _ => {
-                    let (origin, dir) = view.ray(cursor);
+                    let (origin, dir) = self.body_ray(view, cursor);
                     closest_on_line(push.start, push.normal, origin, dir)
                 }
             }
@@ -1380,7 +1670,10 @@ impl Editor {
         let Some((face, start, normal)) = self.face_under(model, view, cursor) else {
             return false;
         };
-        let ctx = model.root().geometry();
+        let Some(body) = model.body(self.body(model)) else {
+            return false;
+        };
+        let ctx = body.geometry();
         let Some(face_data) = ctx.face(face) else {
             return false;
         };
@@ -1433,7 +1726,7 @@ impl Editor {
         let distance = length.abs() * direction * flip;
         match push_pull(
             model,
-            BodyId::Root,
+            self.body(model),
             last.face,
             distance,
             &mut self.undo,
@@ -1462,7 +1755,7 @@ impl Editor {
     fn commit_push(&mut self, model: &mut Model, face: FaceId, distance: f64) -> bool {
         match push_pull(
             model,
-            BodyId::Root,
+            self.body(model),
             face,
             distance,
             &mut self.undo,
@@ -1524,9 +1817,10 @@ impl Editor {
     }
 
     fn handle_shape(&mut self, input: Input, model: &mut Model) -> Result<(), ToolError> {
+        let body = self.body(model);
         let mut target = Target {
             model,
-            body: BodyId::Root,
+            body,
             undo: &mut self.undo,
             unit: self.unit,
         };
@@ -1555,7 +1849,7 @@ impl Editor {
     }
 
     fn move_rotate(&mut self, model: &mut Model, view: &Viewport, cursor: DVec2) {
-        let (origin, dir) = view.ray(cursor);
+        let (origin, dir) = self.body_ray(view, cursor);
         if self.rotate.stage() == RotateStage::Center {
             self.pick_rotate_plane(model, origin, dir);
         }
@@ -1566,9 +1860,10 @@ impl Editor {
         let point = self.rotate_input_point(inf, origin, dir);
         self.hint = Some(Inference { point, ..inf });
         self.rotate.set_angle_snap(free_point(&inf));
+        let body = self.body(model);
         let mut target = Target {
             model,
-            body: BodyId::Root,
+            body,
             undo: &mut self.undo,
             unit: self.unit,
         };
@@ -1580,7 +1875,7 @@ impl Editor {
     fn click_rotate(&mut self, model: &mut Model, view: &Viewport, cursor: DVec2) -> bool {
         let before = self.undo.undo_count();
         let was_center = self.rotate.stage() == RotateStage::Center;
-        let (origin, dir) = view.ray(cursor);
+        let (origin, dir) = self.body_ray(view, cursor);
         if was_center {
             self.pick_rotate_plane(model, origin, dir);
             if self.selection.is_empty() {
@@ -1603,9 +1898,10 @@ impl Editor {
         self.hint = Some(Inference { point, ..inf });
         self.rotate.set_angle_snap(free_point(&inf));
         let result = {
+            let body = self.body(model);
             let mut target = Target {
                 model,
-                body: BodyId::Root,
+                body,
                 undo: &mut self.undo,
                 unit: self.unit,
             };
@@ -1632,9 +1928,10 @@ impl Editor {
         let before = self.undo.undo_count();
         let before_angle = self.rotate.last_angle(&self.undo);
         let result = {
+            let body = self.body(model);
             let mut target = Target {
                 model,
-                body: BodyId::Root,
+                body,
                 undo: &mut self.undo,
                 unit: self.unit,
             };
@@ -1668,7 +1965,10 @@ impl Editor {
     }
 
     fn collect_rotate_segments(&self, model: &Model) -> Vec<(DVec3, DVec3)> {
-        let ctx = model.root().geometry();
+        let body = self.body(model);
+        let Some(ctx) = model.body(body).map(|body| body.geometry()) else {
+            return Vec::new();
+        };
         let mut edges = BTreeSet::new();
         let mut instances = Vec::new();
         for entity in &self.selection {
@@ -1687,7 +1987,7 @@ impl Editor {
                     }
                 }
                 Entity::Instance(id) => {
-                    instances.extend(select::instance_segments(model, BodyId::Root, id));
+                    instances.extend(select::instance_segments(model, body, id));
                 }
             }
         }
@@ -1719,9 +2019,10 @@ impl Editor {
             return;
         };
         self.hint = Some(inf);
+        let body = self.body(model);
         let mut target = Target {
             model,
-            body: BodyId::Root,
+            body,
             undo: &mut self.undo,
             unit: self.unit,
         };
@@ -1750,7 +2051,7 @@ impl Editor {
             };
             match self
                 .scale
-                .grab(handle, model, BodyId::Root, &self.selection)
+                .grab(handle, model, self.body(model), &self.selection)
             {
                 Ok(()) => {
                     self.message = None;
@@ -1768,9 +2069,10 @@ impl Editor {
         self.hint = Some(inf);
         let before = self.undo.undo_count();
         let result = {
+            let body = self.body(model);
             let mut target = Target {
                 model,
-                body: BodyId::Root,
+                body,
                 undo: &mut self.undo,
                 unit: self.unit,
             };
@@ -1792,9 +2094,10 @@ impl Editor {
         let before = self.undo.undo_count();
         let before_factors = self.scale.last_factors(&self.undo);
         let result = {
+            let body = self.body(model);
             let mut target = Target {
                 model,
-                body: BodyId::Root,
+                body,
                 undo: &mut self.undo,
                 unit: self.unit,
             };
@@ -1833,10 +2136,10 @@ impl Editor {
         if self.selection.is_empty() {
             return None;
         }
-        let bounds = bounds(model, BodyId::Root, &self.selection)?;
+        let bounds = bounds(model, self.body(model), &self.selection)?;
         let mut best: Option<(f64, Handle)> = None;
         for handle in handles(&bounds) {
-            let Some(point) = view.project(bounds.point(handle)) else {
+            let Some(point) = view.project(self.to_world(bounds.point(handle))) else {
                 continue;
             };
             let distance = point.distance(cursor);
@@ -1848,22 +2151,7 @@ impl Editor {
     }
 
     fn infer_scale_at(&self, model: &Model, view: &Viewport, cursor: DVec2) -> Option<Inference> {
-        let (origin, dir) = view.ray(cursor);
-        let project = |p: DVec3| view.project(p);
-        let centers: [DVec3; 0] = [];
-        let probe = Probe {
-            cursor,
-            origin,
-            dir,
-            parallel: view.camera.projection == Projection::Parallel,
-            project: &project,
-            radius: SNAP_RADIUS_PX,
-            anchor: self.scale.fixed_point(),
-            axes: AXES,
-            centers: &centers,
-            lock: None,
-        };
-        infer::infer_model(model, &probe)
+        self.infer_with(model, view, cursor, self.scale.fixed_point(), None)
     }
 
     fn move_move(&mut self, model: &mut Model, view: &Viewport, cursor: DVec2) {
@@ -1872,9 +2160,10 @@ impl Editor {
             return;
         };
         self.hint = Some(inf);
+        let body = self.body(model);
         let mut target = Target {
             model,
-            body: BodyId::Root,
+            body,
             undo: &mut self.undo,
             unit: self.unit,
         };
@@ -1903,9 +2192,10 @@ impl Editor {
         };
         self.hint = Some(inf);
         let result = {
+            let body = self.body(model);
             let mut target = Target {
                 model,
-                body: BodyId::Root,
+                body,
                 undo: &mut self.undo,
                 unit: self.unit,
             };
@@ -1932,9 +2222,10 @@ impl Editor {
         let before = self.undo.undo_count();
         let before_offset = self.translate.last_offset(&self.undo);
         let result = {
+            let body = self.body(model);
             let mut target = Target {
                 model,
-                body: BodyId::Root,
+                body,
                 undo: &mut self.undo,
                 unit: self.unit,
             };
@@ -1974,9 +2265,10 @@ impl Editor {
             return;
         };
         self.hint = Some(inf);
+        let body = self.body(model);
         let mut target = Target {
             model,
-            body: BodyId::Root,
+            body,
             undo: &mut self.undo,
             unit: self.unit,
         };
@@ -1993,9 +2285,10 @@ impl Editor {
         };
         self.hint = Some(inf);
         let result = {
+            let body = self.body(model);
             let mut target = Target {
                 model,
-                body: BodyId::Root,
+                body,
                 undo: &mut self.undo,
                 unit: self.unit,
             };
@@ -2011,9 +2304,10 @@ impl Editor {
     fn enter_tape(&mut self, text: String, model: &mut Model) -> bool {
         let before = self.undo.undo_count();
         let result = {
+            let body = self.body(model);
             let mut target = Target {
                 model,
-                body: BodyId::Root,
+                body,
                 undo: &mut self.undo,
                 unit: self.unit,
             };
@@ -2044,7 +2338,11 @@ impl Editor {
         }
         let edge = match self.pick_at(model, view, cursor) {
             Some(Entity::Edge(id)) => {
-                let ctx = model.root().geometry();
+                let Some(body) = model.body(self.body(model)) else {
+                    self.tape.set_hover_edge(None);
+                    return;
+                };
+                let ctx = body.geometry();
                 ctx.edge(id).and_then(|edge| {
                     let a = ctx.vertex(edge.ends[0])?;
                     let b = ctx.vertex(edge.ends[1])?;
@@ -2057,22 +2355,7 @@ impl Editor {
     }
 
     fn infer_tape_at(&self, model: &Model, view: &Viewport, cursor: DVec2) -> Option<Inference> {
-        let (origin, dir) = view.ray(cursor);
-        let project = |p: DVec3| view.project(p);
-        let centers: [DVec3; 0] = [];
-        let probe = Probe {
-            cursor,
-            origin,
-            dir,
-            parallel: view.camera.projection == Projection::Parallel,
-            project: &project,
-            radius: SNAP_RADIUS_PX,
-            anchor: self.tape.start(),
-            axes: AXES,
-            centers: &centers,
-            lock: None,
-        };
-        infer::infer_model(model, &probe)
+        self.infer_with(model, view, cursor, self.tape.start(), None)
     }
 
     fn pick_shape_plane(&mut self, model: &Model, origin: DVec3, dir: DVec3) {
@@ -2089,7 +2372,10 @@ impl Editor {
         let n = match self.plane_lock.and_then(|i| AXES.get(i).copied()) {
             Some(axis) => axis,
             None => {
-                let ctx = model.root().geometry();
+                let Some(body) = model.body(self.body(model)) else {
+                    return plane_for_normal(DVec3::Z);
+                };
+                let ctx = body.geometry();
                 match infer::ray_face(ctx, origin, dir).and_then(|(face, _)| ctx.face_plane(face)) {
                     Some(plane) => plane.normal,
                     None => DVec3::Z,
@@ -2138,60 +2424,15 @@ impl Editor {
     }
 
     fn infer_rotate_at(&self, model: &Model, view: &Viewport, cursor: DVec2) -> Option<Inference> {
-        let (origin, dir) = view.ray(cursor);
-        let project = |p: DVec3| view.project(p);
-        let centers: [DVec3; 0] = [];
-        let probe = Probe {
-            cursor,
-            origin,
-            dir,
-            parallel: view.camera.projection == Projection::Parallel,
-            project: &project,
-            radius: SNAP_RADIUS_PX,
-            anchor: self.rotate.center(),
-            axes: AXES,
-            centers: &centers,
-            lock: None,
-        };
-        infer::infer_model(model, &probe)
+        self.infer_with(model, view, cursor, self.rotate.center(), None)
     }
 
     fn infer_move_at(&self, model: &Model, view: &Viewport, cursor: DVec2) -> Option<Inference> {
-        let (origin, dir) = view.ray(cursor);
-        let project = |p: DVec3| view.project(p);
-        let centers: [DVec3; 0] = [];
-        let probe = Probe {
-            cursor,
-            origin,
-            dir,
-            parallel: view.camera.projection == Projection::Parallel,
-            project: &project,
-            radius: SNAP_RADIUS_PX,
-            anchor: self.translate.from(),
-            axes: AXES,
-            centers: &centers,
-            lock: None,
-        };
-        infer::infer_model(model, &probe)
+        self.infer_with(model, view, cursor, self.translate.from(), None)
     }
 
     fn infer_shape_at(&self, model: &Model, view: &Viewport, cursor: DVec2) -> Option<Inference> {
-        let (origin, dir) = view.ray(cursor);
-        let project = |p: DVec3| view.project(p);
-        let centers: [DVec3; 0] = [];
-        let probe = Probe {
-            cursor,
-            origin,
-            dir,
-            parallel: view.camera.projection == Projection::Parallel,
-            project: &project,
-            radius: SNAP_RADIUS_PX,
-            anchor: self.shape_anchor(),
-            axes: AXES,
-            centers: &centers,
-            lock: None,
-        };
-        infer::infer_model(model, &probe)
+        self.infer_with(model, view, cursor, self.shape_anchor(), None)
     }
 
     fn update_shift_lock(&mut self, mods: Modifiers) {
@@ -2231,45 +2472,18 @@ impl Editor {
     }
 
     fn infer_at(&self, model: &Model, view: &Viewport, cursor: DVec2) -> Option<Inference> {
-        let (origin, dir) = view.ray(cursor);
-        let project = |p: DVec3| view.project(p);
-        let centers: [DVec3; 0] = [];
-        let probe = Probe {
-            cursor,
-            origin,
-            dir,
-            parallel: view.camera.projection == Projection::Parallel,
-            project: &project,
-            radius: SNAP_RADIUS_PX,
-            anchor: self.line.anchor(),
-            axes: AXES,
-            centers: &centers,
-            lock: self.lock(),
-        };
-        infer::infer_model(model, &probe)
+        self.infer_with(model, view, cursor, self.line.anchor(), self.lock_body())
     }
 
     fn pick_at(&self, model: &Model, view: &Viewport, cursor: DVec2) -> Option<Entity> {
-        let (origin, dir) = view.ray(cursor);
-        let project = |p: DVec3| view.project(p);
-        let centers: [DVec3; 0] = [];
-        let probe = Probe {
-            cursor,
-            origin,
-            dir,
-            parallel: view.camera.projection == Projection::Parallel,
-            project: &project,
-            radius: SNAP_RADIUS_PX,
-            anchor: self.line.anchor(),
-            axes: AXES,
-            centers: &centers,
-            lock: self.lock(),
-        };
-        infer::pick_model(model, &probe)
+        self.pick_with(model, view, cursor)
     }
 
     fn prune(&mut self, model: &Model) {
-        let body = model.root();
+        let Some(body) = model.body(self.body(model)) else {
+            self.selection.clear();
+            return;
+        };
         let ctx = body.geometry();
         self.selection.retain(|entity| match entity {
             Entity::Edge(id) => ctx.edge(*id).is_some(),

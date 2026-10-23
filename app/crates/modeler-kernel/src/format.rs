@@ -11,19 +11,20 @@ use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 
-use glam::DMat4;
+use glam::{DMat4, DVec2};
 
 use crate::model::{
     Body, BodyId, DefinitionId, DefinitionInfo, FaceMaterials, Instance, InstanceId, Material,
     MaterialId, Model, ModelError, ModelRecord, Texture,
 };
+use crate::paint::Side;
 use crate::tape::{Guide, GuideId};
 use crate::topology::{
     Edge, EdgeId, EdgeUse, Face, FaceId, Loop, Record, TopoError, Vertex, VertexId,
 };
 
 /// The version this code writes, and the newest it reads.
-pub const FORMAT_VERSION: u32 = 2;
+pub const FORMAT_VERSION: u32 = 3;
 
 /// Why a model can't be written. Nothing was written.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -155,12 +156,33 @@ fn write_body(out: &mut String, id: BodyId, body: &Body) -> Result<(), WriteErro
         if body.geometry().face(fid).is_none() {
             continue;
         }
+        if materials.front.is_none() && materials.back.is_none() {
+            continue;
+        }
         out.push_str(&format!("paint {}", fid.0));
         out.push(' ');
         push_optional_id(out, materials.front.map(|m| m.0));
         out.push(' ');
         push_optional_id(out, materials.back.map(|m| m.0));
         out.push('\n');
+    }
+
+    for (fid, materials) in body.face_material_entries() {
+        if body.geometry().face(fid).is_none() {
+            continue;
+        }
+        for (side, map) in [("front", materials.front_map), ("back", materials.back_map)] {
+            let Some(map) = map else {
+                continue;
+            };
+            for value in map.u.to_array().into_iter().chain(map.v.to_array()) {
+                check_finite(value)?;
+            }
+            out.push_str(&format!(
+                "texmap {} {} {} {} {} {} {} {} {} {}\n",
+                fid.0, side, map.u.x, map.u.y, map.u.z, map.u.w, map.v.x, map.v.y, map.v.z, map.v.w
+            ));
+        }
     }
 
     for (iid, instance) in body.instances() {
@@ -210,17 +232,33 @@ fn write_body(out: &mut String, id: BodyId, body: &Body) -> Result<(), WriteErro
 
 /// The model as file text.
 pub fn to_text(model: &Model) -> Result<String, WriteError> {
-    let mut out = String::new();
-    let version = if model.root().guides().is_empty()
-        && model.definitions().all(|(id, _)| {
+    let bodies = || {
+        std::iter::once(model.root()).chain(
             model
-                .body(BodyId::Definition(id))
-                .is_none_or(|b| b.guides().is_empty())
-        }) {
-        1
-    } else {
-        FORMAT_VERSION
+                .definitions()
+                .filter_map(|(id, _)| model.body(BodyId::Definition(id))),
+        )
     };
+    let needs_three = model.materials().any(|(_, material)| {
+        material
+            .texture
+            .as_ref()
+            .is_some_and(|texture| texture.size != DVec2::ONE)
+    }) || bodies().any(|body| {
+        body.face_material_entries().any(|(face, materials)| {
+            body.geometry().face(face).is_some()
+                && (materials.front_map.is_some() || materials.back_map.is_some())
+        })
+    });
+    let has_guides = bodies().any(|body| !body.guides().is_empty());
+    let version = if needs_three {
+        3
+    } else if has_guides {
+        2
+    } else {
+        1
+    };
+    let mut out = String::new();
     out.push_str(&format!("modeler-model {version}\n"));
 
     for (id, material) in model.materials() {
@@ -234,7 +272,17 @@ pub fn to_text(model: &Model) -> Result<String, WriteError> {
         push_quoted(&mut out, &material.name);
         out.push(' ');
         match &material.texture {
-            Some(texture) => push_quoted(&mut out, &texture.path),
+            Some(texture) => {
+                check_finite(texture.size.x)?;
+                check_finite(texture.size.y)?;
+                push_quoted(&mut out, &texture.path);
+                if version >= 3 {
+                    out.push(' ');
+                    out.push_str(&texture.size.x.to_string());
+                    out.push(' ');
+                    out.push_str(&texture.size.y.to_string());
+                }
+            }
             None => out.push('-'),
         }
         out.push('\n');
@@ -448,7 +496,13 @@ fn apply_line(
             Ok(true)
         }
         "material" => {
-            expect_count(tokens, 8)?;
+            if version >= 3 {
+                if tokens.len() != 8 && tokens.len() != 10 {
+                    return Err(ReadErrorKind::BadField);
+                }
+            } else {
+                expect_count(tokens, 8)?;
+            }
             let id = MaterialId(parse_u64(&tokens[1])?);
             let color = [
                 parse_f32(&tokens[2])?,
@@ -457,10 +511,21 @@ fn apply_line(
                 parse_f32(&tokens[5])?,
             ];
             let name = quoted(&tokens[6])?.to_string();
-            let texture = match &tokens[7] {
-                Token::Quoted(text) => Some(Texture::from(text.as_str())),
-                Token::Bare(text) if text == "-" => None,
-                Token::Bare(_) => return Err(ReadErrorKind::BadField),
+            let texture = if version >= 3 {
+                match (&tokens[7], tokens.len()) {
+                    (Token::Quoted(path), 10) => Some(Texture::new(
+                        path,
+                        DVec2::new(parse_f64(&tokens[8])?, parse_f64(&tokens[9])?),
+                    )),
+                    (Token::Bare(text), 8) if text == "-" => None,
+                    _ => return Err(ReadErrorKind::BadField),
+                }
+            } else {
+                match &tokens[7] {
+                    Token::Quoted(path) => Some(Texture::from(path.as_str())),
+                    Token::Bare(text) if text == "-" => None,
+                    Token::Bare(_) => return Err(ReadErrorKind::BadField),
+                }
             };
             let material = Material {
                 name,
@@ -602,6 +667,61 @@ fn apply_line(
                 .map_err(rejected)?;
             Ok(false)
         }
+        "texmap" => {
+            if version < 3 {
+                return Err(ReadErrorKind::UnknownRecord);
+            }
+            expect_count(tokens, 11)?;
+            let face = FaceId(parse_u64(&tokens[1])?);
+            let side = match bare(&tokens[2])? {
+                "front" => Side::Front,
+                "back" => Side::Back,
+                _ => return Err(ReadErrorKind::BadField),
+            };
+            let u = glam::DVec4::new(
+                parse_f64(&tokens[3])?,
+                parse_f64(&tokens[4])?,
+                parse_f64(&tokens[5])?,
+                parse_f64(&tokens[6])?,
+            );
+            let v = glam::DVec4::new(
+                parse_f64(&tokens[7])?,
+                parse_f64(&tokens[8])?,
+                parse_f64(&tokens[9])?,
+                parse_f64(&tokens[10])?,
+            );
+            let body = current.ok_or(ReadErrorKind::NoBody)?;
+            if model
+                .body(body)
+                .is_none_or(|b| b.geometry().face(face).is_none())
+            {
+                return Err(rejected(ModelError::Topo(TopoError::MissingFace(face))));
+            }
+            let from = model
+                .body(body)
+                .expect("current body exists")
+                .face_materials(face);
+            let map = crate::texture::TextureMap { u, v };
+            let to = match side {
+                Side::Front => FaceMaterials {
+                    front_map: Some(map),
+                    ..from
+                },
+                Side::Back => FaceMaterials {
+                    back_map: Some(map),
+                    ..from
+                },
+            };
+            model
+                .apply(&ModelRecord::SetFaceMaterials {
+                    body,
+                    face,
+                    from,
+                    to,
+                })
+                .map_err(rejected)?;
+            Ok(false)
+        }
         "instance" => {
             expect_count(tokens, 21)?;
             let id = InstanceId(parse_u64(&tokens[1])?);
@@ -699,7 +819,7 @@ pub fn from_text(text: &str) -> Result<Model, ReadError> {
         line: 1,
         kind: ReadErrorKind::NotAModelFile,
     })?;
-    if version != 1 && version != FORMAT_VERSION {
+    if !(1..=FORMAT_VERSION).contains(&version) {
         return Err(ReadError {
             line: 1,
             kind: ReadErrorKind::UnsupportedVersion(version),
