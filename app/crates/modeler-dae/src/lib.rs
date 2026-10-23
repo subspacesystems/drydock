@@ -22,7 +22,7 @@ mod scene;
 
 pub use flat::{Aabb, Batch, FlatScene, LineBatch, flatten};
 pub use kernel::{ConvertError, to_kernel};
-pub use scene::kernel_scene;
+pub use scene::{RestView, kernel_scene, kernel_scene_editing};
 
 /// Why an import failed. Messages name the element or file involved.
 #[derive(Debug)]

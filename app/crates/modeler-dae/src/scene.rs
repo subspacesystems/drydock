@@ -8,6 +8,7 @@
 use std::collections::BTreeMap;
 
 use glam::{DMat3, DMat4, DVec2, DVec3};
+use modeler_kernel::editpath::EditPath;
 use modeler_kernel::geom::{polygon_normal, to_plane_2d};
 use modeler_kernel::model as km;
 use modeler_kernel::tess::triangulate;
@@ -85,6 +86,27 @@ pub fn kernel_scene(model: &km::Model) -> FlatScene {
         lines,
         bounds: any.then_some(Aabb { min, max }),
     }
+}
+
+/// How the part of the model outside the open instance is drawn while editing.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RestView {
+    /// Like the open part.
+    Normal,
+    /// Faces only, with faded copies of their materials.
+    Faded,
+    /// Not drawn.
+    Hidden,
+}
+
+/// [`kernel_scene`] for a model being edited inside the instances of `path`: the open part
+/// (the open body and everything nested in it, placed by the path's transform) is drawn
+/// as usual and the rest is drawn as `rest` says.
+///
+/// Behaviour: `docs/specs/m4-edit-view-scene.md`.
+pub fn kernel_scene_editing(model: &km::Model, path: &EditPath, rest: RestView) -> FlatScene {
+    let _ = (model, path, rest);
+    unimplemented!("m4-edit-view-scene")
 }
 
 struct FaceDraw {
