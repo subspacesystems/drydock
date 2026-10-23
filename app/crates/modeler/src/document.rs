@@ -255,11 +255,22 @@ fn stats_from_scene(scene: &FlatScene, kernel: Option<&km::Model>) -> Stats {
         Some(model) => {
             let mut faces = model.root().geometry().face_count();
             let mut edges = model.root().geometry().edge_count();
-            for (id, _) in model.definitions() {
-                if let Some(body) = model.body(km::BodyId::Definition(id)) {
-                    faces += body.geometry().face_count();
-                    edges += body.geometry().edge_count();
+            let mut seen = std::collections::BTreeSet::new();
+            let mut pending: Vec<_> = model
+                .root()
+                .instances()
+                .map(|(_, instance)| instance.definition)
+                .collect();
+            while let Some(id) = pending.pop() {
+                if !seen.insert(id) {
+                    continue;
                 }
+                let Some(body) = model.body(km::BodyId::Definition(id)) else {
+                    continue;
+                };
+                faces += body.geometry().face_count();
+                edges += body.geometry().edge_count();
+                pending.extend(body.instances().map(|(_, instance)| instance.definition));
             }
             (faces, edges)
         }

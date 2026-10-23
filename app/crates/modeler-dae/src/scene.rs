@@ -22,6 +22,10 @@ const MAX_DEPTH: usize = 64;
 /// Expand every instance of `model` into triangles (faces) and line segments (edges) in
 /// world space, ready for the renderer.
 pub fn kernel_scene(model: &km::Model) -> FlatScene {
+    build_scene(model, None)
+}
+
+fn build_scene(model: &km::Model, edit: Option<EditState<'_>>) -> FlatScene {
     let mut material_index = BTreeMap::new();
     let mut materials = Vec::new();
     let mut texture_sizes = Vec::new();
@@ -48,21 +52,51 @@ pub fn kernel_scene(model: &km::Model) -> FlatScene {
         batches: BTreeMap::new(),
         default_batch: Batch::default(),
         line: LineBatch::default(),
+        edit,
+        rest_batches: BTreeMap::new(),
+        rest_default_batch: Batch::default(),
     };
-    draw.walk(km::BodyId::Root, DMat4::IDENTITY, None, 0);
+    draw.walk(km::BodyId::Root, DMat4::IDENTITY, None, 0, true);
 
-    let mut batches: Vec<Batch> = draw
-        .batches
+    let faded = draw
+        .edit
+        .as_ref()
+        .is_some_and(|edit| edit.rest == RestView::Faded);
+    let mut batches_map = std::mem::take(&mut draw.batches);
+    let rest_batches = std::mem::take(&mut draw.rest_batches);
+    let mut rest_default_batch = std::mem::take(&mut draw.rest_default_batch);
+    if faded {
+        for (index, mut batch) in rest_batches {
+            if batch.positions.is_empty() {
+                continue;
+            }
+            let faded_material = faded_material(&materials[index]);
+            let faded_index = materials.len();
+            materials.push(faded_material);
+            batch.material = Some(faded_index);
+            batches_map.insert(faded_index, batch);
+        }
+        if !rest_default_batch.positions.is_empty() {
+            let faded_index = materials.len();
+            materials.push(faded_default_material());
+            rest_default_batch.material = Some(faded_index);
+            batches_map.insert(faded_index, rest_default_batch);
+        }
+    }
+    let default_batch = draw.default_batch;
+    let line = draw.line;
+
+    let mut batches: Vec<Batch> = batches_map
         .into_values()
         .filter(|batch| !batch.positions.is_empty())
         .collect();
-    if !draw.default_batch.positions.is_empty() {
-        batches.push(draw.default_batch);
+    if !default_batch.positions.is_empty() {
+        batches.push(default_batch);
     }
-    let lines = if draw.line.positions.is_empty() {
+    let lines = if line.positions.is_empty() {
         Vec::new()
     } else {
-        vec![draw.line]
+        vec![line]
     };
 
     let mut min = [f32::INFINITY; 3];
@@ -105,8 +139,37 @@ pub enum RestView {
 ///
 /// Behaviour: `docs/specs/m4-edit-view-scene.md`.
 pub fn kernel_scene_editing(model: &km::Model, path: &EditPath, rest: RestView) -> FlatScene {
-    let _ = (model, path, rest);
-    unimplemented!("m4-edit-view-scene")
+    if path.body(model).is_none() || path.is_root() || rest == RestView::Normal {
+        return kernel_scene(model);
+    }
+    build_scene(model, Some(EditState { path, rest }))
+}
+
+struct EditState<'a> {
+    path: &'a EditPath,
+    rest: RestView,
+}
+
+fn faded_material(material: &Material) -> Material {
+    Material {
+        id: format!("{} (faded)", material.id),
+        name: format!("{} (faded)", material.name),
+        color: [material.color[0], material.color[1], material.color[2], 1.0],
+        texture: material.texture.clone(),
+        opacity: material.opacity * 0.25,
+        unlit: material.unlit,
+    }
+}
+
+fn faded_default_material() -> Material {
+    Material {
+        id: "default (faded)".to_owned(),
+        name: "default (faded)".to_owned(),
+        color: [0.75, 0.75, 0.75, 1.0],
+        texture: None,
+        opacity: 0.25,
+        unlit: false,
+    }
 }
 
 struct FaceDraw {
@@ -125,6 +188,9 @@ struct Draw<'a> {
     batches: BTreeMap<usize, Batch>,
     default_batch: Batch,
     line: LineBatch,
+    edit: Option<EditState<'a>>,
+    rest_batches: BTreeMap<usize, Batch>,
+    rest_default_batch: Batch,
 }
 
 impl Draw<'_> {
@@ -132,10 +198,24 @@ impl Draw<'_> {
         id.and_then(|id| self.material_index.get(&id).copied())
     }
 
-    fn walk(&mut self, body_id: km::BodyId, world: DMat4, inherited: Option<usize>, depth: usize) {
+    fn walk(
+        &mut self,
+        body_id: km::BodyId,
+        world: DMat4,
+        inherited: Option<usize>,
+        depth: usize,
+        on_path: bool,
+    ) {
         if depth >= MAX_DEPTH {
             return;
         }
+
+        let inside = self
+            .edit
+            .as_ref()
+            .is_some_and(|edit| on_path && depth >= edit.path.steps.len());
+        let rest = self.edit.as_ref().map(|edit| edit.rest);
+        let faded_rest = !inside && rest == Some(RestView::Faded);
 
         let (faces, edges, instances) = {
             let Some(body) = self.model.body(body_id) else {
@@ -182,10 +262,11 @@ impl Draw<'_> {
                 edges.push((a.position, b.position));
             }
 
-            let instances: Vec<(km::DefinitionId, DMat4, Option<usize>)> = body
+            let instances: Vec<(km::InstanceId, km::DefinitionId, DMat4, Option<usize>)> = body
                 .instances()
-                .map(|(_, instance)| {
+                .map(|(id, instance)| {
                     (
+                        id,
                         instance.definition,
                         instance.transform,
                         self.material(instance.material).or(inherited),
@@ -197,9 +278,17 @@ impl Draw<'_> {
         };
 
         for face in faces {
+            if rest == Some(RestView::Hidden) && !inside {
+                continue;
+            }
+            let (batches, default_batch) = if faded_rest {
+                (&mut self.rest_batches, &mut self.rest_default_batch)
+            } else {
+                (&mut self.batches, &mut self.default_batch)
+            };
             draw_face(
-                &mut self.batches,
-                &mut self.default_batch,
+                batches,
+                default_batch,
                 world,
                 &face.outer,
                 &face.holes,
@@ -210,17 +299,25 @@ impl Draw<'_> {
             );
         }
 
-        for (a, b) in edges {
-            let a = world.transform_point3(a);
-            let b = world.transform_point3(b);
-            if !a.is_finite() || !b.is_finite() {
-                continue;
+        if self.edit.is_none() || inside {
+            for (a, b) in edges {
+                let a = world.transform_point3(a);
+                let b = world.transform_point3(b);
+                if !a.is_finite() || !b.is_finite() {
+                    continue;
+                }
+                self.line.positions.push(as_f32(a));
+                self.line.positions.push(as_f32(b));
             }
-            self.line.positions.push(as_f32(a));
-            self.line.positions.push(as_f32(b));
         }
 
-        for (definition, transform, material) in instances {
+        for (id, definition, transform, material) in instances {
+            let child_on_path = match self.edit.as_ref() {
+                None => false,
+                Some(_) if !on_path => false,
+                Some(edit) if depth < edit.path.steps.len() => id == edit.path.steps[depth],
+                Some(_) => true,
+            };
             if self
                 .model
                 .body(km::BodyId::Definition(definition))
@@ -233,6 +330,7 @@ impl Draw<'_> {
                 world * transform,
                 material,
                 depth + 1,
+                child_on_path,
             );
         }
     }
