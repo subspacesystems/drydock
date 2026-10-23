@@ -58,7 +58,9 @@ impl Document {
             .extension()
             .is_some_and(|ext| ext.eq_ignore_ascii_case("modeler"));
         if is_native {
-            let model = format::load(path).map_err(|err| file_format_error(path, err))?;
+            let mut model = format::load(path).map_err(|err| file_format_error(path, err))?;
+            let folder = path.parent().unwrap_or(Path::new(""));
+            map_texture_paths(&mut model, |texture| resolve_texture_path(texture, folder));
             let scene = kernel_scene(&model);
             let stats = stats_from_scene(&scene, Some(&model));
             return Ok(Document {
@@ -167,7 +169,9 @@ impl Document {
         let Some(kernel) = &self.kernel else {
             return Err(file_error(&self.path, "nothing to save".to_owned()));
         };
-        format::save(kernel, &target).map_err(|err| file_format_error(&target, err))?;
+        let folder = target.parent().unwrap_or(Path::new(""));
+        let model = model_for_file(kernel, folder);
+        format::save(&model, &target).map_err(|err| file_format_error(&target, err))?;
         self.path = target.clone();
         self.kind = FileKind::Native;
         self.untitled = false;
@@ -193,10 +197,33 @@ impl Document {
             return Err(file_error(&self.path, "nothing to save".to_owned()));
         };
         let path = self.path.clone();
-        format::save(kernel, &path).map_err(|err| file_format_error(&path, err))?;
+        let folder = path.parent().unwrap_or(Path::new(""));
+        let model = model_for_file(kernel, folder);
+        format::save(&model, &path).map_err(|err| file_format_error(&path, err))?;
         self.untitled = false;
         self.modified = false;
         Ok(path)
+    }
+}
+
+fn model_for_file(kernel: &km::Model, dir: &Path) -> km::Model {
+    let mut model = kernel.clone();
+    map_texture_paths(&mut model, |texture| texture_path_for_file(texture, dir));
+    model
+}
+
+fn map_texture_paths(model: &mut km::Model, map: impl Fn(&str) -> String) {
+    let updates: Vec<_> = model
+        .materials()
+        .filter_map(|(id, material)| {
+            let texture = material.texture.as_ref()?;
+            let mut to = material.clone();
+            to.texture.as_mut().unwrap().path = map(&texture.path);
+            Some((id, material.clone(), to))
+        })
+        .collect();
+    for (id, from, to) in updates {
+        let _ = model.apply(&km::ModelRecord::SetMaterial { id, from, to });
     }
 }
 
@@ -253,8 +280,11 @@ pub fn native_path(path: &Path) -> PathBuf {
 /// A texture path as the document keeps it in memory: `texture` as is when it is absolute,
 /// else joined onto `dir` (the folder of the file it was read from), as one string.
 pub fn resolve_texture_path(texture: &str, dir: &Path) -> String {
-    let _ = (texture, dir);
-    unimplemented!()
+    if Path::new(texture).is_absolute() {
+        texture.to_owned()
+    } else {
+        dir.join(texture).to_string_lossy().into_owned()
+    }
 }
 
 /// The text to write for an in-memory texture path in a model file saved into `dir`: the
@@ -262,8 +292,61 @@ pub fn resolve_texture_path(texture: &str, dir: &Path) -> String {
 /// or the absolute path when the two have no common root. Both are made absolute first
 /// (relative ones against the current directory); nothing touches the disk.
 pub fn texture_path_for_file(texture: &str, dir: &Path) -> String {
-    let _ = (texture, dir);
-    unimplemented!()
+    let to = normalize_path(Path::new(texture));
+    let from = normalize_path(dir);
+    let from_parts: Vec<_> = from.components().collect();
+    let to_parts: Vec<_> = to.components().collect();
+    let common = from_parts
+        .iter()
+        .zip(&to_parts)
+        .take_while(|(a, b)| a == b)
+        .count();
+    if common == 0 {
+        return to.to_string_lossy().replace('\\', "/");
+    }
+    let mut parts: Vec<String> = Vec::new();
+    for _ in common..from_parts.len() {
+        parts.push("..".to_owned());
+    }
+    for part in &to_parts[common..] {
+        match part {
+            std::path::Component::Normal(value) => {
+                parts.push(value.to_string_lossy().into_owned());
+            }
+            std::path::Component::ParentDir => parts.push("..".to_owned()),
+            std::path::Component::CurDir
+            | std::path::Component::RootDir
+            | std::path::Component::Prefix(_) => {}
+        }
+    }
+    parts.join("/")
+}
+
+fn normalize_path(path: &Path) -> PathBuf {
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir().unwrap_or_default().join(path)
+    };
+    let mut out = PathBuf::new();
+    for part in absolute.components() {
+        match part {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                let normal = matches!(
+                    out.components().next_back(),
+                    Some(std::path::Component::Normal(_))
+                );
+                if normal {
+                    out.pop();
+                } else if !out.has_root() {
+                    out.push(part.as_os_str());
+                }
+            }
+            _ => out.push(part.as_os_str()),
+        }
+    }
+    out
 }
 
 /// Status bar text for a size, e.g. "4.115 x 6.706 x 2.438 m".
