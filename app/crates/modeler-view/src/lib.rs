@@ -17,6 +17,9 @@ pub const ZOOM_STEP_FACTOR: f64 = 0.8;
 /// Smallest and largest allowed distance to the target, in meters.
 pub const MIN_DISTANCE: f64 = 1e-4;
 pub const MAX_DISTANCE: f64 = 1e7;
+/// A ground point farther than this many camera distances from the target is not used
+/// as an orbit pivot.
+pub const GROUND_PIVOT_RANGE: f64 = 50.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Projection {
@@ -181,6 +184,14 @@ impl Camera {
     /// its place on screen. Behaviour: `docs/specs/m4-orbit-pivot.md`.
     pub fn orbit_about(&mut self, pivot: DVec3, dx: f64, dy: f64) {
         let _ = (pivot, dx, dy);
+        unimplemented!()
+    }
+
+    /// Where the ray `origin + t * dir` (`t > 0`) meets the ground plane z = 0, as the
+    /// orbit pivot when the cursor is over empty space; `None` when it doesn't, or the
+    /// point is too far from the target. Behaviour: `docs/specs/m4-orbit-ground.md`.
+    pub fn ground_pivot(&self, origin: DVec3, dir: DVec3) -> Option<DVec3> {
+        let _ = (origin, dir);
         unimplemented!()
     }
 
