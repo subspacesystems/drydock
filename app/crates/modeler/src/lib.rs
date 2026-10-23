@@ -14,6 +14,7 @@ pub mod hints;
 pub mod input;
 pub mod materials_panel;
 pub mod overlay;
+pub mod texture_panel;
 pub mod viewstate;
 
 /// One-line product banner.
