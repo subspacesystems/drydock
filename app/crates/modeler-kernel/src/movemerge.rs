@@ -436,6 +436,21 @@ pub fn transform_sticky(
     {
         return Ok(());
     }
+    // A selected edge the matrix leaves where it is (an edge on the rotation axis) takes no
+    // part in the move; keeping it would tie the neighbours' faces to the selection.
+    let moving: Vec<Entity> = selection
+        .iter()
+        .copied()
+        .filter(|&e| match e {
+            Entity::Edge(_) => !leaves_geometry_in_place(model, body, &[e], matrix),
+            _ => true,
+        })
+        .collect();
+    let selection = if moving.is_empty() {
+        selection
+    } else {
+        &moving[..]
+    };
     match transform_attached(model, body, selection, matrix, undo, label) {
         Err(error @ TransformError::Invalid(_)) => {
             // Geometry glued to the rest by a vertex or two can't carry that vertex along

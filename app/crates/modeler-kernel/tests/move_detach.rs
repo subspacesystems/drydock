@@ -182,3 +182,60 @@ fn rectangle_selected_by_its_edges_only_still_rotates_onto_the_cube() {
         assert!(model.root().geometry().validate().is_empty());
     }
 }
+
+#[test]
+fn rectangle_selected_with_a_cube_edge_on_the_rotation_axis_still_rotates() {
+    let mut model = Model::new();
+    let pts = [
+        v(0., 0., 0.),
+        v(1., 0., 0.),
+        v(1., 1., 0.),
+        v(0., 1., 0.),
+        v(0., 0., 1.),
+        v(1., 0., 1.),
+        v(1., 1., 1.),
+        v(0., 1., 1.),
+        v(1.5, 1., 1.),
+        v(1.5, 1.8, 1.),
+        v(1., 1.8, 1.),
+    ];
+    let f = mesh(
+        &mut model,
+        &pts,
+        &[
+            &[0, 3, 2, 1],
+            &[4, 5, 6, 7],
+            &[0, 1, 5, 4],
+            &[2, 3, 7, 6],
+            &[1, 2, 6, 5],
+            &[3, 0, 4, 7],
+            &[6, 8, 9, 10],
+        ],
+    );
+    let ctx = model.root().geometry();
+    let vert = ctx
+        .edges()
+        .map(|(id, _)| id)
+        .find(|&id| {
+            let e = ctx.edge(id).unwrap();
+            let a = ctx.vertex(e.ends[0]).unwrap().position;
+            let b = ctx.vertex(e.ends[1]).unwrap().position;
+            (a.distance(v(1., 1., 0.)) < 1e-9 && b.distance(v(1., 1., 1.)) < 1e-9)
+                || (b.distance(v(1., 1., 0.)) < 1e-9 && a.distance(v(1., 1., 1.)) < 1e-9)
+        })
+        .unwrap();
+    let mut sel: Vec<Entity> = vec![Entity::Face(f[6]), Entity::Edge(vert)];
+    for u in &ctx.face(f[6]).unwrap().outer.uses {
+        sel.push(Entity::Edge(u.edge));
+    }
+    for deg in [30.0_f64, 60., 89., 90., 91., 120., 180.] {
+        let mut m2 = model.clone();
+        let m = DMat4::from_translation(v(1., 1., 1.))
+            * DMat4::from_quat(DQuat::from_rotation_z(deg.to_radians()))
+            * DMat4::from_translation(v(-1., -1., -1.));
+        let mut undo = UndoStack::new();
+        let r = transform_sticky(&mut m2, BodyId::Root, &sel, m, &mut undo, "Rotate");
+        r.unwrap_or_else(|e| panic!("{deg} degrees: {e:?}"));
+        assert!(m2.root().geometry().validate().is_empty());
+    }
+}
