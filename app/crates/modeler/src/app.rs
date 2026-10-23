@@ -31,6 +31,8 @@ const POINTS_PER_SCROLL_LINE: f64 = 50.0;
 const ERROR_COLOR: Color32 = Color32::from_rgb(200, 60, 50);
 const ACCENT_COLOR: Color32 = Color32::from_rgb(230, 140, 25);
 const PREVIEW_COLOR: Color32 = Color32::from_rgb(55, 60, 70);
+/// The Rotate protractor's radius on screen before its start point is placed.
+const PROTRACTOR_PX: f64 = 48.0;
 
 const ROBOTO: &[u8] = include_bytes!("../assets/fonts/Roboto-Regular.ttf");
 
@@ -750,10 +752,11 @@ impl App {
                                 ACCENT_COLOR.b(),
                                 55,
                             );
+                            // A tint only: the face's own edges keep their look.
                             painter.add(egui::Shape::convex_polygon(
                                 points,
                                 fill,
-                                egui::Stroke::new(1.5, ACCENT_COLOR),
+                                egui::Stroke::NONE,
                             ));
                         }
                     }
@@ -792,16 +795,22 @@ impl App {
             );
             paint_primitives(painter, &primitives, &project);
         }
-        if let Some(tool) = editor.rotate_tool()
-            && let Some(center) = tool.center()
-        {
-            let preview = tool.preview();
-            let (radius, start) = match preview.first() {
-                Some((_, point)) => (point.distance(center), Some(*point - center)),
-                None => (0.0, None),
-            };
-            let primitives = overlay::protractor(center, tool.plane(), radius, start, tool.angle());
-            paint_primitives(painter, &primitives, &project);
+        if let Some(tool) = editor.rotate_tool() {
+            // Before the center click the protractor follows the cursor, so the plane it
+            // would rotate in shows; until the start click it keeps a fixed screen size.
+            let center = tool.center().or_else(|| editor.hint().map(|h| h.point));
+            if let Some(center) = center {
+                let preview = tool.preview();
+                let (radius, start) = match preview.first() {
+                    Some((_, point)) if tool.center().is_some() => {
+                        (point.distance(center), Some(*point - center))
+                    }
+                    _ => (protractor_radius(&view, center, tool.plane()), None),
+                };
+                let primitives =
+                    overlay::protractor(center, tool.plane(), radius, start, tool.angle());
+                paint_primitives(painter, &primitives, &project);
+            }
         }
         if let Some(hint) = editor.hint()
             && let Some(point) = project(hint.point)
@@ -1146,6 +1155,20 @@ fn overlay_style(style: overlay::Style) -> (Color32, f32) {
 }
 
 /// Paint overlay primitives, projecting world points into the viewport.
+/// The world radius that draws `PROTRACTOR_PX` pixels wide at `center` in `plane`.
+fn protractor_radius(view: &EditorViewport, center: DVec3, plane: DrawPlane) -> f64 {
+    let step = view.camera.distance.max(1e-6) * 0.01;
+    let (Some(a), Some(b)) = (view.project(center), view.project(center + plane.u * step)) else {
+        return 0.0;
+    };
+    let px = a.distance(b);
+    if px > 1e-9 {
+        PROTRACTOR_PX * step / px
+    } else {
+        0.0
+    }
+}
+
 fn paint_primitives(
     painter: &egui::Painter,
     primitives: &[Primitive],

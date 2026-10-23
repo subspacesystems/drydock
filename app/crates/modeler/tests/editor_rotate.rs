@@ -271,6 +271,33 @@ fn cursor_angles_snap_to_15_degrees() {
 }
 
 #[test]
+fn a_cursor_snapped_to_geometry_keeps_its_exact_angle() {
+    let mut w = World::new();
+    // An open radial edge starting at 88 degrees on the radius 3 circle: within the 15 degree
+    // snap window of 90, but the arm must line up with the endpoint.
+    let end = at(DVec3::ZERO, 3.0, 88.0);
+    let far = at(DVec3::ZERO, 5.0, 88.0);
+    let mut undo = UndoStack::new();
+    let mut t = Target {
+        model: &mut w.model,
+        body: BodyId::Root,
+        undo: &mut undo,
+        unit: Unit::Meter,
+    };
+    draw_segments(&mut t, &[(end, far)], "Draw").expect("draw");
+    w.select_square();
+    w.start_at_origin();
+    w.move_to(at(DVec3::ZERO, 1.5, 91.9));
+    assert!((w.angle() - 90.0).abs() < 1e-9, "{}", w.angle());
+    w.move_to(end);
+    assert!((w.angle() - 88.0).abs() < 1e-6, "{}", w.angle());
+    assert!(w.click(end));
+    let mut want = rotated(&SQUARE, DVec3::ZERO, DVec3::Z, 88.0);
+    want.extend([end, far]);
+    w.assert_positions(&want);
+}
+
+#[test]
 fn hint_follows_the_cursor() {
     let mut w = World::new();
     w.select_square();

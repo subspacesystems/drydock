@@ -282,6 +282,25 @@ fn cursor_angles_snap_to_15_degrees_within_the_window() {
 }
 
 #[test]
+fn angle_snap_off_keeps_the_exact_cursor_angle() {
+    let mut w = World::new();
+    let mut tool = RotateTool::new(xy());
+    start_at_origin(&mut w, &mut tool);
+    tool.set_angle_snap(false);
+    w.run(&mut tool, Input::Move(at(DVec3::ZERO, 2.5, 89.0)))
+        .unwrap();
+    assert_angle(tool.angle(), 89.0);
+    w.run(&mut tool, Input::Click(at(DVec3::ZERO, 2.5, 43.5)))
+        .unwrap();
+    assert_angle(tool.last_angle(&w.undo), 43.5);
+    tool.set_angle_snap(true);
+    start_at_origin(&mut w, &mut tool);
+    w.run(&mut tool, Input::Move(at(DVec3::ZERO, 2.5, 89.0)))
+        .unwrap();
+    assert_angle(tool.angle(), 90.0);
+}
+
+#[test]
 fn a_cursor_on_the_center_keeps_the_previous_angle() {
     let mut w = World::new();
     let mut tool = RotateTool::new(xy());

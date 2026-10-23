@@ -215,6 +215,12 @@ fn error_message(error: &ToolError) -> &'static str {
     }
 }
 
+/// True when the inferred point is not snapped to a vertex, edge or axis line, so tools may
+/// round it (Rotate's 15 degree steps).
+fn free_point(inf: &Inference) -> bool {
+    matches!(inf.snap, Snap::OnFace(_) | Snap::Ground | Snap::Along)
+}
+
 fn rotate_error_message(error: &RotateError) -> String {
     match error {
         RotateError::Parse(_) => "Not an angle".to_string(),
@@ -1382,6 +1388,7 @@ impl Editor {
         };
         let point = self.rotate_input_point(inf, origin, dir);
         self.hint = Some(Inference { point, ..inf });
+        self.rotate.set_angle_snap(free_point(&inf));
         let mut target = Target {
             model,
             body: BodyId::Root,
@@ -1417,6 +1424,7 @@ impl Editor {
         };
         let point = self.rotate_input_point(inf, origin, dir);
         self.hint = Some(Inference { point, ..inf });
+        self.rotate.set_angle_snap(free_point(&inf));
         let result = {
             let mut target = Target {
                 model,

@@ -89,6 +89,7 @@ pub struct RotateTool {
     radius: f64,
     cursor: Option<DVec3>,
     angle: Option<f64>,
+    angle_snap: bool,
     last: Option<LastRotation>,
 }
 
@@ -112,6 +113,7 @@ impl RotateTool {
             radius: 0.0,
             cursor: None,
             angle: None,
+            angle_snap: true,
             last: None,
         }
     }
@@ -126,6 +128,13 @@ impl RotateTool {
         if self.stage == RotateStage::Center {
             self.plane = plane;
         }
+    }
+
+    /// Whether cursor angles snap to `SNAP_STEP_DEG` (on by default). Turn it off while the
+    /// cursor point is snapped to geometry, so a click on an edge or a point lines the arm up
+    /// with it exactly.
+    pub fn set_angle_snap(&mut self, on: bool) {
+        self.angle_snap = on;
     }
 
     pub fn stage(&self) -> RotateStage {
@@ -240,7 +249,7 @@ impl RotateTool {
             degrees = 180.0;
         }
         let nearest = (degrees / SNAP_STEP_DEG).round() * SNAP_STEP_DEG;
-        if (degrees - nearest).abs() <= SNAP_WINDOW_DEG {
+        if self.angle_snap && (degrees - nearest).abs() <= SNAP_WINDOW_DEG {
             degrees = nearest;
             if degrees <= -180.0 {
                 degrees = 180.0;
