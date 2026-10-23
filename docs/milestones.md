@@ -111,7 +111,8 @@ Done when: `modeler` on the reference house model opens in under 5 s on modeler-
 | `m4-texture-save` | Texture files stay found after Save As to another folder (paths rewritten relative to the new file) | `m4-texture-model` |
 | `m4-app-edit-context` | Editor works in the open instance: double click opens, Esc or a click outside closes, every tool uses the open body | `m4-edit-path` |
 | `m4-app-components` | Editor: make component / make group / explode on the selection in the open body (undo steps, messages) | `m4-make-component`, `m4-explode`, `m4-app-edit-context` |
-| `m4-app-components-ui` | Edit menu Make Component / Make Group / Explode with a name prompt; View option to hide the rest of the model while editing, otherwise drawn faded | `m4-app-components` |
+| `m4-app-components-ui` | Edit menu Make Component / Make Group / Explode with a name prompt | `m4-app-components` |
+| `m4-app-edit-view` | While editing inside an instance the rest of the model is drawn faded; View option to hide it instead; status bar face/edge counts skip definitions with no instances left (they still count after Explode) | `m4-app-edit-context` |
 | `m4-app-paint` | Paint Bucket tool (B): paints the clicked side, or the selection when clicking into it; Alt samples; current material | `m4-paint` |
 | `m4-app-texture-position` | Position a texture on a face: move, turn and scale the image (drag handles or typed values), reset to the default placement, one undo step each | `m4-texture-model`, `m4-texture-scene` |
 | `m4-app-materials` | Editor: create (becomes current), edit and purge materials, one undo step each, messages | `m4-paint`, `m4-texture-model` |
