@@ -134,6 +134,14 @@ Done when: `modeler` on the reference house model opens in under 5 s on modeler-
 | `m4-ui-axes` | red/green/blue axes drawn at the origin (View > Axes toggle); inside an open instance at its origin | |
 | `m4-ui-materials-layout` | Materials panel buttons and a search box at the top, the list scrolls under them; list or tiles view | |
 | `m4-zoom-cursor` | wheel and Zoom-tool zoom scale about the model point under the cursor, so a step close to a surface stays small and never passes it | |
+| `m4-fix-copy-speed` | Move-copy froze on a large house: `validate` without all-pairs loops; copy/explode/make component check only the bodies they change; instance copies don't explode; explode leaves faces away from the copy alone (kernel, orchestrator) | |
+| `m4-fix-dae-edges` | an opened DAE draws the kernel scene, so edges show at once (not only after the first edit) | |
+| `m4-fix-clipboard-keys` | Ctrl+X/C/V through egui's Cut/Copy/Paste events (no key events arrive for them) | |
+| `m4-axes-depth` | axes hidden behind nearer geometry (drawn in the GPU pass with depth) | |
+| `m4-material-swatch-texture` | textured materials show their image in the Materials list and tiles | |
+| `m4-texture-handles-2` | texture handles: short help in the status bar, grips that look different and change the cursor, drag from any corner, snapping to geometry, turn grip off the corners | |
+| `m4-zoom-through` | Ctrl+wheel steps through the surface under the cursor | `m4-zoom-cursor` |
+| `m4-ui-gpu-info` | Model Info names the graphics adapter and backend in use | |
 
 - Make component from selection; edit in place (all instances update); option to hide the rest of the model while editing; groups.
 - Materials: create/edit colors and image textures; paint bucket; texture positioning basics; materials survive save/load and DAE import.
