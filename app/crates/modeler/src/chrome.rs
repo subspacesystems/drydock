@@ -454,6 +454,11 @@ pub fn menu_bar(ui: &mut eframe::egui::Ui, state: &MenuState<'_>) -> Option<Acti
                 chosen = Some(Action::ToggleHideRest);
                 ui.close();
             }
+            ui.separator();
+            if ui.selectable_label(state.axes, "Axes").clicked() {
+                chosen = Some(Action::ToggleAxes);
+                ui.close();
+            }
         });
         ui.menu_button("Tools", |ui| {
             for (group_index, group) in TOOL_GROUPS.iter().enumerate() {

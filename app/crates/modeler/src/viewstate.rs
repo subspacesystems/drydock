@@ -140,7 +140,7 @@ impl ViewState {
             Action::MakeGroup => return Effect::MakeComponent { group: true },
             Action::Explode => return Effect::Explode,
             Action::ToggleHideRest => return Effect::ToggleHideRest,
-            Action::ToggleAxes => unimplemented!("m4-ui-axes"),
+            Action::ToggleAxes => self.axes = !self.axes,
             Action::OpenRecent(index) => return Effect::OpenRecent(index),
             Action::Exit => return Effect::Exit,
         }
