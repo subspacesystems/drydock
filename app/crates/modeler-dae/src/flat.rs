@@ -61,8 +61,48 @@ impl FlatScene {
     /// scene (either side), in front of `origin`. Lines don't count. Behaviour:
     /// `docs/specs/m4-orbit-pivot.md`.
     pub fn raycast(&self, origin: DVec3, dir: DVec3) -> Option<DVec3> {
-        let _ = (origin, dir);
-        unimplemented!()
+        if !origin.is_finite() || !dir.is_finite() || dir.length_squared() == 0.0 {
+            return None;
+        }
+        let mut nearest: Option<f64> = None;
+        for batch in &self.batches {
+            let point = |index: u32| {
+                batch
+                    .positions
+                    .get(index as usize)
+                    .map(|p| DVec3::new(f64::from(p[0]), f64::from(p[1]), f64::from(p[2])))
+            };
+            for triangle in batch.indices.as_chunks::<3>().0 {
+                let (Some(a), Some(b), Some(c)) =
+                    (point(triangle[0]), point(triangle[1]), point(triangle[2]))
+                else {
+                    continue;
+                };
+                let edge1 = b - a;
+                let edge2 = c - a;
+                let h = dir.cross(edge2);
+                let det = edge1.dot(h);
+                if det == 0.0 || !det.is_finite() {
+                    continue;
+                }
+                let inv_det = 1.0 / det;
+                let s = origin - a;
+                let u = inv_det * s.dot(h);
+                if u < 0.0 || u > 1.0 {
+                    continue;
+                }
+                let q = s.cross(edge1);
+                let v = inv_det * dir.dot(q);
+                if v < 0.0 || u + v > 1.0 {
+                    continue;
+                }
+                let t = inv_det * edge2.dot(q);
+                if t > 0.0 && nearest.is_none_or(|nearest| t < nearest) {
+                    nearest = Some(t);
+                }
+            }
+        }
+        nearest.map(|t| origin + dir * t)
     }
 }
 

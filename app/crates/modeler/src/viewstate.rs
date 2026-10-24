@@ -93,7 +93,10 @@ impl ViewState {
     pub fn apply(&mut self, action: Action, viewport_px: (f64, f64)) -> Effect {
         let (height, aspect) = height_and_aspect(viewport_px);
         match action {
-            Action::Orbit { dx, dy } => self.camera.orbit(dx, dy),
+            Action::Orbit { dx, dy } => match self.pivot {
+                Some(pivot) => self.camera.orbit_about(pivot, dx, dy),
+                None => self.camera.orbit(dx, dy),
+            },
             Action::Pan { dx, dy } => self.camera.pan(dx, dy, height),
             Action::Zoom { steps, cursor_ndc } => self.camera.zoom(steps, cursor_ndc, aspect),
             Action::ZoomExtents => {
