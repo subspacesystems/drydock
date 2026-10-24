@@ -535,6 +535,15 @@ impl Model {
         out
     }
 
+    /// The violations `validate` reports that belong to `bodies`: geometry and transform
+    /// problems of those bodies, and the instance count of groups whose body is listed. Same
+    /// order as `validate`; unknown bodies are skipped. Behaviour:
+    /// `docs/specs/m4-fix-copy-speed.md`.
+    pub fn validate_bodies(&self, bodies: &[BodyId]) -> Vec<ModelViolation> {
+        let _ = bodies;
+        unimplemented!("m4-fix-copy-speed")
+    }
+
     // -- operations (each appends its records to `log`) --------------------------------
 
     pub fn add_material(&mut self, material: Material, log: &mut ModelEdit) -> MaterialId {
