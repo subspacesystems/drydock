@@ -208,7 +208,7 @@ fn empty_group(
         .map_err(ExplodeError::Model)
 }
 
-fn explode_inner(
+pub(crate) fn explode_inner(
     model: &mut Model,
     body: BodyId,
     instance: InstanceId,
