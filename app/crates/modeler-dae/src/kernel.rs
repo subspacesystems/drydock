@@ -12,7 +12,7 @@ use glam::{DMat4, DVec2, DVec3};
 use modeler_kernel::geom::{self, LINEAR_TOL};
 use modeler_kernel::model as km;
 use modeler_kernel::texture::TextureMap;
-use modeler_kernel::topology::{Context, EdgeId, EdgeUse, Edit, Face, Loop, VertexId};
+use modeler_kernel::topology::{Context, EdgeId, EdgeUse, Edit, Face, FaceId, Loop, VertexId};
 
 use crate::{Model, Node, PrimitiveKind};
 
@@ -333,51 +333,44 @@ impl Conv<'_> {
                     edges: HashMap::new(),
                 };
                 for (pid, (members, nrm)) in patches.iter().enumerate() {
-                    let fm = kept_ref[members[0]].fm;
-                    let mut made = None;
-                    if let Some(loops) =
-                        boundary_loops(members, kept_ref, &patch_of, pid, &joinable, pos, *nrm)
-                    {
-                        let face_loops: Option<Vec<Loop>> = loops
-                            .iter()
-                            .map(|l| {
-                                let uses: Option<Vec<EdgeUse>> =
-                                    l.iter().map(|&(a, z)| b.edge_use(a, z)).collect();
-                                Some(Loop { uses: uses? })
-                            })
-                            .collect();
-                        if let Some(mut face_loops) = face_loops
-                            && let Ok(f) = b.ctx.insert_face(
-                                Face {
-                                    outer: face_loops.remove(0),
-                                    inner: face_loops,
-                                },
-                                b.log,
-                            )
-                        {
-                            if b.ctx.face_violation(f).is_some() {
-                                let _ = b.ctx.delete_face(f, b.log);
-                            } else {
-                                made = Some(f);
+                    let inside_patch = |t: usize| patch_of[t] == pid;
+                    if let Some(f) = insert_patch_face(
+                        &mut b,
+                        members,
+                        kept_ref,
+                        &inside_patch,
+                        &joinable,
+                        pos,
+                        *nrm,
+                    ) {
+                        fm_list.push((f, kept_ref[members[0]].fm));
+                        continue;
+                    }
+                    let regions = split_regions(members, kept_ref, &joinable, pos);
+                    if regions.len() <= 1 {
+                        for &t in members {
+                            if let Some(f) = insert_triangle(&mut b, t, kept_ref) {
+                                fm_list.push((f, kept_ref[t].fm));
                             }
                         }
+                        continue;
                     }
-                    match made {
-                        Some(f) => fm_list.push((f, fm)),
-                        None => {
-                            for &t in members {
-                                let s = kept_ref[t].s;
-                                let uses: Option<Vec<EdgeUse>> =
-                                    (0..3).map(|k| b.edge_use(s[k], s[(k + 1) % 3])).collect();
-                                if let Some(uses) = uses
-                                    && let Ok(f) = b.ctx.insert_face(
-                                        Face {
-                                            outer: Loop { uses },
-                                            inner: Vec::new(),
-                                        },
-                                        b.log,
-                                    )
-                                {
+                    for region in &regions {
+                        let region_set: HashSet<usize> = region.iter().copied().collect();
+                        let inside_region = |t: usize| region_set.contains(&t);
+                        if let Some(f) = insert_patch_face(
+                            &mut b,
+                            region,
+                            kept_ref,
+                            &inside_region,
+                            &joinable,
+                            pos,
+                            *nrm,
+                        ) {
+                            fm_list.push((f, kept_ref[region[0]].fm));
+                        } else {
+                            for &t in region {
+                                if let Some(f) = insert_triangle(&mut b, t, kept_ref) {
                                     fm_list.push((f, kept_ref[t].fm));
                                 }
                             }
@@ -447,8 +440,7 @@ fn same_way(a: [usize; 3], b: [usize; 3]) -> bool {
 fn boundary_loops(
     members: &[usize],
     kept: &[T],
-    patch_of: &[usize],
-    pid: usize,
+    inside: &dyn Fn(usize) -> bool,
     joinable: &dyn Fn((usize, usize)) -> Option<(usize, usize)>,
     pos: &[DVec3],
     nrm: DVec3,
@@ -458,7 +450,7 @@ fn boundary_loops(
         let s = kept[t].s;
         for k in 0..3 {
             let (a, b) = (s[k], s[(k + 1) % 3]);
-            let interior = matches!(joinable(upair(a, b)), Some((x, y)) if patch_of[x] == pid && patch_of[y] == pid);
+            let interior = matches!(joinable(upair(a, b)), Some((x, y)) if inside(x) && inside(y));
             if !interior {
                 bnd.push((a, b));
             }
@@ -505,6 +497,184 @@ fn boundary_loops(
     let outer = loops.remove(pos_idx[0]);
     loops.insert(0, outer);
     Some(loops)
+}
+
+/// Insert one face for `members`; `None` when tracing or the kernel refuses it.
+fn insert_patch_face(
+    b: &mut Builder,
+    members: &[usize],
+    kept: &[T],
+    inside: &dyn Fn(usize) -> bool,
+    joinable: &dyn Fn((usize, usize)) -> Option<(usize, usize)>,
+    pos: &[DVec3],
+    nrm: DVec3,
+) -> Option<FaceId> {
+    let loops = boundary_loops(members, kept, inside, joinable, pos, nrm)?;
+    let face_loops: Option<Vec<Loop>> = loops
+        .iter()
+        .map(|l| {
+            let uses: Option<Vec<EdgeUse>> = l.iter().map(|&(a, z)| b.edge_use(a, z)).collect();
+            Some(Loop { uses: uses? })
+        })
+        .collect();
+    let mut face_loops = face_loops?;
+    let f = b
+        .ctx
+        .insert_face(
+            Face {
+                outer: face_loops.remove(0),
+                inner: face_loops,
+            },
+            b.log,
+        )
+        .ok()?;
+    if b.ctx.face_violation(f).is_some() {
+        let _ = b.ctx.delete_face(f, b.log);
+        None
+    } else {
+        Some(f)
+    }
+}
+
+/// Insert one face for a single triangle.
+fn insert_triangle(b: &mut Builder, t: usize, kept: &[T]) -> Option<FaceId> {
+    let s = kept[t].s;
+    let uses: Option<Vec<EdgeUse>> = (0..3).map(|k| b.edge_use(s[k], s[(k + 1) % 3])).collect();
+    let uses = uses?;
+    b.ctx
+        .insert_face(
+            Face {
+                outer: Loop { uses },
+                inner: Vec::new(),
+            },
+            b.log,
+        )
+        .ok()
+}
+
+/// Split a patch into greedily grown regions whose outlines stay clean as they grow.
+fn split_regions(
+    members: &[usize],
+    kept: &[T],
+    joinable: &dyn Fn((usize, usize)) -> Option<(usize, usize)>,
+    pos: &[DVec3],
+) -> Vec<Vec<usize>> {
+    let member_set: HashSet<usize> = members.iter().copied().collect();
+    let mut assigned: HashSet<usize> = HashSet::new();
+    let mut regions: Vec<Vec<usize>> = Vec::new();
+    for &seed in members {
+        if assigned.contains(&seed) {
+            continue;
+        }
+        let mut region = vec![seed];
+        let mut region_set = HashSet::from([seed]);
+        assigned.insert(seed);
+        let s = kept[seed].s;
+        let mut outline: Vec<(usize, usize)> = (0..3).map(|k| (s[k], s[(k + 1) % 3])).collect();
+        loop {
+            let mut added = false;
+            let mut i = 0;
+            while i < region.len() {
+                let t = region[i];
+                for k in 0..3 {
+                    let (a, c) = (kept[t].s[k], kept[t].s[(k + 1) % 3]);
+                    let Some((x, y)) = joinable(upair(a, c)) else {
+                        continue;
+                    };
+                    let u = if x == t { y } else { x };
+                    if !member_set.contains(&u) || assigned.contains(&u) {
+                        continue;
+                    }
+                    if let Some(next) =
+                        try_add_to_region(&outline, u, &region_set, kept, joinable, pos)
+                    {
+                        outline = next;
+                        region.push(u);
+                        region_set.insert(u);
+                        assigned.insert(u);
+                        added = true;
+                    }
+                }
+                i += 1;
+            }
+            if !added {
+                break;
+            }
+        }
+        regions.push(region);
+    }
+    regions
+}
+
+fn point_segment_distance(p: DVec3, a: DVec3, b: DVec3) -> f64 {
+    let ab = b - a;
+    let len2 = ab.length_squared();
+    if len2 == 0.0 {
+        return p.distance(a);
+    }
+    let t = ((p - a).dot(ab) / len2).clamp(0.0, 1.0);
+    p.distance(a + ab * t)
+}
+
+/// The outline after adding `t`, if it stays clean; `None` otherwise.
+fn try_add_to_region(
+    outline: &[(usize, usize)],
+    t: usize,
+    region: &HashSet<usize>,
+    kept: &[T],
+    joinable: &dyn Fn((usize, usize)) -> Option<(usize, usize)>,
+    pos: &[DVec3],
+) -> Option<Vec<(usize, usize)>> {
+    let s = kept[t].s;
+    let mut edges = outline.to_vec();
+    let mut added_edges = Vec::new();
+    for k in 0..3 {
+        let (a, b) = (s[k], s[(k + 1) % 3]);
+        let neighbor_in_region = match joinable(upair(a, b)) {
+            Some((x, y)) => {
+                let u = if x == t { y } else { x };
+                region.contains(&u)
+            }
+            None => false,
+        };
+        if neighbor_in_region {
+            let at = edges.iter().position(|&e| e == (b, a))?;
+            edges.remove(at);
+        } else {
+            edges.push((a, b));
+            added_edges.push((a, b));
+        }
+    }
+    for &v in &s {
+        if edges.iter().filter(|&&(a, _)| a == v).count() > 1 {
+            return None;
+        }
+    }
+    for &v in &s {
+        if !edges.iter().any(|&(a, _)| a == v) {
+            continue;
+        }
+        let p = pos[v];
+        for &(c, d) in &edges {
+            if c == v || d == v {
+                continue;
+            }
+            if point_segment_distance(p, pos[c], pos[d]) <= LINEAR_TOL {
+                return None;
+            }
+        }
+    }
+    for &(a, b) in &added_edges {
+        for &(c, _) in &edges {
+            if c == a || c == b {
+                continue;
+            }
+            if point_segment_distance(pos[c], pos[a], pos[b]) <= LINEAR_TOL {
+                return None;
+            }
+        }
+    }
+    Some(edges)
 }
 
 struct T {

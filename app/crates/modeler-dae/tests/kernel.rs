@@ -472,36 +472,8 @@ fn fully_dropped_document_is_empty() {
     assert_eq!(m.materials().count(), 0);
 }
 
-/// 3x3 cells, minus the centre and the top-right corner cell: the boundary touches itself
-/// at the corner the two missing cells share, so the patch falls back to triangles.
-#[test]
-fn pinched_patch_falls_back_to_triangles() {
-    let mut triangles = Vec::new();
-    for y in 0..3 {
-        for x in 0..3 {
-            if (x, y) == (1, 1) || (x, y) == (2, 2) {
-                continue;
-            }
-            let (x, y) = (x as f32, y as f32);
-            triangles.extend(quad_tris([
-                [x, y, 0.0],
-                [x + 1.0, y, 0.0],
-                [x + 1.0, y + 1.0, 0.0],
-                [x, y + 1.0, 0.0],
-            ]));
-        }
-    }
-    let m = convert(&root_doc(vec![tris(None, &triangles)]));
-    let ctx = root(&m);
-    assert_eq!(ctx.face_count(), 14);
-    for (_, f) in ctx.faces() {
-        assert_eq!(f.outer.uses.len(), 3);
-    }
-    assert!((total_area(ctx) - 7.0).abs() < 1e-9);
-    assert_valid(ctx);
-}
-
-/// The same grid without the corner cell missing is one face with one hole.
+/// 3x3 cells without the centre is one face with one hole. (A grid whose outline touches
+/// itself: `kernel_pinch.rs`.)
 #[test]
 fn grid_with_centre_missing_is_one_face() {
     let mut triangles = Vec::new();
