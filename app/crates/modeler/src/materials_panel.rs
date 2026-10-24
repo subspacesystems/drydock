@@ -105,8 +105,19 @@ impl MaterialForm {
 pub struct MaterialsPanel {
     /// The open new / edit form, if any.
     pub form: Option<MaterialForm>,
+    /// The search box's text (`docs/specs/m4-ui-materials-layout.md`).
+    pub search: String,
+    /// Show the materials as tiles rather than a list.
+    pub tiles: bool,
     /// The name field takes focus on the next draw.
     focus_name: bool,
+}
+
+/// Whether a material called `name` shows for the search text `query`: the trimmed query
+/// is empty, or `name` contains it ignoring case. Behaviour: `docs/specs/m4-ui-materials-layout.md`.
+pub fn matches_search(name: &str, query: &str) -> bool {
+    let _ = (name, query);
+    unimplemented!("m4-ui-materials-layout")
 }
 
 /// Draw the panel into `ui` for `model`, with `current` the Paint Bucket's material.

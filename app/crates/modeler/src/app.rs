@@ -642,6 +642,46 @@ impl App {
                     self.refresh_document(ctx, frame);
                 }
             }
+            Effect::Copy => {
+                if let (Some(editor), Some(document)) = (&mut self.editor, &mut self.model)
+                    && let Some(model) = document.kernel.as_ref()
+                {
+                    editor.copy(model);
+                }
+                self.dirty = true;
+            }
+            Effect::Cut => {
+                let changed =
+                    if let (Some(editor), Some(document)) = (&mut self.editor, &mut self.model) {
+                        match document.kernel.as_mut() {
+                            Some(model) => editor.cut(model),
+                            None => false,
+                        }
+                    } else {
+                        false
+                    };
+                if changed {
+                    self.refresh_document(ctx, frame);
+                } else {
+                    self.dirty = true;
+                }
+            }
+            Effect::Paste => {
+                let started =
+                    if let (Some(editor), Some(document)) = (&mut self.editor, &mut self.model) {
+                        match document.kernel.as_ref() {
+                            Some(model) => editor.paste(model),
+                            None => false,
+                        }
+                    } else {
+                        false
+                    };
+                if started {
+                    self.refresh_document(ctx, frame);
+                } else {
+                    self.dirty = true;
+                }
+            }
             Effect::Flip(axis) => {
                 let changed =
                     if let (Some(editor), Some(document)) = (&mut self.editor, &mut self.model) {
@@ -736,8 +776,19 @@ impl App {
                 modifiers,
                 ..
             } = event
-                && let Some(action) = input::key(key.name(), to_modifiers(modifiers))
             {
+                let mods = to_modifiers(modifiers);
+                // Cut, Copy and Paste are not in `input::key` so the shape letters keep
+                // their plain meanings on every platform.
+                let action = match key.name() {
+                    "C" if mods.ctrl && !mods.shift && !mods.alt => Some(input::Action::Copy),
+                    "X" if mods.ctrl && !mods.shift && !mods.alt => Some(input::Action::Cut),
+                    "V" if mods.ctrl && !mods.shift && !mods.alt => Some(input::Action::Paste),
+                    _ => input::key(key.name(), mods),
+                };
+                let Some(action) = action else {
+                    continue;
+                };
                 let typing = self
                     .editor
                     .as_ref()
@@ -1060,6 +1111,20 @@ impl App {
                 painter.line_segment([a, b], egui::Stroke::new(1.5, preview_color));
             }
         }
+        for (a, b) in editor.paste_preview() {
+            if let (Some(a), Some(b)) = (project(a), project(b)) {
+                painter.line_segment([a, b], egui::Stroke::new(1.5, preview_color));
+            }
+        }
+        if editor.pasting() {
+            painter.text(
+                rect.left_top() + egui::vec2(12.0, 12.0),
+                egui::Align2::LEFT_TOP,
+                "Click to place the paste (Esc cancels)",
+                egui::FontId::proportional(13.0),
+                Color32::from_rgb(220, 220, 220),
+            );
+        }
         if let Some(kernel) = &document.kernel {
             let open_body = editor.path().body(kernel).unwrap_or(BodyId::Root);
             let open_transform = editor.path().transform(kernel).unwrap_or(DMat4::IDENTITY);
@@ -1215,6 +1280,11 @@ impl App {
                 .editor
                 .as_ref()
                 .is_some_and(|editor| !editor.selection().is_empty()),
+            has_clipboard: self
+                .editor
+                .as_ref()
+                .and_then(Editor::clipboard)
+                .is_some_and(|clipboard| !clipboard.is_empty()),
             can_explode: self.editor.as_ref().is_some_and(|editor| {
                 matches!(
                     editor.selection(),
@@ -1225,6 +1295,7 @@ impl App {
                 .editor
                 .as_ref()
                 .is_some_and(|editor| editor.hide_rest()),
+            axes: self.view.axes,
             recent: self.recent.paths(),
             tool: self.view.tool,
         }
@@ -1558,6 +1629,7 @@ fn overlay_style(style: overlay::Style) -> (Color32, f32) {
         overlay::Style::Guide => (Color32::from_rgb(160, 160, 160), 1.0),
         overlay::Style::GuidePoint => (Color32::from_rgb(220, 220, 220), 1.0),
         overlay::Style::Selected | overlay::Style::SelectedFace => (ACCENT_COLOR, 3.0),
+        overlay::Style::Axis { .. } => unimplemented!("m4-ui-axes"),
     }
 }
 

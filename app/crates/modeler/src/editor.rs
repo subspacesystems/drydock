@@ -15,7 +15,7 @@ use std::collections::BTreeSet;
 use glam::{DAffine2, DMat4, DVec2, DVec3};
 use modeler_kernel::click::{self, ClickMods};
 use modeler_kernel::component::make_component;
-use modeler_kernel::copy::{Clipboard, copy_selection};
+use modeler_kernel::copy::{self, Clipboard, copy_selection};
 use modeler_kernel::editpath::EditPath;
 use modeler_kernel::erase::erase;
 use modeler_kernel::explode::explode;
@@ -189,6 +189,11 @@ struct LastPush {
     undo_count: usize,
 }
 
+#[derive(Clone, Copy)]
+struct PasteState {
+    point: Option<DVec3>,
+}
+
 pub struct Editor {
     /// The unit for typed numbers without a unit, and for the measurement display.
     pub unit: Unit,
@@ -220,6 +225,8 @@ pub struct Editor {
     tape_point_guides: bool,
     scale_segments: Vec<(DVec3, DVec3)>,
     material: Option<MaterialId>,
+    clipboard: Option<Clipboard>,
+    paste: Option<PasteState>,
     path: EditPath,
     /// Cumulative world transforms of the path's steps; the last one maps the open body to
     /// the world. Kept next to the path so the getters can map points without the model.
@@ -381,6 +388,8 @@ impl Editor {
             tape_point_guides: false,
             scale_segments: Vec::new(),
             material: None,
+            clipboard: None,
+            paste: None,
             path: EditPath::root(),
             transforms: Vec::new(),
             hide_rest: false,
@@ -503,6 +512,7 @@ impl Editor {
     /// Switch tools; the shape in progress, the typed text and the locks are dropped.
     pub fn set_tool(&mut self, tool: Tool) {
         self.tool = tool;
+        self.paste = None;
         self.line = LineTool::new();
         self.idle_shapes();
         self.typed.clear();
@@ -543,6 +553,15 @@ impl Editor {
         mods: Modifiers,
     ) {
         self.refresh_path(model);
+        if self.paste.is_some() {
+            if let Some(inf) = self.infer_move_at(model, view, cursor) {
+                self.hint = Some(inf);
+                if let Some(paste) = self.paste.as_mut() {
+                    paste.point = Some(inf.point);
+                }
+            }
+            return;
+        }
         if is_shape(self.tool) {
             let (origin, dir) = self.body_ray(view, cursor);
             match self.infer_shape_at(model, view, cursor) {
@@ -611,6 +630,9 @@ impl Editor {
         count: u32,
     ) -> bool {
         self.refresh_path(model);
+        if self.paste.is_some() {
+            return self.click_paste(model, view, cursor);
+        }
         match self.tool {
             Tool::Line => {
                 let before = self.undo.undo_count();
@@ -758,6 +780,10 @@ impl Editor {
         self.refresh_path(model);
         match key {
             EditKey::Cancel => {
+                if self.paste.take().is_some() {
+                    self.hint = None;
+                    return false;
+                }
                 self.line = LineTool::new();
                 self.idle_shapes();
                 self.idle_rotate();
@@ -1268,42 +1294,179 @@ impl Editor {
         self.move_copy = on;
     }
 
+    /// Drop the tool in progress and the typed text, as the editing commands do.
+    fn idle_edit(&mut self) {
+        self.line = LineTool::new();
+        self.idle_shapes();
+        self.idle_rotate();
+        self.idle_move();
+        self.idle_scale();
+        self.idle_tape();
+        self.typed.clear();
+        self.push = None;
+        self.hint = None;
+    }
+
     /// The clipboard, if something was copied or cut. Behaviour:
     /// `docs/specs/m4-app-copy-paste.md`.
     pub fn clipboard(&self) -> Option<&Clipboard> {
-        unimplemented!("m4-app-copy-paste")
+        self.clipboard.as_ref()
     }
 
     /// Copy the selection of the open body to the clipboard. The model is untouched.
     /// True when the clipboard was set.
     pub fn copy(&mut self, model: &Model) -> bool {
-        let _ = model;
-        unimplemented!("m4-app-copy-paste")
+        self.idle_edit();
+        if self.selection.is_empty() {
+            self.message = Some("Select something to copy".to_string());
+            return false;
+        }
+        match copy::extract(model, self.body(model), &self.selection) {
+            Ok(clipboard) => {
+                self.clipboard = Some(clipboard);
+                self.message = None;
+                true
+            }
+            Err(_) => {
+                self.message = Some("Can't copy that".to_string());
+                false
+            }
+        }
     }
 
     /// Copy the selection to the clipboard, then erase it (one undo step "Cut"). True when
     /// the model changed.
     pub fn cut(&mut self, model: &mut Model) -> bool {
-        let _ = model;
-        unimplemented!("m4-app-copy-paste")
+        self.idle_edit();
+        if self.selection.is_empty() {
+            self.message = Some("Select something to cut".to_string());
+            return false;
+        }
+        let body = self.body(model);
+        let clipboard = match copy::extract(model, body, &self.selection) {
+            Ok(clipboard) => clipboard,
+            Err(_) => {
+                self.message = Some("Can't cut that".to_string());
+                return false;
+            }
+        };
+        match erase(model, body, &self.selection, &mut self.undo, "Cut") {
+            Ok(()) => {
+                self.clipboard = Some(clipboard);
+                self.message = None;
+                self.prune(model);
+                true
+            }
+            Err(_) => {
+                self.message = Some("Can't cut that".to_string());
+                false
+            }
+        }
     }
 
     /// Start pasting the clipboard: the Select tool is made current and the copy follows
     /// the cursor until a click places it. True when pasting started.
     pub fn paste(&mut self, model: &Model) -> bool {
         let _ = model;
-        unimplemented!("m4-app-copy-paste")
+        self.idle_edit();
+        let available = self
+            .clipboard
+            .as_ref()
+            .is_some_and(|clipboard| !clipboard.is_empty());
+        if !available {
+            self.message = Some("Nothing to paste".to_string());
+            return false;
+        }
+        self.set_tool(Tool::Select);
+        self.paste = Some(PasteState { point: None });
+        self.message = None;
+        true
     }
 
     /// Whether a paste is waiting for its click.
     pub fn pasting(&self) -> bool {
-        unimplemented!("m4-app-copy-paste")
+        self.paste.is_some()
+    }
+
+    /// The clipboard's x/y middle at its lowest z: where a paste is held by the cursor.
+    fn paste_anchor(&self) -> Option<DVec3> {
+        let (min, max) = self.clipboard.as_ref()?.bounds()?;
+        Some(DVec3::new(
+            (min.x + max.x) * 0.5,
+            (min.y + max.y) * 0.5,
+            min.z,
+        ))
+    }
+
+    fn paste_offset(&self, point: DVec3) -> Option<DVec3> {
+        Some(point - self.paste_anchor()?)
     }
 
     /// Edges of the paste as a click would place it now (world coordinates); empty when
     /// not pasting or the cursor has not been over the viewport yet.
     pub fn paste_preview(&self) -> Vec<(DVec3, DVec3)> {
-        unimplemented!("m4-app-copy-paste")
+        let Some(paste) = self.paste else {
+            return Vec::new();
+        };
+        let Some(point) = paste.point else {
+            return Vec::new();
+        };
+        let Some(offset) = self.paste_offset(point) else {
+            return Vec::new();
+        };
+        let Some(clipboard) = &self.clipboard else {
+            return Vec::new();
+        };
+        let root = clipboard.model().root();
+        let edges: Vec<(DVec3, DVec3)> = if root.instances().next().is_some() {
+            let Some((min, max)) = clipboard.bounds() else {
+                return Vec::new();
+            };
+            box_edges(Bounds { min, max })
+        } else {
+            root.geometry()
+                .edges()
+                .filter_map(|(_, edge)| {
+                    let a = root.geometry().vertex(edge.ends[0])?.position;
+                    let b = root.geometry().vertex(edge.ends[1])?.position;
+                    Some((a, b))
+                })
+                .collect()
+        };
+        edges
+            .into_iter()
+            .map(|(a, b)| (self.to_world(a + offset), self.to_world(b + offset)))
+            .collect()
+    }
+
+    fn click_paste(&mut self, model: &mut Model, view: &Viewport, cursor: DVec2) -> bool {
+        let Some(inf) = self.infer_move_at(model, view, cursor) else {
+            return false;
+        };
+        self.hint = Some(inf);
+        if let Some(paste) = self.paste.as_mut() {
+            paste.point = Some(inf.point);
+        }
+        let Some(offset) = self.paste_offset(inf.point) else {
+            return false;
+        };
+        let body = self.body(model);
+        let Some(clipboard) = self.clipboard.as_ref() else {
+            return false;
+        };
+        let matrix = DMat4::from_translation(offset);
+        match copy::insert(model, body, clipboard, matrix, &mut self.undo, "Paste") {
+            Ok(entities) => {
+                self.selection = entities;
+                self.paste = None;
+                self.message = None;
+                true
+            }
+            Err(_) => {
+                self.message = Some("Can't paste that".to_string());
+                false
+            }
+        }
     }
 
     /// Tape: the tool, for drawing the start point (`docs/specs/m3-app-tape.md`). `None` for
@@ -1379,6 +1542,7 @@ impl Editor {
     /// Erase the selection (one undo step "Erase"). True when the model changed.
     /// Behaviour: `docs/specs/m3-app-erase.md`.
     pub fn erase_selection(&mut self, model: &mut Model) -> bool {
+        self.paste = None;
         self.line = LineTool::new();
         self.idle_shapes();
         self.idle_rotate();
@@ -1441,6 +1605,7 @@ impl Editor {
         let Some(path) = self.path.open(model, instance) else {
             return false;
         };
+        self.paste = None;
         self.path = path;
         self.recompute_transforms(model);
         self.selection.clear();
@@ -1452,6 +1617,7 @@ impl Editor {
         if self.path.is_root() {
             return;
         }
+        self.paste = None;
         self.path = self.path.close();
         self.transforms.pop();
         self.selection.clear();
@@ -1472,6 +1638,7 @@ impl Editor {
     /// "Make Group". The new instance becomes the selection. True when the model changed.
     /// Behaviour: `docs/specs/m4-app-components.md`.
     pub fn make_component(&mut self, model: &mut Model, name: &str, group: bool) -> bool {
+        self.paste = None;
         self.line = LineTool::new();
         self.idle_shapes();
         self.idle_rotate();
@@ -1532,6 +1699,7 @@ impl Editor {
     /// entities that came out become the selection. True when the model changed.
     /// Behaviour: `docs/specs/m4-app-components.md`.
     pub fn explode_selection(&mut self, model: &mut Model) -> bool {
+        self.paste = None;
         self.line = LineTool::new();
         self.idle_shapes();
         self.idle_rotate();

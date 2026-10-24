@@ -17,6 +17,8 @@ pub struct ViewState {
     /// The point the current orbit drag turns about (what was under the cursor when the
     /// drag started); `None` orbits about the camera target. `docs/specs/m4-orbit-pivot.md`.
     pub pivot: Option<DVec3>,
+    /// The red, green and blue axes are drawn (View > Axes; `docs/specs/m4-ui-axes.md`).
+    pub axes: bool,
 }
 
 /// What the caller must do after an action.
@@ -37,6 +39,12 @@ pub enum Effect {
     Flip(usize),
     /// Erase the selection.
     Erase,
+    /// Copy the selection to the clipboard.
+    Copy,
+    /// Copy the selection to the clipboard, then erase it.
+    Cut,
+    /// Start pasting the clipboard.
+    Paste,
     /// Show the About window.
     About,
     /// Ask for a name, then make the selection a component (or a group when `group`).
@@ -80,6 +88,7 @@ impl ViewState {
             tool: Tool::Orbit,
             bounds: None,
             pivot: None,
+            axes: true,
         }
     }
 
@@ -123,11 +132,15 @@ impl ViewState {
             Action::Edit(key) => return Effect::Edit(key),
             Action::Flip(axis) => return Effect::Flip(axis),
             Action::Erase => return Effect::Erase,
+            Action::Copy => return Effect::Copy,
+            Action::Cut => return Effect::Cut,
+            Action::Paste => return Effect::Paste,
             Action::About => return Effect::About,
             Action::MakeComponent => return Effect::MakeComponent { group: false },
             Action::MakeGroup => return Effect::MakeComponent { group: true },
             Action::Explode => return Effect::Explode,
             Action::ToggleHideRest => return Effect::ToggleHideRest,
+            Action::ToggleAxes => unimplemented!("m4-ui-axes"),
             Action::OpenRecent(index) => return Effect::OpenRecent(index),
             Action::Exit => return Effect::Exit,
         }

@@ -104,6 +104,13 @@ pub enum Action {
     Flip(usize),
     /// Erase the selection (Delete key, Edit menu; `docs/specs/m3-app-erase.md`).
     Erase,
+    /// Copy the selection to the clipboard (Ctrl+C, Edit menu;
+    /// `docs/specs/m4-app-copy-paste.md`).
+    Copy,
+    /// Copy the selection to the clipboard and erase it (Ctrl+X, Edit menu).
+    Cut,
+    /// Start pasting the clipboard (Ctrl+V, Edit menu).
+    Paste,
     /// Show the About window (Help menu).
     About,
     /// Make the selection a component, after asking for its name (Edit menu;
@@ -116,6 +123,8 @@ pub enum Action {
     /// Hide (or show again) the rest of the model while editing inside an instance
     /// (View menu; `docs/specs/m4-app-edit-view.md`).
     ToggleHideRest,
+    /// Show or hide the axes at the origin (View menu; `docs/specs/m4-ui-axes.md`).
+    ToggleAxes,
     /// Open the recent file at this index of the File menu's list (most recent first;
     /// `docs/specs/m4-ui-menus.md`).
     OpenRecent(usize),
