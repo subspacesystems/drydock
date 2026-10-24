@@ -108,6 +108,11 @@ pub struct App {
     recent: RecentFiles,
     /// Where `recent` is kept between runs.
     recent_file: Option<PathBuf>,
+    /// Ctrl/Cmd is held down.
+    ctrl_down: bool,
+    /// Ctrl/Cmd went down as a lone modifier (no key or button since), so releasing it
+    /// toggles Move's copy mode.
+    ctrl_lone: bool,
 }
 
 impl App {
@@ -154,6 +159,8 @@ impl App {
             shown_path: EditPath::root(),
             recent,
             recent_file,
+            ctrl_down: false,
+            ctrl_lone: false,
         };
         if app.gpu.is_none() {
             app.error = Some("No wgpu render state: cannot draw the viewport".to_owned());
@@ -652,9 +659,54 @@ impl App {
         }
     }
 
+    fn track_move_copy_modifier(&mut self, events: &[Event], typing: bool) {
+        for event in events {
+            match event {
+                Event::ModifiersChanged(modifiers) => {
+                    let down = modifiers.command;
+                    if down && !self.ctrl_down {
+                        self.ctrl_down = true;
+                        self.ctrl_lone = !typing
+                            && self
+                                .editor
+                                .as_ref()
+                                .is_some_and(|editor| editor.tool() == Tool::Move);
+                    } else if !down && self.ctrl_down {
+                        let toggle = self.ctrl_lone && !typing;
+                        self.ctrl_down = false;
+                        self.ctrl_lone = false;
+                        if toggle
+                            && let Some(editor) = &mut self.editor
+                            && editor.tool() == Tool::Move
+                        {
+                            let on = editor.move_copy();
+                            editor.set_move_copy(!on);
+                        }
+                    }
+                }
+                Event::Key {
+                    key, pressed: true, ..
+                } => {
+                    if !matches!(
+                        key,
+                        egui::Key::ControlLeft
+                            | egui::Key::ControlRight
+                            | egui::Key::SuperLeft
+                            | egui::Key::SuperRight
+                    ) {
+                        self.ctrl_lone = false;
+                    }
+                }
+                Event::PointerButton { pressed: true, .. } => self.ctrl_lone = false,
+                _ => {}
+            }
+        }
+    }
+
     /// Keyboard shortcuts and dropped files (window-wide).
     fn global_input(&mut self, ctx: &egui::Context, frame: &eframe::Frame) {
         let (events, dropped) = ctx.input(|i| (i.events.clone(), i.raw.dropped_files.clone()));
+        self.track_move_copy_modifier(&events, ctx.egui_wants_keyboard_input());
         if let Some(path) = dropped.into_iter().find_map(|file| {
             let path = file.path();
             (!path.as_os_str().is_empty()).then(|| path.to_path_buf())
@@ -1118,6 +1170,14 @@ impl App {
                     ui.set_width(210.0);
                     match editor.measurement() {
                         Some((label, value)) => {
+                            let label = if label == "Distance"
+                                && editor.tool() == Tool::Move
+                                && editor.move_copy()
+                            {
+                                "Distance (copy)"
+                            } else {
+                                label
+                            };
                             ui.horizontal(|ui| {
                                 ui.label(label);
                                 ui.with_layout(
@@ -1248,6 +1308,10 @@ impl App {
                     Tool::Erase => "Erase",
                     Tool::Paint => "Paint Bucket",
                 });
+                if self.view.tool == Tool::Move {
+                    ui.separator();
+                    ui.label("Ctrl: copy");
+                }
             });
         });
     }
