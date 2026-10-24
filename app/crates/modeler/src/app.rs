@@ -18,7 +18,7 @@ use modeler::hints::hint_label;
 use modeler::input::{self, Button, Modifiers, Tool};
 use modeler::materials_panel::{MaterialAction, MaterialsPanel, materials_panel};
 use modeler::overlay::{self, Primitive};
-use modeler::recent::RecentFiles;
+use modeler::recent::{RecentFiles, recent_file};
 use modeler::texture_panel::{TextureForm, texture_panel};
 use modeler::viewstate::{Effect, ViewState, scene_bounds};
 use modeler_dae::{FlatScene, RestView};
@@ -106,6 +106,8 @@ pub struct App {
     shown_path: EditPath,
     /// The File menu's recent files (`docs/specs/m4-ui-menus.md`).
     recent: RecentFiles,
+    /// Where `recent` is kept between runs.
+    recent_file: Option<PathBuf>,
 }
 
 impl App {
@@ -121,6 +123,11 @@ impl App {
                 texture: None,
             }
         });
+        let recent_file = recent_file(|name| std::env::var_os(name));
+        let recent = recent_file
+            .as_deref()
+            .map(RecentFiles::load)
+            .unwrap_or_default();
         let mut app = App {
             view: ViewState::new(),
             about_open: false,
@@ -145,7 +152,8 @@ impl App {
             drag_start_px: None,
             dirty: true,
             shown_path: EditPath::root(),
-            recent: RecentFiles::default(),
+            recent,
+            recent_file,
         };
         if app.gpu.is_none() {
             app.error = Some("No wgpu render state: cannot draw the viewport".to_owned());
@@ -194,6 +202,7 @@ impl App {
     }
 
     fn show_document(&mut self, ctx: &egui::Context, frame: &eframe::Frame, document: Document) {
+        let loaded_path = (!document.untitled).then(|| document.path.clone());
         self.upload_scene(frame, &document.scene);
         self.view
             .set_bounds(scene_bounds(&document.scene), self.viewport_pt);
@@ -206,7 +215,18 @@ impl App {
         }
         ctx.send_viewport_cmd(egui::ViewportCommand::Title(document.title()));
         self.model = Some(document);
+        if let Some(path) = loaded_path {
+            self.remember_recent(&path);
+        }
         self.dirty = true;
+    }
+
+    /// Add `path` to the recent files and store the list; a failed save is ignored.
+    fn remember_recent(&mut self, path: &Path) {
+        self.recent.add(path);
+        if let Some(file) = &self.recent_file {
+            let _ = self.recent.save(file);
+        }
     }
 
     /// Make `scene` the scene on screen and keep its texture warnings.
@@ -563,10 +583,20 @@ impl App {
             Effect::Edit(key) => self.edit(key, ctx, frame),
             Effect::About => self.about_open = true,
             Effect::OpenRecent(index) => {
-                let _ = index;
-                unimplemented!("m4-ui-menus")
+                let Some(path) = self.recent.paths().get(index).cloned() else {
+                    return;
+                };
+                if path.exists() {
+                    self.request(PendingAction::Open(Some(path)), ctx, frame);
+                } else {
+                    self.recent.remove(&path);
+                    if let Some(file) = &self.recent_file {
+                        let _ = self.recent.save(file);
+                    }
+                    self.error = Some(format!("Can't find {}", file_name(&path)));
+                }
             }
-            Effect::Exit => unimplemented!("m4-ui-menus"),
+            Effect::Exit => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
             Effect::ToggleHideRest => {
                 if let Some(editor) = &mut self.editor {
                     let hide = !editor.hide_rest();
@@ -1371,6 +1401,7 @@ impl eframe::App for App {
                             }
                             self.error = None;
                             self.saved = Some(file_name(&written));
+                            self.remember_recent(&written);
                             self.saved_now(&ctx, frame);
                         }
                         Some(Err(message)) => {

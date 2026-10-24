@@ -432,10 +432,7 @@ pub fn menu_bar(ui: &mut eframe::egui::Ui, state: &MenuState<'_>) -> Option<Acti
                         .map(|(_, label)| *label)
                         .unwrap_or("");
                     let text = format!("{label}    {}", tool_shortcut(*tool));
-                    if ui
-                        .selectable_label(state.tool == *tool, text)
-                        .clicked()
-                    {
+                    if ui.selectable_label(state.tool == *tool, text).clicked() {
                         chosen = Some(Action::SelectTool(*tool));
                         ui.close();
                     }
