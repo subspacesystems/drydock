@@ -149,8 +149,38 @@ pub const TOOL_GROUPS: [&[Tool]; 5] = [
 /// (Cmd on macOS) into `Event::Cut`/`Copy`/`Paste` and sends no key event for them.
 /// Behaviour: `docs/specs/m4-fix-clipboard-keys.md`.
 pub fn clipboard_actions(events: &[eframe::egui::Event]) -> Vec<Action> {
-    let _ = events;
-    unimplemented!("m4-fix-clipboard-keys")
+    use eframe::egui::{Event, Key};
+
+    let mut actions = Vec::new();
+    for event in events {
+        let action = match event {
+            Event::Copy => Some(Action::Copy),
+            Event::Cut => Some(Action::Cut),
+            Event::Paste(_) => Some(Action::Paste),
+            Event::Key {
+                key,
+                pressed: true,
+                repeat: false,
+                modifiers,
+                ..
+            } if shortcut_modifiers(modifiers) => match key {
+                Key::C => Some(Action::Copy),
+                Key::X => Some(Action::Cut),
+                Key::V => Some(Action::Paste),
+                _ => None,
+            },
+            _ => None,
+        };
+        if let Some(action) = action {
+            actions.push(action);
+        }
+    }
+    actions
+}
+
+/// Ctrl (or the platform command key) alone: the clipboard shortcut modifier.
+fn shortcut_modifiers(modifiers: &eframe::egui::Modifiers) -> bool {
+    (modifiers.ctrl || modifiers.command) && !modifiers.shift && !modifiers.alt
 }
 
 /// The key that picks `tool` (`input::key`), as shown in the Tools menu.

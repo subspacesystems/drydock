@@ -648,24 +648,35 @@ impl App {
                 }
             }
             Effect::Copy => {
-                if let (Some(editor), Some(document)) = (&mut self.editor, &mut self.model)
+                let copied = if let (Some(editor), Some(document)) =
+                    (&mut self.editor, &mut self.model)
                     && let Some(model) = document.kernel.as_ref()
                 {
-                    editor.copy(model);
+                    let count = editor.selection().len();
+                    editor.copy(model).then_some(count)
+                } else {
+                    None
+                };
+                if let Some(count) = copied {
+                    ctx.copy_text(clipboard_text(count, "copied"));
                 }
                 self.dirty = true;
             }
             Effect::Cut => {
-                let changed =
+                let (changed, count) =
                     if let (Some(editor), Some(document)) = (&mut self.editor, &mut self.model) {
                         match document.kernel.as_mut() {
-                            Some(model) => editor.cut(model),
-                            None => false,
+                            Some(model) => {
+                                let count = editor.selection().len();
+                                (editor.cut(model), count)
+                            }
+                            None => (false, 0),
                         }
                     } else {
-                        false
+                        (false, 0)
                     };
                 if changed {
+                    ctx.copy_text(clipboard_text(count, "cut"));
                     self.refresh_document(ctx, frame);
                 } else {
                     self.dirty = true;
@@ -762,6 +773,15 @@ impl App {
         if ctx.egui_wants_keyboard_input() {
             return;
         }
+        let typing = self
+            .editor
+            .as_ref()
+            .is_some_and(|editor| !editor.typed().is_empty());
+        if !typing {
+            for action in chrome::clipboard_actions(&events) {
+                self.apply(action, ctx, frame);
+            }
+        }
         let mods = ctx.input(|i| to_modifiers(i.modifiers));
         if !mods.ctrl && !mods.alt {
             for text in events.iter().filter_map(|event| match event {
@@ -783,14 +803,7 @@ impl App {
             } = event
             {
                 let mods = to_modifiers(modifiers);
-                // Cut, Copy and Paste are not in `input::key` so the shape letters keep
-                // their plain meanings on every platform.
-                let action = match key.name() {
-                    "C" if mods.ctrl && !mods.shift && !mods.alt => Some(input::Action::Copy),
-                    "X" if mods.ctrl && !mods.shift && !mods.alt => Some(input::Action::Cut),
-                    "V" if mods.ctrl && !mods.shift && !mods.alt => Some(input::Action::Paste),
-                    _ => input::key(key.name(), mods),
-                };
+                let action = input::key(key.name(), mods);
                 let Some(action) = action else {
                     continue;
                 };
@@ -1773,6 +1786,15 @@ fn preview_color(plane: Option<DrawPlane>) -> Color32 {
         Color32::from_rgb(30, 95, 75)
     } else {
         Color32::from_rgb(110, 45, 45)
+    }
+}
+
+/// Short text for the system clipboard after a Copy or Cut, so the next Ctrl+V arrives.
+fn clipboard_text(count: usize, verb: &str) -> String {
+    if count == 1 {
+        format!("modeler: 1 item {verb}")
+    } else {
+        format!("modeler: {count} items {verb}")
     }
 }
 
