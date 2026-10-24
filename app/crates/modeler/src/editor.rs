@@ -47,6 +47,7 @@ use modeler_kernel::units::{self, Unit};
 use modeler_view::{Camera, Projection};
 
 use crate::input::{EditKey, Modifiers, Tool};
+use crate::texture_handles::TextureHandles;
 
 /// A change to how a texture lies on a face, in texture space (meters).
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -1853,6 +1854,26 @@ impl Editor {
                 false
             }
         }
+    }
+
+    /// Show texture handles on `side` of `face` in the open body; while they show, clicks
+    /// and pointer moves in the viewport go to them. True when they started. Behaviour:
+    /// `docs/specs/m4-app-texture-handles.md`.
+    pub fn start_texture_handles(&mut self, model: &Model, face: FaceId, side: Side) -> bool {
+        let _ = (model, face, side);
+        unimplemented!("m4-app-texture-handles")
+    }
+
+    /// Hide the texture handles (dropping a held grip); nothing changes in the model.
+    pub fn end_texture_handles(&mut self) {
+        unimplemented!("m4-app-texture-handles")
+    }
+
+    /// The texture handles to draw, following the cursor while a grip is held; `None` when
+    /// they aren't showing or their side has no texture any more.
+    pub fn texture_handles(&self, model: &Model) -> Option<TextureHandles> {
+        let _ = model;
+        unimplemented!("m4-app-texture-handles")
     }
 
     /// The Paint Bucket's current material (`None` = the default material).

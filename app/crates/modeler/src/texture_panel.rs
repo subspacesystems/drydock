@@ -50,6 +50,15 @@ impl Default for TextureForm {
     }
 }
 
+/// The button that shows or hides the texture handles in the viewport: "Position in
+/// Viewport" while they are hidden (enabled only when `available`), "Done" while they show
+/// (`on`, always enabled). True on the frame it is clicked.
+/// Behaviour: `docs/specs/m4-app-texture-handles.md`.
+pub fn handles_button(ui: &mut egui::Ui, available: bool, on: bool) -> bool {
+    let _ = (ui, available, on);
+    unimplemented!("m4-app-texture-handles")
+}
+
 /// Draw the panel into `ui`. `available` is true while a textured side is selected; the
 /// controls are disabled otherwise. `Some` on the frame the user asks for something.
 pub fn texture_panel(
