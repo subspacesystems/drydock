@@ -315,6 +315,12 @@ pub fn model_info_lines(stats: &Stats, kernel: bool) -> Vec<String> {
     lines
 }
 
+/// The Model Info line naming the graphics adapter (`docs/specs/m4-ui-gpu-info.md`).
+pub fn adapter_line(name: &str, backend: &str, device_type: &str) -> String {
+    let _ = (name, backend, device_type);
+    unimplemented!("m4-ui-gpu-info")
+}
+
 /// The Model Info window while `open`, showing `lines`; its Close button clears `open`.
 pub fn model_info_window(ctx: &eframe::egui::Context, open: &mut bool, lines: &[String]) {
     if !*open {
