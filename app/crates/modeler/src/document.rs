@@ -80,10 +80,10 @@ impl Document {
         }
 
         let model = import_file(path).map_err(|err| file_error(path, err.to_string()))?;
-        let scene = flatten(&model);
-        let kernel = match to_kernel(&model) {
-            Ok(kernel) => Some(kernel),
+        let mut kernel = match to_kernel(&model) {
+            Ok(kernel) => kernel,
             Err(err) => {
+                let scene = flatten(&model);
                 let message = file_error(path, format!("{err:?}"));
                 return Ok(Document {
                     path: path.to_path_buf(),
@@ -98,17 +98,15 @@ impl Document {
                 });
             }
         };
-        let mut kernel = kernel;
-        if let Some(model) = kernel.as_mut() {
-            map_texture_paths(model, |texture| {
-                resolve_texture_path(texture, Path::new(""))
-            });
-        }
-        let stats = stats_from_scene(&scene, kernel.as_ref());
+        map_texture_paths(&mut kernel, |texture| {
+            resolve_texture_path(texture, Path::new(""))
+        });
+        let scene = kernel_scene(&kernel);
+        let stats = stats_from_scene(&scene, Some(&kernel));
         Ok(Document {
             path: path.to_path_buf(),
             kind: FileKind::Dae,
-            kernel,
+            kernel: Some(kernel),
             kernel_error: None,
             scene,
             stats,
