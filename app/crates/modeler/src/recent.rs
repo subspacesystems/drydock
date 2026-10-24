@@ -28,44 +28,96 @@ impl RecentFiles {
     /// Put `path` (made absolute) at the front, dropping an older entry for the same path
     /// and the oldest entry when the list is over `MAX_RECENT`.
     pub fn add(&mut self, path: &Path) {
-        let _ = path;
-        unimplemented!("m4-ui-menus")
+        let path = absolute(path);
+        self.paths.retain(|entry| entry != &path);
+        self.paths.insert(0, path);
+        self.paths.truncate(MAX_RECENT);
     }
 
     /// Drop the entry for `path` (made absolute), if there is one.
     pub fn remove(&mut self, path: &Path) {
-        let _ = path;
-        unimplemented!("m4-ui-menus")
+        let path = absolute(path);
+        self.paths.retain(|entry| entry != &path);
     }
 
     /// The list from the file's text: one path per line.
     pub fn parse(text: &str) -> RecentFiles {
-        let _ = text;
-        unimplemented!("m4-ui-menus")
+        let mut list = RecentFiles::default();
+        for line in text.lines() {
+            let line = line.strip_suffix('\r').unwrap_or(line);
+            if line.is_empty() || list.paths.len() >= MAX_RECENT {
+                continue;
+            }
+            let path = PathBuf::from(line);
+            if !list.paths.contains(&path) {
+                list.paths.push(path);
+            }
+        }
+        list
     }
 
     /// The file's text for this list: each path on its own line.
     pub fn to_text(&self) -> String {
-        unimplemented!("m4-ui-menus")
+        let mut text = String::new();
+        for path in &self.paths {
+            if let Some(path) = path.to_str() {
+                text.push_str(path);
+                text.push('\n');
+            }
+        }
+        text
     }
 
     /// The list stored in `file`; empty when the file is missing or can't be read.
     pub fn load(file: &Path) -> RecentFiles {
-        let _ = file;
-        unimplemented!("m4-ui-menus")
+        std::fs::read_to_string(file)
+            .map(|text| RecentFiles::parse(&text))
+            .unwrap_or_default()
     }
 
     /// Store the list in `file`, creating its folder when needed.
     pub fn save(&self, file: &Path) -> io::Result<()> {
-        let _ = file;
-        unimplemented!("m4-ui-menus")
+        let folder = file.parent().unwrap_or_else(|| Path::new("."));
+        std::fs::create_dir_all(folder)?;
+        let name = file
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "recent-files".to_owned());
+        let temp = folder.join(format!(".{name}.tmp"));
+        std::fs::write(&temp, self.to_text())?;
+        std::fs::rename(&temp, file)
     }
 }
 
 /// The app's config folder, from environment variables read through `var`.
 pub fn config_dir(var: impl Fn(&str) -> Option<OsString>) -> Option<PathBuf> {
-    let _ = var;
-    unimplemented!("m4-ui-menus")
+    let non_empty = |name: &str| var(name).filter(|value| !value.is_empty());
+    if let Some(dir) = non_empty("MODELER_CONFIG_DIR") {
+        return Some(PathBuf::from(dir));
+    }
+    if cfg!(windows) {
+        if let Some(dir) = non_empty("APPDATA") {
+            return Some(PathBuf::from(dir).join("modeler"));
+        }
+    } else if let Some(dir) = non_empty("XDG_CONFIG_HOME") {
+        let dir = PathBuf::from(dir);
+        if dir.is_absolute() {
+            return Some(dir.join("modeler"));
+        }
+    }
+    non_empty("HOME").map(|home| {
+        let home = PathBuf::from(home);
+        if cfg!(windows) {
+            home.join("modeler")
+        } else {
+            home.join(".config").join("modeler")
+        }
+    })
+}
+
+/// Make `path` absolute, keeping it as given when that fails.
+fn absolute(path: &Path) -> PathBuf {
+    std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf())
 }
 
 /// The file the recent list is kept in: `recent-files` in `config_dir`.
