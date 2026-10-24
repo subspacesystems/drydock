@@ -592,6 +592,66 @@ impl Model {
         id
     }
 
+    /// Add a definition with an exact clone of `body`, keeping every id inside it and moving
+    /// the model's instance counter past the clone's instance ids. Used by the clipboard.
+    pub(crate) fn add_definition_with_body(
+        &mut self,
+        id: DefinitionId,
+        info: DefinitionInfo,
+        body: &Body,
+        log: &mut ModelEdit,
+    ) -> Result<(), ModelError> {
+        let record = ModelRecord::AddDefinition(id, info);
+        self.apply(&record)?;
+        log.records.push(record);
+        self.clone_body_into(BodyId::Definition(id), body, log)
+    }
+
+    /// Append records that put an exact clone of `source` into the (empty) body `target`.
+    pub(crate) fn clone_body_into(
+        &mut self,
+        target: BodyId,
+        source: &Body,
+        log: &mut ModelEdit,
+    ) -> Result<(), ModelError> {
+        for (id, vertex) in source.geometry.vertices() {
+            let record = ModelRecord::Geometry(target, Record::AddVertex(id, *vertex));
+            self.apply(&record)?;
+            log.records.push(record);
+        }
+        for (id, edge) in source.geometry.edges() {
+            let record = ModelRecord::Geometry(target, Record::AddEdge(id, *edge));
+            self.apply(&record)?;
+            log.records.push(record);
+        }
+        for (id, face) in source.geometry.faces() {
+            let record = ModelRecord::Geometry(target, Record::AddFace(id, face.clone()));
+            self.apply(&record)?;
+            log.records.push(record);
+        }
+        for (face, materials) in &source.face_materials {
+            let record = ModelRecord::SetFaceMaterials {
+                body: target,
+                face: *face,
+                from: FaceMaterials::default(),
+                to: *materials,
+            };
+            self.apply(&record)?;
+            log.records.push(record);
+        }
+        for (id, instance) in &source.instances {
+            let record = ModelRecord::AddInstance(target, *id, instance.clone());
+            self.apply(&record)?;
+            log.records.push(record);
+        }
+        for (id, guide) in source.guides.iter() {
+            let record = ModelRecord::AddGuide(target, id, *guide);
+            self.apply(&record)?;
+            log.records.push(record);
+        }
+        Ok(())
+    }
+
     pub fn set_definition(
         &mut self,
         id: DefinitionId,
