@@ -175,7 +175,7 @@ fn hover_reports_the_grip_under_the_cursor() {
         ),
         (
             px(&view, h.corners[2]) + DVec2::new(-2.0, 3.0),
-            Some(Grip::Scale),
+            Some(Grip::Scale(2)),
         ),
         (px(&view, middle(&h.corners)), Some(Grip::Slide)),
         (px(&view, v(0.2, 2.8, 0.0)), None),
@@ -247,7 +247,7 @@ fn scale_puts_the_top_right_corner_under_the_cursor() {
     let m0 = map(&model, BodyId::Root, face);
     let a = m0.apply(h.corners[0]);
     assert!(!editor.click(&mut model, &view, px(&view, h.corners[2]), NONE, 1));
-    assert_eq!(handles(&editor, &model).held, Some(Grip::Scale));
+    assert_eq!(handles(&editor, &model).held, Some(Grip::Scale(2)));
     let p =
         h.corners[0] + 2.0 * (h.corners[1] - h.corners[0]) + 0.5 * (h.corners[3] - h.corners[0]);
     assert!(editor.click(&mut model, &view, px(&view, p), NONE, 1));
@@ -292,7 +292,7 @@ fn scale_across_the_pin_is_refused_and_stays_held() {
     let undo_before = editor.undo_stack().undo_count();
     assert!(!editor.click(&mut model, &view, px(&view, p), NONE, 1));
     assert_eq!(editor.message(), Some("Can't position that texture"));
-    assert_eq!(handles(&editor, &model).held, Some(Grip::Scale));
+    assert_eq!(handles(&editor, &model).held, Some(Grip::Scale(2)));
     assert_eq!(editor.undo_stack().undo_count(), undo_before);
     assert_eq!(map(&model, BodyId::Root, face), m0);
 }

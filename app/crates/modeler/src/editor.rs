@@ -2006,13 +2006,13 @@ impl Editor {
                 return Some(if turn < scale {
                     Grip::Turn
                 } else {
-                    Grip::Scale
+                    Grip::Scale(2)
                 });
             }
             _ => {}
         }
         if scale.is_some_and(|distance| distance <= GRIP_PX) {
-            return Some(Grip::Scale);
+            return Some(Grip::Scale(2));
         }
         if turn.is_some_and(|distance| distance <= GRIP_PX) {
             return Some(Grip::Turn);
@@ -2077,7 +2077,7 @@ impl Editor {
                     .is_finite()
                     .then_some(TextureOp::Rotate { angle, about })
             }
-            Grip::Scale => {
+            Grip::Scale(_) => {
                 let from = q - about;
                 let to = state.size;
                 let factor = if mods.shift {

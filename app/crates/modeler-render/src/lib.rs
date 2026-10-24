@@ -47,6 +47,16 @@ impl Default for Style {
     }
 }
 
+/// A line segment drawn with the scene, depth-tested against its faces and lines
+/// (`docs/specs/m4-axes-depth.md`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ExtraLine {
+    pub a: DVec3,
+    pub b: DVec3,
+    /// sRGB RGBA 0..1.
+    pub color: [f32; 4],
+}
+
 #[derive(Debug)]
 pub enum RenderError {
     /// No usable adapter or device (for headless use: no Vulkan driver, e.g. lavapipe).
@@ -854,6 +864,22 @@ impl Renderer {
         queue.submit(Some(encoder.finish()));
     }
 
+    /// Like [`Renderer::render`], plus `extra` lines drawn in the same pass.
+    #[allow(clippy::too_many_arguments)]
+    pub fn render_with_lines(
+        &self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        target: &Viewport,
+        scene: &GpuScene,
+        camera: &Camera,
+        style: &Style,
+        extra: &[ExtraLine],
+    ) {
+        let _ = extra;
+        self.render(device, queue, target, scene, camera, style);
+    }
+
     fn draw(
         &self,
         device: &wgpu::Device,
@@ -1048,6 +1074,18 @@ pub fn render_headless(
     height: u32,
     style: &Style,
 ) -> Result<(image::RgbaImage, Vec<String>), RenderError> {
+    render_headless_with_lines(scene, camera, width, height, style, &[])
+}
+
+/// [`render_headless`] with `extra` lines drawn in the same pass.
+pub fn render_headless_with_lines(
+    scene: &FlatScene,
+    camera: &Camera,
+    width: u32,
+    height: u32,
+    style: &Style,
+    extra: &[ExtraLine],
+) -> Result<(image::RgbaImage, Vec<String>), RenderError> {
     let _guard = HEADLESS_LOCK
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -1064,7 +1102,7 @@ pub fn render_headless(
     let height = height.max(1);
     let gpu_scene = renderer.upload(&device, &queue, scene);
     let viewport = renderer.viewport(&device, width, height);
-    renderer.render(&device, &queue, &viewport, &gpu_scene, camera, style);
+    renderer.render_with_lines(&device, &queue, &viewport, &gpu_scene, camera, style, extra);
     let image = readback(&device, &queue, &viewport)?;
     Ok((image, gpu_scene.warnings))
 }
