@@ -155,7 +155,7 @@ pub fn materials_panel(
 
     let mut new_form = false;
     let mut edit_form = None;
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         if ui.button("New...").clicked() {
             new_form = true;
         }
@@ -193,7 +193,11 @@ pub fn materials_panel(
         ui.horizontal(|ui| {
             ui.label("Name");
             let hint = paint::unique_material_name(model, "Material");
-            let response = ui.add(egui::TextEdit::singleline(&mut form.name).hint_text(hint));
+            let response = ui.add(
+                egui::TextEdit::singleline(&mut form.name)
+                    .hint_text(hint)
+                    .desired_width(f32::INFINITY),
+            );
             if focus_name {
                 response.request_focus();
             }
@@ -209,13 +213,15 @@ pub fn materials_panel(
 
         ui.horizontal(|ui| {
             ui.label("Opacity");
+            let value_width = ui.spacing().interact_size.x;
+            let spacing = ui.spacing().item_spacing.x;
+            ui.spacing_mut().slider_width =
+                (ui.available_width() - value_width - spacing).max(20.0);
             ui.add(egui::Slider::new(&mut form.opacity, 0.0..=1.0));
         });
 
-        ui.horizontal(|ui| {
-            ui.label("Texture image");
-            ui.add(egui::TextEdit::singleline(&mut form.texture));
-        });
+        ui.label("Texture image");
+        ui.add(egui::TextEdit::singleline(&mut form.texture).desired_width(f32::INFINITY));
 
         ui.horizontal(|ui| {
             ui.label("Width (m)");
@@ -265,14 +271,15 @@ fn material_row(
             let (rect, swatch) =
                 ui.allocate_exact_size(egui::vec2(14.0, 14.0), egui::Sense::click());
             ui.painter().rect_filled(rect, 2.0, color);
-            let text = ui.add(egui::Button::selectable(selected, label));
+            let text = ui.add(egui::Button::selectable(selected, label).truncate());
             swatch.union(text)
         })
         .inner;
-    match hover {
-        Some(texture) => response.on_hover_text(texture),
-        None => response,
-    }
+    let tooltip = match hover {
+        Some(texture) => format!("{label}\n{texture}"),
+        None => label.to_owned(),
+    };
+    response.on_hover_text(tooltip)
 }
 
 fn channel_to_byte(channel: f32) -> u8 {

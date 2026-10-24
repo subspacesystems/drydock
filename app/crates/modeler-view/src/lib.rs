@@ -183,16 +183,49 @@ impl Camera {
     /// `orbit`, and the eye and target turn with them about `pivot`, so the pivot keeps
     /// its place on screen. Behaviour: `docs/specs/m4-orbit-pivot.md`.
     pub fn orbit_about(&mut self, pivot: DVec3, dx: f64, dy: f64) {
-        let _ = (pivot, dx, dy);
-        unimplemented!()
+        if !pivot.is_finite() {
+            self.orbit(dx, dy);
+            return;
+        }
+        let target_before = self.target;
+        let yaw_before = self.yaw;
+        let pitch_before = self.pitch;
+        self.orbit(dx, dy);
+        let d_yaw = self.yaw - yaw_before;
+        let d_pitch = self.pitch - pitch_before;
+        let right = DVec3::new(-self.yaw.sin(), self.yaw.cos(), 0.0);
+        let rotation =
+            glam::DMat3::from_axis_angle(right, -d_pitch) * glam::DMat3::from_rotation_z(d_yaw);
+        self.target = pivot + rotation * (target_before - pivot);
     }
 
     /// Where the ray `origin + t * dir` (`t > 0`) meets the ground plane z = 0, as the
     /// orbit pivot when the cursor is over empty space; `None` when it doesn't, or the
     /// point is too far from the target. Behaviour: `docs/specs/m4-orbit-ground.md`.
     pub fn ground_pivot(&self, origin: DVec3, dir: DVec3) -> Option<DVec3> {
-        let _ = (origin, dir);
-        unimplemented!()
+        if !origin.is_finite() || !dir.is_finite() {
+            return None;
+        }
+        if !self.target.is_finite() || !self.distance.is_finite() {
+            return None;
+        }
+        let dir_len = dir.length();
+        if dir_len == 0.0 {
+            return None;
+        }
+        if dir.z.abs() <= 1e-12 * dir_len {
+            return None;
+        }
+        let t = -origin.z / dir.z;
+        if t <= 0.0 {
+            return None;
+        }
+        let mut p = origin + t * dir;
+        p.z = 0.0;
+        if (p - self.target).length() > GROUND_PIVOT_RANGE * self.distance {
+            return None;
+        }
+        Some(p)
     }
 
     /// Pan by a mouse drag of (dx, dy) pixels in a viewport `height_px` tall.
