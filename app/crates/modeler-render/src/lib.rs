@@ -9,7 +9,9 @@
 use std::collections::HashMap;
 use std::fmt;
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::SystemTime;
 
 use glam::DVec3;
 use modeler_dae::{Aabb, FlatScene};
@@ -114,6 +116,12 @@ struct LoadedTexture {
     has_alpha: bool,
 }
 
+struct CachedTexture {
+    texture: Arc<LoadedTexture>,
+    modified: Option<SystemTime>,
+    len: u64,
+}
+
 struct GpuBatch {
     vertex_buffer: wgpu::Buffer,
     index_buffer: Option<wgpu::Buffer>,
@@ -135,6 +143,8 @@ pub struct Renderer {
     sampler: wgpu::Sampler,
     white_view: wgpu::TextureView,
     _white_texture: wgpu::Texture,
+    textures: Mutex<HashMap<PathBuf, CachedTexture>>,
+    texture_loads: AtomicUsize,
 }
 
 /// A scene uploaded to the GPU.
@@ -146,7 +156,7 @@ pub struct GpuScene {
     pub sphere: Option<(glam::DVec3, f64)>,
     batches: Vec<GpuBatch>,
     lines: Vec<GpuBatch>,
-    textures: Vec<LoadedTexture>,
+    textures: Vec<Arc<LoadedTexture>>,
 }
 
 /// An offscreen color + depth target that the renderer draws into.
@@ -460,6 +470,8 @@ impl Renderer {
             sampler,
             white_view,
             _white_texture: white_texture,
+            textures: Mutex::new(HashMap::new()),
+            texture_loads: AtomicUsize::new(0),
         }
     }
 
@@ -467,7 +479,7 @@ impl Renderer {
     /// failed). Uploads reuse textures already loaded from an unchanged file. Behaviour:
     /// `docs/specs/m4-fix-refresh-speed.md`.
     pub fn texture_loads(&self) -> usize {
-        unimplemented!()
+        self.texture_loads.load(Ordering::Relaxed)
     }
 
     /// Upload geometry, and load and upload each material's texture.
@@ -498,28 +510,59 @@ impl Renderer {
         );
         let mut warnings = Vec::new();
         let mut textures = Vec::new();
-        let mut texture_cache: HashMap<PathBuf, Result<usize, String>> = HashMap::new();
         let mut material_textures = vec![None; scene.materials.len()];
+        let mut cache = self
+            .textures
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        // Paths tried by this upload: `Some` index for a texture, `None` for a failure.
+        let mut loaded: HashMap<PathBuf, Option<usize>> = HashMap::new();
 
         for (index, material) in scene.materials.iter().enumerate() {
             let Some(path) = &material.texture else {
                 continue;
             };
-            if !texture_cache.contains_key(path) {
-                match load_texture(device, queue, path) {
-                    Ok(texture) => {
-                        let texture_index = textures.len();
-                        textures.push(texture);
-                        texture_cache.insert(path.clone(), Ok(texture_index));
-                    }
-                    Err(reason) => {
-                        warnings.push(format!("{}: {reason}", path.display()));
-                        texture_cache.insert(path.clone(), Err(reason));
-                    }
-                }
+            if let Some(existing) = loaded.get(path) {
+                material_textures[index] = *existing;
+                continue;
             }
-            if let Some(Ok(texture_index)) = texture_cache.get(path) {
-                material_textures[index] = Some(*texture_index);
+            let metadata = std::fs::metadata(path).ok();
+            let cached = metadata.as_ref().and_then(|metadata| {
+                let entry = cache.get(path)?;
+                let modified = metadata.modified().ok();
+                let len = metadata.len();
+                (entry.modified == modified && entry.len == len).then(|| Arc::clone(&entry.texture))
+            });
+            if let Some(texture) = cached {
+                let texture_index = textures.len();
+                textures.push(texture);
+                loaded.insert(path.clone(), Some(texture_index));
+                material_textures[index] = Some(texture_index);
+                continue;
+            }
+            self.texture_loads.fetch_add(1, Ordering::Relaxed);
+            match load_texture(device, queue, path) {
+                Ok(texture) => {
+                    let texture = Arc::new(texture);
+                    let texture_index = textures.len();
+                    textures.push(Arc::clone(&texture));
+                    if let Some(metadata) = metadata {
+                        cache.insert(
+                            path.clone(),
+                            CachedTexture {
+                                texture,
+                                modified: metadata.modified().ok(),
+                                len: metadata.len(),
+                            },
+                        );
+                    }
+                    loaded.insert(path.clone(), Some(texture_index));
+                    material_textures[index] = Some(texture_index);
+                }
+                Err(reason) => {
+                    warnings.push(format!("{}: {reason}", path.display()));
+                    loaded.insert(path.clone(), None);
+                }
             }
         }
 
