@@ -145,6 +145,14 @@ pub const TOOL_GROUPS: [&[Tool]; 5] = [
     &[Tool::Orbit, Tool::Pan, Tool::Zoom],
 ];
 
+/// Cut, Copy and Paste requested by this frame's events, in order. egui turns Ctrl+X/C/V
+/// (Cmd on macOS) into `Event::Cut`/`Copy`/`Paste` and sends no key event for them.
+/// Behaviour: `docs/specs/m4-fix-clipboard-keys.md`.
+pub fn clipboard_actions(events: &[eframe::egui::Event]) -> Vec<Action> {
+    let _ = events;
+    unimplemented!("m4-fix-clipboard-keys")
+}
+
 /// The key that picks `tool` (`input::key`), as shown in the Tools menu.
 pub fn tool_shortcut(tool: Tool) -> &'static str {
     match tool {
