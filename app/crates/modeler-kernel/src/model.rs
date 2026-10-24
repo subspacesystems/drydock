@@ -540,8 +540,41 @@ impl Model {
     /// order as `validate`; unknown bodies are skipped. Behaviour:
     /// `docs/specs/m4-fix-copy-speed.md`.
     pub fn validate_bodies(&self, bodies: &[BodyId]) -> Vec<ModelViolation> {
-        let _ = bodies;
-        unimplemented!("m4-fix-copy-speed")
+        let listed: std::collections::BTreeSet<BodyId> = bodies.iter().copied().collect();
+        let mut out = Vec::new();
+
+        let check_body = |body_id: BodyId, body: &Body, out: &mut Vec<ModelViolation>| {
+            for v in body.geometry.validate() {
+                out.push(ModelViolation::Geometry(body_id, v));
+            }
+            for (id, inst) in body.instances() {
+                let finite = inst.transform.to_cols_array().iter().all(|v| v.is_finite());
+                let det = inst.transform.determinant();
+                if !finite || det.abs() <= 1e-12 {
+                    out.push(ModelViolation::BadTransform(body_id, id));
+                }
+            }
+        };
+
+        if listed.contains(&BodyId::Root) {
+            check_body(BodyId::Root, &self.root, &mut out);
+        }
+        for (d, (_, b)) in &self.definitions {
+            let id = BodyId::Definition(*d);
+            if listed.contains(&id) {
+                check_body(id, b, &mut out);
+            }
+        }
+        for (d, (info, _)) in &self.definitions {
+            if info.group && listed.contains(&BodyId::Definition(*d)) {
+                let n = self.instances_of(*d).len();
+                if n != 1 {
+                    out.push(ModelViolation::GroupInstances(*d, n));
+                }
+            }
+        }
+
+        out
     }
 
     // -- operations (each appends its records to `log`) --------------------------------

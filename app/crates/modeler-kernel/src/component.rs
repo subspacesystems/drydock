@@ -174,7 +174,7 @@ pub fn make_component(
     let transform = DMat4::from_translation(origin);
     let inverse = DMat4::from_translation(-origin);
 
-    let before = model.validate();
+    let before = model.validate_bodies(&[body]);
     let mut edit = ModelEdit::new();
     let definition = model.add_definition(
         DefinitionInfo {
@@ -292,7 +292,7 @@ pub fn make_component(
     };
 
     let invalid: Vec<ModelViolation> = model
-        .validate()
+        .validate_bodies(&[body, BodyId::Definition(definition)])
         .into_iter()
         .filter(|v| !before.contains(v))
         .collect();
