@@ -17,6 +17,8 @@ pub struct ViewState {
     /// The point the current orbit drag turns about (what was under the cursor when the
     /// drag started); `None` orbits about the camera target. `docs/specs/m4-orbit-pivot.md`.
     pub pivot: Option<DVec3>,
+    /// The red, green and blue axes are drawn (View > Axes; `docs/specs/m4-ui-axes.md`).
+    pub axes: bool,
 }
 
 /// What the caller must do after an action.
@@ -80,6 +82,7 @@ impl ViewState {
             tool: Tool::Orbit,
             bounds: None,
             pivot: None,
+            axes: true,
         }
     }
 
@@ -128,6 +131,7 @@ impl ViewState {
             Action::MakeGroup => return Effect::MakeComponent { group: true },
             Action::Explode => return Effect::Explode,
             Action::ToggleHideRest => return Effect::ToggleHideRest,
+            Action::ToggleAxes => unimplemented!("m4-ui-axes"),
             Action::OpenRecent(index) => return Effect::OpenRecent(index),
             Action::Exit => return Effect::Exit,
         }

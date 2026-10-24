@@ -15,6 +15,7 @@ use modeler_kernel::tess;
 use modeler_kernel::tools::plane::DrawPlane;
 use modeler_kernel::tools::scale::{Bounds, Handle, handles};
 use modeler_kernel::topology::{Context, FaceId};
+use modeler_view::Camera;
 
 /// Box edges shorter than this are not drawn.
 const MIN_EDGE: f64 = 1e-9;
@@ -46,6 +47,9 @@ pub enum Style {
     Selected,
     /// One triangle of a selected face: filled as a tint, no outline.
     SelectedFace,
+    /// Half of an axis line from the origin: `axis` 0 red, 1 green, 2 blue; the positive
+    /// half is drawn solid, the negative half dashed (`docs/specs/m4-ui-axes.md`).
+    Axis { axis: usize, positive: bool },
 }
 
 /// One thing to draw, in world coordinates.
@@ -338,4 +342,20 @@ pub fn guides(guides: &Guides, around: DVec3, half_length: f64) -> Vec<Primitive
         }
     }
     out
+}
+
+/// The axes of the frame `transform` maps from: for each of red, green and blue (local x,
+/// y, z), the positive then the negative half, each a line from the frame's origin
+/// `half_length` long in world units. Behaviour: `docs/specs/m4-ui-axes.md`.
+pub fn axes(transform: DMat4, half_length: f64) -> Vec<Primitive> {
+    let _ = (transform, half_length);
+    unimplemented!("m4-ui-axes")
+}
+
+/// The part of segment `a`-`b` a perspective camera can draw: in front of its near
+/// distance (`camera.distance / 1000` along the view direction). A parallel camera keeps the
+/// whole segment. `None` when nothing is left. Behaviour: `docs/specs/m4-ui-axes.md`.
+pub fn clip_in_front(camera: &Camera, a: DVec3, b: DVec3) -> Option<(DVec3, DVec3)> {
+    let _ = (camera, a, b);
+    unimplemented!("m4-ui-axes")
 }

@@ -27,6 +27,8 @@ pub struct MenuState<'a> {
     /// The rest of the model is hidden while editing inside an instance (the View menu
     /// item offers the opposite).
     pub hide_rest: bool,
+    /// The axes are shown (the View menu's Axes item is checked; `docs/specs/m4-ui-axes.md`).
+    pub axes: bool,
     /// The File menu's recent files, most recent first (`docs/specs/m4-ui-menus.md`).
     pub recent: &'a [PathBuf],
     /// The current tool (checked in the Tools menu).
