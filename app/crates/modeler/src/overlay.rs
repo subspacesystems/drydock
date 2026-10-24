@@ -385,8 +385,55 @@ pub fn axes(transform: DMat4, half_length: f64) -> Vec<Primitive> {
 
 /// The axes of `transform` as GPU lines (`docs/specs/m4-axes-depth.md`).
 pub fn axis_lines(transform: DMat4, half_length: f64, dash: f64) -> Vec<modeler_render::ExtraLine> {
-    let _ = (transform, half_length, dash);
-    Vec::new()
+    const COLORS: [[f32; 4]; 3] = [
+        [200.0 / 255.0, 40.0 / 255.0, 40.0 / 255.0, 1.0],
+        [40.0 / 255.0, 150.0 / 255.0, 40.0 / 255.0, 1.0],
+        [40.0 / 255.0, 70.0 / 255.0, 210.0 / 255.0, 1.0],
+    ];
+    if !half_length.is_finite() || half_length <= 0.0 {
+        return Vec::new();
+    }
+    let origin = transform.transform_point3(DVec3::ZERO);
+    if !origin.is_finite() {
+        return Vec::new();
+    }
+    let solid_dash = !dash.is_finite() || dash <= 0.0;
+    let mut out = Vec::new();
+    for (axis, unit) in [DVec3::X, DVec3::Y, DVec3::Z].into_iter().enumerate() {
+        let mapped = transform.transform_vector3(unit);
+        let length = mapped.length();
+        if !length.is_finite() || length == 0.0 {
+            continue;
+        }
+        let dir = mapped / length;
+        let color = COLORS[axis];
+        out.push(modeler_render::ExtraLine {
+            a: origin,
+            b: origin + dir * half_length,
+            color,
+        });
+        if solid_dash {
+            out.push(modeler_render::ExtraLine {
+                a: origin,
+                b: origin - dir * half_length,
+                color,
+            });
+            continue;
+        }
+        for k in 0..300 {
+            let start = 2.0 * k as f64 * dash;
+            if start >= half_length {
+                break;
+            }
+            let end = ((2.0 * k as f64 + 1.0) * dash).min(half_length);
+            out.push(modeler_render::ExtraLine {
+                a: origin - dir * start,
+                b: origin - dir * end,
+                color,
+            });
+        }
+    }
+    out
 }
 
 /// The part of segment `a`-`b` a perspective camera can draw: in front of its near
