@@ -7,7 +7,7 @@
 //!
 //! Behaviour: `docs/specs/m3-app-ui.md`.
 
-use crate::document::Stats;
+use crate::document::{Stats, format_size};
 use crate::input::{Action, EditKey, Tool};
 use modeler_view::StandardView;
 use std::path::PathBuf;
@@ -264,14 +264,40 @@ pub fn about_window(ctx: &eframe::egui::Context, open: &mut bool) {
 
 /// The Model Info window's lines, top to bottom (`docs/specs/m4-ui-status.md`).
 pub fn model_info_lines(stats: &Stats, kernel: bool) -> Vec<String> {
-    let _ = (stats, kernel);
-    unimplemented!("m4-ui-status")
+    let mut lines = vec![
+        format!("Triangles: {}", stats.triangles),
+        format!("Lines: {}", stats.lines),
+        format!("Materials: {}", stats.materials),
+        format!("Size: {}", format_size(stats.size_m)),
+    ];
+    if kernel {
+        lines.push(format!("Faces: {}", stats.faces));
+        lines.push(format!("Edges: {}", stats.edges));
+    }
+    lines
 }
 
 /// The Model Info window while `open`, showing `lines`; its Close button clears `open`.
 pub fn model_info_window(ctx: &eframe::egui::Context, open: &mut bool, lines: &[String]) {
-    let _ = (ctx, open, lines);
-    unimplemented!("m4-ui-status")
+    if !*open {
+        return;
+    }
+    let mut close = false;
+    eframe::egui::Window::new("Model Info")
+        .collapsible(false)
+        .resizable(false)
+        .open(open)
+        .show(ctx, |ui| {
+            for line in lines {
+                ui.label(line);
+            }
+            if ui.button("Close").clicked() {
+                close = true;
+            }
+        });
+    if close {
+        *open = false;
+    }
 }
 
 /// The measurement in the status bar: the label and value of `measurement` (if any), then
@@ -281,8 +307,15 @@ pub fn status_measurement(
     measurement: Option<(&str, &str)>,
     typed: &str,
 ) {
-    let _ = (ui, measurement, typed);
-    unimplemented!("m4-ui-status")
+    if let Some((label, value)) = measurement {
+        ui.label(label);
+        if !value.is_empty() {
+            ui.monospace(value);
+        }
+    }
+    if !typed.is_empty() {
+        ui.monospace(typed);
+    }
 }
 
 /// The File, Edit, View and Help menus.
@@ -481,6 +514,11 @@ pub fn menu_bar(ui: &mut eframe::egui::Ui, state: &MenuState<'_>) -> Option<Acti
             ui.separator();
             if ui.selectable_label(state.axes, "Axes").clicked() {
                 chosen = Some(Action::ToggleAxes);
+                ui.close();
+            }
+            ui.separator();
+            if ui.button("Model Info").clicked() {
+                chosen = Some(Action::ModelInfo);
                 ui.close();
             }
         });

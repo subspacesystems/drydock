@@ -12,7 +12,7 @@ use eframe::egui;
 use egui::{Color32, Event, MouseWheelUnit, PointerButton, Pos2, Rect, Sense};
 use glam::{DMat4, DVec2, DVec3};
 use modeler::chrome::{self, MenuState};
-use modeler::document::{Document, FileKind, format_size, native_path, resolve_texture_path};
+use modeler::document::{Document, FileKind, native_path, resolve_texture_path};
 use modeler::editor::{Editor, Viewport as EditorViewport};
 use modeler::hints::hint_label;
 use modeler::input::{self, Button, Modifiers, Tool};
@@ -73,6 +73,8 @@ pub struct App {
     view: ViewState,
     /// The Help > About window is showing.
     about_open: bool,
+    /// The View > Model Info window is showing.
+    model_info_open: bool,
     /// The Make Component / Make Group name prompt is showing.
     name_prompt: Option<chrome::NamePrompt>,
     /// The Materials panel and its open form.
@@ -137,6 +139,7 @@ impl App {
         let mut app = App {
             view: ViewState::new(),
             about_open: false,
+            model_info_open: false,
             name_prompt: None,
             materials: MaterialsPanel::default(),
             texture: TextureForm::default(),
@@ -590,7 +593,7 @@ impl App {
             Effect::SaveAsDialog => self.open_save_dialog(),
             Effect::Edit(key) => self.edit(key, ctx, frame),
             Effect::About => self.about_open = true,
-            Effect::ModelInfo => unimplemented!("m4-ui-status"),
+            Effect::ModelInfo => self.model_info_open = true,
             Effect::OpenRecent(index) => {
                 let Some(path) = self.recent.paths().get(index).cloned() else {
                     return;
@@ -1253,50 +1256,6 @@ impl App {
         }
     }
 
-    /// The measurement box at the bottom right of the viewport.
-    fn measurement_box(&self, ctx: &egui::Context, rect: Rect) {
-        let Some(editor) = &self.editor else {
-            return;
-        };
-        let pos = rect.right_bottom() - egui::vec2(226.0, 74.0);
-        egui::Area::new(egui::Id::new("measurement-box"))
-            .order(egui::Order::Foreground)
-            .fixed_pos(pos)
-            .show(ctx, |ui| {
-                egui::Frame::popup(ui.style()).show(ui, |ui| {
-                    ui.set_width(210.0);
-                    match editor.measurement() {
-                        Some((label, value)) => {
-                            let label = if label == "Distance"
-                                && editor.tool() == Tool::Move
-                                && editor.move_copy()
-                            {
-                                "Distance (copy)"
-                            } else {
-                                label
-                            };
-                            ui.horizontal(|ui| {
-                                ui.label(label);
-                                ui.with_layout(
-                                    egui::Layout::right_to_left(egui::Align::Center),
-                                    |ui| {
-                                        ui.monospace(&value);
-                                    },
-                                );
-                            });
-                        }
-                        None => {
-                            ui.label("");
-                        }
-                    }
-                    if !editor.typed().is_empty() {
-                        ui.separator();
-                        ui.monospace(editor.typed());
-                    }
-                });
-            });
-    }
-
     fn menu_state(&self) -> MenuState<'_> {
         MenuState {
             undo: self
@@ -1350,19 +1309,6 @@ impl App {
                 ui.separator();
                 if let Some(message) = self.editor.as_ref().and_then(Editor::message) {
                     ui.colored_label(ERROR_COLOR, message);
-                } else {
-                    let stats = &model.stats;
-                    ui.label(format!(
-                        "{} triangles, {} lines, {} materials, {}",
-                        stats.triangles,
-                        stats.lines,
-                        stats.materials,
-                        format_size(stats.size_m)
-                    ));
-                    if model.kernel.is_some() {
-                        ui.separator();
-                        ui.label(format!("{} faces, {} edges", stats.faces, stats.edges));
-                    }
                 }
                 if let Some(error) = &model.kernel_error {
                     ui.separator();
@@ -1393,6 +1339,27 @@ impl App {
                     Projection::Parallel => "Parallel",
                 });
                 ui.separator();
+                if let Some(editor) = &self.editor {
+                    let measurement = editor.measurement().map(|(label, value)| {
+                        let label = if label == "Distance"
+                            && editor.tool() == Tool::Move
+                            && editor.move_copy()
+                        {
+                            "Distance (copy)"
+                        } else {
+                            label
+                        };
+                        (label, value)
+                    });
+                    let typed = editor.typed();
+                    if measurement.is_some() || !typed.is_empty() {
+                        let measurement = measurement
+                            .as_ref()
+                            .map(|(label, value)| (*label, value.as_str()));
+                        chrome::status_measurement(ui, measurement, typed);
+                        ui.separator();
+                    }
+                }
                 ui.label(match self.view.tool {
                     Tool::Orbit => "Orbit",
                     Tool::Pan => "Pan",
@@ -1531,9 +1498,14 @@ impl eframe::App for App {
             }
             self.paint_viewport(ui, frame, rect);
             self.paint_overlays(ui, rect);
-            self.measurement_box(&ctx, rect);
         });
         chrome::about_window(&ctx, &mut self.about_open);
+        if let Some(model) = &self.model {
+            let lines = chrome::model_info_lines(&model.stats, model.kernel.is_some());
+            chrome::model_info_window(&ctx, &mut self.model_info_open, &lines);
+        } else {
+            self.model_info_open = false;
+        }
         if let Some(prompt) = &mut self.name_prompt {
             match chrome::name_prompt(&ctx, prompt) {
                 Some(chrome::PromptOutcome::Ok(name)) => {
