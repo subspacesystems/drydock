@@ -1420,12 +1420,7 @@ impl Editor {
         };
         edges
             .into_iter()
-            .map(|(a, b)| {
-                (
-                    self.to_world(a + offset),
-                    self.to_world(b + offset),
-                )
-            })
+            .map(|(a, b)| (self.to_world(a + offset), self.to_world(b + offset)))
             .collect()
     }
 

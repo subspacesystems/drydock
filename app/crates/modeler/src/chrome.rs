@@ -20,8 +20,10 @@ pub struct MenuState<'a> {
     pub redo: Option<&'a str>,
     /// The camera is in parallel projection.
     pub parallel: bool,
-    /// Something is selected (Flip and Erase need it).
+    /// Something is selected (Flip, Erase, Cut and Copy need it).
     pub has_selection: bool,
+    /// The clipboard holds something (Paste needs it).
+    pub has_clipboard: bool,
     /// Exactly one group or component is selected (Explode needs it).
     pub can_explode: bool,
     /// The rest of the model is hidden while editing inside an instance (the View menu
@@ -324,6 +326,37 @@ pub fn menu_bar(ui: &mut eframe::egui::Ui, state: &MenuState<'_>) -> Option<Acti
                 .clicked()
             {
                 chosen = Some(Action::Edit(EditKey::Redo));
+                ui.close();
+            }
+            ui.separator();
+            if ui
+                .add_enabled(
+                    state.has_selection,
+                    eframe::egui::Button::new("Cut    Ctrl+X"),
+                )
+                .clicked()
+            {
+                chosen = Some(Action::Cut);
+                ui.close();
+            }
+            if ui
+                .add_enabled(
+                    state.has_selection,
+                    eframe::egui::Button::new("Copy    Ctrl+C"),
+                )
+                .clicked()
+            {
+                chosen = Some(Action::Copy);
+                ui.close();
+            }
+            if ui
+                .add_enabled(
+                    state.has_clipboard,
+                    eframe::egui::Button::new("Paste    Ctrl+V"),
+                )
+                .clicked()
+            {
+                chosen = Some(Action::Paste);
                 ui.close();
             }
             ui.separator();
