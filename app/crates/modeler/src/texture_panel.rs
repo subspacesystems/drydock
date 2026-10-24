@@ -55,11 +55,7 @@ impl Default for TextureForm {
 /// (`on`, always enabled). True on the frame it is clicked.
 /// Behaviour: `docs/specs/m4-app-texture-handles.md`.
 pub fn handles_button(ui: &mut egui::Ui, available: bool, on: bool) -> bool {
-    let label = if on {
-        "Done"
-    } else {
-        "Position in Viewport"
-    };
+    let label = if on { "Done" } else { "Position in Viewport" };
     ui.add_enabled(on || available, egui::Button::new(label))
         .clicked()
 }
