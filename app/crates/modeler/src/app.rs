@@ -854,6 +854,20 @@ impl App {
             )
         });
         let tool = self.editor.as_ref().map(Editor::tool);
+        if response.contains_pointer()
+            && let Some(handles) = self.editor.as_ref().and_then(|editor| {
+                self.model
+                    .as_ref()
+                    .and_then(|document| document.kernel.as_ref())
+                    .and_then(|model| editor.texture_handles(model))
+            })
+        {
+            let icon = handles
+                .held
+                .or(handles.hover)
+                .map_or(egui::CursorIcon::Default, |grip| grip.cursor());
+            ui.ctx().set_cursor_icon(icon);
+        }
         for (egui_button, button) in [
             (PointerButton::Primary, Button::Left),
             (PointerButton::Middle, Button::Middle),
@@ -1181,26 +1195,6 @@ impl App {
                 painter.line_segment([a, b], egui::Stroke::new(1.5, preview_color));
             }
         }
-        if editor.pasting() {
-            painter.text(
-                rect.left_top() + egui::vec2(12.0, 12.0),
-                egui::Align2::LEFT_TOP,
-                "Click to place the paste (Esc cancels)",
-                egui::FontId::proportional(13.0),
-                Color32::from_rgb(220, 220, 220),
-            );
-        }
-        if let Some(kernel) = &document.kernel
-            && editor.texture_handles(kernel).is_some()
-        {
-            painter.text(
-                rect.left_top() + egui::vec2(12.0, 12.0),
-                egui::Align2::LEFT_TOP,
-                "Click inside the image, then click again to slide it. Click the turn or scale corner the same way (Shift keeps proportions). Esc when done.",
-                egui::FontId::proportional(13.0),
-                Color32::from_rgb(220, 220, 220),
-            );
-        }
         if let Some(kernel) = &document.kernel {
             let open_body = editor.path().body(kernel).unwrap_or(BodyId::Root);
             let primitives =
@@ -1377,6 +1371,23 @@ impl App {
             if let Some(error) = &self.error {
                 ui.separator();
                 ui.colored_label(ERROR_COLOR, error);
+            }
+            if let Some(handles) = self
+                .editor
+                .as_ref()
+                .zip(
+                    self.model
+                        .as_ref()
+                        .and_then(|document| document.kernel.as_ref()),
+                )
+                .and_then(|(editor, model)| editor.texture_handles(model))
+            {
+                ui.separator();
+                ui.label(texture_handles::help_text(&handles));
+            }
+            if self.editor.as_ref().is_some_and(Editor::pasting) {
+                ui.separator();
+                ui.label("Click to place the paste (Esc cancels)");
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.label(match self.view.camera.projection {

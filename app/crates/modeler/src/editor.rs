@@ -47,7 +47,10 @@ use modeler_kernel::units::{self, Unit};
 use modeler_view::{Camera, Projection};
 
 use crate::input::{EditKey, Modifiers, Tool};
-use crate::texture_handles::{GRIP_PX, Grip, TextureHandles, plane_point_at, tile_corners};
+use crate::texture_handles::{
+    GRIP_PX, Grip, TextureHandles, plane_point_at, snap_corner, snap_point, snap_turn,
+    tile_corners, turn_grip_point,
+};
 
 /// A change to how a texture lies on a face, in texture space (meters).
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -580,7 +583,7 @@ impl Editor {
                 .as_ref()
                 .is_some_and(|state| state.held.is_some())
             {
-                if let Some(op) = self.held_texture_op(view, cursor, mods) {
+                if let Some(op) = self.held_texture_op(model, view, cursor, mods) {
                     self.preview_texture_op(op);
                 }
             } else {
@@ -1992,30 +1995,40 @@ impl Editor {
         Some((map, size, plane, corners))
     }
 
+    /// The face's loops (outer first, then holes) as open-body point lists.
+    fn texture_loops(&self, model: &Model) -> Option<Vec<Vec<DVec3>>> {
+        let state = self.texture_handles.as_ref()?;
+        let body = self.body(model);
+        let geometry = model.body(body)?.geometry();
+        let face = geometry.face(state.face)?;
+        let mut loops = Vec::with_capacity(1 + face.inner.len());
+        loops.push(geometry.loop_points(&face.outer));
+        loops.extend(face.inner.iter().map(|hole| geometry.loop_points(hole)));
+        Some(loops)
+    }
+
     /// The grip under `cursor` while nothing is held.
     fn texture_grip_at(&self, model: &Model, view: &Viewport, cursor: DVec2) -> Option<Grip> {
         let (map, size, plane, corners) = self.texture_tile(model)?;
-        let scale = view
-            .project(self.to_world(corners[2]))
-            .map(|p| p.distance(cursor));
-        let turn = view
-            .project(self.to_world(corners[1]))
-            .map(|p| p.distance(cursor));
-        match (scale, turn) {
-            (Some(scale), Some(turn)) if scale <= GRIP_PX && turn <= GRIP_PX => {
-                return Some(if turn < scale {
-                    Grip::Turn
-                } else {
-                    Grip::Scale(2)
-                });
+        let turn = turn_grip_point(&corners);
+        let mut best: Option<(f64, Grip)> = None;
+        for (i, corner) in corners.iter().enumerate() {
+            let Some(pixel) = view.project(self.to_world(*corner)) else {
+                continue;
+            };
+            let distance = pixel.distance(cursor);
+            if distance <= GRIP_PX && best.is_none_or(|(nearest, _)| distance < nearest) {
+                best = Some((distance, Grip::Scale(i)));
             }
-            _ => {}
         }
-        if scale.is_some_and(|distance| distance <= GRIP_PX) {
-            return Some(Grip::Scale(2));
+        if let Some(pixel) = view.project(self.to_world(turn)) {
+            let distance = pixel.distance(cursor);
+            if distance <= GRIP_PX && best.is_none_or(|(nearest, _)| distance < nearest) {
+                best = Some((distance, Grip::Turn));
+            }
         }
-        if turn.is_some_and(|distance| distance <= GRIP_PX) {
-            return Some(Grip::Turn);
+        if let Some((_, grip)) = best {
+            return Some(grip);
         }
 
         let (origin, dir) = self.body_ray(view, cursor);
@@ -2040,6 +2053,7 @@ impl Editor {
     /// The op for the held grip at `cursor`, or `None` when it is invalid there.
     fn held_texture_op(
         &self,
+        model: &Model,
         view: &Viewport,
         cursor: DVec2,
         mods: Modifiers,
@@ -2051,42 +2065,100 @@ impl Editor {
         if !denom.is_finite() || denom.abs() < 1e-12 {
             return None;
         }
-        let p = origin + (state.plane.point - origin).dot(state.plane.normal) / denom * dir;
+        let mut p = origin + (state.plane.point - origin).dot(state.plane.normal) / denom * dir;
         if !p.is_finite() {
             return None;
+        }
+        let project = |point: DVec3| view.project(self.to_world(point));
+        let loops = self.texture_loops(model)?;
+        let offsets = [
+            DVec2::ZERO,
+            DVec2::new(state.size.x, 0.0),
+            state.size,
+            DVec2::new(0.0, state.size.y),
+        ];
+        if !mods.shift
+            && let Grip::Scale(_) = grip
+            && let Some((snapped, _)) = snap_point(&project, cursor, &loops)
+        {
+            p = snapped;
         }
         let q = state.map.apply(p);
         if !q.is_finite() {
             return None;
         }
-        let about = state.base;
         match grip {
             Grip::Slide => {
                 let g = state.map.apply(state.grab?);
-                let op = TextureOp::Move(g - q);
-                (g - q).is_finite().then_some(op)
+                if !g.is_finite() {
+                    return None;
+                }
+                let mut d = g - q;
+                if !d.is_finite() {
+                    return None;
+                }
+                let vertices: Vec<DVec3> = loops.iter().flatten().copied().collect();
+                let mut moved = [DVec3::ZERO; 4];
+                let mut complete = true;
+                for (corner, offset) in moved.iter_mut().zip(offsets) {
+                    match plane_point_at(
+                        &state.map,
+                        state.plane.point,
+                        state.plane.normal,
+                        state.base + offset - d,
+                    ) {
+                        Some(point) => *corner = point,
+                        None => {
+                            complete = false;
+                            break;
+                        }
+                    }
+                }
+                if complete && let Some((corner, vertex)) = snap_corner(&project, &moved, &vertices)
+                {
+                    d = state.base + offsets[corner] - state.map.apply(vertex);
+                }
+                d.is_finite().then_some(TextureOp::Move(d))
             }
             Grip::Turn => {
+                let about = state.base + state.size / 2.0;
                 let from = q - about;
                 if from.length() < 1e-9 {
                     return None;
                 }
-                let to = DVec2::new(state.size.x, 0.0);
-                let angle = (from.x * to.y - from.y * to.x).atan2(from.dot(to));
+                let angle = from.x.atan2(from.y);
+                let mut dirs = Vec::new();
+                for points in &loops {
+                    if points.len() < 2 {
+                        continue;
+                    }
+                    for i in 0..points.len() {
+                        let a = points[i];
+                        let b = points[(i + 1) % points.len()];
+                        dirs.push(state.map.apply(b) - state.map.apply(a));
+                    }
+                }
+                let angle = snap_turn(angle, &dirs);
                 angle
                     .is_finite()
                     .then_some(TextureOp::Rotate { angle, about })
             }
-            Grip::Scale(_) => {
-                let from = q - about;
-                let to = state.size;
+            Grip::Scale(i) => {
+                let anchor = state.base + offsets[(i + 2) % 4];
+                let target = state.base + offsets[i];
+                let from = q - anchor;
+                let to = target - anchor;
                 let factor = if mods.shift {
                     DVec2::splat(to.length_squared() / from.dot(to))
                 } else {
                     DVec2::new(to.x / from.x, to.y / from.y)
                 };
-                (factor.is_finite() && factor.x > 0.0 && factor.y > 0.0)
-                    .then_some(TextureOp::Scale { factor, about })
+                (factor.is_finite() && factor.x > 0.0 && factor.y > 0.0).then_some(
+                    TextureOp::Scale {
+                        factor,
+                        about: anchor,
+                    },
+                )
             }
         }
     }
@@ -2168,7 +2240,7 @@ impl Editor {
             return false;
         }
 
-        let Some(op) = self.held_texture_op(view, cursor, mods) else {
+        let Some(op) = self.held_texture_op(model, view, cursor, mods) else {
             self.message = Some("Can't position that texture".to_string());
             return false;
         };

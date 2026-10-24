@@ -35,7 +35,12 @@ pub enum Grip {
 impl Grip {
     /// The mouse cursor to show while this grip is hovered or held.
     pub fn cursor(self) -> egui::CursorIcon {
-        unimplemented!("m4-texture-handles-2")
+        match self {
+            Grip::Slide => egui::CursorIcon::Move,
+            Grip::Turn => egui::CursorIcon::Grab,
+            Grip::Scale(i) if i % 2 == 0 => egui::CursorIcon::ResizeNwSe,
+            Grip::Scale(_) => egui::CursorIcon::ResizeNeSw,
+        }
     }
 }
 
@@ -133,8 +138,7 @@ pub fn tile_corners(
 /// The point of the turn grip: the middle of the top edge, pushed `TURN_STEM` of the
 /// image copy's height further up. `corners` as in [`TextureHandles::corners`].
 pub fn turn_grip_point(corners: &[DVec3; 4]) -> DVec3 {
-    let _ = corners;
-    unimplemented!("m4-texture-handles-2")
+    (corners[2] + corners[3]) / 2.0 + (corners[3] - corners[0]) * TURN_STEM
 }
 
 /// Where a dragged point snaps. `project` maps an open-body point to pixels (`None` when it
@@ -147,8 +151,48 @@ pub fn snap_point(
     cursor: DVec2,
     loops: &[Vec<DVec3>],
 ) -> Option<(DVec3, SnapKind)> {
-    let _ = (project, cursor, loops);
-    unimplemented!("m4-texture-handles-2")
+    if !cursor.is_finite() {
+        return None;
+    }
+    let mut vertex: Option<(f64, DVec3)> = None;
+    for point in loops.iter().flat_map(|points| points.iter()) {
+        let Some(pixel) = project(*point) else {
+            continue;
+        };
+        let distance = pixel.distance(cursor);
+        if distance <= SNAP_PX && vertex.is_none_or(|(best, _)| distance < best) {
+            vertex = Some((distance, *point));
+        }
+    }
+    if let Some((_, point)) = vertex {
+        return Some((point, SnapKind::Vertex));
+    }
+
+    let mut edge: Option<(f64, DVec3)> = None;
+    for points in loops {
+        if points.len() < 2 {
+            continue;
+        }
+        for i in 0..points.len() {
+            let a = points[i];
+            let b = points[(i + 1) % points.len()];
+            let (Some(pa), Some(pb)) = (project(a), project(b)) else {
+                continue;
+            };
+            let ab = pb - pa;
+            let length_squared = ab.length_squared();
+            let t = if length_squared == 0.0 {
+                0.0
+            } else {
+                ((cursor - pa).dot(ab) / length_squared).clamp(0.0, 1.0)
+            };
+            let distance = (pa + ab * t).distance(cursor);
+            if distance <= SNAP_PX && edge.is_none_or(|(best, _)| distance < best) {
+                edge = Some((distance, a + (b - a) * t));
+            }
+        }
+    }
+    edge.map(|(_, point)| (point, SnapKind::Edge))
 }
 
 /// Which image corner lands on a face vertex: among all pairs of a `corners` entry and a
@@ -159,8 +203,24 @@ pub fn snap_corner(
     corners: &[DVec3; 4],
     vertices: &[DVec3],
 ) -> Option<(usize, DVec3)> {
-    let _ = (project, corners, vertices);
-    unimplemented!("m4-texture-handles-2")
+    let mut best: Option<(f64, usize, DVec3)> = None;
+    for (corner_index, corner) in corners.iter().enumerate() {
+        let Some(corner_px) = project(*corner) else {
+            continue;
+        };
+        for vertex in vertices {
+            let Some(vertex_px) = project(*vertex) else {
+                continue;
+            };
+            let distance = corner_px.distance(vertex_px);
+            if distance <= SNAP_PX
+                && best.is_none_or(|(best_distance, _, _)| distance < best_distance)
+            {
+                best = Some((distance, corner_index, *vertex));
+            }
+        }
+    }
+    best.map(|(_, corner_index, vertex)| (corner_index, vertex))
 }
 
 /// `angle` (radians, a rotation of texture space) adjusted so the image lines up with the
@@ -170,14 +230,36 @@ pub fn snap_corner(
 /// `angle`, else `angle` itself. Zero or non-finite directions are ignored; a non-finite
 /// `angle` is returned unchanged.
 pub fn snap_turn(angle: f64, edge_dirs: &[DVec2]) -> f64 {
-    let _ = (angle, edge_dirs);
-    unimplemented!("m4-texture-handles-2")
+    if !angle.is_finite() {
+        return angle;
+    }
+    let period = std::f64::consts::FRAC_PI_2;
+    let mut best: Option<f64> = None;
+    for dir in edge_dirs {
+        if !dir.is_finite() || dir.length_squared() == 0.0 {
+            continue;
+        }
+        let phi = dir.y.atan2(dir.x);
+        let k = ((angle + phi) / period).round();
+        let candidate = -phi + k * period;
+        let distance = (candidate - angle).abs();
+        if distance <= SNAP_ANGLE
+            && best.is_none_or(|best_angle| distance < (best_angle - angle).abs())
+        {
+            best = Some(candidate);
+        }
+    }
+    best.unwrap_or(angle)
 }
 
 /// The short help line for the status bar.
 pub fn help_text(handles: &TextureHandles) -> &'static str {
-    let _ = handles;
-    unimplemented!("m4-texture-handles-2")
+    match handles.held {
+        Some(Grip::Slide) => "Click to drop the image here. Esc cancels.",
+        Some(Grip::Turn) => "Click to set the angle. Esc cancels.",
+        Some(Grip::Scale(_)) => "Click to set the size (Shift keeps proportions). Esc cancels.",
+        None => "Click a corner to scale, the top grip to turn, the image to slide. Esc when done.",
+    }
 }
 
 /// Overlay primitives for `handles`, open-body coordinates.
@@ -191,22 +273,25 @@ pub fn primitives(handles: &TextureHandles) -> Vec<Primitive> {
             Style::Handle
         }
     };
-    vec![
-        Primitive::Polygon {
-            points: handles.corners.to_vec(),
-            style: Style::BoundsBox,
-        },
-        Primitive::Marker {
-            at: handles.corners[0],
-            style: Style::Handle,
-        },
-        Primitive::Marker {
-            at: handles.corners[1],
-            style: style(Grip::Turn),
-        },
-        Primitive::Marker {
-            at: handles.corners[2],
-            style: style(Grip::Scale(2)),
-        },
-    ]
+    let turn = turn_grip_point(&handles.corners);
+    let mut primitives = vec![Primitive::Polygon {
+        points: handles.corners.to_vec(),
+        style: Style::BoundsBox,
+    }];
+    for i in 0..4 {
+        primitives.push(Primitive::Marker {
+            at: handles.corners[i],
+            style: style(Grip::Scale(i)),
+        });
+    }
+    primitives.push(Primitive::Line {
+        a: (handles.corners[2] + handles.corners[3]) / 2.0,
+        b: turn,
+        style: Style::BoundsBox,
+    });
+    primitives.push(Primitive::Marker {
+        at: turn,
+        style: style(Grip::Turn),
+    });
+    primitives
 }
