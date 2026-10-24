@@ -129,6 +129,10 @@ Done when: `modeler` on the reference house model opens in under 5 s on modeler-
 | `m4-app-move-copy` | Move tool: Ctrl toggles copy, the originals stay | `m4-copy` |
 | `m4-app-copy-paste` | Edit > Cut / Copy / Paste (Ctrl+X/C/V); the pasted copy follows the cursor until a click places it | `m4-copy` |
 | `m4-app-texture-handles` | texture position with handles on the face in the viewport (move, turn and scale) instead of typed values | |
+| `m4-ui-menus` | File > Exit and recent files, Tools menu (every tool, grouped, with keys), About with license and contributors | |
+| `m4-ui-status` | status bar without model counts; View > Model Info window with them; the measurement box moves into the status bar | |
+| `m4-ui-axes` | red/green/blue axes drawn at the origin (View > Axes toggle); inside an open instance at its origin | |
+| `m4-ui-materials-layout` | Materials panel buttons and a search box at the top, the list scrolls under them; list or tiles view | |
 
 - Make component from selection; edit in place (all instances update); option to hide the rest of the model while editing; groups.
 - Materials: create/edit colors and image textures; paint bucket; texture positioning basics; materials survive save/load and DAE import.
