@@ -15,7 +15,7 @@ use std::collections::BTreeSet;
 use glam::{DAffine2, DMat4, DVec2, DVec3};
 use modeler_kernel::click::{self, ClickMods};
 use modeler_kernel::component::make_component;
-use modeler_kernel::copy::copy_selection;
+use modeler_kernel::copy::{Clipboard, copy_selection};
 use modeler_kernel::editpath::EditPath;
 use modeler_kernel::erase::erase;
 use modeler_kernel::explode::explode;
@@ -1266,6 +1266,44 @@ impl Editor {
     /// Turn Move's copy mode on or off. Switching tools turns it off.
     pub fn set_move_copy(&mut self, on: bool) {
         self.move_copy = on;
+    }
+
+    /// The clipboard, if something was copied or cut. Behaviour:
+    /// `docs/specs/m4-app-copy-paste.md`.
+    pub fn clipboard(&self) -> Option<&Clipboard> {
+        unimplemented!("m4-app-copy-paste")
+    }
+
+    /// Copy the selection of the open body to the clipboard. The model is untouched.
+    /// True when the clipboard was set.
+    pub fn copy(&mut self, model: &Model) -> bool {
+        let _ = model;
+        unimplemented!("m4-app-copy-paste")
+    }
+
+    /// Copy the selection to the clipboard, then erase it (one undo step "Cut"). True when
+    /// the model changed.
+    pub fn cut(&mut self, model: &mut Model) -> bool {
+        let _ = model;
+        unimplemented!("m4-app-copy-paste")
+    }
+
+    /// Start pasting the clipboard: the Select tool is made current and the copy follows
+    /// the cursor until a click places it. True when pasting started.
+    pub fn paste(&mut self, model: &Model) -> bool {
+        let _ = model;
+        unimplemented!("m4-app-copy-paste")
+    }
+
+    /// Whether a paste is waiting for its click.
+    pub fn pasting(&self) -> bool {
+        unimplemented!("m4-app-copy-paste")
+    }
+
+    /// Edges of the paste as a click would place it now (world coordinates); empty when
+    /// not pasting or the cursor has not been over the viewport yet.
+    pub fn paste_preview(&self) -> Vec<(DVec3, DVec3)> {
+        unimplemented!("m4-app-copy-paste")
     }
 
     /// Tape: the tool, for drawing the start point (`docs/specs/m3-app-tape.md`). `None` for
