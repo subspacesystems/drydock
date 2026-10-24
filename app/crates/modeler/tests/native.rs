@@ -163,9 +163,9 @@ fn dae_document_has_a_kernel_model() {
     assert_eq!(doc.path, fixture("slab.dae"));
     assert!(doc.kernel_error.is_none(), "{:?}", doc.kernel_error);
     let kernel = doc.kernel.as_ref().expect("slab converts");
-    // The scene is still the flattened import.
+    // The scene is the kernel model's: the quad's four edges and the post.
     assert_eq!(doc.stats.triangles, 2);
-    assert_eq!(doc.stats.lines, 1);
+    assert_eq!(doc.stats.lines, 5);
     assert_eq!(doc.stats.materials, 1);
     assert_close(doc.stats.size_m, [2.0, 3.0, 4.0], 1e-5);
     // One quad face and its four edges, plus the post.
