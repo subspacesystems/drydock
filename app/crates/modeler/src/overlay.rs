@@ -383,6 +383,12 @@ pub fn axes(transform: DMat4, half_length: f64) -> Vec<Primitive> {
     out
 }
 
+/// The axes of `transform` as GPU lines (`docs/specs/m4-axes-depth.md`).
+pub fn axis_lines(transform: DMat4, half_length: f64, dash: f64) -> Vec<modeler_render::ExtraLine> {
+    let _ = (transform, half_length, dash);
+    Vec::new()
+}
+
 /// The part of segment `a`-`b` a perspective camera can draw: in front of its near
 /// distance (`camera.distance / 1000` along the view direction). A parallel camera keeps the
 /// whole segment. `None` when nothing is left. Behaviour: `docs/specs/m4-ui-axes.md`.
