@@ -211,6 +211,7 @@ pub struct Editor {
     rotate: RotateTool,
     rotate_segments: Vec<(DVec3, DVec3)>,
     translate: MoveTool,
+    move_copy: bool,
     move_segments: Vec<(DVec3, DVec3)>,
     scale: ScaleTool,
     scale_hover: Option<Handle>,
@@ -357,6 +358,7 @@ impl Editor {
             rotate: RotateTool::new(plane_for_normal(DVec3::Z)),
             rotate_segments: Vec::new(),
             translate: MoveTool::new(),
+            move_copy: false,
             move_segments: Vec::new(),
             scale: ScaleTool::new(),
             scale_hover: None,
@@ -1238,6 +1240,16 @@ impl Editor {
     /// other tools.
     pub fn move_tool(&self) -> Option<&MoveTool> {
         (self.tool == Tool::Move).then_some(&self.translate)
+    }
+
+    /// Whether the Move tool copies instead of moving (`docs/specs/m4-app-move-copy.md`).
+    pub fn move_copy(&self) -> bool {
+        self.move_copy
+    }
+
+    /// Turn Move's copy mode on or off. Switching tools turns it off.
+    pub fn set_move_copy(&mut self, on: bool) {
+        self.move_copy = on;
     }
 
     /// Tape: the tool, for drawing the start point (`docs/specs/m3-app-tape.md`). `None` for
