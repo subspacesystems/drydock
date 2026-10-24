@@ -116,6 +116,11 @@ pub enum Action {
     /// Hide (or show again) the rest of the model while editing inside an instance
     /// (View menu; `docs/specs/m4-app-edit-view.md`).
     ToggleHideRest,
+    /// Open the recent file at this index of the File menu's list (most recent first;
+    /// `docs/specs/m4-ui-menus.md`).
+    OpenRecent(usize),
+    /// Quit, asking first when the document is modified (File > Exit).
+    Exit,
 }
 
 /// A mouse drag of `delta` pixels (screen space, y down) with `button` held.

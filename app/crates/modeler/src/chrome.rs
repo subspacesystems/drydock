@@ -9,6 +9,7 @@
 
 use crate::input::{Action, EditKey, Tool};
 use modeler_view::StandardView;
+use std::path::PathBuf;
 
 /// What the menus need to know about the editor.
 #[derive(Clone, Copy, Debug, Default)]
@@ -26,6 +27,10 @@ pub struct MenuState<'a> {
     /// The rest of the model is hidden while editing inside an instance (the View menu
     /// item offers the opposite).
     pub hide_rest: bool,
+    /// The File menu's recent files, most recent first (`docs/specs/m4-ui-menus.md`).
+    pub recent: &'a [PathBuf],
+    /// The current tool (checked in the Tools menu).
+    pub tool: Tool,
 }
 
 /// The name prompt shown before Make Component / Make Group.
@@ -119,6 +124,50 @@ pub const TOOL_BUTTONS: [(Tool, &str); 16] = [
     (Tool::Zoom, "Zoom"),
 ];
 
+/// The tools by kind, in toolbar order: select, drawing, modifying, measuring and
+/// painting, camera. The Tools menu puts a separator between groups.
+pub const TOOL_GROUPS: [&[Tool]; 5] = [
+    &[Tool::Select],
+    &[
+        Tool::Line,
+        Tool::Rectangle,
+        Tool::Circle,
+        Tool::Arc,
+        Tool::Arc3,
+    ],
+    &[Tool::PushPull, Tool::Move, Tool::Rotate, Tool::Scale],
+    &[Tool::Tape, Tool::Erase, Tool::Paint],
+    &[Tool::Orbit, Tool::Pan, Tool::Zoom],
+];
+
+/// The key that picks `tool` (`input::key`), as shown in the Tools menu.
+pub fn tool_shortcut(tool: Tool) -> &'static str {
+    match tool {
+        Tool::Select => "Space",
+        Tool::Line => "L",
+        Tool::Rectangle => "R",
+        Tool::Circle => "C",
+        Tool::Arc => "A",
+        Tool::Arc3 => "Shift+A",
+        Tool::PushPull => "P",
+        Tool::Move => "M",
+        Tool::Rotate => "Q",
+        Tool::Scale => "S",
+        Tool::Tape => "T",
+        Tool::Erase => "E",
+        Tool::Paint => "B",
+        Tool::Orbit => "O",
+        Tool::Pan => "H",
+        Tool::Zoom => "Z",
+    }
+}
+
+/// The File menu's text for each recent file, in list order (`docs/specs/m4-ui-menus.md`).
+pub fn recent_labels(paths: &[PathBuf]) -> Vec<String> {
+    let _ = paths;
+    unimplemented!("m4-ui-menus")
+}
+
 /// The tool buttons; `current` is drawn selected. Clicking one returns
 /// `Action::SelectTool`.
 pub fn toolbar(ui: &mut eframe::egui::Ui, current: Tool) -> Option<Action> {
@@ -140,6 +189,14 @@ pub const GIT_HASH: &str = env!("MODELER_GIT_HASH");
 /// One line for the About window: name, version and commit.
 pub fn about_text() -> String {
     format!("modeler {} ({GIT_HASH})", env!("CARGO_PKG_VERSION"))
+}
+
+/// The names in the repository's `CONTRIBUTORS` file.
+pub const CONTRIBUTORS: &str = include_str!("../../../../CONTRIBUTORS");
+
+/// The About window's lines, top to bottom (`docs/specs/m4-ui-menus.md`).
+pub fn about_lines() -> Vec<String> {
+    unimplemented!("m4-ui-menus")
 }
 
 /// The About window while `open`; its Close button clears `open`.

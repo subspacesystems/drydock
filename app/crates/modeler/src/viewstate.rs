@@ -47,6 +47,10 @@ pub enum Effect {
     Explode,
     /// Flip the editor's hide-the-rest option.
     ToggleHideRest,
+    /// Open the recent file at this index (`docs/specs/m4-ui-menus.md`).
+    OpenRecent(usize),
+    /// Quit the app (asking first when the document is modified).
+    Exit,
 }
 
 /// The scene's bounding box in `modeler_view` terms (`None` for an empty scene).
@@ -124,6 +128,8 @@ impl ViewState {
             Action::MakeGroup => return Effect::MakeComponent { group: true },
             Action::Explode => return Effect::Explode,
             Action::ToggleHideRest => return Effect::ToggleHideRest,
+            Action::OpenRecent(index) => return Effect::OpenRecent(index),
+            Action::Exit => return Effect::Exit,
         }
         Effect::None
     }

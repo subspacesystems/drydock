@@ -39,6 +39,7 @@ fn state() -> MenuState<'static> {
         has_selection: true,
         can_explode: false,
         hide_rest: false,
+        ..MenuState::default()
     }
 }
 

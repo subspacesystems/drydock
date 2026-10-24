@@ -18,6 +18,7 @@ use modeler::hints::hint_label;
 use modeler::input::{self, Button, Modifiers, Tool};
 use modeler::materials_panel::{MaterialAction, MaterialsPanel, materials_panel};
 use modeler::overlay::{self, Primitive};
+use modeler::recent::RecentFiles;
 use modeler::texture_panel::{TextureForm, texture_panel};
 use modeler::viewstate::{Effect, ViewState, scene_bounds};
 use modeler_dae::{FlatScene, RestView};
@@ -103,6 +104,8 @@ pub struct App {
     dirty: bool,
     /// The editor path the uploaded scene was built for.
     shown_path: EditPath,
+    /// The File menu's recent files (`docs/specs/m4-ui-menus.md`).
+    recent: RecentFiles,
 }
 
 impl App {
@@ -142,6 +145,7 @@ impl App {
             drag_start_px: None,
             dirty: true,
             shown_path: EditPath::root(),
+            recent: RecentFiles::default(),
         };
         if app.gpu.is_none() {
             app.error = Some("No wgpu render state: cannot draw the viewport".to_owned());
@@ -558,6 +562,11 @@ impl App {
             Effect::SaveAsDialog => self.open_save_dialog(),
             Effect::Edit(key) => self.edit(key, ctx, frame),
             Effect::About => self.about_open = true,
+            Effect::OpenRecent(index) => {
+                let _ = index;
+                unimplemented!("m4-ui-menus")
+            }
+            Effect::Exit => unimplemented!("m4-ui-menus"),
             Effect::ToggleHideRest => {
                 if let Some(editor) = &mut self.editor {
                     let hide = !editor.hide_rest();
@@ -1126,6 +1135,8 @@ impl App {
                 .editor
                 .as_ref()
                 .is_some_and(|editor| editor.hide_rest()),
+            recent: self.recent.paths(),
+            tool: self.view.tool,
         }
     }
 
