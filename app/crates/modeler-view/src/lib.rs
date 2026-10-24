@@ -191,8 +191,29 @@ impl Camera {
     /// orbit pivot when the cursor is over empty space; `None` when it doesn't, or the
     /// point is too far from the target. Behaviour: `docs/specs/m4-orbit-ground.md`.
     pub fn ground_pivot(&self, origin: DVec3, dir: DVec3) -> Option<DVec3> {
-        let _ = (origin, dir);
-        unimplemented!()
+        if !origin.is_finite() || !dir.is_finite() {
+            return None;
+        }
+        if !self.target.is_finite() || !self.distance.is_finite() {
+            return None;
+        }
+        let dir_len = dir.length();
+        if dir_len == 0.0 {
+            return None;
+        }
+        if dir.z.abs() <= 1e-12 * dir_len {
+            return None;
+        }
+        let t = -origin.z / dir.z;
+        if t <= 0.0 {
+            return None;
+        }
+        let mut p = origin + t * dir;
+        p.z = 0.0;
+        if (p - self.target).length() > GROUND_PIVOT_RANGE * self.distance {
+            return None;
+        }
+        Some(p)
     }
 
     /// Pan by a mouse drag of (dx, dy) pixels in a viewport `height_px` tall.
