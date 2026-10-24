@@ -6,7 +6,7 @@
 use glam::{DMat4, DVec2, DVec3};
 use modeler::editor::*;
 use modeler::input::{EditKey, Modifiers, Tool};
-use modeler::texture_handles::{Grip, TextureHandles};
+use modeler::texture_handles::{Grip, TextureHandles, turn_grip_point};
 use modeler_kernel::model::{
     BodyId, DefinitionInfo, Instance, InstanceId, Material, Model, ModelEdit, Texture, UndoStack,
 };
@@ -170,12 +170,24 @@ fn hover_reports_the_grip_under_the_cursor() {
     let h = started(&model, &mut editor, face);
     let cases = [
         (
-            px(&view, h.corners[1]) + DVec2::new(3.0, -2.0),
+            px(&view, turn_grip_point(&h.corners)) + DVec2::new(3.0, -2.0),
             Some(Grip::Turn),
         ),
         (
+            px(&view, h.corners[0]) + DVec2::new(3.0, -2.0),
+            Some(Grip::Scale(0)),
+        ),
+        (
+            px(&view, h.corners[1]) + DVec2::new(-2.0, 3.0),
+            Some(Grip::Scale(1)),
+        ),
+        (
             px(&view, h.corners[2]) + DVec2::new(-2.0, 3.0),
-            Some(Grip::Scale),
+            Some(Grip::Scale(2)),
+        ),
+        (
+            px(&view, h.corners[3]) + DVec2::new(2.0, 2.0),
+            Some(Grip::Scale(3)),
         ),
         (px(&view, middle(&h.corners)), Some(Grip::Slide)),
         (px(&view, v(0.2, 2.8, 0.0)), None),
@@ -223,31 +235,64 @@ fn slide_keeps_the_grabbed_texture_point_under_the_cursor() {
 }
 
 #[test]
-fn turn_points_the_bottom_edge_at_the_cursor_about_the_pin() {
+fn turn_points_the_top_of_the_image_at_the_cursor_about_its_center() {
     let (mut model, mut editor, face, view) = setup();
     let h = started(&model, &mut editor, face);
     let m0 = map(&model, BodyId::Root, face);
-    let a = m0.apply(h.corners[0]);
-    assert!(!editor.click(&mut model, &view, px(&view, h.corners[1]), NONE, 1));
+    let center = middle(&h.corners);
+    assert!(!editor.click(
+        &mut model,
+        &view,
+        px(&view, turn_grip_point(&h.corners)),
+        NONE,
+        1
+    ));
     assert_eq!(handles(&editor, &model).held, Some(Grip::Turn));
-    let p =
-        h.corners[0] + 0.3 * (h.corners[1] - h.corners[0]) + 0.8 * (h.corners[3] - h.corners[0]);
+    // 0.8 right of and 0.6 above the center: 36.87 degrees, so a turn of 53.13 degrees.
+    let p = center + v(0.8, 0.6, 0.0);
     assert!(editor.click(&mut model, &view, px(&view, p), NONE, 1));
     let m1 = map(&model, BodyId::Root, face);
-    assert!(close2(m1.apply(h.corners[0]), a), "the pin moved");
-    let d = m1.apply(p) - a;
-    assert!(d.y.abs() < 1e-6 && d.x > 0.0, "{d}");
-    assert!((d.length() - (0.3f64.hypot(0.8))).abs() < 1e-6, "{d}");
+    assert!(
+        close2(m1.apply(center), m0.apply(center)),
+        "the center moved"
+    );
+    let d = m1.apply(p) - m0.apply(center);
+    assert!(close2(d, DVec2::new(0.0, 1.0)), "{d}");
+    assert_eq!(editor.undo_stack().undo_label(), Some("Position Texture"));
 }
 
 #[test]
-fn scale_puts_the_top_right_corner_under_the_cursor() {
+fn turn_snaps_the_image_to_the_face_edges() {
+    let (mut model, mut editor, face, view) = setup();
+    let h = started(&model, &mut editor, face);
+    let m0 = map(&model, BodyId::Root, face);
+    let center = middle(&h.corners);
+    assert!(!editor.click(
+        &mut model,
+        &view,
+        px(&view, turn_grip_point(&h.corners)),
+        NONE,
+        1
+    ));
+    // The cursor asks for a turn of 92 degrees; the face edges line up at 90.
+    let angle = (-2.0f64).to_radians();
+    let p = center + 0.9 * v(angle.cos(), angle.sin(), 0.0);
+    editor.pointer_move(&mut model, &view, px(&view, p), NONE);
+    assert!(editor.click(&mut model, &view, px(&view, p), NONE, 1));
+    let m1 = map(&model, BodyId::Root, face);
+    assert!(close2(m1.apply(center), m0.apply(center)));
+    let bottom = m1.apply(h.corners[1]) - m1.apply(h.corners[0]);
+    assert!(close2(bottom, DVec2::new(0.0, 1.0)), "{bottom}");
+}
+
+#[test]
+fn scale_puts_the_dragged_corner_under_the_cursor() {
     let (mut model, mut editor, face, view) = setup();
     let h = started(&model, &mut editor, face);
     let m0 = map(&model, BodyId::Root, face);
     let a = m0.apply(h.corners[0]);
     assert!(!editor.click(&mut model, &view, px(&view, h.corners[2]), NONE, 1));
-    assert_eq!(handles(&editor, &model).held, Some(Grip::Scale));
+    assert_eq!(handles(&editor, &model).held, Some(Grip::Scale(2)));
     let p =
         h.corners[0] + 2.0 * (h.corners[1] - h.corners[0]) + 0.5 * (h.corners[3] - h.corners[0]);
     assert!(editor.click(&mut model, &view, px(&view, p), NONE, 1));
@@ -292,9 +337,103 @@ fn scale_across_the_pin_is_refused_and_stays_held() {
     let undo_before = editor.undo_stack().undo_count();
     assert!(!editor.click(&mut model, &view, px(&view, p), NONE, 1));
     assert_eq!(editor.message(), Some("Can't position that texture"));
-    assert_eq!(handles(&editor, &model).held, Some(Grip::Scale));
+    assert_eq!(handles(&editor, &model).held, Some(Grip::Scale(2)));
     assert_eq!(editor.undo_stack().undo_count(), undo_before);
     assert_eq!(map(&model, BodyId::Root, face), m0);
+}
+
+#[test]
+fn every_corner_scales_about_the_opposite_one() {
+    for i in 0..4 {
+        let (mut model, mut editor, face, view) = setup();
+        let h = started(&model, &mut editor, face);
+        let m0 = map(&model, BodyId::Root, face);
+        let anchor = h.corners[(i + 2) % 4];
+        assert!(!editor.click(&mut model, &view, px(&view, h.corners[i]), NONE, 1));
+        assert_eq!(handles(&editor, &model).held, Some(Grip::Scale(i)));
+        // Twice as far from the anchor: the image shrinks to half size. These points are
+        // the face's own corners, so snapping changes nothing.
+        let p = anchor + 2.0 * (h.corners[i] - anchor);
+        assert!(
+            editor.click(&mut model, &view, px(&view, p), NONE, 1),
+            "{i}"
+        );
+        let m1 = map(&model, BodyId::Root, face);
+        assert!(close2(m1.apply(anchor), m0.apply(anchor)), "anchor {i}");
+        assert!(
+            close2(m1.apply(p), m0.apply(h.corners[i])),
+            "corner {i}: {} want {}",
+            m1.apply(p),
+            m0.apply(h.corners[i])
+        );
+    }
+}
+
+#[test]
+fn scale_snaps_to_a_face_corner() {
+    let (mut model, mut editor, face, view) = setup();
+    let h = started(&model, &mut editor, face);
+    let a = map(&model, BodyId::Root, face).apply(h.corners[0]);
+    assert!(!editor.click(&mut model, &view, px(&view, h.corners[2]), NONE, 1));
+    // A few pixels off the face corner (3, 3): the image corner lands exactly on it.
+    let cursor = px(&view, v(3.0, 3.0, 0.0)) + DVec2::new(4.0, -3.0);
+    editor.pointer_move(&mut model, &view, cursor, NONE);
+    let preview = handles(&editor, &model);
+    assert!(
+        close3(preview.corners[2], v(3.0, 3.0, 0.0)),
+        "{:?}",
+        preview.corners
+    );
+    assert!(editor.click(&mut model, &view, cursor, NONE, 1));
+    let m1 = map(&model, BodyId::Root, face);
+    assert!(close2(m1.apply(v(3.0, 3.0, 0.0)), a + DVec2::new(1.0, 1.0)));
+}
+
+#[test]
+fn scale_snaps_to_a_face_edge() {
+    let (mut model, mut editor, face, view) = setup();
+    let h = started(&model, &mut editor, face);
+    let a = map(&model, BodyId::Root, face).apply(h.corners[0]);
+    assert!(!editor.click(&mut model, &view, px(&view, h.corners[2]), NONE, 1));
+    // A few pixels outside the right edge, level with y = 1.5: x snaps to the edge, y stays.
+    let cursor = px(&view, v(3.0, 1.5, 0.0)) + DVec2::new(5.0, 0.0);
+    assert!(editor.click(&mut model, &view, cursor, NONE, 1));
+    let m1 = map(&model, BodyId::Root, face);
+    assert!(close2(m1.apply(v(3.0, 1.5, 0.0)), a + DVec2::new(1.0, 1.0)));
+}
+
+#[test]
+fn scale_far_from_the_face_does_not_snap() {
+    let (mut model, mut editor, face, view) = setup();
+    let h = started(&model, &mut editor, face);
+    let a = map(&model, BodyId::Root, face).apply(h.corners[0]);
+    assert!(!editor.click(&mut model, &view, px(&view, h.corners[2]), NONE, 1));
+    let p = v(2.5, 2.2, 0.0);
+    assert!(editor.click(&mut model, &view, px(&view, p), NONE, 1));
+    let m1 = map(&model, BodyId::Root, face);
+    assert!(close2(m1.apply(p), a + DVec2::new(1.0, 1.0)));
+}
+
+#[test]
+fn slide_snaps_an_image_corner_to_a_face_corner() {
+    let (mut model, mut editor, face, view) = setup();
+    let h = started(&model, &mut editor, face);
+    let m0 = map(&model, BodyId::Root, face);
+    let a = m0.apply(h.corners[0]);
+    let p1 = middle(&h.corners);
+    assert!(!editor.click(&mut model, &view, px(&view, p1), NONE, 1));
+    // The image's bottom left corner would land just inside the face corner (0, 0).
+    let p2 = p1 + v(-1.0 + 0.05, -1.0 + 0.04, 0.0);
+    editor.pointer_move(&mut model, &view, px(&view, p2), NONE);
+    let preview = handles(&editor, &model);
+    assert!(
+        close3(preview.corners[0], v(0.0, 0.0, 0.0)),
+        "{:?}",
+        preview.corners
+    );
+    assert!(editor.click(&mut model, &view, px(&view, p2), NONE, 1));
+    let m1 = map(&model, BodyId::Root, face);
+    assert!(close2(m1.apply(v(0.0, 0.0, 0.0)), a));
 }
 
 #[test]
@@ -434,7 +573,7 @@ fn handles_work_inside_an_open_instance() {
         h.corners
     );
     editor.pointer_move(&mut model, &view, px(&view, world(h.corners[1])), NONE);
-    assert_eq!(handles(&editor, &model).hover, Some(Grip::Turn));
+    assert_eq!(handles(&editor, &model).hover, Some(Grip::Scale(1)));
 
     let m0 = map(&model, body, face);
     let p1 = middle(&h.corners);
