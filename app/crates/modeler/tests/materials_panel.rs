@@ -407,11 +407,12 @@ fn name_field_has_focus_when_the_form_opens() {
     h.get_by_label("New...").click();
     h.run();
     h.run();
-    let name = h
+    // The search box above the list is a text field too; the name field is the one in focus.
+    let focused = h
         .get_all_by_role(Role::TextInput)
-        .next()
-        .expect("a name field");
-    assert!(name.is_focused(), "the name field takes focus");
+        .filter(|field| field.is_focused())
+        .count();
+    assert_eq!(focused, 1, "the name field takes focus");
     // Typing without clicking goes to the name.
     h.event(eframe::egui::Event::Text("Walnut".to_string()));
     h.run();
