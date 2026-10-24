@@ -125,6 +125,8 @@ pub enum Action {
     ToggleHideRest,
     /// Show or hide the axes at the origin (View menu; `docs/specs/m4-ui-axes.md`).
     ToggleAxes,
+    /// Show the Model Info window (View menu; `docs/specs/m4-ui-status.md`).
+    ModelInfo,
     /// Open the recent file at this index of the File menu's list (most recent first;
     /// `docs/specs/m4-ui-menus.md`).
     OpenRecent(usize),

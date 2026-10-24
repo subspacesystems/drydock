@@ -7,6 +7,7 @@
 //!
 //! Behaviour: `docs/specs/m3-app-ui.md`.
 
+use crate::document::Stats;
 use crate::input::{Action, EditKey, Tool};
 use modeler_view::StandardView;
 use std::path::PathBuf;
@@ -259,6 +260,29 @@ pub fn about_window(ctx: &eframe::egui::Context, open: &mut bool) {
     if close {
         *open = false;
     }
+}
+
+/// The Model Info window's lines, top to bottom (`docs/specs/m4-ui-status.md`).
+pub fn model_info_lines(stats: &Stats, kernel: bool) -> Vec<String> {
+    let _ = (stats, kernel);
+    unimplemented!("m4-ui-status")
+}
+
+/// The Model Info window while `open`, showing `lines`; its Close button clears `open`.
+pub fn model_info_window(ctx: &eframe::egui::Context, open: &mut bool, lines: &[String]) {
+    let _ = (ctx, open, lines);
+    unimplemented!("m4-ui-status")
+}
+
+/// The measurement in the status bar: the label and value of `measurement` (if any), then
+/// the typed text (if any), drawn into `ui` (`docs/specs/m4-ui-status.md`).
+pub fn status_measurement(
+    ui: &mut eframe::egui::Ui,
+    measurement: Option<(&str, &str)>,
+    typed: &str,
+) {
+    let _ = (ui, measurement, typed);
+    unimplemented!("m4-ui-status")
 }
 
 /// The File, Edit, View and Help menus.

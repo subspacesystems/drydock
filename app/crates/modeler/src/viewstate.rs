@@ -47,6 +47,8 @@ pub enum Effect {
     Paste,
     /// Show the About window.
     About,
+    /// Show the Model Info window.
+    ModelInfo,
     /// Ask for a name, then make the selection a component (or a group when `group`).
     MakeComponent {
         group: bool,
@@ -136,6 +138,7 @@ impl ViewState {
             Action::Cut => return Effect::Cut,
             Action::Paste => return Effect::Paste,
             Action::About => return Effect::About,
+            Action::ModelInfo => return Effect::ModelInfo,
             Action::MakeComponent => return Effect::MakeComponent { group: false },
             Action::MakeGroup => return Effect::MakeComponent { group: true },
             Action::Explode => return Effect::Explode,
