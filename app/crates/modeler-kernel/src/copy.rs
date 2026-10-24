@@ -460,6 +460,33 @@ fn insert_inner(
         }
     }
 
+    let root = clip.root();
+    if root.geometry().vertex_count() == 0
+        && root.geometry().edge_count() == 0
+        && root.geometry().face_count() == 0
+    {
+        let mut result = Vec::new();
+        for (_, instance) in root.instances() {
+            let copy = Instance {
+                definition: definition_map
+                    .get(&instance.definition)
+                    .copied()
+                    .unwrap_or(instance.definition),
+                transform: matrix * instance.transform,
+                name: instance.name.clone(),
+                material: instance
+                    .material
+                    .map(|id| material_map.get(&id).copied().unwrap_or(id)),
+            };
+            let id = model
+                .add_instance(body, copy, edit)
+                .map_err(CopyError::Model)?;
+            result.push(Entity::Instance(id));
+        }
+        result.sort();
+        return Ok(result);
+    }
+
     let holder = model.add_definition(
         DefinitionInfo {
             name: "Clipboard".into(),
@@ -515,12 +542,12 @@ pub fn insert(
         return Err(CopyError::BadMatrix);
     }
 
-    let before = model.validate();
+    let before = model.validate_bodies(&[body]);
     let mut edit = ModelEdit::new();
     match insert_inner(model, body, clipboard, matrix, &mut edit) {
         Ok(entities) => {
             let added: Vec<ModelViolation> = model
-                .validate()
+                .validate_bodies(&[body])
                 .into_iter()
                 .filter(|violation| !before.contains(violation))
                 .collect();

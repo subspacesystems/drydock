@@ -8,7 +8,7 @@
 //! geometric invariants of ADR-004. Every mutation is a `Record` appended to an `Edit`, and
 //! `Edit::inverse` undoes it.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use glam::DVec3;
 
@@ -325,73 +325,152 @@ impl Context {
 
         // 2. Duplicate vertices.
         let vids: Vec<_> = self.vertices.keys().copied().collect();
-        for i in 0..vids.len() {
-            for j in i + 1..vids.len() {
-                let a = &self.vertices[&vids[i]];
-                let b = &self.vertices[&vids[j]];
-                if a.position.distance(b.position) <= geom::LINEAR_TOL {
-                    out.push(Violation::DuplicateVertex(vids[i], vids[j]));
+        let mut pairs = Vec::new();
+        let cell = |x: f64| (x / (2.0 * geom::LINEAR_TOL)).floor() as i64;
+        let mut grid: HashMap<(i64, i64, i64), Vec<usize>> = HashMap::new();
+        for (i, id) in vids.iter().enumerate() {
+            let p = self.vertices[id].position;
+            if !p.is_finite() {
+                continue;
+            }
+            let key = (cell(p.x), cell(p.y), cell(p.z));
+            for dx in -1..=1 {
+                for dy in -1..=1 {
+                    for dz in -1..=1 {
+                        let (Some(x), Some(y), Some(z)) = (
+                            key.0.checked_add(dx),
+                            key.1.checked_add(dy),
+                            key.2.checked_add(dz),
+                        ) else {
+                            continue;
+                        };
+                        if let Some(list) = grid.get(&(x, y, z)) {
+                            for &j in list {
+                                let q = self.vertices[&vids[j]].position;
+                                if p.distance(q) <= geom::LINEAR_TOL {
+                                    pairs.push((j, i));
+                                }
+                            }
+                        }
+                    }
                 }
             }
+            grid.entry(key).or_default().push(i);
+        }
+        pairs.sort_unstable();
+        for (i, j) in pairs {
+            out.push(Violation::DuplicateVertex(vids[i], vids[j]));
         }
 
         // 3. Duplicate edges.
-        let mut duplicate_pairs = BTreeSet::new();
+        let mut by_ends: BTreeMap<(VertexId, VertexId), Vec<EdgeId>> = BTreeMap::new();
         let eids: Vec<_> = self.edges.keys().copied().collect();
+        for &id in &eids {
+            let ends = self.edges[&id].ends;
+            let key = if ends[0] <= ends[1] {
+                (ends[0], ends[1])
+            } else {
+                (ends[1], ends[0])
+            };
+            by_ends.entry(key).or_default().push(id);
+        }
         let mut duplicate = Vec::new();
-        for i in 0..eids.len() {
-            for j in i + 1..eids.len() {
-                let a = &self.edges[&eids[i]];
-                let b = &self.edges[&eids[j]];
-                let same = (a.ends[0] == b.ends[0] && a.ends[1] == b.ends[1])
-                    || (a.ends[0] == b.ends[1] && a.ends[1] == b.ends[0]);
-                if same {
-                    duplicate_pairs.insert((eids[i], eids[j]));
-                    duplicate.push(Violation::DuplicateEdge(eids[i], eids[j]));
+        for ids in by_ends.values() {
+            for i in 0..ids.len() {
+                for j in i + 1..ids.len() {
+                    duplicate.push((ids[i], ids[j]));
                 }
             }
         }
-        out.extend(duplicate);
+        duplicate.sort_unstable();
+        let duplicate_pairs: BTreeSet<(EdgeId, EdgeId)> = duplicate.iter().copied().collect();
+        for (a, b) in duplicate {
+            out.push(Violation::DuplicateEdge(a, b));
+        }
 
         // 4. Edges that cross, touch or overlap.
-        for i in 0..eids.len() {
-            for j in i + 1..eids.len() {
-                if duplicate_pairs.contains(&(eids[i], eids[j])) {
-                    continue;
+        let mut points: Vec<Option<[DVec3; 2]>> = Vec::with_capacity(eids.len());
+        for &id in &eids {
+            let edge = &self.edges[&id];
+            let pair = self
+                .vertices
+                .get(&edge.ends[0])
+                .zip(self.vertices.get(&edge.ends[1]))
+                .map(|(a, b)| [a.position, b.position]);
+            points.push(pair);
+        }
+        let mut finite = Vec::new();
+        let mut boxes: Vec<(DVec3, DVec3)> = Vec::with_capacity(eids.len());
+        let mut non_finite = Vec::new();
+        for (i, pair) in points.iter().enumerate() {
+            let Some([a, b]) = pair else {
+                continue;
+            };
+            if !a.is_finite() || !b.is_finite() {
+                non_finite.push(i);
+                continue;
+            }
+            let lo = a.min(*b) - DVec3::splat(geom::LINEAR_TOL);
+            let hi = a.max(*b) + DVec3::splat(geom::LINEAR_TOL);
+            boxes.push((lo, hi));
+            finite.push(i);
+        }
+        let tree = EdgeTree::build(&boxes, (0..boxes.len()).collect());
+        let mut candidates: BTreeSet<(usize, usize)> = BTreeSet::new();
+        if !non_finite.is_empty() {
+            for &i in &non_finite {
+                for &j in &finite {
+                    candidates.insert((i.min(j), i.max(j)));
                 }
-                let ea = &self.edges[&eids[i]];
-                let eb = &self.edges[&eids[j]];
-                let (Some(a0), Some(a1), Some(b0), Some(b1)) = (
-                    self.vertices.get(&ea.ends[0]).map(|v| v.position),
-                    self.vertices.get(&ea.ends[1]).map(|v| v.position),
-                    self.vertices.get(&eb.ends[0]).map(|v| v.position),
-                    self.vertices.get(&eb.ends[1]).map(|v| v.position),
-                ) else {
-                    continue;
-                };
-                let shared: Vec<VertexId> = ea
-                    .ends
-                    .iter()
-                    .copied()
-                    .filter(|v| eb.ends.contains(v))
-                    .collect();
-                let hit = geom::segment_intersection(a0, a1, b0, b1, geom::LINEAR_TOL);
-                let bad = match shared.as_slice() {
-                    [only] => {
-                        let expected_a = if ea.ends[0] == *only { 0.0 } else { 1.0 };
-                        let expected_b = if eb.ends[0] == *only { 0.0 } else { 1.0 };
-                        match hit {
-                            SegmentHit::None => false,
-                            SegmentHit::Point { ta, tb } => !(ta == expected_a && tb == expected_b),
-                            SegmentHit::Overlap { .. } => true,
-                        }
+                for &j in &non_finite {
+                    if i != j {
+                        candidates.insert((i.min(j), i.max(j)));
                     }
-                    [] => !matches!(hit, SegmentHit::None),
-                    _ => false,
-                };
-                if bad {
-                    out.push(Violation::EdgesIntersect(eids[i], eids[j]));
                 }
+            }
+        }
+        for (k, &i) in finite.iter().enumerate() {
+            let (lo, hi) = boxes[k];
+            let mut hits = Vec::new();
+            tree.query(lo, hi, &boxes, &mut hits);
+            for h in hits {
+                let j = finite[h];
+                if i != j {
+                    candidates.insert((i.min(j), i.max(j)));
+                }
+            }
+        }
+        for (i, j) in candidates {
+            let (a_id, b_id) = (eids[i], eids[j]);
+            if duplicate_pairs.contains(&(a_id, b_id)) {
+                continue;
+            }
+            let [a0, a1] = points[i].expect("candidate edge has vertices");
+            let [b0, b1] = points[j].expect("candidate edge has vertices");
+            let ea = &self.edges[&a_id];
+            let eb = &self.edges[&b_id];
+            let shared: Vec<VertexId> = ea
+                .ends
+                .iter()
+                .copied()
+                .filter(|v| eb.ends.contains(v))
+                .collect();
+            let hit = geom::segment_intersection(a0, a1, b0, b1, geom::LINEAR_TOL);
+            let bad = match shared.as_slice() {
+                [only] => {
+                    let expected_a = if ea.ends[0] == *only { 0.0 } else { 1.0 };
+                    let expected_b = if eb.ends[0] == *only { 0.0 } else { 1.0 };
+                    match hit {
+                        SegmentHit::None => false,
+                        SegmentHit::Point { ta, tb } => !(ta == expected_a && tb == expected_b),
+                        SegmentHit::Overlap { .. } => true,
+                    }
+                }
+                [] => !matches!(hit, SegmentHit::None),
+                _ => false,
+            };
+            if bad {
+                out.push(Violation::EdgesIntersect(a_id, b_id));
             }
         }
 
@@ -403,17 +482,22 @@ impl Context {
         }
 
         // 6. Duplicate faces: same set of outer-loop edges.
-        let fids: Vec<_> = self.faces.keys().copied().collect();
-        let sets: Vec<BTreeSet<EdgeId>> = fids
-            .iter()
-            .map(|f| self.faces[f].outer.uses.iter().map(|u| u.edge).collect())
-            .collect();
-        for i in 0..fids.len() {
-            for j in i + 1..fids.len() {
-                if sets[i] == sets[j] {
-                    out.push(Violation::DuplicateFace(fids[i], fids[j]));
+        let mut by_edges: BTreeMap<BTreeSet<EdgeId>, Vec<FaceId>> = BTreeMap::new();
+        for (f, face) in &self.faces {
+            let set = face.outer.uses.iter().map(|u| u.edge).collect();
+            by_edges.entry(set).or_default().push(*f);
+        }
+        let mut duplicate = Vec::new();
+        for ids in by_edges.values() {
+            for i in 0..ids.len() {
+                for j in i + 1..ids.len() {
+                    duplicate.push((ids[i], ids[j]));
                 }
             }
+        }
+        duplicate.sort_unstable();
+        for (a, b) in duplicate {
+            out.push(Violation::DuplicateFace(a, b));
         }
 
         out
@@ -745,5 +829,95 @@ impl Context {
             }
         }
         Ok(())
+    }
+}
+
+struct EdgeTree {
+    min: DVec3,
+    max: DVec3,
+    items: Vec<usize>,
+    left: Option<Box<EdgeTree>>,
+    right: Option<Box<EdgeTree>>,
+}
+
+fn boxes_overlap(a_min: DVec3, a_max: DVec3, b_min: DVec3, b_max: DVec3) -> bool {
+    a_min.x <= b_max.x
+        && b_min.x <= a_max.x
+        && a_min.y <= b_max.y
+        && b_min.y <= a_max.y
+        && a_min.z <= b_max.z
+        && b_min.z <= a_max.z
+}
+
+impl EdgeTree {
+    fn build(boxes: &[(DVec3, DVec3)], mut items: Vec<usize>) -> EdgeTree {
+        let mut min = DVec3::splat(f64::INFINITY);
+        let mut max = DVec3::splat(f64::NEG_INFINITY);
+        for &i in &items {
+            min = min.min(boxes[i].0);
+            max = max.max(boxes[i].1);
+        }
+        if items.len() <= 16 {
+            return EdgeTree {
+                min,
+                max,
+                items,
+                left: None,
+                right: None,
+            };
+        }
+
+        let center = |i: usize| (boxes[i].0 * 0.5 + boxes[i].1 * 0.5).to_array();
+        let mut c_min = [f64::INFINITY; 3];
+        let mut c_max = [f64::NEG_INFINITY; 3];
+        for &i in &items {
+            let c = center(i);
+            for axis in 0..3 {
+                c_min[axis] = c_min[axis].min(c[axis]);
+                c_max[axis] = c_max[axis].max(c[axis]);
+            }
+        }
+        let spread = [
+            c_max[0] - c_min[0],
+            c_max[1] - c_min[1],
+            c_max[2] - c_min[2],
+        ];
+        let mut axis = 0;
+        if spread[1] > spread[axis] {
+            axis = 1;
+        }
+        if spread[2] > spread[axis] {
+            axis = 2;
+        }
+        items.sort_unstable_by(|&a, &b| center(a)[axis].total_cmp(&center(b)[axis]));
+        let right_items = items.split_off(items.len() / 2);
+        let left = EdgeTree::build(boxes, items);
+        let right = EdgeTree::build(boxes, right_items);
+        EdgeTree {
+            min,
+            max,
+            items: Vec::new(),
+            left: Some(Box::new(left)),
+            right: Some(Box::new(right)),
+        }
+    }
+
+    fn query(&self, lo: DVec3, hi: DVec3, boxes: &[(DVec3, DVec3)], out: &mut Vec<usize>) {
+        if !boxes_overlap(self.min, self.max, lo, hi) {
+            return;
+        }
+        match (&self.left, &self.right) {
+            (Some(left), Some(right)) => {
+                left.query(lo, hi, boxes, out);
+                right.query(lo, hi, boxes, out);
+            }
+            _ => {
+                for &i in &self.items {
+                    if boxes_overlap(boxes[i].0, boxes[i].1, lo, hi) {
+                        out.push(i);
+                    }
+                }
+            }
+        }
     }
 }

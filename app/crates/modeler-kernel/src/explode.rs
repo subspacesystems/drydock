@@ -155,6 +155,28 @@ fn lies_on_segment(a: DVec3, b: DVec3, segment: [DVec3; 2]) -> bool {
         && geom::point_segment_distance(b, segment[0], segment[1]) <= LINEAR_TOL
 }
 
+fn face_box_meets(ctx: &Context, id: FaceId, box_: (DVec3, DVec3)) -> bool {
+    let Some(face) = ctx.face(id) else {
+        return false;
+    };
+    let points = ctx.loop_points(&face.outer);
+    let Some((first, rest)) = points.split_first() else {
+        return false;
+    };
+    let mut lo = *first;
+    let mut hi = *first;
+    for point in rest {
+        lo = lo.min(*point);
+        hi = hi.max(*point);
+    }
+    lo.x <= box_.1.x
+        && box_.0.x <= hi.x
+        && lo.y <= box_.1.y
+        && box_.0.y <= hi.y
+        && lo.z <= box_.1.z
+        && box_.0.z <= hi.z
+}
+
 fn empty_group(
     model: &mut Model,
     definition: DefinitionId,
@@ -232,8 +254,10 @@ pub(crate) fn explode_inner(
         source_faces,
         source_instances,
         old_faces,
+        old_face_ids,
         copied_faces,
         copied_segments,
+        copied_box,
     ) = {
         let Some(source) = model.body(BodyId::Definition(definition)) else {
             return Err(ExplodeError::Model(ModelError::MissingDefinition(
@@ -315,10 +339,24 @@ pub(crate) fn explode_inner(
             })
             .collect();
 
+        let copied_box =
+            segments
+                .iter()
+                .flatten()
+                .fold(None, |acc: Option<(DVec3, DVec3)>, point| {
+                    Some(match acc {
+                        None => (*point, *point),
+                        Some((lo, hi)) => (lo.min(*point), hi.max(*point)),
+                    })
+                });
+        let copied_box = copied_box
+            .map(|(lo, hi)| (lo - DVec3::splat(LINEAR_TOL), hi + DVec3::splat(LINEAR_TOL)));
+
         let Some(target) = model.body(body) else {
             return Err(ExplodeError::Model(ModelError::MissingBody(body)));
         };
         let ctx = target.geometry();
+        let old_face_ids: BTreeSet<FaceId> = ctx.faces().map(|(id, _)| id).collect();
         let old: Vec<RefFace> = ctx
             .faces()
             .map(|(id, face)| {
@@ -330,7 +368,24 @@ pub(crate) fn explode_inner(
             })
             .collect();
 
-        (vertices, edges, faces, instances, old, copied, segments)
+        (
+            vertices,
+            edges,
+            faces,
+            instances,
+            old,
+            old_face_ids,
+            copied,
+            segments,
+            copied_box,
+        )
+    };
+
+    let visit = |ctx: &Context, id: FaceId| -> bool {
+        if !old_face_ids.contains(&id) {
+            return true;
+        }
+        copied_box.is_some_and(|box_| face_box_meets(ctx, id, box_))
     };
 
     let mut vertex_map: BTreeMap<VertexId, VertexId> = BTreeMap::new();
@@ -383,6 +438,7 @@ pub(crate) fn explode_inner(
         };
         let ctx = target.geometry();
         ctx.faces()
+            .filter(|(id, _)| visit(ctx, *id))
             .filter_map(|(id, _)| {
                 let point = interior_point(ctx, id)?;
                 let known = old_faces.iter().any(|face| face.contains(point))
@@ -405,6 +461,7 @@ pub(crate) fn explode_inner(
         };
         let ctx = target.geometry();
         ctx.faces()
+            .filter(|(id, _)| visit(ctx, *id))
             .filter_map(|(id, face)| {
                 let point = interior_point(ctx, id)?;
                 let copied = copied_faces.iter().find(|source| source.contains(point));
@@ -514,12 +571,12 @@ pub fn explode(
         return Err(ExplodeError::BadTransform);
     }
 
-    let before = model.validate();
+    let before = model.validate_bodies(&[body]);
     let mut edit = ModelEdit::new();
     match explode_inner(model, body, instance, &mut edit) {
         Ok(entities) => {
             let added: Vec<ModelViolation> = model
-                .validate()
+                .validate_bodies(&[body])
                 .into_iter()
                 .filter(|violation| !before.contains(violation))
                 .collect();
