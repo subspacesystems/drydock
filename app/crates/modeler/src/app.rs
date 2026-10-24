@@ -21,7 +21,7 @@ use modeler::overlay::{self, Primitive};
 use modeler::recent::{RecentFiles, recent_file};
 use modeler::texture_handles;
 use modeler::texture_panel::{TextureForm, handles_button, texture_panel};
-use modeler::viewstate::{Effect, ViewState, scene_bounds};
+use modeler::viewstate::{Effect, ViewState, scene_bounds, zoom_pivot_at};
 use modeler_dae::{FlatScene, RestView};
 use modeler_kernel::editpath::EditPath;
 use modeler_kernel::model::{BodyId, Material, Model};
@@ -870,6 +870,15 @@ impl App {
                 if egui_button == PointerButton::Primary {
                     // Only a Select drag is a box; an Orbit drag must not leave a start behind.
                     self.drag_start_px = (tool == Some(Tool::Select)).then(|| local(origin));
+                    if tool == Some(Tool::Zoom) {
+                        let size = (f64::from(rect.width()), f64::from(rect.height()));
+                        self.view.zoom_pivot = zoom_pivot_at(
+                            &self.view.camera,
+                            self.model.as_ref().map(|document| &document.scene),
+                            size,
+                            local(origin),
+                        );
+                    }
                     if tool == Some(Tool::Scale) {
                         let view = EditorViewport {
                             camera: self.view.camera,
@@ -893,19 +902,28 @@ impl App {
         }
         if response.drag_stopped() {
             self.view.pivot = None;
+            self.view.zoom_pivot = None;
         }
         if let Some(cursor) = response.hover_pos() {
+            let mut lines = 0.0;
             for event in events {
                 if let Event::MouseWheel { unit, delta, .. } = event {
-                    let lines = match unit {
+                    lines += match unit {
                         MouseWheelUnit::Line => f64::from(delta.y),
                         MouseWheelUnit::Point => f64::from(delta.y) / POINTS_PER_SCROLL_LINE,
                         MouseWheelUnit::Page => f64::from(delta.y) * 3.0,
                     };
-                    if lines != 0.0 {
-                        self.apply(input::scroll(lines, ndc(cursor)), ctx, frame);
-                    }
                 }
+            }
+            if lines != 0.0 {
+                let size = (f64::from(rect.width()), f64::from(rect.height()));
+                self.view.scroll_zoom(
+                    lines,
+                    local(cursor),
+                    self.model.as_ref().map(|document| &document.scene),
+                    size,
+                );
+                self.dirty = true;
             }
         }
         let Some(tool) = tool else {

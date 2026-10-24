@@ -246,8 +246,14 @@ impl Camera {
     /// Zoom by `steps` (positive = in) about `pivot`, a world point that stays fixed in
     /// world space and on screen. Behaviour: `docs/specs/m4-zoom-cursor.md`.
     pub fn zoom_about(&mut self, steps: f64, pivot: DVec3) {
-        let _ = (steps, pivot);
-        unimplemented!("m4-zoom-cursor")
+        if !steps.is_finite() || !pivot.is_finite() {
+            return;
+        }
+        let old = self.distance;
+        let distance = (old * ZOOM_STEP_FACTOR.powf(steps)).clamp(MIN_DISTANCE, MAX_DISTANCE);
+        let ratio = distance / old;
+        self.distance = distance;
+        self.target = pivot + (self.target - pivot) * ratio;
     }
 
     /// Keep the orientation; center and fit `bounds` in a viewport of `aspect`

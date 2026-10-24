@@ -85,8 +85,13 @@ pub fn zoom_pivot_at(
     viewport_px: (f64, f64),
     cursor_px: DVec2,
 ) -> Option<DVec3> {
-    let _ = (camera, scene, viewport_px, cursor_px);
-    unimplemented!("m4-zoom-cursor")
+    let scene = scene?;
+    let viewport = crate::editor::Viewport {
+        camera: *camera,
+        size_px: viewport_px,
+    };
+    let (origin, dir) = viewport.ray(cursor_px);
+    scene.raycast(origin, dir)
 }
 
 /// Viewport height and aspect; a viewport with a zero side counts as 1 px high, aspect 1.
@@ -132,8 +137,20 @@ impl ViewState {
         scene: Option<&FlatScene>,
         viewport_px: (f64, f64),
     ) {
-        let _ = (lines, cursor_px, scene, viewport_px);
-        unimplemented!("m4-zoom-cursor")
+        if lines == 0.0 {
+            return;
+        }
+        if let Some(pivot) = zoom_pivot_at(&self.camera, scene, viewport_px, cursor_px) {
+            self.camera.zoom_about(lines, pivot);
+            return;
+        }
+        let (width, height) = viewport_px;
+        let (_, aspect) = height_and_aspect(viewport_px);
+        let ndc = DVec2::new(
+            2.0 * cursor_px.x / width - 1.0,
+            1.0 - 2.0 * cursor_px.y / height,
+        );
+        self.camera.zoom(lines, ndc, aspect);
     }
 
     /// Apply an input action. `viewport_px` is (width, height) of the viewport.
@@ -145,7 +162,10 @@ impl ViewState {
                 None => self.camera.orbit(dx, dy),
             },
             Action::Pan { dx, dy } => self.camera.pan(dx, dy, height),
-            Action::Zoom { steps, cursor_ndc } => self.camera.zoom(steps, cursor_ndc, aspect),
+            Action::Zoom { steps, cursor_ndc } => match self.zoom_pivot {
+                Some(pivot) => self.camera.zoom_about(steps, pivot),
+                None => self.camera.zoom(steps, cursor_ndc, aspect),
+            },
             Action::ZoomExtents => {
                 if let Some(bounds) = self.bounds {
                     self.camera.zoom_extents(&bounds, aspect);
