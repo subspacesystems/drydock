@@ -133,6 +133,7 @@ Done when: `modeler` on the reference house model opens in under 5 s on modeler-
 | `m4-ui-status` | status bar without model counts; View > Model Info window with them; the measurement box moves into the status bar | |
 | `m4-ui-axes` | red/green/blue axes drawn at the origin (View > Axes toggle); inside an open instance at its origin | |
 | `m4-ui-materials-layout` | Materials panel buttons and a search box at the top, the list scrolls under them; list or tiles view | |
+| `m4-zoom-cursor` | wheel and Zoom-tool zoom scale about the model point under the cursor, so a step close to a surface stays small and never passes it | |
 
 - Make component from selection; edit in place (all instances update); option to hide the rest of the model while editing; groups.
 - Materials: create/edit colors and image textures; paint bucket; texture positioning basics; materials survive save/load and DAE import.

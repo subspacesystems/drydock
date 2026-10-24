@@ -3,7 +3,7 @@
 
 //! Camera state and the effect of input actions on it. No egui, no GPU.
 
-use glam::DVec3;
+use glam::{DVec2, DVec3};
 use modeler_dae::FlatScene;
 use modeler_view::{Bounds, Camera, Projection};
 
@@ -17,6 +17,10 @@ pub struct ViewState {
     /// The point the current orbit drag turns about (what was under the cursor when the
     /// drag started); `None` orbits about the camera target. `docs/specs/m4-orbit-pivot.md`.
     pub pivot: Option<DVec3>,
+    /// The point the current Zoom-tool drag scales about (the model point under the cursor
+    /// when the drag started); `None` zooms toward the target-plane point under the cursor.
+    /// `docs/specs/m4-zoom-cursor.md`.
+    pub zoom_pivot: Option<DVec3>,
     /// The red, green and blue axes are drawn (View > Axes; `docs/specs/m4-ui-axes.md`).
     pub axes: bool,
 }
@@ -72,6 +76,19 @@ pub fn scene_bounds(scene: &FlatScene) -> Option<Bounds> {
     })
 }
 
+/// The model point a zoom with the cursor at `cursor_px` scales about: where the cursor's
+/// ray first meets a triangle of `scene`; `None` over empty space or without a scene.
+/// `viewport_px` is the viewport (width, height). Behaviour: `docs/specs/m4-zoom-cursor.md`.
+pub fn zoom_pivot_at(
+    camera: &Camera,
+    scene: Option<&FlatScene>,
+    viewport_px: (f64, f64),
+    cursor_px: DVec2,
+) -> Option<DVec3> {
+    let _ = (camera, scene, viewport_px, cursor_px);
+    unimplemented!("m4-zoom-cursor")
+}
+
 /// Viewport height and aspect; a viewport with a zero side counts as 1 px high, aspect 1.
 fn height_and_aspect(viewport_px: (f64, f64)) -> (f64, f64) {
     let (width, height) = viewport_px;
@@ -90,6 +107,7 @@ impl ViewState {
             tool: Tool::Orbit,
             bounds: None,
             pivot: None,
+            zoom_pivot: None,
             axes: true,
         }
     }
@@ -102,6 +120,20 @@ impl ViewState {
             let (_, aspect) = height_and_aspect(viewport_px);
             self.camera.zoom_extents(&bounds, aspect);
         }
+    }
+
+    /// A mouse-wheel scroll of `lines` notches (positive = away from the user, zoom in) with
+    /// the cursor at `cursor_px`: zooms about the model point under the cursor, or over empty
+    /// space as `Action::Zoom` does. Behaviour: `docs/specs/m4-zoom-cursor.md`.
+    pub fn scroll_zoom(
+        &mut self,
+        lines: f64,
+        cursor_px: DVec2,
+        scene: Option<&FlatScene>,
+        viewport_px: (f64, f64),
+    ) {
+        let _ = (lines, cursor_px, scene, viewport_px);
+        unimplemented!("m4-zoom-cursor")
     }
 
     /// Apply an input action. `viewport_px` is (width, height) of the viewport.
