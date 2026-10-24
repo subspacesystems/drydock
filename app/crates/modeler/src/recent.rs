@@ -43,7 +43,7 @@ impl RecentFiles {
     /// The list from the file's text: one path per line.
     pub fn parse(text: &str) -> RecentFiles {
         let mut list = RecentFiles::default();
-        for line in text.lines() {
+        for line in text.split('\n') {
             let line = line.strip_suffix('\r').unwrap_or(line);
             if line.is_empty() || list.paths.len() >= MAX_RECENT {
                 continue;
@@ -95,24 +95,18 @@ pub fn config_dir(var: impl Fn(&str) -> Option<OsString>) -> Option<PathBuf> {
     if let Some(dir) = non_empty("MODELER_CONFIG_DIR") {
         return Some(PathBuf::from(dir));
     }
-    if cfg!(windows) {
-        if let Some(dir) = non_empty("APPDATA") {
-            return Some(PathBuf::from(dir).join("modeler"));
-        }
-    } else if let Some(dir) = non_empty("XDG_CONFIG_HOME") {
+    if cfg!(windows)
+        && let Some(dir) = non_empty("APPDATA")
+    {
+        return Some(PathBuf::from(dir).join("modeler"));
+    }
+    if let Some(dir) = non_empty("XDG_CONFIG_HOME") {
         let dir = PathBuf::from(dir);
         if dir.is_absolute() {
             return Some(dir.join("modeler"));
         }
     }
-    non_empty("HOME").map(|home| {
-        let home = PathBuf::from(home);
-        if cfg!(windows) {
-            home.join("modeler")
-        } else {
-            home.join(".config").join("modeler")
-        }
-    })
+    non_empty("HOME").map(|home| PathBuf::from(home).join(".config").join("modeler"))
 }
 
 /// Make `path` absolute, keeping it as given when that fails.
