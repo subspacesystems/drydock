@@ -13,6 +13,7 @@ modeler-kernel.workspace = true
 modeler-view.workspace = true
 modeler-render.workspace = true
 glam.workspace = true
+image.workspace = true
 eframe.workspace = true
 egui-wgpu.workspace = true
 wgpu.workspace = true

@@ -13,6 +13,8 @@ use glam::DVec2;
 use modeler_kernel::model::{Material, MaterialId, Model, Texture};
 use modeler_kernel::paint;
 
+use crate::swatches::Swatches;
+
 /// What the user asked for in the panel this frame.
 #[derive(Clone, Debug, PartialEq)]
 pub enum MaterialAction {
@@ -109,6 +111,8 @@ pub struct MaterialsPanel {
     pub search: String,
     /// Show the materials as tiles rather than a list.
     pub tiles: bool,
+    /// Texture previews for textured materials (`docs/specs/m4-material-swatch-texture.md`).
+    pub swatches: Swatches,
     /// The name field takes focus on the next draw.
     focus_name: bool,
 }

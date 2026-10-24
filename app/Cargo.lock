@@ -1334,6 +1334,7 @@ dependencies = [
  "egui-wgpu",
  "egui_kittest",
  "glam",
+ "image",
  "modeler-dae",
  "modeler-kernel",
  "modeler-render",
