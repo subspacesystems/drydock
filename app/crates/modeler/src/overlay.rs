@@ -348,14 +348,68 @@ pub fn guides(guides: &Guides, around: DVec3, half_length: f64) -> Vec<Primitive
 /// y, z), the positive then the negative half, each a line from the frame's origin
 /// `half_length` long in world units. Behaviour: `docs/specs/m4-ui-axes.md`.
 pub fn axes(transform: DMat4, half_length: f64) -> Vec<Primitive> {
-    let _ = (transform, half_length);
-    unimplemented!("m4-ui-axes")
+    if !half_length.is_finite() || half_length <= 0.0 {
+        return Vec::new();
+    }
+    let origin = transform.transform_point3(DVec3::ZERO);
+    if !origin.is_finite() {
+        return Vec::new();
+    }
+    let mut out = Vec::with_capacity(6);
+    for (axis, unit) in [DVec3::X, DVec3::Y, DVec3::Z].into_iter().enumerate() {
+        let mapped = transform.transform_vector3(unit);
+        let length = mapped.length();
+        if !length.is_finite() || length == 0.0 {
+            continue;
+        }
+        let dir = mapped / length;
+        out.push(Primitive::Line {
+            a: origin,
+            b: origin + dir * half_length,
+            style: Style::Axis {
+                axis,
+                positive: true,
+            },
+        });
+        out.push(Primitive::Line {
+            a: origin,
+            b: origin - dir * half_length,
+            style: Style::Axis {
+                axis,
+                positive: false,
+            },
+        });
+    }
+    out
 }
 
 /// The part of segment `a`-`b` a perspective camera can draw: in front of its near
 /// distance (`camera.distance / 1000` along the view direction). A parallel camera keeps the
 /// whole segment. `None` when nothing is left. Behaviour: `docs/specs/m4-ui-axes.md`.
 pub fn clip_in_front(camera: &Camera, a: DVec3, b: DVec3) -> Option<(DVec3, DVec3)> {
-    let _ = (camera, a, b);
-    unimplemented!("m4-ui-axes")
+    if !a.is_finite() || !b.is_finite() {
+        return None;
+    }
+    if camera.projection != modeler_view::Projection::Perspective {
+        return Some((a, b));
+    }
+    let near = camera.distance / 1000.0;
+    let (forward, _, _) = camera.basis();
+    let eye = camera.eye();
+    let depth_a = (a - eye).dot(forward);
+    let depth_b = (b - eye).dot(forward);
+    let keep_a = depth_a >= near;
+    let keep_b = depth_b >= near;
+    match (keep_a, keep_b) {
+        (true, true) => Some((a, b)),
+        (false, false) => None,
+        (false, true) => {
+            let t = (near - depth_a) / (depth_b - depth_a);
+            Some((a + (b - a) * t, b))
+        }
+        (true, false) => {
+            let t = (near - depth_a) / (depth_b - depth_a);
+            Some((a, a + (b - a) * t))
+        }
+    }
 }

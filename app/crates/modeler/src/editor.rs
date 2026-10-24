@@ -15,7 +15,7 @@ use std::collections::BTreeSet;
 use glam::{DAffine2, DMat4, DVec2, DVec3};
 use modeler_kernel::click::{self, ClickMods};
 use modeler_kernel::component::make_component;
-use modeler_kernel::copy::{self, Clipboard};
+use modeler_kernel::copy::{self, Clipboard, copy_selection};
 use modeler_kernel::editpath::EditPath;
 use modeler_kernel::erase::erase;
 use modeler_kernel::explode::explode;
@@ -297,6 +297,20 @@ fn move_error_message(error: &MoveError) -> &'static str {
     }
 }
 
+/// The copied entities that keep the kinds of the selection they came from. A face copy
+/// also brings its boundary edges out of the copy, but selecting those too would grow the
+/// selection beyond what the user had chosen.
+fn copied_selection(original: &[Entity], copied: Vec<Entity>) -> Vec<Entity> {
+    copied
+        .into_iter()
+        .filter(|entity| {
+            original
+                .iter()
+                .any(|old| std::mem::discriminant(old) == std::mem::discriminant(entity))
+        })
+        .collect()
+}
+
 fn tape_error_message(error: &TapeError) -> &'static str {
     match error {
         TapeError::Parse(_) => "Not a length",
@@ -533,6 +547,7 @@ impl Editor {
         self.rotate = RotateTool::new(plane_for_normal(DVec3::Z));
         self.rotate_segments.clear();
         self.translate = MoveTool::new();
+        self.move_copy = false;
         self.move_segments.clear();
         self.scale = ScaleTool::new();
         self.scale_hover = None;
@@ -2938,6 +2953,40 @@ impl Editor {
             return false;
         };
         self.hint = Some(inf);
+        if !was_from && self.move_copy {
+            {
+                let body = self.body(model);
+                let mut target = Target {
+                    model,
+                    body,
+                    undo: &mut self.undo,
+                    unit: self.unit,
+                };
+                let _ = self
+                    .translate
+                    .handle(Input::Move(inf.point), &self.selection, &mut target);
+            }
+            if let Some(offset) = self.translate.offset()
+                && offset.length() > TOL
+            {
+                let matrix = DMat4::from_translation(offset);
+                let body = self.body(model);
+                match copy_selection(model, body, &self.selection, matrix, &mut self.undo, "Copy") {
+                    Ok(entities) => {
+                        let selection = copied_selection(&self.selection, entities);
+                        self.selection = selection;
+                        self.translate = MoveTool::new();
+                        self.move_segments.clear();
+                        self.message = None;
+                        return self.undo.undo_count() != before;
+                    }
+                    Err(_) => {
+                        self.message = Some("Can't copy that".to_string());
+                        return false;
+                    }
+                }
+            }
+        }
         let result = {
             let body = self.body(model);
             let mut target = Target {
@@ -2968,6 +3017,43 @@ impl Editor {
     fn enter_move(&mut self, text: String, model: &mut Model) -> bool {
         let before = self.undo.undo_count();
         let before_offset = self.translate.last_offset(&self.undo);
+        if self.move_copy && self.translate.stage() == MoveStage::To {
+            let value = match units::parse_length(&text, self.unit) {
+                Ok(value) => value,
+                Err(error) => {
+                    self.message = Some(move_error_message(&MoveError::Parse(error)).to_string());
+                    return false;
+                }
+            };
+            let Some(offset) = self.translate.offset() else {
+                self.message = Some(move_error_message(&MoveError::NoDirection).to_string());
+                return false;
+            };
+            if offset.length() <= TOL {
+                self.message = Some(move_error_message(&MoveError::NoDirection).to_string());
+                return false;
+            }
+            if value.abs() <= TOL {
+                self.message = None;
+                return false;
+            }
+            let matrix = DMat4::from_translation(offset.normalize() * value);
+            let body = self.body(model);
+            match copy_selection(model, body, &self.selection, matrix, &mut self.undo, "Copy") {
+                Ok(entities) => {
+                    let selection = copied_selection(&self.selection, entities);
+                    self.selection = selection;
+                    self.translate = MoveTool::new();
+                    self.move_segments.clear();
+                    self.message = None;
+                    return self.undo.undo_count() != before;
+                }
+                Err(_) => {
+                    self.message = Some("Can't copy that".to_string());
+                    return false;
+                }
+            }
+        }
         let result = {
             let body = self.body(model);
             let mut target = Target {

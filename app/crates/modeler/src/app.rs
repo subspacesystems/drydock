@@ -109,6 +109,11 @@ pub struct App {
     recent: RecentFiles,
     /// Where `recent` is kept between runs.
     recent_file: Option<PathBuf>,
+    /// Ctrl/Cmd is held down.
+    ctrl_down: bool,
+    /// Ctrl/Cmd went down as a lone modifier (no key or button since), so releasing it
+    /// toggles Move's copy mode.
+    ctrl_lone: bool,
 }
 
 impl App {
@@ -155,6 +160,8 @@ impl App {
             shown_path: EditPath::root(),
             recent,
             recent_file,
+            ctrl_down: false,
+            ctrl_lone: false,
         };
         if app.gpu.is_none() {
             app.error = Some("No wgpu render state: cannot draw the viewport".to_owned());
@@ -693,9 +700,54 @@ impl App {
         }
     }
 
+    fn track_move_copy_modifier(&mut self, events: &[Event], typing: bool) {
+        for event in events {
+            match event {
+                Event::ModifiersChanged(modifiers) => {
+                    let down = modifiers.command;
+                    if down && !self.ctrl_down {
+                        self.ctrl_down = true;
+                        self.ctrl_lone = !typing
+                            && self
+                                .editor
+                                .as_ref()
+                                .is_some_and(|editor| editor.tool() == Tool::Move);
+                    } else if !down && self.ctrl_down {
+                        let toggle = self.ctrl_lone && !typing;
+                        self.ctrl_down = false;
+                        self.ctrl_lone = false;
+                        if toggle
+                            && let Some(editor) = &mut self.editor
+                            && editor.tool() == Tool::Move
+                        {
+                            let on = editor.move_copy();
+                            editor.set_move_copy(!on);
+                        }
+                    }
+                }
+                Event::Key {
+                    key, pressed: true, ..
+                } => {
+                    if !matches!(
+                        key,
+                        egui::Key::ControlLeft
+                            | egui::Key::ControlRight
+                            | egui::Key::SuperLeft
+                            | egui::Key::SuperRight
+                    ) {
+                        self.ctrl_lone = false;
+                    }
+                }
+                Event::PointerButton { pressed: true, .. } => self.ctrl_lone = false,
+                _ => {}
+            }
+        }
+    }
+
     /// Keyboard shortcuts and dropped files (window-wide).
     fn global_input(&mut self, ctx: &egui::Context, frame: &eframe::Frame) {
         let (events, dropped) = ctx.input(|i| (i.events.clone(), i.raw.dropped_files.clone()));
+        self.track_move_copy_modifier(&events, ctx.egui_wants_keyboard_input());
         if let Some(path) = dropped.into_iter().find_map(|file| {
             let path = file.path();
             (!path.as_os_str().is_empty()).then(|| path.to_path_buf())
@@ -1021,9 +1073,6 @@ impl App {
 
     /// Draw the editor's preview, hint, selection and draw plane over the rendered view.
     fn paint_overlays(&self, ui: &egui::Ui, rect: Rect) {
-        let (Some(editor), Some(document)) = (&self.editor, &self.model) else {
-            return;
-        };
         let view = EditorViewport {
             camera: self.view.camera,
             size_px: (f64::from(rect.width()), f64::from(rect.height())),
@@ -1033,6 +1082,24 @@ impl App {
                 .map(|q| rect.min + egui::vec2(q.x as f32, q.y as f32))
         };
         let painter = ui.painter();
+        let open_transform = self
+            .editor
+            .as_ref()
+            .zip(self.model.as_ref())
+            .and_then(|(editor, document)| {
+                document
+                    .kernel
+                    .as_ref()
+                    .map(|kernel| editor.path().transform(kernel).unwrap_or(DMat4::IDENTITY))
+            })
+            .unwrap_or(DMat4::IDENTITY);
+        if self.view.axes {
+            let primitives = overlay::axes(open_transform, self.view.camera.distance * 100.0);
+            paint_primitives(painter, &self.view.camera, &primitives, &project);
+        }
+        let (Some(editor), Some(document)) = (&self.editor, &self.model) else {
+            return;
+        };
         if editor.tool() == Tool::Select
             && let Some(start) = self.drag_start_px
             && let Some(now) = ui.input(|i| i.pointer.latest_pos())
@@ -1087,21 +1154,20 @@ impl App {
         }
         if let Some(kernel) = &document.kernel {
             let open_body = editor.path().body(kernel).unwrap_or(BodyId::Root);
-            let open_transform = editor.path().transform(kernel).unwrap_or(DMat4::IDENTITY);
             let primitives =
                 overlay::selection(kernel, open_body, open_transform, editor.selection());
-            paint_primitives(painter, &primitives, &project);
+            paint_primitives(painter, &self.view.camera, &primitives, &project);
             if let Some(handles) = editor.texture_handles(kernel) {
                 let primitives = texture_handles::primitives(&handles);
                 let primitives = overlay::transformed(primitives, open_transform);
-                paint_primitives(painter, &primitives, &project);
+                paint_primitives(painter, &self.view.camera, &primitives, &project);
             }
             if let Some(face) = editor.pushpull_face()
                 && let Some(body) = kernel.body(open_body)
             {
                 let primitives = overlay::face_highlight(body.geometry(), face);
                 let primitives = overlay::transformed(primitives, open_transform);
-                paint_primitives(painter, &primitives, &project);
+                paint_primitives(painter, &self.view.camera, &primitives, &project);
             }
             if let Some(tool) = editor.scale_tool() {
                 let bounds = tool
@@ -1114,7 +1180,7 @@ impl App {
                         tool.handle_grabbed(),
                     );
                     let primitives = overlay::transformed(primitives, open_transform);
-                    paint_primitives(painter, &primitives, &project);
+                    paint_primitives(painter, &self.view.camera, &primitives, &project);
                 }
             }
             let primitives = overlay::guides(
@@ -1122,7 +1188,7 @@ impl App {
                 self.view.camera.target,
                 self.view.camera.distance * 10.0,
             );
-            paint_primitives(painter, &primitives, &project);
+            paint_primitives(painter, &self.view.camera, &primitives, &project);
         }
         if let Some(tool) = editor.rotate_tool() {
             // Before the center click the protractor follows the cursor, so the plane it
@@ -1138,7 +1204,7 @@ impl App {
                 };
                 let primitives =
                     overlay::protractor(center, tool.plane(), radius, start, tool.angle());
-                paint_primitives(painter, &primitives, &project);
+                paint_primitives(painter, &self.view.camera, &primitives, &project);
             }
         }
         if let Some(hint) = editor.hint()
@@ -1200,6 +1266,14 @@ impl App {
                     ui.set_width(210.0);
                     match editor.measurement() {
                         Some((label, value)) => {
+                            let label = if label == "Distance"
+                                && editor.tool() == Tool::Move
+                                && editor.move_copy()
+                            {
+                                "Distance (copy)"
+                            } else {
+                                label
+                            };
                             ui.horizontal(|ui| {
                                 ui.label(label);
                                 ui.with_layout(
@@ -1336,6 +1410,10 @@ impl App {
                     Tool::Erase => "Erase",
                     Tool::Paint => "Paint Bucket",
                 });
+                if self.view.tool == Tool::Move {
+                    ui.separator();
+                    ui.label("Ctrl: copy");
+                }
             });
         });
     }
@@ -1602,7 +1680,14 @@ fn overlay_style(style: overlay::Style) -> (Color32, f32) {
         overlay::Style::Guide => (Color32::from_rgb(160, 160, 160), 1.0),
         overlay::Style::GuidePoint => (Color32::from_rgb(220, 220, 220), 1.0),
         overlay::Style::Selected | overlay::Style::SelectedFace => (ACCENT_COLOR, 3.0),
-        overlay::Style::Axis { .. } => unimplemented!("m4-ui-axes"),
+        overlay::Style::Axis { axis, .. } => (
+            match axis {
+                0 => Color32::from_rgb(200, 40, 40),
+                1 => Color32::from_rgb(40, 150, 40),
+                _ => Color32::from_rgb(40, 70, 210),
+            },
+            1.5,
+        ),
     }
 }
 
@@ -1623,6 +1708,7 @@ fn protractor_radius(view: &EditorViewport, center: DVec3, plane: DrawPlane) -> 
 
 fn paint_primitives(
     painter: &egui::Painter,
+    camera: &modeler_view::Camera,
     primitives: &[Primitive],
     project: &dyn Fn(DVec3) -> Option<Pos2>,
 ) {
@@ -1630,8 +1716,22 @@ fn paint_primitives(
         match primitive {
             Primitive::Line { a, b, style } => {
                 let (color, width) = overlay_style(*style);
-                if let (Some(a), Some(b)) = (project(*a), project(*b)) {
-                    painter.line_segment([a, b], egui::Stroke::new(width, color));
+                let Some((a, b)) = overlay::clip_in_front(camera, *a, *b) else {
+                    continue;
+                };
+                if let (Some(a), Some(b)) = (project(a), project(b)) {
+                    let stroke = egui::Stroke::new(width, color);
+                    if matches!(
+                        style,
+                        overlay::Style::Axis {
+                            positive: false,
+                            ..
+                        }
+                    ) {
+                        painter.extend(egui::Shape::dashed_line(&[a, b], stroke, 6.0, 4.0));
+                    } else {
+                        painter.line_segment([a, b], stroke);
+                    }
                 }
             }
             Primitive::Polygon { points, style } => {
