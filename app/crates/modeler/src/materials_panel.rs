@@ -192,6 +192,7 @@ pub fn materials_panel(
 
     let search = panel.search.clone();
     let tiles = panel.tiles;
+    let mut swatches = panel.swatches.clone();
     let focus_name = std::mem::take(&mut panel.focus_name);
     let mut close = false;
     egui::ScrollArea::vertical()
@@ -268,10 +269,12 @@ pub fn materials_panel(
             }
 
             let entries = if tiles {
-                ui.horizontal_wrapped(|ui| material_entries(ui, model, current, &search, true))
-                    .inner
+                ui.horizontal_wrapped(|ui| {
+                    material_entries(ui, &mut swatches, model, current, &search, true)
+                })
+                .inner
             } else {
-                material_entries(ui, model, current, &search, false)
+                material_entries(ui, &mut swatches, model, current, &search, false)
             };
             if action.is_none() {
                 action = entries;
@@ -287,6 +290,7 @@ pub fn materials_panel(
 /// The Default entry and the matching materials, as rows or tiles.
 fn material_entries(
     ui: &mut egui::Ui,
+    swatches: &mut Swatches,
     model: &Model,
     current: Option<MaterialId>,
     search: &str,
@@ -297,6 +301,7 @@ fn material_entries(
         let response = if tiles {
             material_tile(
                 ui,
+                swatches,
                 "Default",
                 Color32::from_gray(230),
                 current.is_none(),
@@ -305,6 +310,7 @@ fn material_entries(
         } else {
             material_row(
                 ui,
+                swatches,
                 "Default",
                 Color32::from_gray(230),
                 current.is_none(),
@@ -330,9 +336,9 @@ fn material_entries(
             .map(|texture| texture.path.as_str());
         let selected = current == Some(id);
         let response = if tiles {
-            material_tile(ui, &material.name, color, selected, texture)
+            material_tile(ui, swatches, &material.name, color, selected, texture)
         } else {
-            material_row(ui, &material.name, color, selected, texture)
+            material_row(ui, swatches, &material.name, color, selected, texture)
         };
         if response.clicked() {
             action = Some(MaterialAction::Choose(Some(id)));
@@ -344,6 +350,7 @@ fn material_entries(
 /// One selectable row: a color swatch, then the material's name.
 fn material_row(
     ui: &mut egui::Ui,
+    swatches: &mut Swatches,
     label: &str,
     color: Color32,
     selected: bool,
@@ -353,7 +360,7 @@ fn material_row(
         .horizontal(|ui| {
             let (rect, swatch) =
                 ui.allocate_exact_size(egui::vec2(14.0, 14.0), egui::Sense::click());
-            ui.painter().rect_filled(rect, 2.0, color);
+            paint_swatch(ui, swatches, rect, color, hover);
             let text = ui.add(egui::Button::selectable(selected, label).truncate());
             swatch.union(text)
         })
@@ -368,6 +375,7 @@ fn material_row(
 /// One selectable tile: a color swatch with the material's name under it.
 fn material_tile(
     ui: &mut egui::Ui,
+    swatches: &mut Swatches,
     label: &str,
     color: Color32,
     selected: bool,
@@ -381,7 +389,7 @@ fn material_tile(
             |ui| {
                 let (rect, swatch) =
                     ui.allocate_exact_size(egui::vec2(64.0, 40.0), egui::Sense::click());
-                ui.painter().rect_filled(rect, 2.0, color);
+                paint_swatch(ui, swatches, rect, color, hover);
                 let text = ui.add_sized(
                     [64.0, ui.spacing().interact_size.y],
                     egui::Button::selectable(selected, label).truncate(),
@@ -395,6 +403,29 @@ fn material_tile(
         None => label.to_owned(),
     };
     response.on_hover_text(tooltip)
+}
+
+/// The swatch: a texture preview when it's ready, otherwise the flat color.
+fn paint_swatch(
+    ui: &mut egui::Ui,
+    swatches: &mut Swatches,
+    rect: egui::Rect,
+    color: Color32,
+    texture: Option<&str>,
+) {
+    if let Some(path) = texture
+        && let Some(id) = swatches.get(ui.ctx(), path)
+        && let crate::swatches::SwatchState::Ready { size } = swatches.state(path)
+    {
+        ui.painter().image(
+            id,
+            rect,
+            crate::swatches::cover_uv(size, rect.size()),
+            Color32::WHITE,
+        );
+        return;
+    }
+    ui.painter().rect_filled(rect, 2.0, color);
 }
 
 fn channel_to_byte(channel: f32) -> u8 {
