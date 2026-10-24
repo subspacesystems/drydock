@@ -104,6 +104,13 @@ pub enum Action {
     Flip(usize),
     /// Erase the selection (Delete key, Edit menu; `docs/specs/m3-app-erase.md`).
     Erase,
+    /// Copy the selection to the clipboard (Ctrl+C, Edit menu;
+    /// `docs/specs/m4-app-copy-paste.md`).
+    Copy,
+    /// Copy the selection to the clipboard and erase it (Ctrl+X, Edit menu).
+    Cut,
+    /// Start pasting the clipboard (Ctrl+V, Edit menu).
+    Paste,
     /// Show the About window (Help menu).
     About,
     /// Make the selection a component, after asking for its name (Edit menu;

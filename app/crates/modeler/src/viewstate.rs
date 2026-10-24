@@ -39,6 +39,12 @@ pub enum Effect {
     Flip(usize),
     /// Erase the selection.
     Erase,
+    /// Copy the selection to the clipboard.
+    Copy,
+    /// Copy the selection to the clipboard, then erase it.
+    Cut,
+    /// Start pasting the clipboard.
+    Paste,
     /// Show the About window.
     About,
     /// Ask for a name, then make the selection a component (or a group when `group`).
@@ -126,6 +132,9 @@ impl ViewState {
             Action::Edit(key) => return Effect::Edit(key),
             Action::Flip(axis) => return Effect::Flip(axis),
             Action::Erase => return Effect::Erase,
+            Action::Copy => return Effect::Copy,
+            Action::Cut => return Effect::Cut,
+            Action::Paste => return Effect::Paste,
             Action::About => return Effect::About,
             Action::MakeComponent => return Effect::MakeComponent { group: false },
             Action::MakeGroup => return Effect::MakeComponent { group: true },
