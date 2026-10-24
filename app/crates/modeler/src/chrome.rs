@@ -317,8 +317,21 @@ pub fn model_info_lines(stats: &Stats, kernel: bool) -> Vec<String> {
 
 /// The Model Info line naming the graphics adapter (`docs/specs/m4-ui-gpu-info.md`).
 pub fn adapter_line(name: &str, backend: &str, device_type: &str) -> String {
-    let _ = (name, backend, device_type);
-    unimplemented!("m4-ui-gpu-info")
+    let name = name.trim();
+    let name = if name.is_empty() {
+        "unknown adapter"
+    } else {
+        name
+    };
+    let backend = backend.trim();
+    let device_type = device_type.trim();
+    let details = match (backend.is_empty(), device_type.is_empty()) {
+        (false, false) => format!(" ({backend}, {device_type})"),
+        (false, true) => format!(" ({backend})"),
+        (true, false) => format!(" ({device_type})"),
+        (true, true) => String::new(),
+    };
+    format!("Graphics: {name}{details}")
 }
 
 /// The Model Info window while `open`, showing `lines`; its Close button clears `open`.

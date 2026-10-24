@@ -32,6 +32,7 @@ use modeler_kernel::tools::scale;
 use modeler_kernel::topology::FaceId;
 use modeler_render::{GpuScene, Renderer, Style, Viewport};
 use modeler_view::Projection;
+use wgpu::{Backend, DeviceType};
 
 /// Scroll distance in points that counts as one wheel notch (touchpads report points).
 const POINTS_PER_SCROLL_LINE: f64 = 50.0;
@@ -54,6 +55,29 @@ pub fn install_fonts(ctx: &egui::Context) {
         fonts.families.insert(family, vec!["Roboto".to_owned()]);
     }
     ctx.set_fonts(fonts);
+}
+
+/// The display name of a wgpu backend (`docs/specs/m4-ui-gpu-info.md`).
+fn backend_label(backend: Backend) -> &'static str {
+    match backend {
+        Backend::Vulkan => "Vulkan",
+        Backend::Metal => "Metal",
+        Backend::Dx12 => "DX12",
+        Backend::Gl => "GL",
+        Backend::BrowserWebGpu => "BrowserWebGpu",
+        Backend::Noop => "Noop",
+    }
+}
+
+/// The display name of a wgpu device type (`docs/specs/m4-ui-gpu-info.md`).
+fn device_type_label(device_type: DeviceType) -> &'static str {
+    match device_type {
+        DeviceType::Other => "other",
+        DeviceType::IntegratedGpu => "integrated GPU",
+        DeviceType::DiscreteGpu => "discrete GPU",
+        DeviceType::VirtualGpu => "virtual GPU",
+        DeviceType::Cpu => "CPU",
+    }
 }
 
 /// GPU state that lives as long as the window.
@@ -1556,7 +1580,15 @@ impl eframe::App for App {
         });
         chrome::about_window(&ctx, &mut self.about_open);
         if let Some(model) = &self.model {
-            let lines = chrome::model_info_lines(&model.stats, model.kernel.is_some());
+            let mut lines = chrome::model_info_lines(&model.stats, model.kernel.is_some());
+            if let Some(state) = frame.wgpu_render_state() {
+                let info = state.adapter.get_info();
+                lines.push(chrome::adapter_line(
+                    &info.name,
+                    backend_label(info.backend),
+                    device_type_label(info.device_type),
+                ));
+            }
             chrome::model_info_window(&ctx, &mut self.model_info_open, &lines);
         } else {
             self.model_info_open = false;
