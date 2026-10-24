@@ -23,6 +23,9 @@ pub struct ViewState {
     pub zoom_pivot: Option<DVec3>,
     /// The red, green and blue axes are drawn (View > Axes; `docs/specs/m4-ui-axes.md`).
     pub axes: bool,
+    /// Ctrl+wheel notches not yet turned into a step through a surface (a fraction of a
+    /// notch from a smooth wheel or touchpad). `docs/specs/m4-zoom-through.md`.
+    pub through_carry: f64,
 }
 
 /// What the caller must do after an action.
@@ -94,6 +97,15 @@ pub fn zoom_pivot_at(
     scene.raycast(origin, dir)
 }
 
+/// How far the eye travels along the cursor's ray to step through the first surface it
+/// meets. `hits` are distances along the (unit) ray to every triangle it crosses, in any
+/// order, repeats allowed; `None` when nothing is ahead. Behaviour:
+/// `docs/specs/m4-zoom-through.md`.
+pub fn through_distance(hits: &[f64]) -> Option<f64> {
+    let _ = hits;
+    unimplemented!("m4-zoom-through")
+}
+
 /// Viewport height and aspect; a viewport with a zero side counts as 1 px high, aspect 1.
 fn height_and_aspect(viewport_px: (f64, f64)) -> (f64, f64) {
     let (width, height) = viewport_px;
@@ -114,6 +126,7 @@ impl ViewState {
             pivot: None,
             zoom_pivot: None,
             axes: true,
+            through_carry: 0.0,
         }
     }
 
@@ -151,6 +164,21 @@ impl ViewState {
             1.0 - 2.0 * cursor_px.y / height,
         );
         self.camera.zoom(lines, ndc, aspect);
+    }
+
+    /// A Ctrl+wheel scroll of `lines` notches with the cursor at `cursor_px`: each whole
+    /// notch forward steps the eye through the next surface under the cursor, each notch
+    /// back steps out through the surface behind it. Behaviour:
+    /// `docs/specs/m4-zoom-through.md`.
+    pub fn scroll_through(
+        &mut self,
+        lines: f64,
+        cursor_px: DVec2,
+        scene: Option<&FlatScene>,
+        viewport_px: (f64, f64),
+    ) {
+        let _ = (lines, cursor_px, scene, viewport_px);
+        unimplemented!("m4-zoom-through")
     }
 
     /// Apply an input action. `viewport_px` is (width, height) of the viewport.

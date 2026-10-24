@@ -104,6 +104,14 @@ impl FlatScene {
         }
         nearest.map(|t| origin + dir * t)
     }
+
+    /// Every place the ray from `origin` along `dir` crosses a triangle of the scene (either
+    /// side) in front of `origin`, as ray parameters `t > 0` (the point is `origin + dir *
+    /// t`), sorted ascending. Lines don't count. Behaviour: `docs/specs/m4-zoom-through.md`.
+    pub fn ray_hits(&self, origin: DVec3, dir: DVec3) -> Vec<f64> {
+        let _ = (origin, dir);
+        unimplemented!("m4-zoom-through")
+    }
 }
 
 /// Expand every instance into world space.
