@@ -906,23 +906,37 @@ impl App {
         }
         if let Some(cursor) = response.hover_pos() {
             let mut lines = 0.0;
+            let mut through = 0.0;
             for event in events {
-                if let Event::MouseWheel { unit, delta, .. } = event {
-                    lines += match unit {
+                if let Event::MouseWheel {
+                    unit,
+                    delta,
+                    modifiers,
+                    ..
+                } = event
+                {
+                    let notches = match unit {
                         MouseWheelUnit::Line => f64::from(delta.y),
                         MouseWheelUnit::Point => f64::from(delta.y) / POINTS_PER_SCROLL_LINE,
                         MouseWheelUnit::Page => f64::from(delta.y) * 3.0,
                     };
+                    if modifiers.command {
+                        through += notches;
+                    } else {
+                        lines += notches;
+                    }
                 }
             }
-            if lines != 0.0 {
+            if lines != 0.0 || through != 0.0 {
                 let size = (f64::from(rect.width()), f64::from(rect.height()));
-                self.view.scroll_zoom(
-                    lines,
-                    local(cursor),
-                    self.model.as_ref().map(|document| &document.scene),
-                    size,
-                );
+                let scene = self.model.as_ref().map(|document| &document.scene);
+                if lines != 0.0 {
+                    self.view.scroll_zoom(lines, local(cursor), scene, size);
+                }
+                if through != 0.0 {
+                    self.view
+                        .scroll_through(through, local(cursor), scene, size);
+                }
                 self.dirty = true;
             }
         }

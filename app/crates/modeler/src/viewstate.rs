@@ -102,8 +102,18 @@ pub fn zoom_pivot_at(
 /// order, repeats allowed; `None` when nothing is ahead. Behaviour:
 /// `docs/specs/m4-zoom-through.md`.
 pub fn through_distance(hits: &[f64]) -> Option<f64> {
-    let _ = hits;
-    unimplemented!("m4-zoom-through")
+    let valid = || hits.iter().copied().filter(|h| h.is_finite() && *h > 0.0);
+    let t1 = valid().fold(f64::INFINITY, f64::min);
+    if !t1.is_finite() {
+        return None;
+    }
+    let same = t1 + 1e-6 * t1 + 1e-9;
+    let t2 = valid().filter(|h| *h > same).fold(f64::INFINITY, f64::min);
+    Some(if t2.is_finite() {
+        t1 + (t2 - t1) / 2.0
+    } else {
+        2.0 * t1
+    })
 }
 
 /// Viewport height and aspect; a viewport with a zero side counts as 1 px high, aspect 1.
@@ -177,8 +187,54 @@ impl ViewState {
         scene: Option<&FlatScene>,
         viewport_px: (f64, f64),
     ) {
-        let _ = (lines, cursor_px, scene, viewport_px);
-        unimplemented!("m4-zoom-through")
+        if lines == 0.0 {
+            return;
+        }
+        let Some(scene) = scene else {
+            self.scroll_zoom(lines, cursor_px, scene, viewport_px);
+            self.through_carry = 0.0;
+            return;
+        };
+        if self.camera.projection == Projection::Parallel {
+            self.scroll_zoom(lines, cursor_px, Some(scene), viewport_px);
+            self.through_carry = 0.0;
+            return;
+        }
+        self.through_carry += lines;
+        while self.through_carry >= 1.0 {
+            self.step_through(1.0, cursor_px, scene, viewport_px);
+            self.through_carry -= 1.0;
+        }
+        while self.through_carry <= -1.0 {
+            self.step_through(-1.0, cursor_px, scene, viewport_px);
+            self.through_carry += 1.0;
+        }
+    }
+
+    /// One notch of `direction` (+1 forward, -1 back) through the surface under the cursor.
+    fn step_through(
+        &mut self,
+        direction: f64,
+        cursor_px: DVec2,
+        scene: &FlatScene,
+        viewport_px: (f64, f64),
+    ) {
+        let viewport = crate::editor::Viewport {
+            camera: self.camera,
+            size_px: viewport_px,
+        };
+        let (origin, dir) = viewport.ray(cursor_px);
+        let dir = dir.normalize();
+        let distance = if direction > 0.0 {
+            through_distance(&scene.ray_hits(origin, dir))
+        } else {
+            through_distance(&scene.ray_hits(origin, -dir))
+        };
+        match distance {
+            Some(distance) if direction > 0.0 => self.camera.target += dir * distance,
+            Some(distance) => self.camera.target -= dir * distance,
+            None => self.scroll_zoom(direction, cursor_px, Some(scene), viewport_px),
+        }
     }
 
     /// Apply an input action. `viewport_px` is (width, height) of the viewport.
