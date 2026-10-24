@@ -230,7 +230,7 @@ fn hovered_grip_marker_is_highlighted() {
 
 #[test]
 fn held_grip_marker_is_grabbed() {
-    let h = handles(Some(Grip::Scale), Some(Grip::Scale));
+    let h = handles(Some(Grip::Scale(2)), Some(Grip::Scale(2)));
     assert_eq!(
         marker_styles(&primitives(&h)),
         vec![
