@@ -27,7 +27,7 @@ use modeler_kernel::paint::{self, Side};
 use modeler_kernel::pushpull::push_pull;
 use modeler_kernel::select::{self, BoxMode, Entity};
 use modeler_kernel::tape::Guide;
-use modeler_kernel::texture;
+use modeler_kernel::texture::{self, TextureMap};
 use modeler_kernel::tools::arc::ArcTool;
 use modeler_kernel::tools::arc3::Arc3Tool;
 use modeler_kernel::tools::circle::CircleTool;
@@ -47,7 +47,7 @@ use modeler_kernel::units::{self, Unit};
 use modeler_view::{Camera, Projection};
 
 use crate::input::{EditKey, Modifiers, Tool};
-use crate::texture_handles::TextureHandles;
+use crate::texture_handles::{GRIP_PX, Grip, TextureHandles, plane_point_at, tile_corners};
 
 /// A change to how a texture lies on a face, in texture space (meters).
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -195,6 +195,23 @@ struct PasteState {
     point: Option<DVec3>,
 }
 
+/// The texture handles mode: the face and side they act on, the map at grab time, the
+/// grabbed image copy's texture-space pin `base`, and the last valid preview map.
+#[derive(Clone, Debug)]
+struct TextureHandleState {
+    face: FaceId,
+    side: Side,
+    map: TextureMap,
+    base: DVec2,
+    size: DVec2,
+    plane: modeler_kernel::geom::Plane,
+    hover: Option<Grip>,
+    held: Option<Grip>,
+    /// The plane point under the click that grabbed a Slide grip.
+    grab: Option<DVec3>,
+    preview: TextureMap,
+}
+
 pub struct Editor {
     /// The unit for typed numbers without a unit, and for the measurement display.
     pub unit: Unit,
@@ -228,6 +245,7 @@ pub struct Editor {
     material: Option<MaterialId>,
     clipboard: Option<Clipboard>,
     paste: Option<PasteState>,
+    texture_handles: Option<TextureHandleState>,
     path: EditPath,
     /// Cumulative world transforms of the path's steps; the last one maps the open body to
     /// the world. Kept next to the path so the getters can map points without the model.
@@ -391,6 +409,7 @@ impl Editor {
             material: None,
             clipboard: None,
             paste: None,
+            texture_handles: None,
             path: EditPath::root(),
             transforms: Vec::new(),
             hide_rest: false,
@@ -512,6 +531,7 @@ impl Editor {
 
     /// Switch tools; the shape in progress, the typed text and the locks are dropped.
     pub fn set_tool(&mut self, tool: Tool) {
+        self.end_texture_handles();
         self.tool = tool;
         self.paste = None;
         self.line = LineTool::new();
@@ -554,6 +574,24 @@ impl Editor {
         mods: Modifiers,
     ) {
         self.refresh_path(model);
+        if self.texture_handles.is_some() {
+            if self
+                .texture_handles
+                .as_ref()
+                .is_some_and(|state| state.held.is_some())
+            {
+                if let Some(op) = self.held_texture_op(view, cursor, mods) {
+                    self.preview_texture_op(op);
+                }
+            } else {
+                let hover = self.texture_grip_at(model, view, cursor);
+                if let Some(state) = self.texture_handles.as_mut() {
+                    state.hover = hover;
+                }
+            }
+            self.hint = None;
+            return;
+        }
         if self.paste.is_some() {
             if let Some(inf) = self.infer_move_at(model, view, cursor) {
                 self.hint = Some(inf);
@@ -631,6 +669,9 @@ impl Editor {
         count: u32,
     ) -> bool {
         self.refresh_path(model);
+        if self.texture_handles.is_some() {
+            return self.click_texture_handles(model, view, cursor, mods);
+        }
         if self.paste.is_some() {
             return self.click_paste(model, view, cursor);
         }
@@ -757,6 +798,9 @@ impl Editor {
 
     /// Typed characters for the measurement box. True when they were taken.
     pub fn text(&mut self, text: &str) -> bool {
+        if self.texture_handles.is_some() {
+            return false;
+        }
         if !takes_text(self.tool) {
             return false;
         }
@@ -779,6 +823,38 @@ impl Editor {
     /// An editor key. True when the model changed.
     pub fn key(&mut self, key: EditKey, model: &mut Model) -> bool {
         self.refresh_path(model);
+        if self.texture_handles.is_some() {
+            match key {
+                EditKey::Cancel => {
+                    let held = self
+                        .texture_handles
+                        .as_ref()
+                        .is_some_and(|state| state.held.is_some());
+                    if held {
+                        if let Some(state) = self.texture_handles.as_mut() {
+                            state.held = None;
+                            state.grab = None;
+                            state.hover = None;
+                        }
+                    } else {
+                        self.end_texture_handles();
+                    }
+                    return false;
+                }
+                EditKey::Enter => {
+                    self.end_texture_handles();
+                    return false;
+                }
+                EditKey::Undo | EditKey::Redo => {
+                    if let Some(state) = self.texture_handles.as_mut() {
+                        state.held = None;
+                        state.grab = None;
+                        state.hover = None;
+                    }
+                }
+                _ => {}
+            }
+        }
         match key {
             EditKey::Cancel => {
                 if self.paste.take().is_some() {
@@ -1543,6 +1619,7 @@ impl Editor {
     /// Erase the selection (one undo step "Erase"). True when the model changed.
     /// Behaviour: `docs/specs/m3-app-erase.md`.
     pub fn erase_selection(&mut self, model: &mut Model) -> bool {
+        self.end_texture_handles();
         self.paste = None;
         self.line = LineTool::new();
         self.idle_shapes();
@@ -1606,6 +1683,7 @@ impl Editor {
         let Some(path) = self.path.open(model, instance) else {
             return false;
         };
+        self.end_texture_handles();
         self.paste = None;
         self.path = path;
         self.recompute_transforms(model);
@@ -1615,6 +1693,7 @@ impl Editor {
 
     /// Close the innermost open instance; the root stays open.
     pub fn close_path(&mut self) {
+        self.end_texture_handles();
         if self.path.is_root() {
             return;
         }
@@ -1639,6 +1718,7 @@ impl Editor {
     /// "Make Group". The new instance becomes the selection. True when the model changed.
     /// Behaviour: `docs/specs/m4-app-components.md`.
     pub fn make_component(&mut self, model: &mut Model, name: &str, group: bool) -> bool {
+        self.end_texture_handles();
         self.paste = None;
         self.line = LineTool::new();
         self.idle_shapes();
@@ -1700,6 +1780,7 @@ impl Editor {
     /// entities that came out become the selection. True when the model changed.
     /// Behaviour: `docs/specs/m4-app-components.md`.
     pub fn explode_selection(&mut self, model: &mut Model) -> bool {
+        self.end_texture_handles();
         self.paste = None;
         self.line = LineTool::new();
         self.idle_shapes();
@@ -1871,24 +1952,319 @@ impl Editor {
         }
     }
 
+    /// The texture size on `side` of `face` when that side has a material with a texture.
+    fn textured_size(
+        &self,
+        model: &Model,
+        body: BodyId,
+        face: FaceId,
+        side: Side,
+    ) -> Option<DVec2> {
+        let body = model.body(body)?;
+        body.geometry().face(face)?;
+        let materials = body.face_materials(face);
+        let material = match side {
+            Side::Front => materials.front,
+            Side::Back => materials.back,
+        }?;
+        model.material(material)?.texture.as_ref().map(|t| t.size)
+    }
+
+    /// The current map, size, plane and image copy corners of the handles, or `None` when
+    /// the face or its texture is gone.
+    fn texture_tile(
+        &self,
+        model: &Model,
+    ) -> Option<(TextureMap, DVec2, modeler_kernel::geom::Plane, [DVec3; 4])> {
+        let state = self.texture_handles.as_ref()?;
+        let body = self.body(model);
+        let size = self.textured_size(model, body, state.face, state.side)?;
+        let map = texture::side_map(model, body, state.face, state.side)?;
+        let geometry = model.body(body)?.geometry();
+        let face = geometry.face(state.face)?;
+        let plane = geometry.face_plane(state.face)?;
+        let points = geometry.loop_points(&face.outer);
+        if points.is_empty() {
+            return None;
+        }
+        let center = points.iter().copied().sum::<DVec3>() / points.len() as f64;
+        let corners = tile_corners(&map, size, plane.point, plane.normal, center)?;
+        Some((map, size, plane, corners))
+    }
+
+    /// The grip under `cursor` while nothing is held.
+    fn texture_grip_at(&self, model: &Model, view: &Viewport, cursor: DVec2) -> Option<Grip> {
+        let (map, size, plane, corners) = self.texture_tile(model)?;
+        let scale = view
+            .project(self.to_world(corners[2]))
+            .map(|p| p.distance(cursor));
+        let turn = view
+            .project(self.to_world(corners[1]))
+            .map(|p| p.distance(cursor));
+        match (scale, turn) {
+            (Some(scale), Some(turn)) if scale <= GRIP_PX && turn <= GRIP_PX => {
+                return Some(if turn < scale {
+                    Grip::Turn
+                } else {
+                    Grip::Scale
+                });
+            }
+            _ => {}
+        }
+        if scale.is_some_and(|distance| distance <= GRIP_PX) {
+            return Some(Grip::Scale);
+        }
+        if turn.is_some_and(|distance| distance <= GRIP_PX) {
+            return Some(Grip::Turn);
+        }
+
+        let (origin, dir) = self.body_ray(view, cursor);
+        let denom = dir.dot(plane.normal);
+        if !denom.is_finite() || denom.abs() < 1e-12 {
+            return None;
+        }
+        let p = origin + (plane.point - origin).dot(plane.normal) / denom * dir;
+        if !p.is_finite() {
+            return None;
+        }
+        let q = map.apply(p);
+        let base = map.apply(corners[0]);
+        let tol = 1e-9;
+        (q.x >= base.x - tol
+            && q.x <= base.x + size.x + tol
+            && q.y >= base.y - tol
+            && q.y <= base.y + size.y + tol)
+            .then_some(Grip::Slide)
+    }
+
+    /// The op for the held grip at `cursor`, or `None` when it is invalid there.
+    fn held_texture_op(
+        &self,
+        view: &Viewport,
+        cursor: DVec2,
+        mods: Modifiers,
+    ) -> Option<TextureOp> {
+        let state = self.texture_handles.as_ref()?;
+        let grip = state.held?;
+        let (origin, dir) = self.body_ray(view, cursor);
+        let denom = dir.dot(state.plane.normal);
+        if !denom.is_finite() || denom.abs() < 1e-12 {
+            return None;
+        }
+        let p = origin + (state.plane.point - origin).dot(state.plane.normal) / denom * dir;
+        if !p.is_finite() {
+            return None;
+        }
+        let q = state.map.apply(p);
+        if !q.is_finite() {
+            return None;
+        }
+        let about = state.base;
+        match grip {
+            Grip::Slide => {
+                let g = state.map.apply(state.grab?);
+                let op = TextureOp::Move(g - q);
+                (g - q).is_finite().then_some(op)
+            }
+            Grip::Turn => {
+                let from = q - about;
+                if from.length() < 1e-9 {
+                    return None;
+                }
+                let to = DVec2::new(state.size.x, 0.0);
+                let angle = (from.x * to.y - from.y * to.x).atan2(from.dot(to));
+                angle
+                    .is_finite()
+                    .then_some(TextureOp::Rotate { angle, about })
+            }
+            Grip::Scale => {
+                let from = q - about;
+                let to = state.size;
+                let factor = if mods.shift {
+                    DVec2::splat(to.length_squared() / from.dot(to))
+                } else {
+                    DVec2::new(to.x / from.x, to.y / from.y)
+                };
+                (factor.is_finite() && factor.x > 0.0 && factor.y > 0.0)
+                    .then_some(TextureOp::Scale { factor, about })
+            }
+        }
+    }
+
+    /// Update the held grip's preview map from `op`.
+    fn preview_texture_op(&mut self, op: TextureOp) {
+        let affine = match op {
+            TextureOp::Move(d) => DAffine2::from_translation(d),
+            TextureOp::Rotate { angle, about } => {
+                DAffine2::from_translation(about)
+                    * DAffine2::from_angle(angle)
+                    * DAffine2::from_translation(-about)
+            }
+            TextureOp::Scale { factor, about } => {
+                DAffine2::from_translation(about)
+                    * DAffine2::from_scale(factor)
+                    * DAffine2::from_translation(-about)
+            }
+            TextureOp::Reset => return,
+        };
+        let Some(state) = self.texture_handles.as_mut() else {
+            return;
+        };
+        let preview = state.map.then(affine);
+        if preview.is_finite() {
+            state.preview = preview;
+        }
+    }
+
+    /// A click while the texture handles show. Behaviour:
+    /// `docs/specs/m4-app-texture-handles.md`.
+    fn click_texture_handles(
+        &mut self,
+        model: &mut Model,
+        view: &Viewport,
+        cursor: DVec2,
+        mods: Modifiers,
+    ) -> bool {
+        let Some(state) = self.texture_handles.as_ref() else {
+            return false;
+        };
+        let (face, side) = (state.face, state.side);
+        let body = self.body(model);
+        if self.textured_size(model, body, face, side).is_none() {
+            self.end_texture_handles();
+            return false;
+        }
+        if state.held.is_none() {
+            let Some(grip) = self.texture_grip_at(model, view, cursor) else {
+                self.end_texture_handles();
+                return false;
+            };
+            let Some((map, size, plane, corners)) = self.texture_tile(model) else {
+                self.end_texture_handles();
+                return false;
+            };
+            let grab = if grip == Grip::Slide {
+                let (origin, dir) = self.body_ray(view, cursor);
+                let denom = dir.dot(plane.normal);
+                if !denom.is_finite() || denom.abs() < 1e-12 {
+                    self.end_texture_handles();
+                    return false;
+                }
+                let p = origin + (plane.point - origin).dot(plane.normal) / denom * dir;
+                p.is_finite().then_some(p)
+            } else {
+                None
+            };
+            if let Some(state) = self.texture_handles.as_mut() {
+                state.map = map;
+                state.base = map.apply(corners[0]);
+                state.size = size;
+                state.plane = plane;
+                state.held = Some(grip);
+                state.hover = None;
+                state.grab = grab;
+                state.preview = map;
+            }
+            return false;
+        }
+
+        let Some(op) = self.held_texture_op(view, cursor, mods) else {
+            self.message = Some("Can't position that texture".to_string());
+            return false;
+        };
+        let changed = self.position_texture(model, face, side, op);
+        if let Some(state) = self.texture_handles.as_mut() {
+            state.held = None;
+            state.grab = None;
+            state.hover = None;
+        }
+        changed
+    }
+
     /// Show texture handles on `side` of `face` in the open body; while they show, clicks
     /// and pointer moves in the viewport go to them. True when they started. Behaviour:
     /// `docs/specs/m4-app-texture-handles.md`.
     pub fn start_texture_handles(&mut self, model: &Model, face: FaceId, side: Side) -> bool {
-        let _ = (model, face, side);
-        unimplemented!("m4-app-texture-handles")
+        let body = self.body(model);
+        let Some(size) = self.textured_size(model, body, face, side) else {
+            self.message = Some("That side has no texture".to_string());
+            return false;
+        };
+        let computed = (|| {
+            let map = texture::side_map(model, body, face, side)?;
+            let geometry = model.body(body)?.geometry();
+            let face_data = geometry.face(face)?;
+            let plane = geometry.face_plane(face)?;
+            let points = geometry.loop_points(&face_data.outer);
+            if points.is_empty() {
+                return None;
+            }
+            let center = points.iter().copied().sum::<DVec3>() / points.len() as f64;
+            let corners = tile_corners(&map, size, plane.point, plane.normal, center)?;
+            Some((map, plane, map.apply(corners[0])))
+        })();
+        let Some((map, plane, base)) = computed else {
+            self.message = Some("Can't position that texture".to_string());
+            return false;
+        };
+
+        let tool = self.tool;
+        self.set_tool(tool);
+        self.texture_handles = Some(TextureHandleState {
+            face,
+            side,
+            map,
+            base,
+            size,
+            plane,
+            hover: None,
+            held: None,
+            grab: None,
+            preview: map,
+        });
+        self.message = None;
+        true
     }
 
     /// Hide the texture handles (dropping a held grip); nothing changes in the model.
     pub fn end_texture_handles(&mut self) {
-        unimplemented!("m4-app-texture-handles")
+        self.texture_handles = None;
     }
 
     /// The texture handles to draw, following the cursor while a grip is held; `None` when
     /// they aren't showing or their side has no texture any more.
     pub fn texture_handles(&self, model: &Model) -> Option<TextureHandles> {
-        let _ = model;
-        unimplemented!("m4-app-texture-handles")
+        let state = self.texture_handles.as_ref()?;
+        let body = self.body(model);
+        self.textured_size(model, body, state.face, state.side)?;
+        let corners = match state.held {
+            Some(_) => {
+                let offsets = [
+                    DVec2::ZERO,
+                    DVec2::new(state.size.x, 0.0),
+                    state.size,
+                    DVec2::new(0.0, state.size.y),
+                ];
+                let mut corners = [DVec3::ZERO; 4];
+                for (corner, offset) in corners.iter_mut().zip(offsets) {
+                    *corner = plane_point_at(
+                        &state.preview,
+                        state.plane.point,
+                        state.plane.normal,
+                        state.base + offset,
+                    )?;
+                }
+                corners
+            }
+            None => self.texture_tile(model)?.3,
+        };
+        Some(TextureHandles {
+            face: state.face,
+            side: state.side,
+            corners,
+            hover: state.hover,
+            held: state.held,
+        })
     }
 
     /// The Paint Bucket's current material (`None` = the default material).

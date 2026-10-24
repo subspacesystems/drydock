@@ -19,7 +19,8 @@ use modeler::input::{self, Button, Modifiers, Tool};
 use modeler::materials_panel::{MaterialAction, MaterialsPanel, materials_panel};
 use modeler::overlay::{self, Primitive};
 use modeler::recent::{RecentFiles, recent_file};
-use modeler::texture_panel::{TextureForm, texture_panel};
+use modeler::texture_handles;
+use modeler::texture_panel::{TextureForm, handles_button, texture_panel};
 use modeler::viewstate::{Effect, ViewState, scene_bounds};
 use modeler_dae::{FlatScene, RestView};
 use modeler_kernel::editpath::EditPath;
@@ -1140,11 +1141,27 @@ impl App {
                 Color32::from_rgb(220, 220, 220),
             );
         }
+        if let Some(kernel) = &document.kernel
+            && editor.texture_handles(kernel).is_some()
+        {
+            painter.text(
+                rect.left_top() + egui::vec2(12.0, 12.0),
+                egui::Align2::LEFT_TOP,
+                "Click inside the image, then click again to slide it. Click the turn or scale corner the same way (Shift keeps proportions). Esc when done.",
+                egui::FontId::proportional(13.0),
+                Color32::from_rgb(220, 220, 220),
+            );
+        }
         if let Some(kernel) = &document.kernel {
             let open_body = editor.path().body(kernel).unwrap_or(BodyId::Root);
             let primitives =
                 overlay::selection(kernel, open_body, open_transform, editor.selection());
             paint_primitives(painter, &self.view.camera, &primitives, &project);
+            if let Some(handles) = editor.texture_handles(kernel) {
+                let primitives = texture_handles::primitives(&handles);
+                let primitives = overlay::transformed(primitives, open_transform);
+                paint_primitives(painter, &self.view.camera, &primitives, &project);
+            }
             if let Some(face) = editor.pushpull_face()
                 && let Some(body) = kernel.body(open_body)
             {
@@ -1432,6 +1449,7 @@ impl eframe::App for App {
 
         let mut material_action = None;
         let mut texture_action = None;
+        let mut handles_action = None;
         if let Some(model) = self
             .model
             .as_ref()
@@ -1439,6 +1457,10 @@ impl eframe::App for App {
         {
             let current = self.editor.as_ref().and_then(Editor::material);
             let target = self.texture_target(model);
+            let texture_on = self
+                .editor
+                .as_ref()
+                .is_some_and(|editor| editor.texture_handles(model).is_some());
             egui::Panel::right("materials")
                 .resizable(true)
                 .default_size(180.0)
@@ -1446,6 +1468,9 @@ impl eframe::App for App {
                     // Texture Position stays in view at the bottom; a model's material
                     // list can be far taller than the window, so it scrolls.
                     egui::Panel::bottom("texture-position").show(ui, |ui| {
+                        if handles_button(ui, target.is_some(), texture_on) {
+                            handles_action = Some(if texture_on { None } else { target });
+                        }
                         if let Some(op) = texture_panel(ui, &mut self.texture, target.is_some())
                             && let Some((face, side)) = target
                         {
@@ -1471,6 +1496,18 @@ impl eframe::App for App {
                 };
             if changed {
                 self.refresh_document(&ctx, frame);
+            }
+        }
+        if let Some(action) = handles_action
+            && let (Some(editor), Some(document)) = (&mut self.editor, &self.model)
+        {
+            match action {
+                Some((face, side)) => {
+                    if let Some(model) = document.kernel.as_ref() {
+                        editor.start_texture_handles(model, face, side);
+                    }
+                }
+                None => editor.end_texture_handles(),
             }
         }
 
