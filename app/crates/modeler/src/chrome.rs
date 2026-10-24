@@ -164,8 +164,30 @@ pub fn tool_shortcut(tool: Tool) -> &'static str {
 
 /// The File menu's text for each recent file, in list order (`docs/specs/m4-ui-menus.md`).
 pub fn recent_labels(paths: &[PathBuf]) -> Vec<String> {
-    let _ = paths;
-    unimplemented!("m4-ui-menus")
+    let names: Vec<String> = paths
+        .iter()
+        .map(|path| match path.file_name() {
+            Some(name) => name.to_string_lossy().into_owned(),
+            None => path.display().to_string(),
+        })
+        .collect();
+    paths
+        .iter()
+        .zip(&names)
+        .enumerate()
+        .map(|(index, (path, name))| {
+            let mut label = format!("{}  {name}", index + 1);
+            if names.iter().filter(|other| *other == name).count() > 1
+                && let Some(folder) = path
+                    .parent()
+                    .and_then(|parent| parent.file_name())
+                    .map(|folder| folder.to_string_lossy())
+            {
+                label.push_str(&format!(" ({folder})"));
+            }
+            label
+        })
+        .collect()
 }
 
 /// The tool buttons; `current` is drawn selected. Clicking one returns
@@ -196,7 +218,20 @@ pub const CONTRIBUTORS: &str = include_str!("../../../../CONTRIBUTORS");
 
 /// The About window's lines, top to bottom (`docs/specs/m4-ui-menus.md`).
 pub fn about_lines() -> Vec<String> {
-    unimplemented!("m4-ui-menus")
+    let mut lines = vec![
+        about_text(),
+        format!("License: {}", env!("CARGO_PKG_LICENSE")),
+        "Copyright (c) 2026 Subspace Systems".to_owned(),
+        "Contributors:".to_owned(),
+    ];
+    lines.extend(
+        CONTRIBUTORS
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty() && !line.starts_with('#'))
+            .map(str::to_owned),
+    );
+    lines
 }
 
 /// The About window while `open`; its Close button clears `open`.
@@ -210,7 +245,9 @@ pub fn about_window(ctx: &eframe::egui::Context, open: &mut bool) {
         .resizable(false)
         .open(open)
         .show(ctx, |ui| {
-            ui.label(about_text());
+            for line in about_lines() {
+                ui.label(line);
+            }
             if ui.button("Close").clicked() {
                 close = true;
             }
@@ -240,6 +277,29 @@ pub fn menu_bar(ui: &mut eframe::egui::Ui, state: &MenuState<'_>) -> Option<Acti
             }
             if ui.button("Save As...    Ctrl+Shift+S").clicked() {
                 chosen = Some(Action::SaveAs);
+                ui.close();
+            }
+            if !state.recent.is_empty() {
+                ui.separator();
+                for (index, (path, label)) in state
+                    .recent
+                    .iter()
+                    .zip(recent_labels(state.recent))
+                    .enumerate()
+                {
+                    if ui
+                        .button(label)
+                        .on_hover_text(path.display().to_string())
+                        .clicked()
+                    {
+                        chosen = Some(Action::OpenRecent(index));
+                        ui.close();
+                    }
+                }
+            }
+            ui.separator();
+            if ui.button("Exit").clicked() {
+                chosen = Some(Action::Exit);
                 ui.close();
             }
         });
@@ -358,6 +418,28 @@ pub fn menu_bar(ui: &mut eframe::egui::Ui, state: &MenuState<'_>) -> Option<Acti
             if ui.button(label).clicked() {
                 chosen = Some(Action::ToggleHideRest);
                 ui.close();
+            }
+        });
+        ui.menu_button("Tools", |ui| {
+            for (group_index, group) in TOOL_GROUPS.iter().enumerate() {
+                if group_index > 0 {
+                    ui.separator();
+                }
+                for tool in *group {
+                    let label = TOOL_BUTTONS
+                        .iter()
+                        .find(|(button, _)| button == tool)
+                        .map(|(_, label)| *label)
+                        .unwrap_or("");
+                    let text = format!("{label}    {}", tool_shortcut(*tool));
+                    if ui
+                        .selectable_label(state.tool == *tool, text)
+                        .clicked()
+                    {
+                        chosen = Some(Action::SelectTool(*tool));
+                        ui.close();
+                    }
+                }
             }
         });
         ui.menu_button("Help", |ui| {
