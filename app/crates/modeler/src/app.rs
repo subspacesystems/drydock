@@ -1452,12 +1452,8 @@ impl eframe::App for App {
                             texture_action = Some((face, side, op));
                         }
                     });
-                    egui::ScrollArea::vertical()
-                        .auto_shrink([false, false])
-                        .show(ui, |ui| {
-                            material_action =
-                                materials_panel(ui, &mut self.materials, model, current);
-                        });
+                    // The Materials panel scrolls its own list under fixed controls.
+                    material_action = materials_panel(ui, &mut self.materials, model, current);
                 });
         }
         if let Some(action) = material_action {
