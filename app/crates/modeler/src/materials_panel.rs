@@ -116,8 +116,8 @@ pub struct MaterialsPanel {
 /// Whether a material called `name` shows for the search text `query`: the trimmed query
 /// is empty, or `name` contains it ignoring case. Behaviour: `docs/specs/m4-ui-materials-layout.md`.
 pub fn matches_search(name: &str, query: &str) -> bool {
-    let _ = (name, query);
-    unimplemented!("m4-ui-materials-layout")
+    let query = query.trim();
+    query.is_empty() || name.to_lowercase().contains(&query.to_lowercase())
 }
 
 /// Draw the panel into `ui` for `model`, with `current` the Paint Bucket's material.
@@ -137,32 +137,6 @@ pub fn materials_panel(
 
     let mut action = None;
     ui.heading("Materials");
-
-    if material_row(
-        ui,
-        "Default",
-        Color32::from_gray(230),
-        current.is_none(),
-        None,
-    )
-    .clicked()
-    {
-        action = Some(MaterialAction::Choose(None));
-    }
-    for (id, material) in model.materials() {
-        let color = Color32::from_rgb(
-            channel_to_byte(material.color[0]),
-            channel_to_byte(material.color[1]),
-            channel_to_byte(material.color[2]),
-        );
-        let texture = material
-            .texture
-            .as_ref()
-            .map(|texture| texture.path.as_str());
-        if material_row(ui, &material.name, color, current == Some(id), texture).clicked() {
-            action = Some(MaterialAction::Choose(Some(id)));
-        }
-    }
 
     let mut new_form = false;
     let mut edit_form = None;
@@ -191,81 +165,175 @@ pub fn materials_panel(
         panel.focus_name = true;
     }
 
+    ui.add(
+        egui::TextEdit::singleline(&mut panel.search)
+            .hint_text("Search")
+            .desired_width(f32::INFINITY),
+    );
+
+    ui.horizontal_wrapped(|ui| {
+        if ui
+            .add(egui::Button::selectable(!panel.tiles, "List"))
+            .clicked()
+        {
+            panel.tiles = false;
+        }
+        if ui
+            .add(egui::Button::selectable(panel.tiles, "Tiles"))
+            .clicked()
+        {
+            panel.tiles = true;
+        }
+    });
+
+    let search = panel.search.clone();
+    let tiles = panel.tiles;
     let focus_name = std::mem::take(&mut panel.focus_name);
     let mut close = false;
-    if let Some(form) = &mut panel.form {
-        ui.separator();
-        ui.heading(if form.editing.is_some() {
-            "Edit Material"
-        } else {
-            "New Material"
-        });
-
-        ui.horizontal(|ui| {
-            ui.label("Name");
-            let hint = paint::unique_material_name(model, "Material");
-            let response = ui.add(
-                egui::TextEdit::singleline(&mut form.name)
-                    .hint_text(hint)
-                    .desired_width(f32::INFINITY),
-            );
-            if focus_name {
-                response.request_focus();
-            }
-        });
-
-        ui.horizontal(|ui| {
-            ui.label("Color");
-            let mut color = form.color;
-            if ui.color_edit_button_rgb(&mut color).changed() {
-                form.color = color;
-            }
-        });
-
-        ui.horizontal(|ui| {
-            ui.label("Opacity");
-            let value_width = ui.spacing().interact_size.x;
-            let spacing = ui.spacing().item_spacing.x;
-            ui.spacing_mut().slider_width =
-                (ui.available_width() - value_width - spacing).max(20.0);
-            ui.add(egui::Slider::new(&mut form.opacity, 0.0..=1.0));
-        });
-
-        ui.label("Texture image");
-        ui.add(egui::TextEdit::singleline(&mut form.texture).desired_width(f32::INFINITY));
-
-        ui.horizontal(|ui| {
-            ui.label("Width (m)");
-            ui.add(egui::DragValue::new(&mut form.size[0]));
-        });
-        ui.horizontal(|ui| {
-            ui.label("Height (m)");
-            ui.add(egui::DragValue::new(&mut form.size[1]));
-        });
-
-        let material = form.material();
-        let editing = form.editing;
-        ui.horizontal(|ui| {
-            if ui
-                .add_enabled(material.is_some(), egui::Button::new("OK"))
-                .clicked()
-                && let Some(material) = material
-            {
-                action = Some(match editing {
-                    Some(id) => MaterialAction::Edit(id, material),
-                    None => MaterialAction::Create(material),
+    egui::ScrollArea::vertical()
+        .auto_shrink([false, false])
+        .show(ui, |ui| {
+            if let Some(form) = &mut panel.form {
+                ui.separator();
+                ui.heading(if form.editing.is_some() {
+                    "Edit Material"
+                } else {
+                    "New Material"
                 });
-                close = true;
+
+                ui.horizontal(|ui| {
+                    ui.label("Name");
+                    let hint = paint::unique_material_name(model, "Material");
+                    let response = ui.add(
+                        egui::TextEdit::singleline(&mut form.name)
+                            .hint_text(hint)
+                            .desired_width(f32::INFINITY),
+                    );
+                    if focus_name {
+                        response.request_focus();
+                    }
+                });
+
+                ui.horizontal(|ui| {
+                    ui.label("Color");
+                    let mut color = form.color;
+                    if ui.color_edit_button_rgb(&mut color).changed() {
+                        form.color = color;
+                    }
+                });
+
+                ui.horizontal(|ui| {
+                    ui.label("Opacity");
+                    let value_width = ui.spacing().interact_size.x;
+                    let spacing = ui.spacing().item_spacing.x;
+                    ui.spacing_mut().slider_width =
+                        (ui.available_width() - value_width - spacing).max(20.0);
+                    ui.add(egui::Slider::new(&mut form.opacity, 0.0..=1.0));
+                });
+
+                ui.label("Texture image");
+                ui.add(egui::TextEdit::singleline(&mut form.texture).desired_width(f32::INFINITY));
+
+                ui.horizontal(|ui| {
+                    ui.label("Width (m)");
+                    ui.add(egui::DragValue::new(&mut form.size[0]));
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Height (m)");
+                    ui.add(egui::DragValue::new(&mut form.size[1]));
+                });
+
+                let material = form.material();
+                let editing = form.editing;
+                ui.horizontal(|ui| {
+                    if ui
+                        .add_enabled(material.is_some(), egui::Button::new("OK"))
+                        .clicked()
+                        && let Some(material) = material
+                    {
+                        action = Some(match editing {
+                            Some(id) => MaterialAction::Edit(id, material),
+                            None => MaterialAction::Create(material),
+                        });
+                        close = true;
+                    }
+                    if ui.button("Cancel").clicked() {
+                        close = true;
+                    }
+                });
             }
-            if ui.button("Cancel").clicked() {
-                close = true;
+
+            let entries = if tiles {
+                ui.horizontal_wrapped(|ui| material_entries(ui, model, current, &search, true))
+                    .inner
+            } else {
+                material_entries(ui, model, current, &search, false)
+            };
+            if action.is_none() {
+                action = entries;
             }
         });
-    }
     if close {
         panel.form = None;
     }
 
+    action
+}
+
+/// The Default entry and the matching materials, as rows or tiles.
+fn material_entries(
+    ui: &mut egui::Ui,
+    model: &Model,
+    current: Option<MaterialId>,
+    search: &str,
+    tiles: bool,
+) -> Option<MaterialAction> {
+    let mut action = None;
+    if matches_search("Default", search) {
+        let response = if tiles {
+            material_tile(
+                ui,
+                "Default",
+                Color32::from_gray(230),
+                current.is_none(),
+                None,
+            )
+        } else {
+            material_row(
+                ui,
+                "Default",
+                Color32::from_gray(230),
+                current.is_none(),
+                None,
+            )
+        };
+        if response.clicked() {
+            action = Some(MaterialAction::Choose(None));
+        }
+    }
+    for (id, material) in model.materials() {
+        if !matches_search(&material.name, search) {
+            continue;
+        }
+        let color = Color32::from_rgb(
+            channel_to_byte(material.color[0]),
+            channel_to_byte(material.color[1]),
+            channel_to_byte(material.color[2]),
+        );
+        let texture = material
+            .texture
+            .as_ref()
+            .map(|texture| texture.path.as_str());
+        let selected = current == Some(id);
+        let response = if tiles {
+            material_tile(ui, &material.name, color, selected, texture)
+        } else {
+            material_row(ui, &material.name, color, selected, texture)
+        };
+        if response.clicked() {
+            action = Some(MaterialAction::Choose(Some(id)));
+        }
+    }
     action
 }
 
@@ -285,6 +353,38 @@ fn material_row(
             let text = ui.add(egui::Button::selectable(selected, label).truncate());
             swatch.union(text)
         })
+        .inner;
+    let tooltip = match hover {
+        Some(texture) => format!("{label}\n{texture}"),
+        None => label.to_owned(),
+    };
+    response.on_hover_text(tooltip)
+}
+
+/// One selectable tile: a color swatch with the material's name under it.
+fn material_tile(
+    ui: &mut egui::Ui,
+    label: &str,
+    color: Color32,
+    selected: bool,
+    hover: Option<&str>,
+) -> egui::Response {
+    let height = 40.0 + ui.spacing().item_spacing.y + ui.spacing().interact_size.y;
+    let response = ui
+        .allocate_ui_with_layout(
+            egui::vec2(64.0, height),
+            egui::Layout::top_down(egui::Align::Center),
+            |ui| {
+                let (rect, swatch) =
+                    ui.allocate_exact_size(egui::vec2(64.0, 40.0), egui::Sense::click());
+                ui.painter().rect_filled(rect, 2.0, color);
+                let text = ui.add_sized(
+                    [64.0, ui.spacing().interact_size.y],
+                    egui::Button::selectable(selected, label).truncate(),
+                );
+                swatch.union(text)
+            },
+        )
         .inner;
     let tooltip = match hover {
         Some(texture) => format!("{label}\n{texture}"),
