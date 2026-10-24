@@ -14,7 +14,8 @@ fn open_reports_stats() {
     let doc = Document::open(&slab()).expect("slab.dae opens");
     assert_eq!(doc.path, slab());
     assert_eq!(doc.stats.triangles, 2);
-    assert_eq!(doc.stats.lines, 1);
+    // The quad's four edges and the post (m4-fix-dae-edges).
+    assert_eq!(doc.stats.lines, 5);
     assert_eq!(doc.stats.materials, 1);
     let want = [2.0, 3.0, 4.0];
     for (got, want) in doc.stats.size_m.iter().zip(want) {
