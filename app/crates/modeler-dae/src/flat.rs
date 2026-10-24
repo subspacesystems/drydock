@@ -78,26 +78,10 @@ impl FlatScene {
                 else {
                     continue;
                 };
-                let edge1 = b - a;
-                let edge2 = c - a;
-                let h = dir.cross(edge2);
-                let det = edge1.dot(h);
-                if det == 0.0 || !det.is_finite() {
+                let Some(t) = triangle_hit(origin, dir, a, b, c) else {
                     continue;
-                }
-                let inv_det = 1.0 / det;
-                let s = origin - a;
-                let u = inv_det * s.dot(h);
-                if u < 0.0 || u > 1.0 {
-                    continue;
-                }
-                let q = s.cross(edge1);
-                let v = inv_det * dir.dot(q);
-                if v < 0.0 || u + v > 1.0 {
-                    continue;
-                }
-                let t = inv_det * edge2.dot(q);
-                if t > 0.0 && nearest.is_none_or(|nearest| t < nearest) {
+                };
+                if nearest.is_none_or(|nearest| t < nearest) {
                     nearest = Some(t);
                 }
             }
@@ -109,9 +93,56 @@ impl FlatScene {
     /// side) in front of `origin`, as ray parameters `t > 0` (the point is `origin + dir *
     /// t`), sorted ascending. Lines don't count. Behaviour: `docs/specs/m4-zoom-through.md`.
     pub fn ray_hits(&self, origin: DVec3, dir: DVec3) -> Vec<f64> {
-        let _ = (origin, dir);
-        unimplemented!("m4-zoom-through")
+        if !origin.is_finite() || !dir.is_finite() || dir.length_squared() == 0.0 {
+            return Vec::new();
+        }
+        let mut hits = Vec::new();
+        for batch in &self.batches {
+            let point = |index: u32| {
+                batch
+                    .positions
+                    .get(index as usize)
+                    .map(|p| DVec3::new(f64::from(p[0]), f64::from(p[1]), f64::from(p[2])))
+            };
+            for triangle in batch.indices.as_chunks::<3>().0 {
+                let (Some(a), Some(b), Some(c)) =
+                    (point(triangle[0]), point(triangle[1]), point(triangle[2]))
+                else {
+                    continue;
+                };
+                if let Some(t) = triangle_hit(origin, dir, a, b, c) {
+                    hits.push(t);
+                }
+            }
+        }
+        hits.sort_by(|a, b| a.total_cmp(b));
+        hits
     }
+}
+
+/// The ray parameter `t > 0` where the ray from `origin` along `dir` crosses the triangle
+/// `a`, `b`, `c`, either side included. `None` when it misses or is parallel.
+fn triangle_hit(origin: DVec3, dir: DVec3, a: DVec3, b: DVec3, c: DVec3) -> Option<f64> {
+    let edge1 = b - a;
+    let edge2 = c - a;
+    let h = dir.cross(edge2);
+    let det = edge1.dot(h);
+    if det == 0.0 || !det.is_finite() {
+        return None;
+    }
+    let inv_det = 1.0 / det;
+    let s = origin - a;
+    let u = inv_det * s.dot(h);
+    if u < 0.0 || u > 1.0 {
+        return None;
+    }
+    let q = s.cross(edge1);
+    let v = inv_det * dir.dot(q);
+    if v < 0.0 || u + v > 1.0 {
+        return None;
+    }
+    let t = inv_det * edge2.dot(q);
+    (t > 0.0).then_some(t)
 }
 
 /// Expand every instance into world space.
