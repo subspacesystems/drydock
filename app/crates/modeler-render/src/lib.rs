@@ -108,8 +108,6 @@ const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 pub const SHADOW_SIZE: u32 = 2048;
 /// Most cascades [`shadow_cascades`] returns.
 pub const SHADOW_CASCADES: usize = 4;
-/// Extra depth compared against the shadow map, in normalized depth units.
-const SHADOW_BIAS: f32 = 0.0008;
 
 /// Serializes headless rendering: creating devices on several threads at once can
 /// crash some Vulkan drivers (lavapipe).
@@ -140,7 +138,10 @@ struct CameraUniform {
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 struct ShadowUniform {
-    light_view_proj: [[f32; 4]; 4],
+    light_view_proj: [[[f32; 4]; 4]; SHADOW_CASCADES],
+    far: [f32; 4],
+    texel: [f32; 4],
+    bias: [f32; 4],
     params: [f32; 4],
 }
 
@@ -202,6 +203,7 @@ pub struct Renderer {
     _white_texture: wgpu::Texture,
     fallback_shadow_view: wgpu::TextureView,
     _fallback_shadow_texture: wgpu::Texture,
+    shadow_map: Mutex<Option<wgpu::Texture>>,
     textures: Mutex<HashMap<PathBuf, CachedTexture>>,
     texture_loads: AtomicUsize,
 }
@@ -322,7 +324,7 @@ impl Renderer {
                     visibility: wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Texture {
                         sample_type: wgpu::TextureSampleType::Depth,
-                        view_dimension: wgpu::TextureViewDimension::D2,
+                        view_dimension: wgpu::TextureViewDimension::D2Array,
                         multisampled: false,
                     },
                     count: None,
@@ -679,7 +681,12 @@ impl Renderer {
             view_formats: &[],
         });
         let fallback_shadow_view =
-            fallback_shadow_texture.create_view(&wgpu::TextureViewDescriptor::default());
+            fallback_shadow_texture.create_view(&wgpu::TextureViewDescriptor {
+                label: Some("modeler-render fallback shadow array"),
+                dimension: Some(wgpu::TextureViewDimension::D2Array),
+                array_layer_count: Some(1),
+                ..Default::default()
+            });
         let white_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("modeler-render white"),
             size: wgpu::Extent3d {
@@ -714,6 +721,7 @@ impl Renderer {
             _white_texture: white_texture,
             fallback_shadow_view,
             _fallback_shadow_texture: fallback_shadow_texture,
+            shadow_map: Mutex::new(None),
             textures: Mutex::new(HashMap::new()),
             texture_loads: AtomicUsize::new(0),
         }
@@ -1057,41 +1065,51 @@ impl Renderer {
             }],
         });
 
+        let cascades = if shadows_on {
+            shadow_cascades(camera, aspect, scene.bounds.unwrap(), sun_dir, draw_ground)
+        } else {
+            Vec::new()
+        };
+        let shadows_on = shadows_on && !cascades.is_empty();
+        let draw_ground = draw_ground && shadows_on;
         let shadow_setup = if shadows_on {
-            let (center, radius) = shadow_bounds(scene.bounds.unwrap(), sun_dir, draw_ground);
-            let light_view_proj = light_view_proj(center, radius, sun_dir);
-            let texture = device.create_texture(&wgpu::TextureDescriptor {
-                label: Some("modeler-render shadow map"),
-                size: wgpu::Extent3d {
-                    width: SHADOW_SIZE,
-                    height: SHADOW_SIZE,
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: DEPTH_FORMAT,
-                usage: wgpu::TextureUsages::RENDER_ATTACHMENT
-                    | wgpu::TextureUsages::TEXTURE_BINDING,
-                view_formats: &[],
+            let texture = self.shadow_texture(device);
+            let array_view = texture.create_view(&wgpu::TextureViewDescriptor {
+                label: Some("modeler-render shadow array"),
+                dimension: Some(wgpu::TextureViewDimension::D2Array),
+                array_layer_count: Some(SHADOW_CASCADES as u32),
+                ..Default::default()
             });
-            let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-            let light_camera = CameraUniform {
-                view_proj: light_view_proj.as_mat4().to_cols_array_2d(),
-                inv_view_proj: light_view_proj.inverse().as_mat4().to_cols_array_2d(),
-                eye: [center.x as f32, center.y as f32, center.z as f32, 1.0],
-                forward: [sun_dir.x as f32, sun_dir.y as f32, sun_dir.z as f32, 0.0],
-                sun_dir: [0.0; 4],
-                sun_params: [0.0; 4],
-                background: [0.0; 4],
-                parallel: 1,
-                _pad: [0; 3],
+            let (region_min, region_max) =
+                shadow_region(scene.bounds.unwrap(), sun_dir, draw_ground);
+            let mut nearest_sun = f64::NEG_INFINITY;
+            let mut farthest_sun = f64::INFINITY;
+            for x in [region_min.x, region_max.x] {
+                for y in [region_min.y, region_max.y] {
+                    for z in [region_min.z, region_max.z] {
+                        let along = DVec3::new(x, y, z).dot(sun_dir);
+                        nearest_sun = nearest_sun.max(along);
+                        farthest_sun = farthest_sun.min(along);
+                    }
+                }
+            }
+            let sun_range = (nearest_sun - farthest_sun).max(1e-9);
+            let mut uniform = ShadowUniform {
+                light_view_proj: [glam::DMat4::IDENTITY.as_mat4().to_cols_array_2d();
+                    SHADOW_CASCADES],
+                far: [0.0; 4],
+                texel: [0.0; 4],
+                bias: [0.0; 4],
+                params: [2.0 / SHADOW_SIZE as f32, 0.0, 1.0, cascades.len() as f32],
             };
-            let uniform = ShadowUniform {
-                light_view_proj: light_view_proj.as_mat4().to_cols_array_2d(),
-                params: [1.0 / SHADOW_SIZE as f32, SHADOW_BIAS, 1.0, 0.0],
-            };
-            Some((texture, view, uniform, light_camera))
+            for (index, cascade) in cascades.iter().enumerate() {
+                uniform.light_view_proj[index] =
+                    cascade.light_view_proj.as_mat4().to_cols_array_2d();
+                uniform.far[index] = cascade.far as f32;
+                uniform.texel[index] = cascade.texel as f32;
+                uniform.bias[index] = (1.5 * cascade.texel / sun_range) as f32;
+            }
+            Some((texture, array_view, uniform))
         } else {
             None
         };
@@ -1146,54 +1164,81 @@ impl Renderer {
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("modeler-render"),
         });
-        if let Some((_, shadow_view, _, light_camera)) = &shadow_setup {
-            let light_buffer = create_buffer_init(
-                device,
-                "modeler-render light camera",
-                bytemuck::bytes_of(light_camera),
-                wgpu::BufferUsages::UNIFORM,
-            );
-            let light_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("modeler-render light camera"),
-                layout: &self.camera_layout,
-                entries: &[wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: light_buffer.as_entire_binding(),
-                }],
-            });
-            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("modeler-render shadow map"),
-                color_attachments: &[],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: shadow_view,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.0),
-                        store: wgpu::StoreOp::Store,
+        if let Some((texture, _, _)) = &shadow_setup {
+            for (index, cascade) in cascades.iter().enumerate() {
+                let layer_view = texture.create_view(&wgpu::TextureViewDescriptor {
+                    label: Some("modeler-render shadow layer"),
+                    dimension: Some(wgpu::TextureViewDimension::D2),
+                    base_array_layer: index as u32,
+                    array_layer_count: Some(1),
+                    ..Default::default()
+                });
+                let light_camera = CameraUniform {
+                    view_proj: cascade.light_view_proj.as_mat4().to_cols_array_2d(),
+                    inv_view_proj: cascade
+                        .light_view_proj
+                        .inverse()
+                        .as_mat4()
+                        .to_cols_array_2d(),
+                    eye: [0.0; 4],
+                    forward: [sun_dir.x as f32, sun_dir.y as f32, sun_dir.z as f32, 0.0],
+                    sun_dir: [0.0; 4],
+                    sun_params: [0.0; 4],
+                    background: [0.0; 4],
+                    parallel: 1,
+                    _pad: [0; 3],
+                };
+                let light_buffer = create_buffer_init(
+                    device,
+                    "modeler-render light camera",
+                    bytemuck::bytes_of(&light_camera),
+                    wgpu::BufferUsages::UNIFORM,
+                );
+                let light_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("modeler-render light camera"),
+                    layout: &self.camera_layout,
+                    entries: &[wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: light_buffer.as_entire_binding(),
+                    }],
+                });
+                let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("modeler-render shadow map"),
+                    color_attachments: &[],
+                    depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                        view: &layer_view,
+                        depth_ops: Some(wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(1.0),
+                            store: wgpu::StoreOp::Store,
+                        }),
+                        stencil_ops: None,
                     }),
-                    stencil_ops: None,
-                }),
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                multiview_mask: None,
-            });
-            pass.set_bind_group(0, &light_bind_group, &[]);
-            pass.set_pipeline(&self.shadow_pipeline);
-            for batch in &scene.batches {
-                pass.set_vertex_buffer(0, batch.vertex_buffer.slice(..));
-                if let Some(index_buffer) = &batch.index_buffer {
-                    pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-                    pass.draw_indexed(0..batch.index_count, 0, 0..1);
-                } else {
-                    pass.draw(0..batch.vertex_count, 0..1);
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                    multiview_mask: None,
+                });
+                pass.set_bind_group(0, &light_bind_group, &[]);
+                pass.set_pipeline(&self.shadow_pipeline);
+                for batch in &scene.batches {
+                    pass.set_vertex_buffer(0, batch.vertex_buffer.slice(..));
+                    if let Some(index_buffer) = &batch.index_buffer {
+                        pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+                        pass.draw_indexed(0..batch.index_count, 0, 0..1);
+                    } else {
+                        pass.draw(0..batch.vertex_count, 0..1);
+                    }
                 }
             }
         }
         let fallback_shadow_uniform = ShadowUniform {
-            light_view_proj: glam::DMat4::IDENTITY.as_mat4().to_cols_array_2d(),
+            light_view_proj: [glam::DMat4::IDENTITY.as_mat4().to_cols_array_2d(); SHADOW_CASCADES],
+            far: [0.0; 4],
+            texel: [0.0; 4],
+            bias: [0.0; 4],
             params: [0.0; 4],
         };
         let (shadow_view, shadow_uniform) = match &shadow_setup {
-            Some((_, view, uniform, _)) => (view, *uniform),
+            Some((_, view, uniform)) => (view, *uniform),
             None => (&self.fallback_shadow_view, fallback_shadow_uniform),
         };
         let shadow_bind_group = self.shadow_bind_group(device, shadow_view, &shadow_uniform);
@@ -1307,6 +1352,33 @@ impl Renderer {
             }
         }
         queue.submit(Some(encoder.finish()));
+    }
+
+    fn shadow_texture(&self, device: &wgpu::Device) -> wgpu::Texture {
+        let mut map = self
+            .shadow_map
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if map.is_none() {
+            *map = Some(device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("modeler-render shadow maps"),
+                size: wgpu::Extent3d {
+                    width: SHADOW_SIZE,
+                    height: SHADOW_SIZE,
+                    depth_or_array_layers: SHADOW_CASCADES as u32,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: DEPTH_FORMAT,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                    | wgpu::TextureUsages::TEXTURE_BINDING,
+                view_formats: &[],
+            }));
+        }
+        map.as_ref()
+            .expect("shadow texture was just created")
+            .clone()
     }
 
     fn shadow_bind_group(
@@ -1764,10 +1836,7 @@ pub fn shadow_cascades(
             let span = (far - lower).max(0.0);
             let center = eye + forward * ((lower + far) * 0.5);
             let radius = 0.5
-                * ((2.0 * half_width).powi(2)
-                    + (2.0 * half_height).powi(2)
-                    + span * span)
-                    .sqrt();
+                * ((2.0 * half_width).powi(2) + (2.0 * half_height).powi(2) + span * span).sqrt();
             (center, radius)
         } else {
             let span = (far - lower).max(0.0);
@@ -1789,24 +1858,9 @@ pub fn shadow_cascades(
         let cx = (center.dot(axis_x) / texel).round() * texel;
         let cy = (center.dot(axis_y) / texel).round() * texel;
         let light_view_proj = glam::DMat4::from_cols(
-            glam::DVec4::new(
-                axis_x.x / extent,
-                axis_y.x / extent,
-                -sun.x * z_scale,
-                0.0,
-            ),
-            glam::DVec4::new(
-                axis_x.y / extent,
-                axis_y.y / extent,
-                -sun.y * z_scale,
-                0.0,
-            ),
-            glam::DVec4::new(
-                axis_x.z / extent,
-                axis_y.z / extent,
-                -sun.z * z_scale,
-                0.0,
-            ),
+            glam::DVec4::new(axis_x.x / extent, axis_y.x / extent, -sun.x * z_scale, 0.0),
+            glam::DVec4::new(axis_x.y / extent, axis_y.y / extent, -sun.y * z_scale, 0.0),
+            glam::DVec4::new(axis_x.z / extent, axis_y.z / extent, -sun.z * z_scale, 0.0),
             glam::DVec4::new(
                 -cx / extent,
                 -cy / extent,
@@ -1838,36 +1892,6 @@ fn light_axes(sun: DVec3) -> (DVec3, DVec3) {
     };
     let y = sun.cross(x).normalize();
     (x, y)
-}
-
-/// Bounding sphere of [`shadow_region`].
-fn shadow_bounds(bounds: Aabb, sun: DVec3, ground: bool) -> (DVec3, f64) {
-    let (min, max) = shadow_region(bounds, sun, ground);
-    let center = (min + max) * 0.5;
-    let radius = ((max - min).length() * 0.5).max(1e-3);
-    (center, radius)
-}
-
-/// Orthographic light camera fitted around a sphere, looking along `sun`.
-fn light_view_proj(center: DVec3, radius: f64, sun: DVec3) -> glam::DMat4 {
-    let margin = radius * 0.01 + 1e-3;
-    let eye = center + sun * (radius + margin);
-    let up = if sun.z.abs() > 0.99 {
-        DVec3::Y
-    } else {
-        DVec3::Z
-    };
-    let view = glam::dcamera::rh::view::look_to_mat4(eye, -sun, up);
-    let extent = radius + margin;
-    let projection = glam::dcamera::rh::proj::directx::orthographic(
-        -extent,
-        extent,
-        -extent,
-        extent,
-        margin,
-        2.0 * radius + margin,
-    );
-    projection * view
 }
 
 fn sphere_from_bounds(bounds: Option<Aabb>) -> Option<(DVec3, f64)> {
