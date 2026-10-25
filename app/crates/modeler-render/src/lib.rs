@@ -1675,8 +1675,169 @@ pub fn shadow_cascades(
     sun: DVec3,
     on_ground: bool,
 ) -> Vec<ShadowCascade> {
-    let _ = (camera, aspect, bounds, sun, on_ground);
-    unimplemented!("m5-shadow-cascades")
+    let sun_length = sun.length();
+    if !sun.is_finite() || !sun_length.is_finite() || sun_length <= 1e-12 {
+        return Vec::new();
+    }
+    let sun = sun / sun_length;
+    if !sun.is_finite() || sun.z <= 0.0 {
+        return Vec::new();
+    }
+
+    let (min, max) = shadow_region(bounds, sun, on_ground);
+    if !min.is_finite() || !max.is_finite() {
+        return Vec::new();
+    }
+    let (forward, _, _) = camera.basis();
+    let eye = camera.eye();
+    if !forward.is_finite() || !eye.is_finite() {
+        return Vec::new();
+    }
+    let perspective = camera.projection == Projection::Perspective;
+    let aspect = if aspect.is_finite() && aspect > 0.0 {
+        aspect
+    } else {
+        1.0
+    };
+
+    let mut depths = [0.0f64; 8];
+    let mut along_sun = [0.0f64; 8];
+    let mut index = 0;
+    for x in [min.x, max.x] {
+        for y in [min.y, max.y] {
+            for z in [min.z, max.z] {
+                let p = DVec3::new(x, y, z);
+                depths[index] = (p - eye).dot(forward);
+                along_sun[index] = p.dot(sun);
+                index += 1;
+            }
+        }
+    }
+    let mut nearest_depth = f64::INFINITY;
+    let mut deepest = f64::NEG_INFINITY;
+    let mut nearest_sun = f64::NEG_INFINITY;
+    let mut farthest_sun = f64::INFINITY;
+    for i in 0..8 {
+        nearest_depth = nearest_depth.min(depths[i]);
+        deepest = deepest.max(depths[i]);
+        nearest_sun = nearest_sun.max(along_sun[i]);
+        farthest_sun = farthest_sun.min(along_sun[i]);
+    }
+    if perspective && deepest <= 1e-9 {
+        return Vec::new();
+    }
+    if !deepest.is_finite() || !nearest_depth.is_finite() {
+        return Vec::new();
+    }
+
+    let near = if perspective { 0.0 } else { nearest_depth };
+    let distance = camera.distance.abs();
+    let mut fars = Vec::with_capacity(SHADOW_CASCADES);
+    if distance.is_finite() && distance > 0.0 {
+        for i in 0..SHADOW_CASCADES.saturating_sub(1) {
+            let far = 2.0 * distance * 4f64.powi(i as i32);
+            if far > near + 1e-9 && far < deepest - 1e-9 {
+                fars.push(far);
+            }
+        }
+    }
+    fars.push(deepest);
+
+    let (axis_x, axis_y) = light_axes(sun);
+    let tan_half = (camera.fov_y * 0.5).tan().abs();
+    let parallel_half_height = distance * tan_half;
+    let parallel_half_width = parallel_half_height * aspect;
+
+    let center_r = (min + max) * 0.5;
+    let radius_r = ((max - min).length() * 0.5).max(1e-9);
+    let sun_range = (nearest_sun - farthest_sun).max(1e-9);
+    let depth_pad = sun_range * 1e-9 + 1e-12;
+    let z_scale = 1.0 / (sun_range + 2.0 * depth_pad);
+
+    let mut cascades = Vec::with_capacity(fars.len());
+    for (i, &far) in fars.iter().enumerate() {
+        let lower = if i == 0 { near } else { fars[i - 1] };
+        let (center, radius) = if perspective {
+            let depth = far.max(0.0);
+            let half_height = depth * tan_half;
+            let half_width = half_height * aspect;
+            let span = (far - lower).max(0.0);
+            let center = eye + forward * ((lower + far) * 0.5);
+            let radius = 0.5
+                * ((2.0 * half_width).powi(2)
+                    + (2.0 * half_height).powi(2)
+                    + span * span)
+                    .sqrt();
+            (center, radius)
+        } else {
+            let span = (far - lower).max(0.0);
+            let center = eye + forward * ((lower + far) * 0.5);
+            let radius = 0.5
+                * ((2.0 * parallel_half_width).powi(2)
+                    + (2.0 * parallel_half_height).powi(2)
+                    + span * span)
+                    .sqrt();
+            (center, radius)
+        };
+        let (center, radius) = if radius_r < radius {
+            (center_r, radius_r)
+        } else {
+            (center, radius)
+        };
+        let extent = radius * (1.0 + 8.0 / SHADOW_SIZE as f64) + 1e-12;
+        let texel = 2.0 * extent / SHADOW_SIZE as f64;
+        let cx = (center.dot(axis_x) / texel).round() * texel;
+        let cy = (center.dot(axis_y) / texel).round() * texel;
+        let light_view_proj = glam::DMat4::from_cols(
+            glam::DVec4::new(
+                axis_x.x / extent,
+                axis_y.x / extent,
+                -sun.x * z_scale,
+                0.0,
+            ),
+            glam::DVec4::new(
+                axis_x.y / extent,
+                axis_y.y / extent,
+                -sun.y * z_scale,
+                0.0,
+            ),
+            glam::DVec4::new(
+                axis_x.z / extent,
+                axis_y.z / extent,
+                -sun.z * z_scale,
+                0.0,
+            ),
+            glam::DVec4::new(
+                -cx / extent,
+                -cy / extent,
+                (nearest_sun + depth_pad) * z_scale,
+                1.0,
+            ),
+        );
+        cascades.push(ShadowCascade {
+            far,
+            light_view_proj,
+            texel,
+        });
+    }
+    cascades
+}
+
+/// Fixed light-space x and y axes for a sun direction, chosen so camera motion can
+/// snap the shadow-map center to whole texels.
+fn light_axes(sun: DVec3) -> (DVec3, DVec3) {
+    let x = if sun.z.abs() > 8f64.to_radians().cos() {
+        DVec3::Y.cross(sun)
+    } else {
+        DVec3::Z.cross(sun)
+    };
+    let x = if x.length_squared() > 1e-24 {
+        x.normalize()
+    } else {
+        DVec3::X
+    };
+    let y = sun.cross(x).normalize();
+    (x, y)
 }
 
 /// Bounding sphere of [`shadow_region`].
