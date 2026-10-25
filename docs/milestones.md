@@ -172,13 +172,27 @@ Done when: on 05-house, setting a location, date and time shows shadows on the h
 
 ## M6: UI
 
-Tyrel's UI items deferred from M4, inserted after M5 at his request. Tasks are written when the milestone starts.
+Tyrel's UI items deferred from M4, inserted after M5 at his request.
+
+| Task | What | Needs |
+| --- | --- | --- |
+| `m6-icons` | Own vector icons for every tool and the Materials buttons (drawn in code, theme color), icon button with tooltip | |
+| `m6-toolbar-layout` | Toolbar layout data: one toolbar per tool group, show/hide, dock on any edge or float, add/remove/reorder tools, new toolbars; layout file | |
+| `m6-dock-layout` | Panel layout data: Entity Info, Materials, Components, Shadows open/closed, left/right column or floating, collapsed, column widths, drop rules; layout file | |
+| `m6-toolbar-ui` | Draw the toolbars from the layout with icon buttons; drag a toolbar's grip to another edge or to float; View > Toolbars (show/hide, Customize..., Reset); Customize window; layout saved | `m6-icons`, `m6-toolbar-layout` |
+| `m6-materials-icons` | Materials panel: List/Tiles and New/Edit/Purge as icon buttons with tooltips | `m6-icons` |
+| `m6-entity-info` | Entity Info panel widget: selection type, size/length/area, materials, definition and instance names; rename a component or group (one undo step) |  |
+| `m6-components-panel` | Components panel widget: the model's definitions with drawn thumbnails, search, list/tiles; click one to place an instance (follows the cursor, click places, one undo step) | |
+| `m6-components-import` | Components panel: import a .dae or model file as a new component definition, then place it | `m6-components-panel` |
+| `m6-dock-ui` | App: host the four panels in the docking columns or floating windows; drag a title to dock or float, collapse, resize columns; View menu items; Shadows window becomes a panel; layout saved | `m6-dock-layout`, `m6-entity-info`, `m6-components-panel`, `m6-materials-icons` |
 
 - Icon toolbars by tool group (own icons), toolbars that can be shown, hidden and rearranged.
 - Dockable side panels (Materials, Shadows, Entity Info, Components) instead of floating windows.
 - Entity Info panel: the selection's type, tag/material, size and editable fields.
 - Components pane: the model's definitions with thumbnails, place by drag or click.
 - List/Tiles icons in the Materials panel.
+
+Done when: tools are icon buttons grouped by kind along the top by default; each toolbar can be hidden, moved to another edge or floated, and customized (tools added, removed, reordered), and the arrangement survives a restart; Entity Info, Materials, Components and Shadows dock in the left or right column or float, collapse, and survive a restart; Entity Info describes the selection and renames components and groups; Components lists the model's definitions with thumbnails, places one by click, and imports a file; the Materials panel buttons are icons. Checked in the real window before Tyrel tries it.
 
 ## M7: Follow Me and offset
 
