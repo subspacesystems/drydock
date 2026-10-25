@@ -355,7 +355,8 @@ pub enum ModelViolation {
     GroupInstances(DefinitionId, usize),
 }
 
-/// A whole model. Equality compares the root, definitions and materials, not id counters.
+/// A whole model. Equality compares the root, definitions, materials, geolocation and
+/// shadow settings, not id counters.
 #[derive(Clone, Debug, Default)]
 pub struct Model {
     root: Body,
@@ -394,7 +395,28 @@ impl PartialEq for Model {
         self.root == other.root
             && self.definitions == other.definitions
             && self.materials == other.materials
+            && self.geolocation == other.geolocation
+            && self.shadows == other.shadows
     }
+}
+
+fn geolocation_is_good(g: &Geolocation) -> bool {
+    g.latitude.is_finite()
+        && (-90.0..=90.0).contains(&g.latitude)
+        && g.longitude.is_finite()
+        && (-180.0..=180.0).contains(&g.longitude)
+        && g.north_angle.is_finite()
+        && (-360.0..=360.0).contains(&g.north_angle)
+        && g.utc_offset.is_finite()
+        && (-12.0..=14.0).contains(&g.utc_offset)
+}
+
+fn shadow_settings_are_good(s: &ShadowSettings) -> bool {
+    s.time.is_valid()
+        && s.light.is_finite()
+        && (0.0..=1.0).contains(&s.light)
+        && s.dark.is_finite()
+        && (0.0..=1.0).contains(&s.dark)
 }
 
 impl Model {
@@ -425,8 +447,19 @@ impl Model {
         geolocation: Geolocation,
         log: &mut ModelEdit,
     ) -> Result<(), ModelError> {
-        let _ = (geolocation, log);
-        unimplemented!("m5-geo-model")
+        if !geolocation_is_good(&geolocation) {
+            return Err(ModelError::BadSettings);
+        }
+        if geolocation == self.geolocation {
+            return Ok(());
+        }
+        let record = ModelRecord::SetGeolocation {
+            from: self.geolocation,
+            to: geolocation,
+        };
+        self.apply(&record)?;
+        log.records.push(record);
+        Ok(())
     }
 
     /// Replace the shadow settings as one record in `log`; `BadSettings` (nothing changes)
@@ -436,8 +469,19 @@ impl Model {
         settings: ShadowSettings,
         log: &mut ModelEdit,
     ) -> Result<(), ModelError> {
-        let _ = (settings, log);
-        unimplemented!("m5-geo-model")
+        if !shadow_settings_are_good(&settings) {
+            return Err(ModelError::BadSettings);
+        }
+        if settings == self.shadows {
+            return Ok(());
+        }
+        let record = ModelRecord::SetShadows {
+            from: self.shadows,
+            to: settings,
+        };
+        self.apply(&record)?;
+        log.records.push(record);
+        Ok(())
     }
 
     /// The identity and revision that key a cached flattening of this model.
@@ -945,7 +989,12 @@ impl Model {
     /// Apply one record. On error, nothing changes.
     pub fn apply(&mut self, record: &ModelRecord) -> Result<(), ModelError> {
         self.apply_record(record)?;
-        self.revision = self.revision.wrapping_add(1);
+        if !matches!(
+            record,
+            ModelRecord::SetGeolocation { .. } | ModelRecord::SetShadows { .. }
+        ) {
+            self.revision = self.revision.wrapping_add(1);
+        }
         Ok(())
     }
 
@@ -1159,8 +1208,25 @@ impl Model {
                 b.guides.remove(*id);
                 Ok(())
             }
-            ModelRecord::SetGeolocation { .. } | ModelRecord::SetShadows { .. } => {
-                unimplemented!("m5-geo-model")
+            ModelRecord::SetGeolocation { from, to } => {
+                if !geolocation_is_good(to) {
+                    return Err(ModelError::BadSettings);
+                }
+                if *from != self.geolocation {
+                    return Err(ModelError::Mismatch);
+                }
+                self.geolocation = *to;
+                Ok(())
+            }
+            ModelRecord::SetShadows { from, to } => {
+                if !shadow_settings_are_good(to) {
+                    return Err(ModelError::BadSettings);
+                }
+                if *from != self.shadows {
+                    return Err(ModelError::Mismatch);
+                }
+                self.shadows = *to;
+                Ok(())
             }
         }
     }
