@@ -11,7 +11,7 @@ use modeler_view::StandardView;
 pub const ZOOM_DRAG_PIXELS_PER_STEP: f64 = 25.0;
 
 /// The active viewport tool (left mouse button).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
 pub enum Tool {
     #[default]
     Orbit,
