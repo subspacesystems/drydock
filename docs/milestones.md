@@ -151,8 +151,20 @@ Done when: `modeler` on the reference house model opens in under 5 s on modeler-
 
 ## M5: Sun
 
+| Task | What | Needs |
+| --- | --- | --- |
+| `m5-solar` | Solar position from place, date and time (low-precision solar theory, own code), the sun's direction in model axes with the north angle (`sun.rs`; calendar helpers already on main) | |
+| `m5-geo-model` | Geolocation and shadow settings stored in the model: undoable records that don't bump the revision, model equality, native format v4 | |
+| `m5-render-sun` | Renderer: lit faces shaded by the sun (light/dark, side seen by the viewer) when `Style::sun` is set | |
+| `m5-render-shadows` | Renderer: shadow map from the sun; faces receive shadows, optional shadows on the ground plane; lavapipe tests | `m5-render-sun` |
+| `m5-app-sun` | Editor/app: the model's settings give `Style::sun` each frame; setting geolocation or shadow settings is one undo step; redraw on change | `m5-solar`, `m5-geo-model`, `m5-render-sun` |
+| `m5-app-shadows-ui` | Shadows window: shadows on/off, sun shading, time and date sliders, light/dark, on ground; View > Shadows toggle; egui_kittest tests | `m5-app-sun` |
+| `m5-app-geo-ui` | Model Info > Geolocation: typed latitude, longitude, north angle and UTC offset with checks; egui_kittest tests | `m5-app-sun` |
+
 - Geolocation (latitude, longitude, true north angle), date and time.
 - Solar position (own implementation from a public-domain algorithm description), shadow mapping in the renderer, light/dark settings.
+
+Done when: on 05-house, setting a location, date and time shows shadows on the house and the ground that move as the time slider moves; the settings survive save and reopen; navigation stays smooth with shadows on (release build).
 
 ## M6: Follow Me and offset
 
