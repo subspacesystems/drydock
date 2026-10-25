@@ -13,8 +13,8 @@ use modeler_kernel::sun::ShadowSettings;
 use modeler_render::SunLight;
 
 use crate::editor::Editor;
-use crate::geo_panel::GeoForm;
-use crate::shadows_panel::ShadowsEvent;
+use crate::geo_panel::{self, GeoForm};
+use crate::shadows_panel::{self, ShadowsEvent};
 
 /// State of the two windows.
 #[derive(Debug, Default)]
@@ -45,21 +45,99 @@ impl SunWindows {
         model: &mut Model,
         editor: &mut Editor,
     ) -> bool {
-        let _ = (event, settings, model, editor, &mut self.preview);
-        unimplemented!("m5-app-sun-windows")
+        match event {
+            ShadowsEvent::Preview => {
+                self.preview = Some(settings);
+                false
+            }
+            ShadowsEvent::Commit => {
+                self.preview = None;
+                if settings == model.shadow_settings() {
+                    false
+                } else {
+                    editor.set_shadow_settings(model, settings)
+                }
+            }
+            ShadowsEvent::None => false,
+        }
     }
 
     /// The sun to draw: the previewed settings (with the model's geolocation) while a drag is
     /// in progress, otherwise the model's own (`shading::sun_light`).
     pub fn sun_light(&self, model: &Model) -> Option<SunLight> {
-        let _ = (model, &self.preview);
-        unimplemented!("m5-app-sun-windows")
+        match &self.preview {
+            Some(preview) => crate::shading::sun_light_for(&model.geolocation(), preview),
+            None => crate::shading::sun_light(model),
+        }
     }
 
     /// Draw whichever windows are open. Returns true when the model changed (a committed
     /// shadow change or an applied geolocation).
     pub fn show(&mut self, ctx: &egui::Context, model: &mut Model, editor: &mut Editor) -> bool {
-        let _ = (ctx, model, editor, &mut self.form);
-        unimplemented!("m5-app-sun-windows")
+        let mut changed = false;
+
+        if self.shadows_open {
+            let mut settings = self.preview.unwrap_or_else(|| model.shadow_settings());
+            let mut event = ShadowsEvent::None;
+            let mut open = self.shadows_open;
+            let mut close = false;
+            egui::Window::new("Shadows")
+                .collapsible(false)
+                .resizable(false)
+                .open(&mut open)
+                .show(ctx, |ui| {
+                    event = shadows_panel::shadows_panel(ui, &mut settings);
+                    if ui.button("Close").clicked() {
+                        close = true;
+                    }
+                });
+            if !open || close {
+                self.shadows_open = false;
+                self.preview = None;
+            } else if self.apply_shadows_event(event, settings, model, editor) {
+                changed = true;
+            }
+        }
+
+        if self.geo_open {
+            if self.form.is_none() {
+                self.form = Some(GeoForm::from_geolocation(&model.geolocation()));
+            }
+            let mut open = self.geo_open;
+            let mut close = false;
+            let mut applied = None;
+            egui::Window::new("Geolocation")
+                .collapsible(false)
+                .resizable(false)
+                .open(&mut open)
+                .show(ctx, |ui| {
+                    if let Some(form) = &mut self.form {
+                        applied = geo_panel::geo_panel(ui, form);
+                    }
+                    if ui.button("Close").clicked() {
+                        close = true;
+                    }
+                });
+            if !open || close {
+                self.geo_open = false;
+                self.form = None;
+            } else if let Some(geolocation) = applied {
+                if editor.set_geolocation(model, geolocation) {
+                    changed = true;
+                }
+                self.geo_open = false;
+                self.form = None;
+            }
+        }
+
+        changed
+    }
+
+    /// Close both windows and forget any preview or typed form.
+    pub fn close(&mut self) {
+        self.shadows_open = false;
+        self.geo_open = false;
+        self.preview = None;
+        self.form = None;
     }
 }

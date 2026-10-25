@@ -20,6 +20,7 @@ use modeler::materials_panel::{MaterialAction, MaterialsPanel, materials_panel};
 use modeler::overlay::{self, Primitive};
 use modeler::recent::{RecentFiles, recent_file};
 use modeler::shading;
+use modeler::sun_windows::SunWindows;
 use modeler::texture_handles;
 use modeler::texture_panel::{TextureForm, texture_position_section};
 use modeler::viewstate::{Effect, ViewState, scene_bounds, zoom_pivot_at};
@@ -100,8 +101,8 @@ pub struct App {
     about_open: bool,
     /// The View > Model Info window is showing.
     model_info_open: bool,
-    /// The View > Shadows window is showing.
-    shadows_open: bool,
+    /// The Shadows and Geolocation windows.
+    sun_windows: SunWindows,
     /// The Make Component / Make Group name prompt is showing.
     name_prompt: Option<chrome::NamePrompt>,
     /// The Materials panel and its open form.
@@ -167,7 +168,7 @@ impl App {
             view: ViewState::new(),
             about_open: false,
             model_info_open: false,
-            shadows_open: false,
+            sun_windows: SunWindows::new(),
             name_prompt: None,
             materials: MaterialsPanel::default(),
             texture: TextureForm::default(),
@@ -622,7 +623,7 @@ impl App {
             Effect::Edit(key) => self.edit(key, ctx, frame),
             Effect::About => self.about_open = true,
             Effect::ModelInfo => self.model_info_open = true,
-            Effect::ToggleShadows => self.shadows_open = !self.shadows_open,
+            Effect::ToggleShadows => self.sun_windows.shadows_open = !self.sun_windows.shadows_open,
             Effect::OpenRecent(index) => {
                 let Some(path) = self.recent.paths().get(index).cloned() else {
                     return;
@@ -1408,7 +1409,7 @@ impl App {
                 .as_ref()
                 .is_some_and(|editor| editor.hide_rest()),
             axes: self.view.axes,
-            shadows: self.shadows_open,
+            shadows: self.sun_windows.shadows_open,
             recent: self.recent.paths(),
             tool: self.view.tool,
         }
@@ -1633,11 +1634,21 @@ impl eframe::App for App {
             self.global_input(&ctx, frame);
             self.sync_editor_path(&ctx, frame);
         }
+        let mut sun_changed = false;
+        if let (Some(editor), Some(document)) = (&mut self.editor, &mut self.model)
+            && let Some(model) = document.kernel.as_mut()
+            && self.sun_windows.show(&ctx, model, editor)
+        {
+            sun_changed = true;
+        }
+        if sun_changed {
+            self.refresh_document(&ctx, frame);
+        }
         let sun = self
             .model
             .as_ref()
             .and_then(|document| document.kernel.as_ref())
-            .and_then(shading::sun_light);
+            .and_then(|model| self.sun_windows.sun_light(model));
         if shading::update_style(&mut self.style, sun) {
             self.dirty = true;
         }
@@ -1664,9 +1675,18 @@ impl eframe::App for App {
                     device_type_label(info.device_type),
                 ));
             }
-            chrome::model_info_window(&ctx, &mut self.model_info_open, &lines);
+            let mut geolocation = false;
+            chrome::model_info_window_with(&ctx, &mut self.model_info_open, &lines, |ui| {
+                if ui.button("Geolocation...").clicked() {
+                    geolocation = true;
+                }
+            });
+            if geolocation {
+                self.sun_windows.geo_open = true;
+            }
         } else {
             self.model_info_open = false;
+            self.sun_windows.close();
         }
         if let Some(prompt) = &mut self.name_prompt {
             match chrome::name_prompt(&ctx, prompt) {
