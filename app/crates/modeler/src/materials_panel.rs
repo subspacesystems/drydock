@@ -115,6 +115,8 @@ pub struct MaterialsPanel {
     pub swatches: Swatches,
     /// The name field takes focus on the next draw.
     focus_name: bool,
+    /// The Purge Unused confirmation shows (`docs/specs/m4-purge-confirm.md`).
+    purge_confirm: bool,
 }
 
 impl MaterialsPanel {
@@ -122,7 +124,7 @@ impl MaterialsPanel {
     /// from the model then, as for its other dialogs. Behaviour:
     /// `docs/specs/m4-purge-confirm.md`.
     pub fn confirming(&self) -> bool {
-        unimplemented!("m4-purge-confirm")
+        self.purge_confirm
     }
 }
 
@@ -166,7 +168,7 @@ pub fn materials_panel(
             edit_form = Some(MaterialForm::edit(id, material));
         }
         if ui.button("Purge Unused").clicked() {
-            action = Some(MaterialAction::Purge);
+            panel.purge_confirm = true;
         }
     });
     if new_form {
@@ -291,6 +293,48 @@ pub fn materials_panel(
         });
     if close {
         panel.form = None;
+    }
+
+    if panel.purge_confirm {
+        let unused = paint::unused_materials(model);
+        let mut purge = false;
+        let mut close = false;
+        let response = egui::Modal::new(egui::Id::new("purge-unused")).show(ui.ctx(), |ui| {
+            ui.set_width(360.0);
+            if unused.is_empty() {
+                ui.label("No unused materials to remove.");
+                if ui.button("OK").clicked() {
+                    close = true;
+                }
+            } else {
+                ui.label("The following unused materials will be removed from the model:");
+                egui::ScrollArea::vertical()
+                    .max_height(240.0)
+                    .auto_shrink([false, true])
+                    .show(ui, |ui| {
+                        for &id in &unused {
+                            if let Some(material) = model.material(id) {
+                                ui.label(&material.name);
+                            }
+                        }
+                    });
+                ui.horizontal(|ui| {
+                    if ui.button("Purge").clicked() {
+                        purge = true;
+                        close = true;
+                    }
+                    if ui.button("Cancel").clicked() {
+                        close = true;
+                    }
+                });
+            }
+        });
+        if close || response.should_close() {
+            panel.purge_confirm = false;
+        }
+        if purge {
+            action = Some(MaterialAction::Purge);
+        }
     }
 
     action
