@@ -9,7 +9,7 @@
 //! Behaviour: `docs/specs/m5-app-shadows-ui.md`.
 
 use eframe::egui;
-use modeler_kernel::sun::{LocalTime, ShadowSettings};
+use modeler_kernel::sun::{LocalTime, ShadowSettings, days_in_month};
 
 /// What the user did to the settings this frame.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -24,42 +24,120 @@ pub enum ShadowsEvent {
 
 /// Minutes since midnight of `time` (0..=1439).
 pub fn minutes_of_day(time: &LocalTime) -> u32 {
-    let _ = time;
-    unimplemented!("m5-app-shadows-ui")
+    time.hour * 60 + time.minute
 }
 
 /// `time` with the clock set to `minutes` since midnight (clamped to 1439); the date is kept.
 pub fn with_minutes(time: &LocalTime, minutes: u32) -> LocalTime {
-    let _ = (time, minutes);
-    unimplemented!("m5-app-shadows-ui")
+    let minutes = minutes.min(1439);
+    LocalTime::new(time.year, time.month, time.day, minutes / 60, minutes % 60)
+        .expect("valid date with a valid clock")
 }
 
 /// `time` on day `day` of its year (clamped to 1..=the year's length); the clock is kept.
 pub fn with_day_of_year(time: &LocalTime, day: u32) -> LocalTime {
-    let _ = (time, day);
-    unimplemented!("m5-app-shadows-ui")
+    let year_days = (1..=12)
+        .map(|month| days_in_month(time.year, month))
+        .sum::<u32>();
+    LocalTime::from_day_of_year(time.year, day.clamp(1, year_days), time.hour, time.minute)
+        .expect("valid day of the year with a valid clock")
 }
 
 /// The clock as "HH:MM", for example "07:05".
 pub fn time_label(time: &LocalTime) -> String {
-    let _ = time;
-    unimplemented!("m5-app-shadows-ui")
+    format!("{:02}:{:02}", time.hour, time.minute)
 }
 
 /// A 0..=1 share as a whole percent, for example 0.8 gives "80%".
 pub fn percent_label(share: f64) -> String {
-    let _ = share;
-    unimplemented!("m5-app-shadows-ui")
+    format!("{:.0}%", share * 100.0)
 }
 
 /// The date as "YYYY-MM-DD", for example "2026-06-21".
 pub fn date_label(time: &LocalTime) -> String {
-    let _ = time;
-    unimplemented!("m5-app-shadows-ui")
+    format!("{:04}-{:02}-{:02}", time.year, time.month, time.day)
 }
 
 /// Draw the panel into `ui`, editing `settings` in place.
 pub fn shadows_panel(ui: &mut egui::Ui, settings: &mut ShadowSettings) -> ShadowsEvent {
-    let _ = (ui, settings);
-    unimplemented!("m5-app-shadows-ui")
+    fn slider(response: egui::Response, event: &mut ShadowsEvent) {
+        if response.drag_stopped() {
+            *event = ShadowsEvent::Commit;
+        } else if response.changed() {
+            *event = if response.dragged() {
+                ShadowsEvent::Preview
+            } else {
+                ShadowsEvent::Commit
+            };
+        }
+    }
+
+    let mut event = ShadowsEvent::None;
+
+    ui.heading("Shadows");
+    if ui.checkbox(&mut settings.shadows, "Show Shadows").clicked() {
+        event = ShadowsEvent::Commit;
+    }
+    if ui
+        .checkbox(&mut settings.sun_shading, "Sun Shading")
+        .clicked()
+    {
+        event = ShadowsEvent::Commit;
+    }
+    if ui
+        .checkbox(&mut settings.on_ground, "Shadows on Ground")
+        .clicked()
+    {
+        event = ShadowsEvent::Commit;
+    }
+
+    ui.horizontal(|ui| {
+        let mut minutes = minutes_of_day(&settings.time);
+        let response = ui.add(
+            egui::Slider::new(&mut minutes, 0..=1439)
+                .text("Time of Day")
+                .show_value(false),
+        );
+        if response.changed() {
+            settings.time = with_minutes(&settings.time, minutes);
+        }
+        slider(response, &mut event);
+        ui.label(time_label(&settings.time));
+    });
+
+    ui.horizontal(|ui| {
+        let mut day = settings.time.day_of_year();
+        let response = ui.add(
+            egui::Slider::new(&mut day, 1..=366)
+                .text("Date")
+                .show_value(false),
+        );
+        if response.changed() {
+            settings.time = with_day_of_year(&settings.time, day);
+        }
+        slider(response, &mut event);
+        ui.label(date_label(&settings.time));
+    });
+
+    ui.horizontal(|ui| {
+        let response = ui.add(
+            egui::Slider::new(&mut settings.light, 0.0..=1.0)
+                .text("Light")
+                .show_value(false),
+        );
+        slider(response, &mut event);
+        ui.label(percent_label(settings.light));
+    });
+
+    ui.horizontal(|ui| {
+        let response = ui.add(
+            egui::Slider::new(&mut settings.dark, 0.0..=1.0)
+                .text("Dark")
+                .show_value(false),
+        );
+        slider(response, &mut event);
+        ui.label(percent_label(settings.dark));
+    });
+
+    event
 }

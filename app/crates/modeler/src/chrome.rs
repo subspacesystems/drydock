@@ -576,6 +576,10 @@ pub fn menu_bar(ui: &mut eframe::egui::Ui, state: &MenuState<'_>) -> Option<Acti
                 chosen = Some(Action::ToggleAxes);
                 ui.close();
             }
+            if ui.selectable_label(state.shadows, "Shadows").clicked() {
+                chosen = Some(Action::ToggleShadows);
+                ui.close();
+            }
             ui.separator();
             if ui.button("Model Info").clicked() {
                 chosen = Some(Action::ModelInfo);
