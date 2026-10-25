@@ -131,8 +131,16 @@ pub fn days_in_month(year: i32, month: u32) -> u32 {
 /// The Julian day of a Gregorian date, `hours` (UTC, may be fractional, negative or past 24)
 /// after its midnight.
 pub fn julian_day(year: i32, month: u32, day: u32, hours: f64) -> f64 {
-    let _ = (year, month, day, hours);
-    unimplemented!("m5-solar")
+    let (mut y, mut m) = (year, month);
+    if m <= 2 {
+        y -= 1;
+        m += 12;
+    }
+    let a = (y as f64 / 100.0).floor();
+    let b = 2.0 - a + (a / 4.0).floor();
+    (365.25 * (y as f64 + 4716.0)).floor() + (30.6001 * (m as f64 + 1.0)).floor() + day as f64 + b
+        - 1524.5
+        + hours / 24.0
 }
 
 /// The sun's place on the sky at one instant, independent of the observer.
@@ -148,8 +156,50 @@ pub struct SolarCoordinates {
 
 /// The sun's coordinates at Julian day `jd`.
 pub fn solar_coordinates(jd: f64) -> SolarCoordinates {
-    let _ = jd;
-    unimplemented!("m5-solar")
+    let t = (jd - 2451545.0) / 36525.0;
+
+    let mean_longitude = 280.46646 + t * (36000.76983 + t * 0.0003032);
+    let mean_anomaly = 357.52911 + t * (35999.05029 - t * 0.0001537);
+    let eccentricity = 0.016708634 - t * (0.000042037 + t * 0.0000001267);
+
+    let m = mean_anomaly.to_radians();
+    let center = (1.914602 - t * (0.004817 + t * 0.000014)) * m.sin()
+        + (0.019993 - t * 0.000101) * (2.0 * m).sin()
+        + 0.000289 * (3.0 * m).sin();
+    let true_longitude = mean_longitude + center;
+
+    let omega = 125.04 - 1934.136 * t;
+    let omega_r = omega.to_radians();
+    let apparent_longitude = true_longitude - 0.00569 - 0.00478 * omega_r.sin();
+
+    let mean_obliquity =
+        23.0 + (26.0 + (21.448 - t * (46.815 + t * (0.00059 - t * 0.001813))) / 60.0) / 60.0;
+    let obliquity = mean_obliquity + 0.00256 * omega_r.cos();
+
+    let lambda = apparent_longitude.to_radians();
+    let eps = obliquity.to_radians();
+    let declination = (eps.sin() * lambda.sin()).asin().to_degrees();
+
+    let right_ascension = (eps.cos() * lambda.sin())
+        .atan2(lambda.cos())
+        .to_degrees()
+        .rem_euclid(360.0);
+
+    let y = (eps / 2.0).tan();
+    let y = y * y;
+    let l0 = mean_longitude.to_radians();
+    let equation_of_time = 4.0
+        * (y * (2.0 * l0).sin() - 2.0 * eccentricity * m.sin()
+            + 4.0 * eccentricity * y * m.sin() * (2.0 * l0).cos()
+            - 0.5 * y * y * (4.0 * l0).sin()
+            - 1.25 * eccentricity * eccentricity * (2.0 * m).sin())
+        .to_degrees();
+
+    SolarCoordinates {
+        declination,
+        right_ascension,
+        equation_of_time,
+    }
 }
 
 /// The sun as an observer at a place sees it.
@@ -163,22 +213,65 @@ pub struct SolarPosition {
 
 /// Where the sun is seen from `geo` at local time `time`.
 pub fn solar_position(geo: &Geolocation, time: &LocalTime) -> SolarPosition {
-    let _ = (geo, time);
-    unimplemented!("m5-solar")
+    let utc_hours = time.hour as f64 + time.minute as f64 / 60.0 - geo.utc_offset;
+    let jd = julian_day(time.year, time.month, time.day, utc_hours);
+    solar_position_at(geo.latitude, geo.longitude, jd)
 }
 
 /// Where the sun is seen from `latitude`, `longitude` (degrees, east positive) at Julian
 /// day `jd` (UTC).
 pub fn solar_position_at(latitude: f64, longitude: f64, jd: f64) -> SolarPosition {
-    let _ = (latitude, longitude, jd);
-    unimplemented!("m5-solar")
+    let coords = solar_coordinates(jd);
+
+    let minutes_since_midnight = (jd + 0.5).rem_euclid(1.0) * 1440.0;
+    let true_solar_time = minutes_since_midnight + coords.equation_of_time + 4.0 * longitude;
+    let hour_angle = true_solar_time / 4.0 - 180.0;
+
+    let lat = latitude.to_radians();
+    let dec = coords.declination.to_radians();
+    let ha = hour_angle.to_radians();
+
+    let cos_zenith = (lat.sin() * dec.sin() + lat.cos() * dec.cos() * ha.cos()).clamp(-1.0, 1.0);
+    let zenith = cos_zenith.acos();
+    let geometric_elevation = 90.0 - zenith.to_degrees();
+
+    let east = -dec.cos() * ha.sin();
+    let north = dec.sin() * lat.cos() - dec.cos() * lat.sin() * ha.cos();
+    let azimuth = east.atan2(north).to_degrees().rem_euclid(360.0);
+
+    let elevation = geometric_elevation + refraction(geometric_elevation);
+
+    SolarPosition { azimuth, elevation }
+}
+
+/// Atmospheric refraction in degrees for a geometric elevation in degrees, at standard
+/// pressure and temperature.
+fn refraction(elevation: f64) -> f64 {
+    if elevation > 85.0 {
+        return 0.0;
+    }
+    let te = elevation.to_radians().tan();
+    let arcseconds = if elevation > 5.0 {
+        58.1 / te - 0.07 / (te * te * te) + 0.000086 / (te * te * te * te * te)
+    } else if elevation > -0.575 {
+        1735.0
+            + elevation * (-518.2 + elevation * (103.4 + elevation * (-12.79 + elevation * 0.711)))
+    } else {
+        -20.772 / te
+    };
+    arcseconds / 3600.0
 }
 
 /// Unit vector toward a sun at `position`, in model axes (Z up) for a model whose
 /// true north is `north_angle` (see [`Geolocation::north_angle`]).
 pub fn direction_from(position: SolarPosition, north_angle: f64) -> DVec3 {
-    let _ = (position, north_angle);
-    unimplemented!("m5-solar")
+    let azimuth = (position.azimuth + north_angle).to_radians();
+    let elevation = position.elevation.to_radians();
+    DVec3::new(
+        azimuth.sin() * elevation.cos(),
+        azimuth.cos() * elevation.cos(),
+        elevation.sin(),
+    )
 }
 
 /// Unit vector toward the sun seen from `geo` at `time`, in model axes.
