@@ -11,6 +11,7 @@ pub mod chrome;
 pub mod document;
 pub mod editor;
 pub mod geo_panel;
+pub mod globe;
 pub mod hints;
 pub mod input;
 pub mod materials_panel;

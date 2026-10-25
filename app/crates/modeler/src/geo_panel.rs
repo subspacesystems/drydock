@@ -10,6 +10,8 @@
 use eframe::egui;
 use modeler_kernel::sun::Geolocation;
 
+use crate::globe::GlobeView;
+
 /// The text typed into the four fields.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GeoForm {
@@ -82,6 +84,18 @@ pub fn geo_panel(ui: &mut egui::Ui, form: &mut GeoForm) -> Option<Geolocation> {
     } else {
         None
     }
+}
+
+/// The globe above [`geo_panel`]: clicking it fills the latitude, longitude and an estimated
+/// UTC offset into `form` (nothing is applied until the user does). Behaviour:
+/// `docs/specs/m5-geo-globe.md`.
+pub fn geo_panel_with_globe(
+    ui: &mut egui::Ui,
+    form: &mut GeoForm,
+    view: &mut GlobeView,
+) -> Option<Geolocation> {
+    let _ = (ui, form, view);
+    unimplemented!("m5-geo-globe")
 }
 
 /// One label and its text field, returning whether Enter was pressed in the field.
