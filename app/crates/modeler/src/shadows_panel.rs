@@ -46,6 +46,12 @@ pub fn time_label(time: &LocalTime) -> String {
     unimplemented!("m5-app-shadows-ui")
 }
 
+/// A 0..=1 share as a whole percent, for example 0.8 gives "80%".
+pub fn percent_label(share: f64) -> String {
+    let _ = share;
+    unimplemented!("m5-app-shadows-ui")
+}
+
 /// The date as "YYYY-MM-DD", for example "2026-06-21".
 pub fn date_label(time: &LocalTime) -> String {
     let _ = time;
