@@ -94,8 +94,21 @@ pub fn geo_panel_with_globe(
     form: &mut GeoForm,
     view: &mut GlobeView,
 ) -> Option<Geolocation> {
-    let _ = (ui, form, view);
-    unimplemented!("m5-geo-globe")
+    let marker = parse_geolocation(form)
+        .ok()
+        .map(|geolocation| (geolocation.latitude, geolocation.longitude));
+    if let Some((latitude, longitude)) = crate::globe::globe(ui, view, marker, 220.0) {
+        form.latitude = format!("{}", round_to_4(latitude));
+        form.longitude = format!("{}", round_to_4(longitude));
+        form.utc_offset = format!("{}", crate::globe::utc_offset_estimate(longitude));
+    }
+    ui.label("Drag to turn, click to pick. UTC offset is estimated from longitude.");
+    geo_panel(ui, form)
+}
+
+fn round_to_4(value: f64) -> f64 {
+    let rounded = (value * 10_000.0).round() / 10_000.0;
+    if rounded == 0.0 { 0.0 } else { rounded }
 }
 
 /// One label and its text field, returning whether Enter was pressed in the field.

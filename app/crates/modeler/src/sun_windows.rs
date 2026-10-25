@@ -14,6 +14,7 @@ use modeler_render::SunLight;
 
 use crate::editor::Editor;
 use crate::geo_panel::{self, GeoForm};
+use crate::globe::GlobeView;
 use crate::shadows_panel::{self, ShadowsEvent};
 
 /// State of the two windows.
@@ -27,6 +28,8 @@ pub struct SunWindows {
     preview: Option<ShadowSettings>,
     /// The text in the Geolocation window; `Some` while the window is open.
     form: Option<GeoForm>,
+    /// Which way the Geolocation window's globe faces; `Some` while the window is open.
+    globe: Option<GlobeView>,
 }
 
 impl SunWindows {
@@ -101,7 +104,12 @@ impl SunWindows {
 
         if self.geo_open {
             if self.form.is_none() {
-                self.form = Some(GeoForm::from_geolocation(&model.geolocation()));
+                let geolocation = model.geolocation();
+                self.form = Some(GeoForm::from_geolocation(&geolocation));
+                self.globe = Some(GlobeView::facing(
+                    geolocation.latitude,
+                    geolocation.longitude,
+                ));
             }
             let mut open = self.geo_open;
             let mut close = false;
@@ -111,8 +119,8 @@ impl SunWindows {
                 .resizable(false)
                 .open(&mut open)
                 .show(ctx, |ui| {
-                    if let Some(form) = &mut self.form {
-                        applied = geo_panel::geo_panel(ui, form);
+                    if let (Some(form), Some(globe)) = (&mut self.form, &mut self.globe) {
+                        applied = geo_panel::geo_panel_with_globe(ui, form, globe);
                     }
                     if ui.button("Close").clicked() {
                         close = true;
@@ -121,12 +129,14 @@ impl SunWindows {
             if !open || close {
                 self.geo_open = false;
                 self.form = None;
+                self.globe = None;
             } else if let Some(geolocation) = applied {
                 if editor.set_geolocation(model, geolocation) {
                     changed = true;
                 }
                 self.geo_open = false;
                 self.form = None;
+                self.globe = None;
             }
         }
 
@@ -139,5 +149,6 @@ impl SunWindows {
         self.geo_open = false;
         self.preview = None;
         self.form = None;
+        self.globe = None;
     }
 }
