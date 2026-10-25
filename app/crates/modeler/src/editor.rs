@@ -12,7 +12,7 @@
 
 use std::collections::BTreeSet;
 
-use glam::{DAffine2, DMat4, DVec2, DVec3};
+use glam::{DAffine2, DMat2, DMat4, DVec2, DVec3};
 use modeler_kernel::click::{self, ClickMods};
 use modeler_kernel::component::make_component;
 use modeler_kernel::copy::{self, Clipboard, copy_selection};
@@ -79,6 +79,59 @@ fn unit_or(v: DVec3, fallback: DVec3) -> DVec3 {
     } else {
         fallback
     }
+}
+
+/// A right-handed orthonormal basis `(e1, e2)` of the plane with unit `normal`.
+fn face_basis(normal: DVec3) -> Option<(DVec3, DVec3)> {
+    if !normal.is_finite() {
+        return None;
+    }
+    let length = normal.length();
+    if !length.is_finite() || length == 0.0 {
+        return None;
+    }
+    let n = normal / length;
+    let helper = if n.z.abs() < 0.9 { DVec3::Z } else { DVec3::Y };
+    let e1 = helper.cross(n).normalize();
+    let e2 = n.cross(e1).normalize();
+    (e1.is_finite() && e2.is_finite()).then_some((e1, e2))
+}
+
+/// The map's linear part in the face basis `(e1, e2)`.
+fn texture_linear(map: &TextureMap, e1: DVec3, e2: DVec3) -> DMat2 {
+    DMat2::from_cols(
+        DVec2::new(map.u.truncate().dot(e1), map.v.truncate().dot(e1)),
+        DVec2::new(map.u.truncate().dot(e2), map.v.truncate().dot(e2)),
+    )
+}
+
+/// The turn `angle` about `about` applied rigidly on the face: texture space's turn
+/// `L · R(sign(det L)·angle) · L⁻¹`, with `L` the map's linear part in the face plane.
+fn rigid_turn_affine(
+    map: &TextureMap,
+    normal: DVec3,
+    angle: f64,
+    about: DVec2,
+) -> Option<DAffine2> {
+    if !angle.is_finite() || !about.is_finite() {
+        return None;
+    }
+    let (e1, e2) = face_basis(normal)?;
+    let linear = texture_linear(map, e1, e2);
+    let det = linear.determinant();
+    if !det.is_finite() || det.abs() < 1e-12 {
+        return None;
+    }
+    let sigma = if det < 0.0 { -1.0 } else { 1.0 };
+    let turned = linear * DMat2::from_angle(sigma * angle) * linear.inverse();
+    if !turned.is_finite() {
+        return None;
+    }
+    Some(
+        DAffine2::from_translation(about)
+            * DAffine2::from_mat2(turned)
+            * DAffine2::from_translation(-about),
+    )
 }
 
 /// The draw plane for a shape on a plane with unit normal `n`: `u` horizontal unless the
@@ -1926,9 +1979,16 @@ impl Editor {
                 "Position Texture",
             ),
             TextureOp::Rotate { angle, about } => {
-                let affine = DAffine2::from_translation(about)
-                    * DAffine2::from_angle(angle)
-                    * DAffine2::from_translation(-about);
+                let normal = model
+                    .body(body)
+                    .and_then(|body| body.geometry().face_plane(face))
+                    .map(|plane| plane.normal);
+                let Some(affine) =
+                    normal.and_then(|normal| rigid_turn_affine(&current, normal, angle, about))
+                else {
+                    self.message = Some("Can't position that texture".to_string());
+                    return false;
+                };
                 (Some(current.then(affine)), "Position Texture")
             }
             TextureOp::Scale { factor, about } => {
@@ -2121,12 +2181,31 @@ impl Editor {
                 d.is_finite().then_some(TextureOp::Move(d))
             }
             Grip::Turn => {
-                let about = state.base + state.size / 2.0;
-                let from = q - about;
-                if from.length() < 1e-9 {
+                let (e1, e2) = face_basis(state.plane.normal)?;
+                let linear = texture_linear(&state.map, e1, e2);
+                let det = linear.determinant();
+                if !det.is_finite() || det.abs() < 1e-12 {
                     return None;
                 }
-                let angle = from.x.atan2(from.y);
+                let sigma = if det < 0.0 { -1.0 } else { 1.0 };
+                let mut corners = [DVec3::ZERO; 4];
+                for (corner, offset) in corners.iter_mut().zip(offsets) {
+                    *corner = plane_point_at(
+                        &state.map,
+                        state.plane.point,
+                        state.plane.normal,
+                        state.base + offset,
+                    )?;
+                }
+                let center = corners.iter().copied().sum::<DVec3>() / 4.0;
+                let top = corners[3] - corners[0];
+                let target = p - center;
+                if top.length() < 1e-12 || target.length() < 1e-12 {
+                    return None;
+                }
+                let normal = state.plane.normal.normalize();
+                let mut turn = top.cross(target).dot(normal).atan2(top.dot(target));
+                let alpha = top.dot(e2).atan2(top.dot(e1));
                 let mut dirs = Vec::new();
                 for points in &loops {
                     if points.len() < 2 {
@@ -2135,13 +2214,20 @@ impl Editor {
                     for i in 0..points.len() {
                         let a = points[i];
                         let b = points[(i + 1) % points.len()];
-                        dirs.push(state.map.apply(b) - state.map.apply(a));
+                        let edge = b - a;
+                        if edge.length_squared() < 1e-24 {
+                            continue;
+                        }
+                        let beta = edge.dot(e2).atan2(edge.dot(e1));
+                        dirs.push(DVec2::from_angle(alpha - beta));
                     }
                 }
-                let angle = snap_turn(angle, &dirs);
-                angle
-                    .is_finite()
-                    .then_some(TextureOp::Rotate { angle, about })
+                turn = snap_turn(turn, &dirs);
+                let angle = -sigma * turn;
+                angle.is_finite().then_some(TextureOp::Rotate {
+                    angle,
+                    about: state.base + state.size / 2.0,
+                })
             }
             Grip::Scale(i) => {
                 let anchor = state.base + offsets[(i + 2) % 4];
@@ -2168,9 +2254,14 @@ impl Editor {
         let affine = match op {
             TextureOp::Move(d) => DAffine2::from_translation(d),
             TextureOp::Rotate { angle, about } => {
-                DAffine2::from_translation(about)
-                    * DAffine2::from_angle(angle)
-                    * DAffine2::from_translation(-about)
+                let Some(state) = self.texture_handles.as_ref() else {
+                    return;
+                };
+                let Some(affine) = rigid_turn_affine(&state.map, state.plane.normal, angle, about)
+                else {
+                    return;
+                };
+                affine
             }
             TextureOp::Scale { factor, about } => {
                 DAffine2::from_translation(about)

@@ -901,12 +901,23 @@ impl App {
                 && let Some(origin) = press_origin.or(response.interact_pointer_pos())
             {
                 self.drag_start_ndc = ndc(origin);
+                let mut grabbed_texture = false;
+                if egui_button == PointerButton::Primary && self.texture_handles_showing() {
+                    let view = EditorViewport {
+                        camera: self.view.camera,
+                        size_px: (f64::from(rect.width()), f64::from(rect.height())),
+                    };
+                    if self.editor_click(&view, local(origin), mods, 1) {
+                        self.refresh_document(ctx, frame);
+                    }
+                    grabbed_texture = self.texture_grip_held();
+                }
                 let orbits = match button {
                     Button::Middle => !mods.shift,
                     Button::Left => self.view.tool == Tool::Orbit && !mods.shift,
                     Button::Right => false,
                 };
-                if orbits {
+                if orbits && !grabbed_texture {
                     let view = EditorViewport {
                         camera: self.view.camera,
                         size_px: (f64::from(rect.width()), f64::from(rect.height())),
@@ -918,7 +929,7 @@ impl App {
                         .and_then(|document| document.scene.raycast(ray_origin, ray_dir))
                         .or_else(|| self.view.camera.ground_pivot(ray_origin, ray_dir));
                 }
-                if egui_button == PointerButton::Primary {
+                if egui_button == PointerButton::Primary && !grabbed_texture {
                     // Only a Select drag is a box; an Orbit drag must not leave a start behind.
                     self.drag_start_px = (tool == Some(Tool::Select)).then(|| local(origin));
                     if tool == Some(Tool::Zoom) {
@@ -942,12 +953,16 @@ impl App {
                 }
             }
             if response.dragged_by(egui_button) {
-                let delta = response.drag_delta();
-                let delta = DVec2::new(f64::from(delta.x), f64::from(delta.y));
-                if let Some(action) =
-                    input::drag(self.view.tool, button, mods, delta, self.drag_start_ndc)
-                {
-                    self.apply(action, ctx, frame);
+                let texture_drag =
+                    egui_button == PointerButton::Primary && self.texture_grip_held();
+                if !texture_drag {
+                    let delta = response.drag_delta();
+                    let delta = DVec2::new(f64::from(delta.x), f64::from(delta.y));
+                    if let Some(action) =
+                        input::drag(self.view.tool, button, mods, delta, self.drag_start_ndc)
+                    {
+                        self.apply(action, ctx, frame);
+                    }
                 }
             }
         }
@@ -1029,7 +1044,14 @@ impl App {
             self.editor_pointer_move(&view, local(cursor), mods);
         }
         if response.drag_stopped_by(PointerButton::Primary) {
-            if tool == Tool::Select {
+            if self.texture_grip_held() {
+                if let Some(end) = cursor
+                    && self.editor_click(&view, local(end), mods, 1)
+                {
+                    self.refresh_document(ctx, frame);
+                }
+                self.drag_start_px = None;
+            } else if tool == Tool::Select {
                 if let (Some(start), Some(end)) = (
                     self.drag_start_px.take(),
                     response.interact_pointer_pos().map(local),
@@ -1088,6 +1110,27 @@ impl App {
             return false;
         };
         editor.click(model, view, cursor, mods, count)
+    }
+
+    fn texture_handles_showing(&self) -> bool {
+        let (Some(editor), Some(document)) = (&self.editor, &self.model) else {
+            return false;
+        };
+        document
+            .kernel
+            .as_ref()
+            .is_some_and(|model| editor.texture_handles(model).is_some())
+    }
+
+    fn texture_grip_held(&self) -> bool {
+        let (Some(editor), Some(document)) = (&self.editor, &self.model) else {
+            return false;
+        };
+        document.kernel.as_ref().is_some_and(|model| {
+            editor
+                .texture_handles(model)
+                .is_some_and(|h| h.held.is_some())
+        })
     }
 
     fn editor_box_select(
