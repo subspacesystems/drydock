@@ -129,7 +129,7 @@ fn decode_land(bytes: &[u8]) -> Vec<Vec<(f64, f64)>> {
 }
 
 const SEA: egui::Color32 = egui::Color32::from_rgb(32, 74, 112);
-const GRID: egui::Color32 = egui::Color32::from_rgba_premultiplied(220, 230, 240, 45);
+const GRID: egui::Color32 = egui::Color32::from_rgba_unmultiplied_const(220, 230, 240, 45);
 const LAND_LINE: egui::Color32 = egui::Color32::from_rgb(226, 220, 198);
 const LIMB: egui::Color32 = egui::Color32::from_rgb(180, 195, 210);
 const MARKER: egui::Color32 = egui::Color32::from_rgb(220, 40, 40);
