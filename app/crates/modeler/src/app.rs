@@ -100,6 +100,8 @@ pub struct App {
     about_open: bool,
     /// The View > Model Info window is showing.
     model_info_open: bool,
+    /// The View > Shadows window is showing.
+    shadows_open: bool,
     /// The Make Component / Make Group name prompt is showing.
     name_prompt: Option<chrome::NamePrompt>,
     /// The Materials panel and its open form.
@@ -165,6 +167,7 @@ impl App {
             view: ViewState::new(),
             about_open: false,
             model_info_open: false,
+            shadows_open: false,
             name_prompt: None,
             materials: MaterialsPanel::default(),
             texture: TextureForm::default(),
@@ -619,6 +622,7 @@ impl App {
             Effect::Edit(key) => self.edit(key, ctx, frame),
             Effect::About => self.about_open = true,
             Effect::ModelInfo => self.model_info_open = true,
+            Effect::ToggleShadows => self.shadows_open = !self.shadows_open,
             Effect::OpenRecent(index) => {
                 let Some(path) = self.recent.paths().get(index).cloned() else {
                     return;
@@ -1404,6 +1408,7 @@ impl App {
                 .as_ref()
                 .is_some_and(|editor| editor.hide_rest()),
             axes: self.view.axes,
+            shadows: self.shadows_open,
             recent: self.recent.paths(),
             tool: self.view.tool,
         }

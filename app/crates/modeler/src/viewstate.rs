@@ -56,6 +56,8 @@ pub enum Effect {
     About,
     /// Show the Model Info window.
     ModelInfo,
+    /// Show or hide the Shadows window.
+    ToggleShadows,
     /// Ask for a name, then make the selection a component (or a group when `group`).
     MakeComponent {
         group: bool,
@@ -275,6 +277,7 @@ impl ViewState {
             Action::Paste => return Effect::Paste,
             Action::About => return Effect::About,
             Action::ModelInfo => return Effect::ModelInfo,
+            Action::ToggleShadows => return Effect::ToggleShadows,
             Action::MakeComponent => return Effect::MakeComponent { group: false },
             Action::MakeGroup => return Effect::MakeComponent { group: true },
             Action::Explode => return Effect::Explode,

@@ -32,6 +32,9 @@ pub struct MenuState<'a> {
     pub hide_rest: bool,
     /// The axes are shown (the View menu's Axes item is checked; `docs/specs/m4-ui-axes.md`).
     pub axes: bool,
+    /// The Shadows window is showing (the View menu's Shadows item is checked;
+    /// `docs/specs/m5-app-shadows-ui.md`).
+    pub shadows: bool,
     /// The File menu's recent files, most recent first (`docs/specs/m4-ui-menus.md`).
     pub recent: &'a [PathBuf],
     /// The current tool (checked in the Tools menu).

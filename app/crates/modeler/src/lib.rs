@@ -10,12 +10,14 @@
 pub mod chrome;
 pub mod document;
 pub mod editor;
+pub mod geo_panel;
 pub mod hints;
 pub mod input;
 pub mod materials_panel;
 pub mod overlay;
 pub mod recent;
 pub mod shading;
+pub mod shadows_panel;
 pub mod swatches;
 pub mod texture_handles;
 pub mod texture_panel;
