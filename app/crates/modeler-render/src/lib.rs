@@ -78,6 +78,7 @@ impl std::error::Error for RenderError {}
 
 /// Number of samples used when the adapter supports 4x MSAA for the target formats.
 const SAMPLE_COUNT: u32 = 4;
+const EXTRA_LINE_WIDTH_PX: f64 = 2.0;
 const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
 /// Serializes headless rendering: creating devices on several threads at once can
@@ -150,6 +151,7 @@ pub struct Renderer {
     opaque_back_pipeline: wgpu::RenderPipeline,
     transparent_pipeline: wgpu::RenderPipeline,
     line_pipeline: wgpu::RenderPipeline,
+    extra_line_pipeline: wgpu::RenderPipeline,
     sampler: wgpu::Sampler,
     white_view: wgpu::TextureView,
     _white_texture: wgpu::Texture,
@@ -409,10 +411,45 @@ impl Renderer {
                 module: &shader,
                 entry_point: Some("vs_line"),
                 compilation_options: Default::default(),
-                buffers: &[Some(vertex_layout)],
+                buffers: &[Some(vertex_layout.clone())],
             },
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::LineList,
+                cull_mode: None,
+                ..Default::default()
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: DEPTH_FORMAT,
+                depth_write_enabled: Some(true),
+                depth_compare: Some(wgpu::CompareFunction::LessEqual),
+                stencil: Default::default(),
+                bias: Default::default(),
+            }),
+            multisample: wgpu::MultisampleState {
+                count: SAMPLE_COUNT,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("fs_line"),
+                compilation_options: Default::default(),
+                targets: &transparent_targets,
+            }),
+            multiview_mask: None,
+            cache: None,
+        });
+        let extra_line_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("modeler-render extra lines"),
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs_line"),
+                compilation_options: Default::default(),
+                buffers: &[Some(vertex_layout)],
+            },
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
                 cull_mode: None,
                 ..Default::default()
             },
@@ -477,6 +514,7 @@ impl Renderer {
             opaque_back_pipeline,
             transparent_pipeline,
             line_pipeline,
+            extra_line_pipeline,
             sampler,
             white_view,
             _white_texture: white_texture,
@@ -742,6 +780,21 @@ impl Renderer {
         camera: &Camera,
         style: &Style,
     ) {
+        self.render_with_lines(device, queue, target, scene, camera, style, &[]);
+    }
+
+    /// Like [`Renderer::render`], plus `extra` lines drawn in the same pass.
+    #[allow(clippy::too_many_arguments)]
+    pub fn render_with_lines(
+        &self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        target: &Viewport,
+        scene: &GpuScene,
+        camera: &Camera,
+        style: &Style,
+        extra: &[ExtraLine],
+    ) {
         let aspect = target.width as f64 / target.height as f64;
         let view = camera.view_matrix();
         let projection = camera.projection_matrix(aspect, scene.sphere);
@@ -793,6 +846,58 @@ impl Renderer {
             }),
             stencil_ops: None,
         };
+        let extra: Vec<ExtraLine> = extra
+            .iter()
+            .copied()
+            .filter(|line| line.a.is_finite() && line.b.is_finite() && line.a != line.b)
+            .collect();
+        let world_per_pixel = 2.0 * (camera.fov_y * 0.5).tan() / target.height as f64;
+        let extra_buffer = (!extra.is_empty()).then(|| {
+            let mut vertices = Vec::with_capacity(extra.len() * 6);
+            for line in &extra {
+                let mid = (line.a + line.b) * 0.5;
+                let direction = (line.b - line.a).normalize();
+                let view = if camera.projection == Projection::Parallel {
+                    forward
+                } else {
+                    (mid - eye).normalize()
+                };
+                let mut side = direction.cross(view);
+                if side.length_squared() <= 1e-24 {
+                    side = direction.cross(camera.basis().1);
+                }
+                if side.length_squared() <= 1e-24 {
+                    side = DVec3::Z;
+                }
+                side = side.normalize();
+                let depth = if camera.projection == Projection::Parallel {
+                    camera.distance
+                } else {
+                    (mid - eye).dot(forward).max(1e-6)
+                };
+                let offset = side * (world_per_pixel * depth * EXTRA_LINE_WIDTH_PX * 0.5);
+                for position in [
+                    line.a + offset,
+                    line.a - offset,
+                    line.b - offset,
+                    line.a + offset,
+                    line.b - offset,
+                    line.b + offset,
+                ] {
+                    vertices.push(Vertex {
+                        position: [position.x as f32, position.y as f32, position.z as f32],
+                        normal: [0.0; 3],
+                        uv: [0.0; 2],
+                    });
+                }
+            }
+            create_buffer_init(
+                device,
+                "modeler-render extra line vertices",
+                bytemuck::cast_slice(&vertices),
+                wgpu::BufferUsages::VERTEX,
+            )
+        });
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("modeler-render"),
         });
@@ -840,6 +945,29 @@ impl Renderer {
                 self.draw(device, &mut pass, scene, batch, material);
             }
 
+            if let Some(extra_buffer) = &extra_buffer {
+                pass.set_pipeline(&self.extra_line_pipeline);
+                pass.set_vertex_buffer(0, extra_buffer.slice(..));
+                let mut start = 0;
+                while start < extra.len() {
+                    let color = extra[start].color;
+                    let mut end = start + 1;
+                    while end < extra.len() && extra[end].color == color {
+                        end += 1;
+                    }
+                    let material = GpuMaterial {
+                        color: linear_color(color),
+                        opacity: color[3],
+                        unlit: true,
+                        texture: None,
+                    };
+                    let bind_group = self.material_bind_group(device, scene, material);
+                    pass.set_bind_group(1, &bind_group, &[]);
+                    pass.draw((start as u32) * 6..(end as u32) * 6, 0..1);
+                    start = end;
+                }
+            }
+
             pass.set_pipeline(&self.transparent_pipeline);
             let mut transparent: Vec<&GpuBatch> = scene
                 .batches
@@ -864,30 +992,12 @@ impl Renderer {
         queue.submit(Some(encoder.finish()));
     }
 
-    /// Like [`Renderer::render`], plus `extra` lines drawn in the same pass.
-    #[allow(clippy::too_many_arguments)]
-    pub fn render_with_lines(
+    fn material_bind_group(
         &self,
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        target: &Viewport,
         scene: &GpuScene,
-        camera: &Camera,
-        style: &Style,
-        extra: &[ExtraLine],
-    ) {
-        let _ = extra;
-        self.render(device, queue, target, scene, camera, style);
-    }
-
-    fn draw(
-        &self,
-        device: &wgpu::Device,
-        pass: &mut wgpu::RenderPass<'_>,
-        scene: &GpuScene,
-        batch: &GpuBatch,
         material: GpuMaterial,
-    ) {
+    ) -> wgpu::BindGroup {
         let uniform = MaterialUniform {
             color: material.color,
             opacity: material.opacity,
@@ -905,7 +1015,7 @@ impl Renderer {
             .texture
             .and_then(|index| scene.textures.get(index))
             .map_or(&self.white_view, |texture| &texture.view);
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("modeler-render material"),
             layout: &self.material_layout,
             entries: &[
@@ -922,7 +1032,18 @@ impl Renderer {
                     resource: wgpu::BindingResource::Sampler(&self.sampler),
                 },
             ],
-        });
+        })
+    }
+
+    fn draw(
+        &self,
+        device: &wgpu::Device,
+        pass: &mut wgpu::RenderPass<'_>,
+        scene: &GpuScene,
+        batch: &GpuBatch,
+        material: GpuMaterial,
+    ) {
+        let bind_group = self.material_bind_group(device, scene, material);
         pass.set_bind_group(1, &bind_group, &[]);
         pass.set_vertex_buffer(0, batch.vertex_buffer.slice(..));
         if let Some(index_buffer) = &batch.index_buffer {

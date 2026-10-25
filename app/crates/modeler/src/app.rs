@@ -32,6 +32,7 @@ use modeler_kernel::tools::scale;
 use modeler_kernel::topology::FaceId;
 use modeler_render::{GpuScene, Renderer, Style, Viewport};
 use modeler_view::Projection;
+use wgpu::{Backend, DeviceType};
 
 /// Scroll distance in points that counts as one wheel notch (touchpads report points).
 const POINTS_PER_SCROLL_LINE: f64 = 50.0;
@@ -54,6 +55,29 @@ pub fn install_fonts(ctx: &egui::Context) {
         fonts.families.insert(family, vec!["Roboto".to_owned()]);
     }
     ctx.set_fonts(fonts);
+}
+
+/// The display name of a wgpu backend (`docs/specs/m4-ui-gpu-info.md`).
+fn backend_label(backend: Backend) -> &'static str {
+    match backend {
+        Backend::Vulkan => "Vulkan",
+        Backend::Metal => "Metal",
+        Backend::Dx12 => "DX12",
+        Backend::Gl => "GL",
+        Backend::BrowserWebGpu => "BrowserWebGpu",
+        Backend::Noop => "Noop",
+    }
+}
+
+/// The display name of a wgpu device type (`docs/specs/m4-ui-gpu-info.md`).
+fn device_type_label(device_type: DeviceType) -> &'static str {
+    match device_type {
+        DeviceType::Other => "other",
+        DeviceType::IntegratedGpu => "integrated GPU",
+        DeviceType::DiscreteGpu => "discrete GPU",
+        DeviceType::VirtualGpu => "virtual GPU",
+        DeviceType::Cpu => "CPU",
+    }
 }
 
 /// GPU state that lives as long as the window.
@@ -1084,6 +1108,15 @@ impl App {
 
     /// Make the offscreen target match the panel, re-render if needed, and paint it.
     fn paint_viewport(&mut self, ui: &egui::Ui, frame: &eframe::Frame, rect: Rect) {
+        let extra = if self.view.axes {
+            overlay::axis_lines(
+                self.open_transform(),
+                self.view.camera.distance * 100.0,
+                self.view.camera.distance * 0.04,
+            )
+        } else {
+            Vec::new()
+        };
         let (Some(gpu), Some(state)) = (&mut self.gpu, frame.wgpu_render_state()) else {
             return;
         };
@@ -1118,13 +1151,14 @@ impl App {
         if let Some(viewport) = &gpu.viewport
             && self.dirty
         {
-            gpu.renderer.render(
+            gpu.renderer.render_with_lines(
                 &state.device,
                 &state.queue,
                 viewport,
                 &gpu.scene,
                 &self.view.camera,
                 &self.style,
+                &extra,
             );
             self.dirty = false;
         }
@@ -1132,6 +1166,20 @@ impl App {
             let uv = Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0));
             ui.painter().image(texture, rect, uv, Color32::WHITE);
         }
+    }
+
+    /// The transform of the open instance, or the identity when none is open.
+    fn open_transform(&self) -> DMat4 {
+        self.editor
+            .as_ref()
+            .zip(self.model.as_ref())
+            .and_then(|(editor, document)| {
+                document
+                    .kernel
+                    .as_ref()
+                    .map(|kernel| editor.path().transform(kernel).unwrap_or(DMat4::IDENTITY))
+            })
+            .unwrap_or(DMat4::IDENTITY)
     }
 
     /// Draw the editor's preview, hint, selection and draw plane over the rendered view.
@@ -1145,21 +1193,7 @@ impl App {
                 .map(|q| rect.min + egui::vec2(q.x as f32, q.y as f32))
         };
         let painter = ui.painter();
-        let open_transform = self
-            .editor
-            .as_ref()
-            .zip(self.model.as_ref())
-            .and_then(|(editor, document)| {
-                document
-                    .kernel
-                    .as_ref()
-                    .map(|kernel| editor.path().transform(kernel).unwrap_or(DMat4::IDENTITY))
-            })
-            .unwrap_or(DMat4::IDENTITY);
-        if self.view.axes {
-            let primitives = overlay::axes(open_transform, self.view.camera.distance * 100.0);
-            paint_primitives(painter, &self.view.camera, &primitives, &project);
-        }
+        let open_transform = self.open_transform();
         let (Some(editor), Some(document)) = (&self.editor, &self.model) else {
             return;
         };
@@ -1557,7 +1591,15 @@ impl eframe::App for App {
         });
         chrome::about_window(&ctx, &mut self.about_open);
         if let Some(model) = &self.model {
-            let lines = chrome::model_info_lines(&model.stats, model.kernel.is_some());
+            let mut lines = chrome::model_info_lines(&model.stats, model.kernel.is_some());
+            if let Some(state) = frame.wgpu_render_state() {
+                let info = state.adapter.get_info();
+                lines.push(chrome::adapter_line(
+                    &info.name,
+                    backend_label(info.backend),
+                    device_type_label(info.device_type),
+                ));
+            }
             chrome::model_info_window(&ctx, &mut self.model_info_open, &lines);
         } else {
             self.model_info_open = false;
