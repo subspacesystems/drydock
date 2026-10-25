@@ -142,6 +142,9 @@ Done when: `modeler` on the reference house model opens in under 5 s on modeler-
 | `m4-texture-handles-2` | texture handles: short help in the status bar, grips that look different and change the cursor, drag from any corner, snapping to geometry, turn grip off the corners | |
 | `m4-zoom-through` | Ctrl+wheel steps through the surface under the cursor | `m4-zoom-cursor` |
 | `m4-ui-gpu-info` | Model Info names the graphics adapter and backend in use | |
+| `m4-axes-screen` | axes thin again: extra lines keep a fixed pixel width and screen-space dashes, drawn past the scene's far distance (renderer) | |
+| `m4-texture-turn` | texture turns are rigid on the face (no skew after a stretch); press-drag-release on the texture grips | |
+| `m4-purge-confirm` | Purge Unused lists the materials it will remove and asks first | |
 
 - Make component from selection; edit in place (all instances update); option to hide the rest of the model while editing; groups.
 - Materials: create/edit colors and image textures; paint bucket; texture positioning basics; materials survive save/load and DAE import.
