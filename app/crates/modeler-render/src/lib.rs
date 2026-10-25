@@ -104,6 +104,10 @@ impl std::error::Error for RenderError {}
 /// Number of samples used when the adapter supports 4x MSAA for the target formats.
 const SAMPLE_COUNT: u32 = 4;
 const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
+/// Shadow-map resolution on each side.
+const SHADOW_SIZE: u32 = 2048;
+/// Extra depth compared against the shadow map, in normalized depth units.
+const SHADOW_BIAS: f32 = 0.0008;
 
 /// Serializes headless rendering: creating devices on several threads at once can
 /// crash some Vulkan drivers (lavapipe).
@@ -121,12 +125,21 @@ struct Vertex {
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 struct CameraUniform {
     view_proj: [[f32; 4]; 4],
+    inv_view_proj: [[f32; 4]; 4],
     eye: [f32; 4],
     forward: [f32; 4],
-    sun: [f32; 4],
+    sun_dir: [f32; 4],
     sun_params: [f32; 4],
+    background: [f32; 4],
     parallel: u32,
     _pad: [u32; 3],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+struct ShadowUniform {
+    light_view_proj: [[f32; 4]; 4],
+    params: [f32; 4],
 }
 
 #[repr(C)]
@@ -173,14 +186,20 @@ struct GpuBatch {
 pub struct Renderer {
     camera_layout: wgpu::BindGroupLayout,
     material_layout: wgpu::BindGroupLayout,
+    shadow_layout: wgpu::BindGroupLayout,
     opaque_pipeline: wgpu::RenderPipeline,
     opaque_back_pipeline: wgpu::RenderPipeline,
     transparent_pipeline: wgpu::RenderPipeline,
     line_pipeline: wgpu::RenderPipeline,
     extra_line_pipeline: wgpu::RenderPipeline,
+    shadow_pipeline: wgpu::RenderPipeline,
+    ground_pipeline: wgpu::RenderPipeline,
     sampler: wgpu::Sampler,
+    shadow_sampler: wgpu::Sampler,
     white_view: wgpu::TextureView,
     _white_texture: wgpu::Texture,
+    fallback_shadow_view: wgpu::TextureView,
+    _fallback_shadow_texture: wgpu::Texture,
     textures: Mutex<HashMap<PathBuf, CachedTexture>>,
     texture_loads: AtomicUsize,
 }
@@ -192,6 +211,7 @@ pub struct GpuScene {
     pub warnings: Vec<String>,
     /// Center and radius of the scene's bounding sphere, if the scene isn't empty.
     pub sphere: Option<(glam::DVec3, f64)>,
+    bounds: Option<Aabb>,
     batches: Vec<GpuBatch>,
     lines: Vec<GpuBatch>,
     textures: Vec<Arc<LoadedTexture>>,
@@ -292,11 +312,52 @@ impl Renderer {
                 },
             ],
         });
+        let shadow_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("modeler-render shadow"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Depth,
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Comparison),
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+            ],
+        });
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("modeler-render"),
-            bind_group_layouts: &[Some(&camera_layout), Some(&material_layout)],
+            bind_group_layouts: &[
+                Some(&camera_layout),
+                Some(&material_layout),
+                Some(&shadow_layout),
+            ],
             immediate_size: 0,
         });
+        let shadow_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("modeler-render shadow"),
+                bind_group_layouts: &[Some(&camera_layout)],
+                immediate_size: 0,
+            });
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("modeler-render scene"),
@@ -472,7 +533,7 @@ impl Renderer {
                 module: &shader,
                 entry_point: Some("vs_extra_line"),
                 compilation_options: Default::default(),
-                buffers: &[Some(vertex_layout)],
+                buffers: &[Some(vertex_layout.clone())],
             },
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList,
@@ -501,6 +562,76 @@ impl Renderer {
             cache: None,
         });
 
+        let shadow_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("modeler-render shadows"),
+            layout: Some(&shadow_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs_shadow"),
+                compilation_options: Default::default(),
+                buffers: &[Some(vertex_layout.clone())],
+            },
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                cull_mode: None,
+                ..Default::default()
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: DEPTH_FORMAT,
+                depth_write_enabled: Some(true),
+                depth_compare: Some(wgpu::CompareFunction::Less),
+                stencil: Default::default(),
+                bias: wgpu::DepthBiasState {
+                    constant: 16,
+                    slope_scale: 3.0,
+                    clamp: 0.0,
+                },
+            }),
+            multisample: wgpu::MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            fragment: None,
+            multiview_mask: None,
+            cache: None,
+        });
+        let ground_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("modeler-render ground shadow"),
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs_ground"),
+                compilation_options: Default::default(),
+                buffers: &[],
+            },
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                cull_mode: None,
+                ..Default::default()
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: DEPTH_FORMAT,
+                depth_write_enabled: Some(false),
+                depth_compare: Some(wgpu::CompareFunction::Always),
+                stencil: Default::default(),
+                bias: Default::default(),
+            }),
+            multisample: wgpu::MultisampleState {
+                count: SAMPLE_COUNT,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("fs_ground"),
+                compilation_options: Default::default(),
+                targets: &targets,
+            }),
+            multiview_mask: None,
+            cache: None,
+        });
+
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("modeler-render texture"),
             address_mode_u: wgpu::AddressMode::Repeat,
@@ -516,6 +647,37 @@ impl Renderer {
             border_color: None,
         });
 
+        let shadow_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("modeler-render shadow"),
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::MipmapFilterMode::Nearest,
+            lod_min_clamp: 0.0,
+            lod_max_clamp: 0.0,
+            compare: Some(wgpu::CompareFunction::LessEqual),
+            anisotropy_clamp: 1,
+            border_color: None,
+        });
+
+        let fallback_shadow_texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("modeler-render fallback shadow"),
+            size: wgpu::Extent3d {
+                width: 1,
+                height: 1,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: DEPTH_FORMAT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+        let fallback_shadow_view =
+            fallback_shadow_texture.create_view(&wgpu::TextureViewDescriptor::default());
         let white_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("modeler-render white"),
             size: wgpu::Extent3d {
@@ -536,14 +698,20 @@ impl Renderer {
         Renderer {
             camera_layout,
             material_layout,
+            shadow_layout,
             opaque_pipeline,
             opaque_back_pipeline,
             transparent_pipeline,
             line_pipeline,
             extra_line_pipeline,
+            shadow_pipeline,
+            ground_pipeline,
             sampler,
+            shadow_sampler,
             white_view,
             _white_texture: white_texture,
+            fallback_shadow_view,
+            _fallback_shadow_texture: fallback_shadow_texture,
             textures: Mutex::new(HashMap::new()),
             texture_loads: AtomicUsize::new(0),
         }
@@ -729,6 +897,7 @@ impl Renderer {
         GpuScene {
             warnings,
             sphere: sphere_from_bounds(scene.bounds),
+            bounds: scene.bounds,
             batches,
             lines,
             textures,
@@ -827,24 +996,47 @@ impl Renderer {
         let view_proj = (projection * view).as_mat4();
         let (forward, _, _) = camera.basis();
         let eye = camera.eye();
-        let (sun, sun_params) = match style.sun {
-            Some(sun) => (
-                [
-                    sun.direction.x as f32,
-                    sun.direction.y as f32,
-                    sun.direction.z as f32,
-                    1.0,
-                ],
-                [sun.light, sun.dark, 0.0, 0.0],
-            ),
-            None => ([0.0; 4], [0.0; 4]),
+        let background = linear_color(style.background);
+        let sun = style.sun;
+        let sun_dir = sun
+            .map(|sun| {
+                let length = sun.direction.length();
+                if sun.direction.is_finite() && length > 1e-9 {
+                    sun.direction / length
+                } else {
+                    DVec3::ZERO
+                }
+            })
+            .unwrap_or(DVec3::ZERO);
+        let sun_enabled = sun.is_some();
+        let sun_light = sun.map_or(0.0, |sun| sun.light);
+        let sun_dark = sun.map_or(0.0, |sun| sun.dark);
+        let shadows_on =
+            sun.is_some_and(|sun| sun.shadows) && sun_dir.z > 0.0 && scene.bounds.is_some();
+        let draw_ground = shadows_on && sun.is_some_and(|sun| sun.on_ground);
+        let ground_factor = if sun_dir.z > 0.0 {
+            let direct = (sun_dark + sun_light * sun_dir.z as f32).min(1.0);
+            if direct > 1e-6 {
+                (sun_dark / direct).min(1.0)
+            } else {
+                1.0
+            }
+        } else {
+            1.0
         };
         let camera_uniform = CameraUniform {
             view_proj: view_proj.to_cols_array_2d(),
+            inv_view_proj: (projection * view).inverse().as_mat4().to_cols_array_2d(),
             eye: [eye.x as f32, eye.y as f32, eye.z as f32, 1.0],
             forward: [forward.x as f32, forward.y as f32, forward.z as f32, 0.0],
-            sun,
-            sun_params,
+            sun_dir: [
+                sun_dir.x as f32,
+                sun_dir.y as f32,
+                sun_dir.z as f32,
+                f32::from(sun_enabled),
+            ],
+            sun_params: [sun_light, sun_dark, ground_factor, 0.0],
+            background,
             parallel: u32::from(camera.projection == Projection::Parallel),
             _pad: [0; 3],
         };
@@ -863,7 +1055,44 @@ impl Renderer {
             }],
         });
 
-        let background = linear_color(style.background);
+        let shadow_setup = if shadows_on {
+            let (center, radius) = shadow_bounds(scene.bounds.unwrap(), sun_dir, draw_ground);
+            let light_view_proj = light_view_proj(center, radius, sun_dir);
+            let texture = device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("modeler-render shadow map"),
+                size: wgpu::Extent3d {
+                    width: SHADOW_SIZE,
+                    height: SHADOW_SIZE,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: DEPTH_FORMAT,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                    | wgpu::TextureUsages::TEXTURE_BINDING,
+                view_formats: &[],
+            });
+            let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+            let light_camera = CameraUniform {
+                view_proj: light_view_proj.as_mat4().to_cols_array_2d(),
+                inv_view_proj: light_view_proj.inverse().as_mat4().to_cols_array_2d(),
+                eye: [center.x as f32, center.y as f32, center.z as f32, 1.0],
+                forward: [sun_dir.x as f32, sun_dir.y as f32, sun_dir.z as f32, 0.0],
+                sun_dir: [0.0; 4],
+                sun_params: [0.0; 4],
+                background: [0.0; 4],
+                parallel: 1,
+                _pad: [0; 3],
+            };
+            let uniform = ShadowUniform {
+                light_view_proj: light_view_proj.as_mat4().to_cols_array_2d(),
+                params: [1.0 / SHADOW_SIZE as f32, SHADOW_BIAS, 1.0, 0.0],
+            };
+            Some((texture, view, uniform, light_camera))
+        } else {
+            None
+        };
         let color_attachment = wgpu::RenderPassColorAttachment {
             view: target.msaa_view.as_ref().unwrap_or(&target.color_view),
             depth_slice: None,
@@ -915,6 +1144,57 @@ impl Renderer {
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("modeler-render"),
         });
+        if let Some((_, shadow_view, _, light_camera)) = &shadow_setup {
+            let light_buffer = create_buffer_init(
+                device,
+                "modeler-render light camera",
+                bytemuck::bytes_of(light_camera),
+                wgpu::BufferUsages::UNIFORM,
+            );
+            let light_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("modeler-render light camera"),
+                layout: &self.camera_layout,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: light_buffer.as_entire_binding(),
+                }],
+            });
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("modeler-render shadow map"),
+                color_attachments: &[],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: shadow_view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                }),
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
+            pass.set_bind_group(0, &light_bind_group, &[]);
+            pass.set_pipeline(&self.shadow_pipeline);
+            for batch in &scene.batches {
+                pass.set_vertex_buffer(0, batch.vertex_buffer.slice(..));
+                if let Some(index_buffer) = &batch.index_buffer {
+                    pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+                    pass.draw_indexed(0..batch.index_count, 0, 0..1);
+                } else {
+                    pass.draw(0..batch.vertex_count, 0..1);
+                }
+            }
+        }
+        let fallback_shadow_uniform = ShadowUniform {
+            light_view_proj: glam::DMat4::IDENTITY.as_mat4().to_cols_array_2d(),
+            params: [0.0; 4],
+        };
+        let (shadow_view, shadow_uniform) = match &shadow_setup {
+            Some((_, view, uniform, _)) => (view, *uniform),
+            None => (&self.fallback_shadow_view, fallback_shadow_uniform),
+        };
+        let shadow_bind_group = self.shadow_bind_group(device, shadow_view, &shadow_uniform);
         {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("modeler-render"),
@@ -925,6 +1205,23 @@ impl Renderer {
                 multiview_mask: None,
             });
             pass.set_bind_group(0, &camera_bind_group, &[]);
+            pass.set_bind_group(2, &shadow_bind_group, &[]);
+
+            if draw_ground {
+                pass.set_pipeline(&self.ground_pipeline);
+                let ground_material = self.material_bind_group(
+                    device,
+                    scene,
+                    GpuMaterial {
+                        color: [1.0; 4],
+                        opacity: 1.0,
+                        unlit: true,
+                        texture: None,
+                    },
+                );
+                pass.set_bind_group(1, &ground_material, &[]);
+                pass.draw(0..3, 0..1);
+            }
 
             pass.set_pipeline(&self.opaque_pipeline);
             for batch in scene.batches.iter().filter(|batch| !batch.transparent) {
@@ -1008,6 +1305,38 @@ impl Renderer {
             }
         }
         queue.submit(Some(encoder.finish()));
+    }
+
+    fn shadow_bind_group(
+        &self,
+        device: &wgpu::Device,
+        view: &wgpu::TextureView,
+        uniform: &ShadowUniform,
+    ) -> wgpu::BindGroup {
+        let buffer = create_buffer_init(
+            device,
+            "modeler-render shadow",
+            bytemuck::bytes_of(uniform),
+            wgpu::BufferUsages::UNIFORM,
+        );
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("modeler-render shadow"),
+            layout: &self.shadow_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&self.shadow_sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: buffer.as_entire_binding(),
+                },
+            ],
+        })
     }
 
     fn material_bind_group(
@@ -1286,6 +1615,60 @@ fn batch_center(positions: &[[f32; 3]]) -> DVec3 {
         max = max.max(p);
     }
     (min + max) * 0.5
+}
+
+/// Bounding sphere of the scene plus, when shadows fall on the ground, the ground area
+/// the scene's shadow can reach.
+fn shadow_bounds(bounds: Aabb, sun: DVec3, ground: bool) -> (DVec3, f64) {
+    let mut min = DVec3::new(
+        bounds.min[0] as f64,
+        bounds.min[1] as f64,
+        bounds.min[2] as f64,
+    );
+    let mut max = DVec3::new(
+        bounds.max[0] as f64,
+        bounds.max[1] as f64,
+        bounds.max[2] as f64,
+    );
+    if ground && sun.z > 0.0 {
+        for x in [min.x, max.x] {
+            for y in [min.y, max.y] {
+                for z in [min.z, max.z] {
+                    if z >= 0.0 {
+                        let p = DVec3::new(x, y, z);
+                        let q = p - sun * (z / sun.z);
+                        min = min.min(q);
+                        max = max.max(q);
+                    }
+                }
+            }
+        }
+    }
+    let center = (min + max) * 0.5;
+    let radius = ((max - min).length() * 0.5).max(1e-3);
+    (center, radius)
+}
+
+/// Orthographic light camera fitted around a sphere, looking along `sun`.
+fn light_view_proj(center: DVec3, radius: f64, sun: DVec3) -> glam::DMat4 {
+    let margin = radius * 0.01 + 1e-3;
+    let eye = center + sun * (radius + margin);
+    let up = if sun.z.abs() > 0.99 {
+        DVec3::Y
+    } else {
+        DVec3::Z
+    };
+    let view = glam::dcamera::rh::view::look_to_mat4(eye, -sun, up);
+    let extent = radius + margin;
+    let projection = glam::dcamera::rh::proj::directx::orthographic(
+        -extent,
+        extent,
+        -extent,
+        extent,
+        margin,
+        2.0 * radius + margin,
+    );
+    projection * view
 }
 
 fn sphere_from_bounds(bounds: Option<Aabb>) -> Option<(DVec3, f64)> {
