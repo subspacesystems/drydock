@@ -10,9 +10,10 @@ In build order. Each milestone ends when every listed task is merged and Tyrel's
 | M3 | Modify | Push/Pull, move, rotate, scale, flip, tape measure | M2 |
 | M4 | Components and materials | Components, materials | M3 |
 | M5 | Sun | Geolocation and shadows | M4 |
-| M6 | Medium priority | Follow Me, offset | M3 |
-| M7 | Low priority | Tags, model library hook | M4 |
-| M8 | Windows | Windows build and installer | M4 |
+| M6 | UI | Tyrel's deferred UI items: icon toolbars, docking panels, Entity Info, Components | M5 |
+| M7 | Medium priority | Follow Me, offset | M3 |
+| M8 | Low priority | Tags, model library hook | M4 |
+| M9 | Windows | Windows build and installer | M4 |
 
 MVP = M0 to M5 (all High features).
 
@@ -161,22 +162,34 @@ Done when: `modeler` on the reference house model opens in under 5 s on modeler-
 | `m5-app-shadows-ui` | Shadows panel widget: shadows on/off, sun shading, time and date sliders, light/dark, on ground; View > Shadows item; egui_kittest tests | `m5-app-sun` |
 | `m5-app-geo-ui` | Geolocation form widget: typed latitude, longitude, north angle and UTC offset with checks; egui_kittest tests | `m5-app-sun` |
 | `m5-app-sun-windows` | App wiring: Shadows window (slider drags preview, release commits one undo step) and Geolocation window opened from Model Info; real-window check on 05-house | `m5-app-shadows-ui`, `m5-app-geo-ui` |
+| `m5-shadow-cascades` | Fix from feedback: shadow edges jagged up close. Cascaded shadow maps fitted to slices of the view, texel-snapped, bias per cascade texel | |
+| `m5-geo-globe` | From: a globe in the Geolocation window (Natural Earth outlines, ADR-006); drag turns, click picks latitude/longitude and a guessed UTC offset | |
 
 - Geolocation (latitude, longitude, true north angle), date and time.
 - Solar position (own implementation from a public-domain algorithm description), shadow mapping in the renderer, light/dark settings.
 
-Done when: on 05-house, setting a location, date and time shows shadows on the house and the ground that move as the time slider moves; the settings survive save and reopen; navigation stays smooth with shadows on (release build).
+Done when: on 05-house, setting a location, date and time shows shadows on the house and the ground that move as the time slider moves; the settings survive save and reopen; navigation stays smooth with shadows on (release build). After the first try: shadow edges stay sharp when zoomed in close, and the Geolocation window has a globe to pick the place.
 
-## M6: Follow Me and offset
+## M6: UI
+
+Tyrel's UI items deferred from M4, inserted after M5 at his request. Tasks are written when the milestone starts.
+
+- Icon toolbars by tool group (own icons), toolbars that can be shown, hidden and rearranged.
+- Dockable side panels (Materials, Shadows, Entity Info, Components) instead of floating windows.
+- Entity Info panel: the selection's type, tag/material, size and editable fields.
+- Components pane: the model's definitions with thumbnails, place by drag or click.
+- List/Tiles icons in the Materials panel.
+
+## M7: Follow Me and offset
 
 - Follow Me: extrude a face along a path of connected edges.
 - Offset: offset a face's edges inward/outward by a distance, with typed value.
 
-## M7: Tags and model library hook
+## M8: Tags and model library hook
 
 - Tags: assign entities to tags; show/hide tags.
 - Library hook: import pipeline abstracted behind a "model source" interface so an online library could be added later.
 
-## M8: Windows
+## M9: Windows
 
 - Windows build in CI (cross-compile or a Windows runner), installer, release artifacts.
