@@ -24,7 +24,10 @@ struct Material {
 };
 
 struct Shadow {
-    light_view_proj: mat4x4<f32>,
+    light_view_proj: array<mat4x4<f32>, 4>,
+    far: vec4<f32>,
+    texel: vec4<f32>,
+    bias: vec4<f32>,
     params: vec4<f32>,
 };
 
@@ -32,7 +35,7 @@ struct Shadow {
 @group(1) @binding(0) var<uniform> material: Material;
 @group(1) @binding(1) var material_texture: texture_2d<f32>;
 @group(1) @binding(2) var material_sampler: sampler;
-@group(2) @binding(0) var shadow_map: texture_depth_2d;
+@group(2) @binding(0) var shadow_map: texture_depth_2d_array;
 @group(2) @binding(1) var shadow_sampler: sampler_comparison;
 @group(2) @binding(2) var<uniform> shadow: Shadow;
 
@@ -66,13 +69,31 @@ fn vs_shadow(in: VertexIn) -> @builtin(position) vec4<f32> {
     return camera.view_proj * vec4<f32>(in.position, 1.0);
 }
 
+fn cascade_index(world: vec3<f32>) -> u32 {
+    let depth = dot(world - camera.eye.xyz, camera.forward.xyz);
+    let count = u32(shadow.params.w);
+    var index = count - 1u;
+    for (var i = 0u; i < 4u; i = i + 1u) {
+        if (i < count && depth <= shadow.far[i]) {
+            index = i;
+            break;
+        }
+    }
+    return index;
+}
+
 /// 1 where `world` sees the sun, 0 where something blocks it. Outside the shadow map the
 /// point counts as lit, so the map only needs to cover the scene.
-fn sun_visibility(world: vec3<f32>) -> f32 {
+fn sun_visibility(world: vec3<f32>, normal: vec3<f32>) -> f32 {
     if (shadow.params.z < 0.5) {
         return 1.0;
     }
-    let clip = shadow.light_view_proj * vec4<f32>(world, 1.0);
+    let index = cascade_index(world);
+    let n = normalize(normal);
+    let to_sun = select(-n, n, dot(n, camera.sun_dir.xyz) >= 0.0);
+    let texel = shadow.texel[index];
+    let p = world + to_sun * (1.5 * texel);
+    let clip = shadow.light_view_proj[index] * vec4<f32>(p, 1.0);
     if (clip.w <= 0.0) {
         return 1.0;
     }
@@ -82,16 +103,17 @@ fn sun_visibility(world: vec3<f32>) -> f32 {
         ndc.z < 0.0 || ndc.z > 1.0) {
         return 1.0;
     }
-    let texel = shadow.params.x;
-    let depth = ndc.z - shadow.params.y;
+    let step = shadow.params.x;
+    let depth = ndc.z - shadow.bias[index];
     var lit = 0.0;
     for (var y = -1; y <= 1; y = y + 1) {
         for (var x = -1; x <= 1; x = x + 1) {
-            let offset = vec2<f32>(f32(x), f32(y)) * texel;
+            let offset = vec2<f32>(f32(x), f32(y)) * step;
             lit = lit + textureSampleCompareLevel(
                 shadow_map,
                 shadow_sampler,
                 uv + offset,
+                i32(index),
                 depth,
             );
         }
@@ -116,7 +138,7 @@ fn fs_face(in: VertexOut) -> @location(0) vec4<f32> {
             var direct = 0.0;
             if (camera.sun_dir.z > 0.0) {
                 direct = max(dot(n_view, camera.sun_dir.xyz), 0.0);
-                direct = direct * sun_visibility(in.world);
+                direct = direct * sun_visibility(in.world, in.normal);
             }
             let shade = min(1.0, camera.sun_params.y + camera.sun_params.x * direct);
             rgb = rgb * shade;
@@ -163,7 +185,7 @@ fn fs_ground(in: GroundOut) -> @location(0) vec4<f32> {
         discard;
     }
     let world = near + ray * t;
-    let lit = sun_visibility(world);
+    let lit = sun_visibility(world, vec3<f32>(0.0, 0.0, 1.0));
     let ground = camera.sun_params.z;
     let shade = mix(ground, 1.0, lit);
     return vec4<f32>(camera.background.rgb * shade, camera.background.a);
