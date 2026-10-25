@@ -1621,7 +1621,8 @@ impl eframe::App for App {
         let dialog_open = self.dialog.is_some()
             || self.save_dialog.is_some()
             || self.confirm.is_some()
-            || self.name_prompt.is_some();
+            || self.name_prompt.is_some()
+            || self.materials.confirming();
         if !dialog_open {
             self.global_input(&ctx, frame);
             self.sync_editor_path(&ctx, frame);

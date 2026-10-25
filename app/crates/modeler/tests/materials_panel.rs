@@ -2,7 +2,8 @@
 // Copyright (C) 2026 Subspace Systems
 
 //! m4-app-materials-ui: the Materials panel and its form, driven with egui_kittest.
-//! See docs/specs/m4-app-materials-ui.md.
+//! See docs/specs/m4-app-materials-ui.md (Purge Unused confirms since
+//! docs/specs/m4-purge-confirm.md).
 
 use eframe::egui::accesskit::{Role, Toggled};
 use egui_kittest::Harness;
@@ -256,6 +257,9 @@ fn purge_unused_sends_purge() {
     let mut h = harness(model, None);
     h.get_by_label("Purge Unused").click();
     h.run();
+    assert!(h.state().actions.is_empty(), "it asks first");
+    h.get_by_label("Purge").click();
+    h.run();
     assert_eq!(h.state().actions, vec![MaterialAction::Purge]);
 }
 
@@ -449,6 +453,8 @@ fn list_and_buttons_work_while_the_form_is_open() {
     h.get_by_label("Brick").click();
     h.run();
     h.get_by_label("Purge Unused").click();
+    h.run();
+    h.get_by_label("Purge").click();
     h.run();
     assert_eq!(
         h.state().actions,
