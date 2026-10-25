@@ -18,6 +18,7 @@ pub mod overlay;
 pub mod recent;
 pub mod shading;
 pub mod shadows_panel;
+pub mod sun_windows;
 pub mod swatches;
 pub mod texture_handles;
 pub mod texture_panel;

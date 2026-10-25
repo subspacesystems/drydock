@@ -339,6 +339,16 @@ pub fn adapter_line(name: &str, backend: &str, device_type: &str) -> String {
 
 /// The Model Info window while `open`, showing `lines`; its Close button clears `open`.
 pub fn model_info_window(ctx: &eframe::egui::Context, open: &mut bool, lines: &[String]) {
+    model_info_window_with(ctx, open, lines, |_| {});
+}
+
+/// [`model_info_window`] with `extra` drawing more widgets under the lines, above Close.
+pub fn model_info_window_with(
+    ctx: &eframe::egui::Context,
+    open: &mut bool,
+    lines: &[String],
+    extra: impl FnOnce(&mut eframe::egui::Ui),
+) {
     if !*open {
         return;
     }
@@ -351,6 +361,7 @@ pub fn model_info_window(ctx: &eframe::egui::Context, open: &mut bool, lines: &[
             for line in lines {
                 ui.label(line);
             }
+            extra(ui);
             if ui.button("Close").clicked() {
                 close = true;
             }
