@@ -117,6 +117,15 @@ pub struct MaterialsPanel {
     focus_name: bool,
 }
 
+impl MaterialsPanel {
+    /// True while the Purge Unused confirmation shows; the app keeps viewport keys away
+    /// from the model then, as for its other dialogs. Behaviour:
+    /// `docs/specs/m4-purge-confirm.md`.
+    pub fn confirming(&self) -> bool {
+        unimplemented!("m4-purge-confirm")
+    }
+}
+
 /// Whether a material called `name` shows for the search text `query`: the trimmed query
 /// is empty, or `name` contains it ignoring case. Behaviour: `docs/specs/m4-ui-materials-layout.md`.
 pub fn matches_search(name: &str, query: &str) -> bool {

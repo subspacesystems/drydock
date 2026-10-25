@@ -383,8 +383,19 @@ pub fn axes(transform: DMat4, half_length: f64) -> Vec<Primitive> {
     out
 }
 
-/// The axes of `transform` as GPU lines (`docs/specs/m4-axes-depth.md`).
-pub fn axis_lines(transform: DMat4, half_length: f64, dash: f64) -> Vec<modeler_render::ExtraLine> {
+/// Width of a drawn axis in points.
+pub const AXIS_WIDTH_PT: f32 = 1.5;
+
+/// Dash and gap of a negative half axis in points.
+pub const AXIS_DASH_PT: [f32; 2] = [6.0, 4.0];
+
+/// The axes of `transform` as GPU lines, sized for `pixels_per_point`
+/// (`docs/specs/m4-axes-screen.md`).
+pub fn axis_lines(
+    transform: DMat4,
+    half_length: f64,
+    pixels_per_point: f32,
+) -> Vec<modeler_render::ExtraLine> {
     const COLORS: [[f32; 4]; 3] = [
         [200.0 / 255.0, 40.0 / 255.0, 40.0 / 255.0, 1.0],
         [40.0 / 255.0, 150.0 / 255.0, 40.0 / 255.0, 1.0],
@@ -397,7 +408,13 @@ pub fn axis_lines(transform: DMat4, half_length: f64, dash: f64) -> Vec<modeler_
     if !origin.is_finite() {
         return Vec::new();
     }
-    let solid_dash = !dash.is_finite() || dash <= 0.0;
+    let ppp = if pixels_per_point.is_finite() && pixels_per_point > 0.0 {
+        pixels_per_point
+    } else {
+        1.0
+    };
+    let width_px = AXIS_WIDTH_PT * ppp;
+    let dash_px = [AXIS_DASH_PT[0] * ppp, AXIS_DASH_PT[1] * ppp];
     let mut out = Vec::new();
     for (axis, unit) in [DVec3::X, DVec3::Y, DVec3::Z].into_iter().enumerate() {
         let mapped = transform.transform_vector3(unit);
@@ -411,27 +428,16 @@ pub fn axis_lines(transform: DMat4, half_length: f64, dash: f64) -> Vec<modeler_
             a: origin,
             b: origin + dir * half_length,
             color,
+            width_px,
+            dash_px: None,
         });
-        if solid_dash {
-            out.push(modeler_render::ExtraLine {
-                a: origin,
-                b: origin - dir * half_length,
-                color,
-            });
-            continue;
-        }
-        for k in 0..300 {
-            let start = 2.0 * k as f64 * dash;
-            if start >= half_length {
-                break;
-            }
-            let end = ((2.0 * k as f64 + 1.0) * dash).min(half_length);
-            out.push(modeler_render::ExtraLine {
-                a: origin - dir * start,
-                b: origin - dir * end,
-                color,
-            });
-        }
+        out.push(modeler_render::ExtraLine {
+            a: origin,
+            b: origin - dir * half_length,
+            color,
+            width_px,
+            dash_px: Some(dash_px),
+        });
     }
     out
 }

@@ -68,6 +68,25 @@ pub fn texture_panel(
     available: bool,
 ) -> Option<TextureOp> {
     ui.heading("Texture Position");
+    controls(ui, form, available)
+}
+
+/// The panel as the app shows it: the heading, the [`handles_button`] under it (`on` while
+/// the handles show), then the panel's controls. Returns the op asked for and whether the
+/// handles button was clicked.
+pub fn texture_position_section(
+    ui: &mut egui::Ui,
+    form: &mut TextureForm,
+    available: bool,
+    on: bool,
+) -> (Option<TextureOp>, bool) {
+    ui.heading("Texture Position");
+    let toggled = handles_button(ui, available, on);
+    (controls(ui, form, available), toggled)
+}
+
+/// Everything under the heading but the handles button.
+fn controls(ui: &mut egui::Ui, form: &mut TextureForm, available: bool) -> Option<TextureOp> {
     if !available {
         ui.label("Select a face with a texture");
     }

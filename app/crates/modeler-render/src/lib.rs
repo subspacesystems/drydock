@@ -48,13 +48,18 @@ impl Default for Style {
 }
 
 /// A line segment drawn with the scene, depth-tested against its faces and lines
-/// (`docs/specs/m4-axes-depth.md`).
+/// (`docs/specs/m4-axes-depth.md`, `docs/specs/m4-axes-screen.md`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ExtraLine {
     pub a: DVec3,
     pub b: DVec3,
     /// sRGB RGBA 0..1.
     pub color: [f32; 4],
+    /// Width on screen in target pixels, the same all along the line.
+    pub width_px: f32,
+    /// `Some([on, off])`: dashes `on` target pixels long with gaps `off` long, measured on
+    /// screen from `a`. `None`: solid.
+    pub dash_px: Option<[f32; 2]>,
 }
 
 #[derive(Debug)]
@@ -78,7 +83,6 @@ impl std::error::Error for RenderError {}
 
 /// Number of samples used when the adapter supports 4x MSAA for the target formats.
 const SAMPLE_COUNT: u32 = 4;
-const EXTRA_LINE_WIDTH_PX: f64 = 2.0;
 const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
 /// Serializes headless rendering: creating devices on several threads at once can
@@ -875,7 +879,7 @@ impl Renderer {
                 } else {
                     (mid - eye).dot(forward).max(1e-6)
                 };
-                let offset = side * (world_per_pixel * depth * EXTRA_LINE_WIDTH_PX * 0.5);
+                let offset = side * (world_per_pixel * depth * f64::from(line.width_px) * 0.5);
                 for position in [
                     line.a + offset,
                     line.a - offset,

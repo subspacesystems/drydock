@@ -256,19 +256,18 @@ pub fn edit_material(
     }
 }
 
-/// Remove every material that no existing face side and no instance uses, as one undo
-/// step (none when nothing goes). Returns the removed ids, ascending.
-pub fn purge_materials(
-    model: &mut Model,
-    undo: &mut UndoStack,
-    label: &str,
-) -> Result<Vec<MaterialId>, PaintError> {
-    let bodies: Vec<BodyId> = std::iter::once(BodyId::Root)
+/// Every body of `model`: the root, then each definition.
+fn all_bodies(model: &Model) -> Vec<BodyId> {
+    std::iter::once(BodyId::Root)
         .chain(model.definitions().map(|(id, _)| BodyId::Definition(id)))
-        .collect();
+        .collect()
+}
 
+/// The materials that no existing face side and no instance uses, in the model's material
+/// order: what [`purge_materials`] removes.
+pub fn unused_materials(model: &Model) -> Vec<MaterialId> {
     let mut used = BTreeSet::new();
-    for &body_id in &bodies {
+    for body_id in all_bodies(model) {
         let Some(body) = model.body(body_id) else {
             continue;
         };
@@ -289,12 +288,22 @@ pub fn purge_materials(
             }
         }
     }
-
-    let unused: Vec<MaterialId> = model
+    model
         .materials()
         .filter(|(id, _)| !used.contains(id))
         .map(|(id, _)| id)
-        .collect();
+        .collect()
+}
+
+/// Remove every material that no existing face side and no instance uses, as one undo
+/// step (none when nothing goes). Returns the removed ids, ascending.
+pub fn purge_materials(
+    model: &mut Model,
+    undo: &mut UndoStack,
+    label: &str,
+) -> Result<Vec<MaterialId>, PaintError> {
+    let bodies = all_bodies(model);
+    let unused = unused_materials(model);
     if unused.is_empty() {
         return Ok(Vec::new());
     }

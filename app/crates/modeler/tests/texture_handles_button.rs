@@ -69,3 +69,46 @@ fn on_shows_done_even_when_unavailable() {
         assert_eq!(h.state().clicks, 1, "available = {available}");
     }
 }
+
+/// The section the app shows: heading, then the handles button, then the controls.
+fn section(available: bool, on: bool) -> Harness<'static, State> {
+    let mut h = Harness::new_ui_state(
+        |ui, state: &mut State| {
+            let mut form = modeler::texture_panel::TextureForm::default();
+            let (_, toggled) = modeler::texture_panel::texture_position_section(
+                ui,
+                &mut form,
+                state.available,
+                state.on,
+            );
+            if toggled {
+                state.clicks += 1;
+            }
+        },
+        State {
+            available,
+            on,
+            clicks: 0,
+        },
+    );
+    h.run();
+    h
+}
+
+#[test]
+fn the_section_puts_the_button_under_the_heading_and_above_the_controls() {
+    let h = section(true, false);
+    let heading = h.get_by_label("Texture Position").rect();
+    let button = h.get_by_label("Position in Viewport").rect();
+    let reset = h.get_by_label("Reset Texture").rect();
+    assert!(button.top() >= heading.bottom(), "{heading:?} {button:?}");
+    assert!(reset.top() >= button.bottom(), "{button:?} {reset:?}");
+}
+
+#[test]
+fn the_section_reports_the_button_click() {
+    let mut h = section(true, true);
+    h.get_by_label("Done").click();
+    h.run();
+    assert_eq!(h.state().clicks, 1);
+}

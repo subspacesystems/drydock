@@ -20,7 +20,7 @@ use modeler::materials_panel::{MaterialAction, MaterialsPanel, materials_panel};
 use modeler::overlay::{self, Primitive};
 use modeler::recent::{RecentFiles, recent_file};
 use modeler::texture_handles;
-use modeler::texture_panel::{TextureForm, handles_button, texture_panel};
+use modeler::texture_panel::{TextureForm, texture_position_section};
 use modeler::viewstate::{Effect, ViewState, scene_bounds, zoom_pivot_at};
 use modeler_dae::{FlatScene, RestView};
 use modeler_kernel::editpath::EditPath;
@@ -1112,7 +1112,7 @@ impl App {
             overlay::axis_lines(
                 self.open_transform(),
                 self.view.camera.distance * 100.0,
-                self.view.camera.distance * 0.04,
+                ui.ctx().pixels_per_point(),
             )
         } else {
             Vec::new()
@@ -1526,10 +1526,16 @@ impl eframe::App for App {
                     // Texture Position stays in view at the bottom; a model's material
                     // list can be far taller than the window, so it scrolls.
                     egui::Panel::bottom("texture-position").show(ui, |ui| {
-                        if handles_button(ui, target.is_some(), texture_on) {
+                        let (op, toggled) = texture_position_section(
+                            ui,
+                            &mut self.texture,
+                            target.is_some(),
+                            texture_on,
+                        );
+                        if toggled {
                             handles_action = Some(if texture_on { None } else { target });
                         }
-                        if let Some(op) = texture_panel(ui, &mut self.texture, target.is_some())
+                        if let Some(op) = op
                             && let Some((face, side)) = target
                         {
                             texture_action = Some((face, side, op));

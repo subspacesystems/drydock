@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Subspace Systems
 
-//! m4-axes-depth: `overlay::axis_lines`. See docs/specs/m4-axes-depth.md.
+//! `overlay::axis_lines`. See docs/specs/m4-axes-depth.md and docs/specs/m4-axes-screen.md
+//! (the negative half became one dashed line, sized in screen pixels).
 
 use glam::{DMat4, DQuat, DVec3};
 use modeler::overlay::{Primitive, axes, axis_lines};
@@ -64,56 +65,42 @@ fn each_axis_has_its_colour_and_order() {
 }
 
 #[test]
-fn the_negative_half_is_dashes_with_gaps() {
-    let lines = axis_lines(DMat4::IDENTITY, 10.0, 1.0);
-    let red = of_axis(&lines, 0);
-    // positive line + dashes at [0,1], [2,3], [4,5], [6,7], [8,9]
-    assert_eq!(red.len(), 1 + 5);
-    for (k, d) in red[1..].iter().enumerate() {
-        assert!(near(d.a, DVec3::new(-2.0 * k as f64, 0.0, 0.0)), "dash {k}");
-        assert!(
-            near(d.b, DVec3::new(-2.0 * k as f64 - 1.0, 0.0, 0.0)),
-            "dash {k}"
-        );
-    }
-}
-
-#[test]
-fn the_last_dash_is_cut_at_the_half_length() {
-    let lines = axis_lines(DMat4::IDENTITY, 4.5, 1.0);
-    let blue = of_axis(&lines, 2);
-    // dashes at [0,1], [2,3], [4,4.5]
-    assert_eq!(blue.len(), 1 + 3);
-    assert!(near(blue[3].a, DVec3::new(0.0, 0.0, -4.0)));
-    assert!(near(blue[3].b, DVec3::new(0.0, 0.0, -4.5)));
-}
-
-#[test]
-fn dashes_follow_a_turned_frame() {
+fn each_axis_is_a_solid_positive_line_then_a_dashed_negative_line() {
     let t = placed();
     let lines = axis_lines(t, 10.0, 1.0);
+    assert_eq!(lines.len(), 6);
     let origin = t.transform_point3(DVec3::ZERO);
-    let dir = t.transform_vector3(DVec3::Y).normalize();
-    let green = of_axis(&lines, 1);
-    assert!(near(green[2].a, origin - dir * 2.0));
-    assert!(near(green[2].b, origin - dir * 3.0));
-}
-
-#[test]
-fn at_most_three_hundred_dashes_per_axis() {
-    let lines = axis_lines(DMat4::IDENTITY, 1.0e6, 1.0);
-    for i in 0..3 {
-        assert_eq!(of_axis(&lines, i).len(), 1 + 300, "axis {i}");
+    for (i, unit) in [DVec3::X, DVec3::Y, DVec3::Z].into_iter().enumerate() {
+        let dir = t.transform_vector3(unit).normalize();
+        let mine = of_axis(&lines, i);
+        assert_eq!(mine.len(), 2, "axis {i}");
+        assert!(near(mine[0].a, origin) && near(mine[0].b, origin + dir * 10.0));
+        assert_eq!(mine[0].dash_px, None, "axis {i}");
+        assert!(near(mine[1].a, origin) && near(mine[1].b, origin - dir * 10.0));
+        assert_eq!(mine[1].dash_px, Some([6.0, 4.0]), "axis {i}");
     }
 }
 
 #[test]
-fn a_bad_dash_gives_one_solid_negative_line() {
-    for dash in [0.0, -1.0, f64::NAN, f64::INFINITY] {
-        let lines = axis_lines(DMat4::IDENTITY, 10.0, dash);
-        let red = of_axis(&lines, 0);
-        assert_eq!(red.len(), 2, "dash {dash}");
-        assert!(near(red[1].a, DVec3::ZERO) && near(red[1].b, DVec3::new(-10.0, 0.0, 0.0)));
+fn width_and_dashes_are_points_times_pixels_per_point() {
+    for (ppp, width, dash) in [(1.0, 1.5, [6.0, 4.0]), (2.0, 3.0, [12.0, 8.0])] {
+        let lines = axis_lines(DMat4::IDENTITY, 10.0, ppp);
+        for l in &lines {
+            assert!((l.width_px - width).abs() < 1e-6, "ppp {ppp}");
+        }
+        for i in 0..3 {
+            assert_eq!(of_axis(&lines, i)[1].dash_px, Some(dash), "ppp {ppp}");
+        }
+    }
+}
+
+#[test]
+fn a_bad_pixels_per_point_counts_as_one() {
+    for ppp in [0.0, -1.0, f32::NAN, f32::INFINITY] {
+        let lines = axis_lines(DMat4::IDENTITY, 10.0, ppp);
+        assert_eq!(lines.len(), 6, "ppp {ppp}");
+        assert!((lines[0].width_px - 1.5).abs() < 1e-6, "ppp {ppp}");
+        assert_eq!(lines[1].dash_px, Some([6.0, 4.0]), "ppp {ppp}");
     }
 }
 

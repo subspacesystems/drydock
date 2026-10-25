@@ -57,7 +57,13 @@ fn camera(projection: Projection) -> Camera {
 }
 
 fn line(a: DVec3, b: DVec3) -> ExtraLine {
-    ExtraLine { a, b, color: GREEN }
+    ExtraLine {
+        a,
+        b,
+        color: GREEN,
+        width_px: 2.0,
+        dash_px: None,
+    }
 }
 
 /// Pixel of a world point.
