@@ -21,7 +21,7 @@ use modeler_kernel::erase::erase;
 use modeler_kernel::explode::explode;
 use modeler_kernel::infer::{self, Inference, Probe, Snap};
 use modeler_kernel::model::{
-    BodyId, DefinitionInfo, InstanceId, Material, MaterialId, Model, UndoStack,
+    BodyId, DefinitionInfo, InstanceId, Material, MaterialId, Model, ModelEdit, UndoStack,
 };
 use modeler_kernel::paint::{self, Side};
 use modeler_kernel::pushpull::push_pull;
@@ -1930,16 +1930,36 @@ impl Editor {
     /// changes). True when accepted; false with a message when refused.
     /// Behaviour: `docs/specs/m5-app-sun.md`.
     pub fn set_geolocation(&mut self, model: &mut Model, geolocation: Geolocation) -> bool {
-        let _ = (model, geolocation);
-        unimplemented!()
+        let mut log = ModelEdit::new();
+        match model.set_geolocation(geolocation, &mut log) {
+            Ok(()) => {
+                self.undo.push("Set Location", log);
+                self.message = None;
+                true
+            }
+            Err(_) => {
+                self.message = Some("Can't use that location".to_string());
+                false
+            }
+        }
     }
 
     /// Replace the model's shadow settings as one undo step "Shadow Settings" (none when
     /// nothing changes). True when accepted; false with a message when refused.
     /// Behaviour: `docs/specs/m5-app-sun.md`.
     pub fn set_shadow_settings(&mut self, model: &mut Model, settings: ShadowSettings) -> bool {
-        let _ = (model, settings);
-        unimplemented!()
+        let mut log = ModelEdit::new();
+        match model.set_shadow_settings(settings, &mut log) {
+            Ok(()) => {
+                self.undo.push("Shadow Settings", log);
+                self.message = None;
+                true
+            }
+            Err(_) => {
+                self.message = Some("Can't use those shadow settings".to_string());
+                false
+            }
+        }
     }
 
     /// Position the texture on `side` of `face` in the open body: apply `op` to the map in

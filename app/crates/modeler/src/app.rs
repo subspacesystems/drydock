@@ -19,6 +19,7 @@ use modeler::input::{self, Button, Modifiers, Tool};
 use modeler::materials_panel::{MaterialAction, MaterialsPanel, materials_panel};
 use modeler::overlay::{self, Primitive};
 use modeler::recent::{RecentFiles, recent_file};
+use modeler::shading;
 use modeler::texture_handles;
 use modeler::texture_panel::{TextureForm, texture_position_section};
 use modeler::viewstate::{Effect, ViewState, scene_bounds, zoom_pivot_at};
@@ -1626,6 +1627,14 @@ impl eframe::App for App {
         if !dialog_open {
             self.global_input(&ctx, frame);
             self.sync_editor_path(&ctx, frame);
+        }
+        let sun = self
+            .model
+            .as_ref()
+            .and_then(|document| document.kernel.as_ref())
+            .and_then(shading::sun_light);
+        if shading::update_style(&mut self.style, sun) {
+            self.dirty = true;
         }
         egui::Panel::bottom("status").show(ui, |ui| self.status_bar(ui));
         egui::CentralPanel::no_frame().show(ui, |ui| {

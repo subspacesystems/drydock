@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use modeler::document::Document;
+use modeler::shading;
 use modeler::viewstate::{ViewState, scene_bounds};
 use modeler_render::{Style, render_headless};
 use modeler_view::StandardView;
@@ -107,14 +108,12 @@ fn screenshot(file: &Path, out: &Path) -> Result<(), String> {
         scene_bounds(&document.scene),
         (f64::from(width), f64::from(height)),
     );
-    let (image, warnings) = render_headless(
-        &document.scene,
-        &view.camera,
-        width,
-        height,
-        &Style::default(),
-    )
-    .map_err(|err| err.to_string())?;
+    let style = Style {
+        sun: document.kernel.as_ref().and_then(shading::sun_light),
+        ..Style::default()
+    };
+    let (image, warnings) = render_headless(&document.scene, &view.camera, width, height, &style)
+        .map_err(|err| err.to_string())?;
     for warning in warnings {
         eprintln!("modeler: warning: {warning}");
     }
