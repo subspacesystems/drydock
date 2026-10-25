@@ -26,6 +26,7 @@ use modeler_kernel::model::{
 use modeler_kernel::paint::{self, Side};
 use modeler_kernel::pushpull::push_pull;
 use modeler_kernel::select::{self, BoxMode, Entity};
+use modeler_kernel::sun::{Geolocation, ShadowSettings};
 use modeler_kernel::tape::Guide;
 use modeler_kernel::texture::{self, TextureMap};
 use modeler_kernel::tools::arc::ArcTool;
@@ -1923,6 +1924,22 @@ impl Editor {
                 0
             }
         }
+    }
+
+    /// Replace the model's geolocation as one undo step "Set Location" (none when nothing
+    /// changes). True when accepted; false with a message when refused.
+    /// Behaviour: `docs/specs/m5-app-sun.md`.
+    pub fn set_geolocation(&mut self, model: &mut Model, geolocation: Geolocation) -> bool {
+        let _ = (model, geolocation);
+        unimplemented!()
+    }
+
+    /// Replace the model's shadow settings as one undo step "Shadow Settings" (none when
+    /// nothing changes). True when accepted; false with a message when refused.
+    /// Behaviour: `docs/specs/m5-app-sun.md`.
+    pub fn set_shadow_settings(&mut self, model: &mut Model, settings: ShadowSettings) -> bool {
+        let _ = (model, settings);
+        unimplemented!()
     }
 
     /// Position the texture on `side` of `face` in the open body: apply `op` to the map in

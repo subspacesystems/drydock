@@ -15,6 +15,7 @@ pub mod input;
 pub mod materials_panel;
 pub mod overlay;
 pub mod recent;
+pub mod shading;
 pub mod swatches;
 pub mod texture_handles;
 pub mod texture_panel;
