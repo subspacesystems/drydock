@@ -123,6 +123,8 @@ struct CameraUniform {
     view_proj: [[f32; 4]; 4],
     eye: [f32; 4],
     forward: [f32; 4],
+    sun: [f32; 4],
+    sun_params: [f32; 4],
     parallel: u32,
     _pad: [u32; 3],
 }
@@ -825,10 +827,24 @@ impl Renderer {
         let view_proj = (projection * view).as_mat4();
         let (forward, _, _) = camera.basis();
         let eye = camera.eye();
+        let (sun, sun_params) = match style.sun {
+            Some(sun) => (
+                [
+                    sun.direction.x as f32,
+                    sun.direction.y as f32,
+                    sun.direction.z as f32,
+                    1.0,
+                ],
+                [sun.light, sun.dark, 0.0, 0.0],
+            ),
+            None => ([0.0; 4], [0.0; 4]),
+        };
         let camera_uniform = CameraUniform {
             view_proj: view_proj.to_cols_array_2d(),
             eye: [eye.x as f32, eye.y as f32, eye.z as f32, 1.0],
             forward: [forward.x as f32, forward.y as f32, forward.z as f32, 0.0],
+            sun,
+            sun_params,
             parallel: u32::from(camera.projection == Projection::Parallel),
             _pad: [0; 3],
         };

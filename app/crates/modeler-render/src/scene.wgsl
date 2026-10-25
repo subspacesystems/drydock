@@ -5,6 +5,8 @@ struct Camera {
     view_proj: mat4x4<f32>,
     eye: vec4<f32>,
     forward: vec4<f32>,
+    sun: vec4<f32>,
+    sun_params: vec4<f32>,
     parallel: u32,
     pad0: u32,
     pad1: u32,
@@ -54,15 +56,28 @@ fn fs_face(in: VertexOut) -> @location(0) vec4<f32> {
     let texel = textureSample(material_texture, material_sampler, vec2<f32>(in.uv.x, 1.0 - in.uv.y));
     var rgb = material.color.rgb * texel.rgb;
     if (material.unlit == 0u) {
-        let n = normalize(in.normal);
+        var n = normalize(in.normal);
         var v: vec3<f32>;
         if (camera.parallel != 0u) {
             v = -camera.forward.xyz;
         } else {
             v = normalize(camera.eye.xyz - in.world);
         }
-        let shade = abs(dot(n, v));
-        rgb = rgb * (AMBIENT + (1.0 - AMBIENT) * shade);
+        if (dot(n, v) < 0.0) {
+            n = -n;
+        }
+        var shade: f32;
+        if (camera.sun.w > 0.5) {
+            let s = camera.sun.xyz;
+            var direct = 0.0;
+            if (s.z > 0.0) {
+                direct = max(dot(n, s), 0.0);
+            }
+            shade = min(1.0, camera.sun_params.y + camera.sun_params.x * direct);
+        } else {
+            shade = AMBIENT + (1.0 - AMBIENT) * abs(dot(n, v));
+        }
+        rgb = rgb * shade;
     }
     let alpha = material.opacity * texel.a;
     return vec4<f32>(rgb, alpha);
