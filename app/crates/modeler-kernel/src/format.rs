@@ -18,13 +18,14 @@ use crate::model::{
     MaterialId, Model, ModelError, ModelRecord, Texture,
 };
 use crate::paint::Side;
+use crate::sun::{Geolocation, LocalTime, ShadowSettings};
 use crate::tape::{Guide, GuideId};
 use crate::topology::{
     Edge, EdgeId, EdgeUse, Face, FaceId, Loop, Record, TopoError, Vertex, VertexId,
 };
 
 /// The version this code writes, and the newest it reads.
-pub const FORMAT_VERSION: u32 = 3;
+pub const FORMAT_VERSION: u32 = 4;
 
 /// Why a model can't be written. Nothing was written.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -251,7 +252,11 @@ pub fn to_text(model: &Model) -> Result<String, WriteError> {
         })
     });
     let has_guides = bodies().any(|body| !body.guides().is_empty());
-    let version = if needs_three {
+    let has_settings = model.geolocation() != Geolocation::default()
+        || model.shadow_settings() != ShadowSettings::default();
+    let version = if has_settings {
+        4
+    } else if needs_three {
         3
     } else if has_guides {
         2
@@ -260,6 +265,37 @@ pub fn to_text(model: &Model) -> Result<String, WriteError> {
     };
     let mut out = String::new();
     out.push_str(&format!("modeler-model {version}\n"));
+
+    if model.geolocation() != Geolocation::default() {
+        let g = model.geolocation();
+        check_finite(g.latitude)?;
+        check_finite(g.longitude)?;
+        check_finite(g.north_angle)?;
+        check_finite(g.utc_offset)?;
+        out.push_str(&format!(
+            "geolocation {} {} {} {}\n",
+            g.latitude, g.longitude, g.north_angle, g.utc_offset
+        ));
+    }
+    if model.shadow_settings() != ShadowSettings::default() {
+        let s = model.shadow_settings();
+        check_finite(s.light)?;
+        check_finite(s.dark)?;
+        let flag = |on: bool| if on { "on" } else { "off" };
+        out.push_str(&format!(
+            "sun {} {} {} {} {} {} {} {} {} {}\n",
+            s.time.year,
+            s.time.month,
+            s.time.day,
+            s.time.hour,
+            s.time.minute,
+            flag(s.shadows),
+            flag(s.sun_shading),
+            s.light,
+            s.dark,
+            flag(s.on_ground)
+        ));
+    }
 
     for (id, material) in model.materials() {
         for component in material.color {
@@ -450,6 +486,26 @@ fn parse_f32(token: &Token) -> Result<f32, ReadErrorKind> {
     }
 }
 
+fn parse_i32(token: &Token) -> Result<i32, ReadErrorKind> {
+    bare(token)?
+        .parse::<i32>()
+        .map_err(|_| ReadErrorKind::BadField)
+}
+
+fn parse_u32(token: &Token) -> Result<u32, ReadErrorKind> {
+    bare(token)?
+        .parse::<u32>()
+        .map_err(|_| ReadErrorKind::BadField)
+}
+
+fn parse_flag(token: &Token) -> Result<bool, ReadErrorKind> {
+    match bare(token)? {
+        "on" => Ok(true),
+        "off" => Ok(false),
+        _ => Err(ReadErrorKind::BadField),
+    }
+}
+
 fn parse_optional_id(token: &Token) -> Result<Option<u64>, ReadErrorKind> {
     match bare(token)? {
         "-" => Ok(None),
@@ -483,6 +539,7 @@ fn apply_line(
     version: u32,
     current: &mut Option<BodyId>,
     seen: &mut BTreeSet<BodyId>,
+    settings_seen: &mut BTreeSet<&'static str>,
     tokens: &[Token],
 ) -> Result<bool, ReadErrorKind> {
     let name = match tokens.first() {
@@ -785,6 +842,58 @@ fn apply_line(
                 .map_err(rejected)?;
             Ok(false)
         }
+        "geolocation" => {
+            if version < 4 {
+                return Err(ReadErrorKind::UnknownRecord);
+            }
+            if !settings_seen.insert("geolocation") {
+                return Err(ReadErrorKind::BadField);
+            }
+            expect_count(tokens, 5)?;
+            let geolocation = Geolocation {
+                latitude: parse_f64(&tokens[1])?,
+                longitude: parse_f64(&tokens[2])?,
+                north_angle: parse_f64(&tokens[3])?,
+                utc_offset: parse_f64(&tokens[4])?,
+            };
+            let from = model.geolocation();
+            model
+                .apply(&ModelRecord::SetGeolocation {
+                    from,
+                    to: geolocation,
+                })
+                .map_err(rejected)?;
+            Ok(false)
+        }
+        "sun" => {
+            if version < 4 {
+                return Err(ReadErrorKind::UnknownRecord);
+            }
+            if !settings_seen.insert("sun") {
+                return Err(ReadErrorKind::BadField);
+            }
+            expect_count(tokens, 11)?;
+            let time = LocalTime {
+                year: parse_i32(&tokens[1])?,
+                month: parse_u32(&tokens[2])?,
+                day: parse_u32(&tokens[3])?,
+                hour: parse_u32(&tokens[4])?,
+                minute: parse_u32(&tokens[5])?,
+            };
+            let settings = ShadowSettings {
+                time,
+                shadows: parse_flag(&tokens[6])?,
+                sun_shading: parse_flag(&tokens[7])?,
+                light: parse_f64(&tokens[8])?,
+                dark: parse_f64(&tokens[9])?,
+                on_ground: parse_flag(&tokens[10])?,
+            };
+            let from = model.shadow_settings();
+            model
+                .apply(&ModelRecord::SetShadows { from, to: settings })
+                .map_err(rejected)?;
+            Ok(false)
+        }
         _ => Err(ReadErrorKind::UnknownRecord),
     }
 }
@@ -829,6 +938,7 @@ pub fn from_text(text: &str) -> Result<Model, ReadError> {
     let mut model = Model::new();
     let mut current = None;
     let mut seen = BTreeSet::new();
+    let mut settings_seen = BTreeSet::new();
     let mut ended = false;
 
     for (index, line) in lines {
@@ -849,11 +959,17 @@ pub fn from_text(text: &str) -> Result<Model, ReadError> {
             line: line_number,
             kind,
         })?;
-        if apply_line(&mut model, version, &mut current, &mut seen, &tokens).map_err(|kind| {
-            ReadError {
-                line: line_number,
-                kind,
-            }
+        if apply_line(
+            &mut model,
+            version,
+            &mut current,
+            &mut seen,
+            &mut settings_seen,
+            &tokens,
+        )
+        .map_err(|kind| ReadError {
+            line: line_number,
+            kind,
         })? {
             ended = true;
         }
