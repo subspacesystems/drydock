@@ -77,6 +77,13 @@ fn vs_line(in: LineIn) -> @builtin(position) vec4<f32> {
     return camera.view_proj * vec4<f32>(in.position, 1.0);
 }
 
+@vertex
+fn vs_extra_line(in: LineIn) -> @builtin(position) vec4<f32> {
+    var clip = camera.view_proj * vec4<f32>(in.position, 1.0);
+    clip.z = clamp(clip.z, 0.0, clip.w);
+    return clip;
+}
+
 @fragment
 fn fs_line() -> @location(0) vec4<f32> {
     return vec4<f32>(material.color.rgb, material.opacity);
