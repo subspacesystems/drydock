@@ -240,6 +240,7 @@ fn choose_shadows(shadows: bool) -> Vec<Action> {
     h.get_by_label("Shadows").click();
     h.run();
     let out = seen.borrow().clone();
+    drop(h);
     out
 }
 

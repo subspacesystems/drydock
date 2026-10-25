@@ -33,8 +33,6 @@ unsafe_code = "forbid"
 [workspace.lints.clippy]
 dbg_macro = "warn"
 todo = "warn"
-# Some acceptance tests finish with `let out = ...; out`.
-let_and_return = "allow"
 
 # Tests decode large textures and XML; optimise dependencies even in test builds.
 [profile.dev.package."*"]
