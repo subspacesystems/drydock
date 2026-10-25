@@ -13,7 +13,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
-use glam::DVec3;
+use glam::{DVec2, DVec3};
 use modeler_dae::{Aabb, FlatScene};
 use modeler_view::{Camera, Projection};
 use wgpu::util::DeviceExt;
@@ -448,7 +448,7 @@ impl Renderer {
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
-                entry_point: Some("vs_line"),
+                entry_point: Some("vs_extra_line"),
                 compilation_options: Default::default(),
                 buffers: &[Some(vertex_layout)],
             },
@@ -853,52 +853,26 @@ impl Renderer {
         let extra: Vec<ExtraLine> = extra
             .iter()
             .copied()
-            .filter(|line| line.a.is_finite() && line.b.is_finite() && line.a != line.b)
+            .filter(|line| {
+                line.a.is_finite()
+                    && line.b.is_finite()
+                    && line.a != line.b
+                    && line.width_px.is_finite()
+                    && line.width_px > 0.0
+            })
             .collect();
-        let world_per_pixel = 2.0 * (camera.fov_y * 0.5).tan() / target.height as f64;
-        let extra_buffer = (!extra.is_empty()).then(|| {
-            let mut vertices = Vec::with_capacity(extra.len() * 6);
-            for line in &extra {
-                let mid = (line.a + line.b) * 0.5;
-                let direction = (line.b - line.a).normalize();
-                let view = if camera.projection == Projection::Parallel {
-                    forward
-                } else {
-                    (mid - eye).normalize()
-                };
-                let mut side = direction.cross(view);
-                if side.length_squared() <= 1e-24 {
-                    side = direction.cross(camera.basis().1);
-                }
-                if side.length_squared() <= 1e-24 {
-                    side = DVec3::Z;
-                }
-                side = side.normalize();
-                let depth = if camera.projection == Projection::Parallel {
-                    camera.distance
-                } else {
-                    (mid - eye).dot(forward).max(1e-6)
-                };
-                let offset = side * (world_per_pixel * depth * f64::from(line.width_px) * 0.5);
-                for position in [
-                    line.a + offset,
-                    line.a - offset,
-                    line.b - offset,
-                    line.a + offset,
-                    line.b - offset,
-                    line.b + offset,
-                ] {
-                    vertices.push(Vertex {
-                        position: [position.x as f32, position.y as f32, position.z as f32],
-                        normal: [0.0; 3],
-                        uv: [0.0; 2],
-                    });
-                }
-            }
+        let (extra_vertices, extra_ranges) = extra_line_geometry(
+            &extra,
+            camera,
+            &(projection * view),
+            target.width,
+            target.height,
+        );
+        let extra_buffer = (!extra_vertices.is_empty()).then(|| {
             create_buffer_init(
                 device,
                 "modeler-render extra line vertices",
-                bytemuck::cast_slice(&vertices),
+                bytemuck::cast_slice(&extra_vertices),
                 wgpu::BufferUsages::VERTEX,
             )
         });
@@ -967,7 +941,11 @@ impl Renderer {
                     };
                     let bind_group = self.material_bind_group(device, scene, material);
                     pass.set_bind_group(1, &bind_group, &[]);
-                    pass.draw((start as u32) * 6..(end as u32) * 6, 0..1);
+                    let first = extra_ranges[start].0;
+                    let last = extra_ranges[end - 1].1;
+                    if last > first {
+                        pass.draw(first..last, 0..1);
+                    }
                     start = end;
                 }
             }
@@ -1070,6 +1048,184 @@ fn create_buffer_init(
         contents,
         usage,
     })
+}
+
+fn screen_fraction_to_param(f: f64, w0: f64, w1: f64) -> f64 {
+    if (w0 - w1).abs() <= 1e-30 {
+        f
+    } else {
+        (f / w1) / ((1.0 - f) / w0 + f / w1)
+    }
+}
+
+/// Build screen-sized quads for `extra` lines, splitting them where the clip depth leaves
+/// the [0, w] range and cutting dashes on the CPU. Returns the vertices and, per line,
+/// the vertex range it occupies.
+fn extra_line_geometry(
+    extra: &[ExtraLine],
+    camera: &Camera,
+    view_proj: &glam::DMat4,
+    width: u32,
+    height: u32,
+) -> (Vec<Vertex>, Vec<(u32, u32)>) {
+    const MAX_DASHES: usize = 65_536;
+    let world_per_pixel = 2.0 * (camera.fov_y * 0.5).tan() / f64::from(height);
+    let (forward, right, _) = camera.basis();
+    let eye = camera.eye();
+    let parallel = camera.projection == Projection::Parallel;
+    // Stop a little in front of the eye so the projection never divides by zero.
+    let w_min = (camera.distance.abs() * 1e-4).max(1e-9);
+    let (width, height) = (f64::from(width), f64::from(height));
+    let mut vertices = Vec::new();
+    let mut ranges = Vec::with_capacity(extra.len());
+
+    for line in extra {
+        let start = vertices.len() as u32;
+        let (a, b) = (line.a, line.b);
+        let ca = *view_proj * glam::DVec4::new(a.x, a.y, a.z, 1.0);
+        let cb = *view_proj * glam::DVec4::new(b.x, b.y, b.z, 1.0);
+        let dw = cb.w - ca.w;
+        let dz = cb.z - ca.z;
+
+        let (t0, t1) = if parallel {
+            (0.0, 1.0)
+        } else {
+            let (mut lo, mut hi): (f64, f64) = (0.0, 1.0);
+            if dw.abs() <= 1e-30 {
+                if ca.w <= w_min {
+                    ranges.push((start, start));
+                    continue;
+                }
+            } else {
+                let t = (w_min - ca.w) / dw;
+                if dw > 0.0 {
+                    lo = lo.max(t);
+                } else {
+                    hi = hi.min(t);
+                }
+            }
+            if hi <= lo {
+                ranges.push((start, start));
+                continue;
+            }
+            (lo, hi)
+        };
+
+        let direction = (b - a).normalize();
+        let mut side = if parallel {
+            direction.cross(forward)
+        } else {
+            direction.cross((a + b) * 0.5 - eye)
+        };
+        if side.length_squared() <= 1e-24 {
+            side = direction.cross(right);
+        }
+        if side.length_squared() <= 1e-24 {
+            side = DVec3::Z;
+        }
+        let side = side.normalize();
+        let half_width = f64::from(line.width_px) * 0.5;
+
+        let screen_at = |t: f64| -> DVec2 {
+            let clip = ca + (cb - ca) * t;
+            DVec2::new(
+                (clip.x / clip.w + 1.0) * 0.5 * width,
+                (1.0 - clip.y / clip.w) * 0.5 * height,
+            )
+        };
+
+        // Parameters where the clip depth crosses the near plane (z = 0) or the far
+        // plane (z = w). Each piece on one side keeps the shader's clamp exact.
+        let mut cuts = vec![t0, t1];
+        if dz.abs() > 1e-30 {
+            let t = -ca.z / dz;
+            if t > t0 && t < t1 {
+                cuts.push(t);
+            }
+        }
+        let depth_span = dz - dw;
+        if depth_span.abs() > 1e-30 {
+            let t = (ca.w - ca.z) / depth_span;
+            if t > t0 && t < t1 {
+                cuts.push(t);
+            }
+        }
+        cuts.sort_by(|x, y| x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal));
+        cuts.dedup_by(|x, y| (*x - *y).abs() <= 1e-12);
+
+        let dash = line.dash_px.and_then(|[on, off]| {
+            (on.is_finite() && off.is_finite() && on > 0.0 && off > 0.0)
+                .then_some((f64::from(on), f64::from(off)))
+        });
+        let mut spans: Vec<(f64, f64)> = Vec::new();
+        match dash {
+            None => spans.push((t0, t1)),
+            Some((on, off)) => {
+                let length = screen_at(t0).distance(screen_at(t1));
+                if !length.is_finite() || length <= 1e-9 {
+                    spans.push((t0, t1));
+                } else {
+                    let w0 = ca.w + dw * t0;
+                    let w1 = ca.w + dw * t1;
+                    let span = t1 - t0;
+                    let mut k = 0;
+                    while k < MAX_DASHES {
+                        let start_px = k as f64 * (on + off);
+                        if start_px >= length {
+                            break;
+                        }
+                        let f0 = start_px / length;
+                        let f1 = ((start_px + on) / length).min(1.0);
+                        let u0 = screen_fraction_to_param(f0, w0, w1);
+                        let u1 = screen_fraction_to_param(f1, w0, w1);
+                        let (ta, tb) = (t0 + u0 * span, t0 + u1 * span);
+                        if tb > ta {
+                            spans.push((ta, tb));
+                        }
+                        k += 1;
+                    }
+                }
+            }
+        }
+
+        for (ta, tb) in spans {
+            let mut bounds = vec![ta, tb];
+            bounds.extend(cuts.iter().copied().filter(|c| *c > ta && *c < tb));
+            bounds.sort_by(|x, y| x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal));
+            for pair in bounds.windows(2) {
+                let (u0, u1) = (pair[0], pair[1]);
+                if u1 - u0 <= 1e-12 {
+                    continue;
+                }
+                let p0 = a + (b - a) * u0;
+                let p1 = a + (b - a) * u1;
+                let d0 = if parallel {
+                    camera.distance.abs()
+                } else {
+                    ca.w + dw * u0
+                };
+                let d1 = if parallel {
+                    camera.distance.abs()
+                } else {
+                    ca.w + dw * u1
+                };
+                if d0 <= 0.0 || d1 <= 0.0 {
+                    continue;
+                }
+                let o0 = side * (world_per_pixel * d0 * half_width);
+                let o1 = side * (world_per_pixel * d1 * half_width);
+                for position in [p0 + o0, p0 - o0, p1 - o1, p0 + o0, p1 - o1, p1 + o1] {
+                    vertices.push(Vertex {
+                        position: [position.x as f32, position.y as f32, position.z as f32],
+                        normal: [0.0; 3],
+                        uv: [0.0; 2],
+                    });
+                }
+            }
+        }
+        ranges.push((start, vertices.len() as u32));
+    }
+    (vertices, ranges)
 }
 
 fn build_vertices(batch: &modeler_dae::Batch) -> Vec<Vertex> {
