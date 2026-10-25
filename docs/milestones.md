@@ -158,8 +158,9 @@ Done when: `modeler` on the reference house model opens in under 5 s on modeler-
 | `m5-render-sun` | Renderer: lit faces shaded by the sun (light/dark, side seen by the viewer) when `Style::sun` is set | |
 | `m5-render-shadows` | Renderer: shadow map from the sun; faces receive shadows, optional shadows on the ground plane; lavapipe tests | `m5-render-sun` |
 | `m5-app-sun` | Editor/app: the model's settings give `Style::sun` each frame; setting geolocation or shadow settings is one undo step; redraw on change | `m5-solar`, `m5-geo-model`, `m5-render-sun` |
-| `m5-app-shadows-ui` | Shadows window: shadows on/off, sun shading, time and date sliders, light/dark, on ground; View > Shadows toggle; egui_kittest tests | `m5-app-sun` |
-| `m5-app-geo-ui` | Model Info > Geolocation: typed latitude, longitude, north angle and UTC offset with checks; egui_kittest tests | `m5-app-sun` |
+| `m5-app-shadows-ui` | Shadows panel widget: shadows on/off, sun shading, time and date sliders, light/dark, on ground; View > Shadows item; egui_kittest tests | `m5-app-sun` |
+| `m5-app-geo-ui` | Geolocation form widget: typed latitude, longitude, north angle and UTC offset with checks; egui_kittest tests | `m5-app-sun` |
+| `m5-app-sun-windows` | App wiring: Shadows window (slider drags preview, release commits one undo step) and Geolocation window opened from Model Info; real-window check on 05-house | `m5-app-shadows-ui`, `m5-app-geo-ui` |
 
 - Geolocation (latitude, longitude, true north angle), date and time.
 - Solar position (own implementation from a public-domain algorithm description), shadow mapping in the renderer, light/dark settings.
