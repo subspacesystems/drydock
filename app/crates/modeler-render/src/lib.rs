@@ -104,8 +104,10 @@ impl std::error::Error for RenderError {}
 /// Number of samples used when the adapter supports 4x MSAA for the target formats.
 const SAMPLE_COUNT: u32 = 4;
 const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
-/// Shadow-map resolution on each side.
-const SHADOW_SIZE: u32 = 2048;
+/// Shadow-map resolution on each side, for each cascade.
+pub const SHADOW_SIZE: u32 = 2048;
+/// Most cascades [`shadow_cascades`] returns.
+pub const SHADOW_CASCADES: usize = 4;
 /// Extra depth compared against the shadow map, in normalized depth units.
 const SHADOW_BIAS: f32 = 0.0008;
 
@@ -1617,9 +1619,10 @@ fn batch_center(positions: &[[f32; 3]]) -> DVec3 {
     (min + max) * 0.5
 }
 
-/// Bounding sphere of the scene plus, when shadows fall on the ground, the ground area
-/// the scene's shadow can reach.
-fn shadow_bounds(bounds: Aabb, sun: DVec3, ground: bool) -> (DVec3, f64) {
+/// The box shadows are needed in: the scene's bounds plus, when shadows fall on the
+/// ground, the ground area (z = 0) the scene's shadow can reach along `sun`. Returns the
+/// box's min and max corners.
+pub fn shadow_region(bounds: Aabb, sun: DVec3, on_ground: bool) -> (DVec3, DVec3) {
     let mut min = DVec3::new(
         bounds.min[0] as f64,
         bounds.min[1] as f64,
@@ -1630,7 +1633,7 @@ fn shadow_bounds(bounds: Aabb, sun: DVec3, ground: bool) -> (DVec3, f64) {
         bounds.max[1] as f64,
         bounds.max[2] as f64,
     );
-    if ground && sun.z > 0.0 {
+    if on_ground && sun.z > 0.0 {
         for x in [min.x, max.x] {
             for y in [min.y, max.y] {
                 for z in [min.z, max.z] {
@@ -1644,6 +1647,41 @@ fn shadow_bounds(bounds: Aabb, sun: DVec3, ground: bool) -> (DVec3, f64) {
             }
         }
     }
+    (min, max)
+}
+
+/// One slice of the view's depth range and the light camera whose shadow map covers it
+/// (`docs/specs/m5-shadow-cascades.md`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ShadowCascade {
+    /// View depth (distance along the camera's forward from the eye) where this cascade
+    /// ends. A fragment uses the first cascade whose `far` is at least its depth.
+    pub far: f64,
+    /// World to the light's clip space: orthographic along `-sun`, x and y in -1..1 over
+    /// the map, depth 0..1.
+    pub light_view_proj: glam::DMat4,
+    /// World size of one shadow-map texel (square texels).
+    pub texel: f64,
+}
+
+/// The shadow cascades for one frame: 1 to [`SHADOW_CASCADES`] slices of the camera's
+/// view of [`shadow_region`], nearest first, each with a light camera fitted to it.
+/// Empty when the sun is at or below the horizon or nothing of the region is in front
+/// of the camera. Behaviour: `docs/specs/m5-shadow-cascades.md`.
+pub fn shadow_cascades(
+    camera: &Camera,
+    aspect: f64,
+    bounds: Aabb,
+    sun: DVec3,
+    on_ground: bool,
+) -> Vec<ShadowCascade> {
+    let _ = (camera, aspect, bounds, sun, on_ground);
+    unimplemented!("m5-shadow-cascades")
+}
+
+/// Bounding sphere of [`shadow_region`].
+fn shadow_bounds(bounds: Aabb, sun: DVec3, ground: bool) -> (DVec3, f64) {
+    let (min, max) = shadow_region(bounds, sun, ground);
     let center = (min + max) * 0.5;
     let radius = ((max - min).length() * 0.5).max(1e-3);
     (center, radius)

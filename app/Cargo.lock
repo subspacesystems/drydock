@@ -1371,6 +1371,7 @@ dependencies = [
  "modeler-dae",
  "modeler-view",
  "pollster",
+ "proptest",
  "wgpu",
 ]
 
