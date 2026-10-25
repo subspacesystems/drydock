@@ -35,6 +35,25 @@ pub struct Style {
     pub default_face: [f32; 4],
     /// Color for lines without a material, sRGB RGBA 0..1.
     pub default_line: [f32; 4],
+    /// `Some`: lit materials are shaded by the sun instead of a light at the viewer
+    /// (`docs/specs/m5-render-sun.md`).
+    pub sun: Option<SunLight>,
+}
+
+/// Sunlight for [`Style::sun`].
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SunLight {
+    /// Unit vector toward the sun, world axes (Z up). Below the horizon (`z <= 0`) there is
+    /// no direct light.
+    pub direction: DVec3,
+    /// Share of a material's color that direct sunlight adds on a face square to it, 0..=1.
+    pub light: f32,
+    /// Share of a material's color without direct sunlight, 0..=1.
+    pub dark: f32,
+    /// Faces cast shadows (`docs/specs/m5-render-shadows.md`).
+    pub shadows: bool,
+    /// Shadows also fall on the ground (z = 0) where there is no face.
+    pub on_ground: bool,
 }
 
 impl Default for Style {
@@ -43,6 +62,7 @@ impl Default for Style {
             background: [0.94, 0.95, 0.96, 1.0],
             default_face: [0.85, 0.85, 0.85, 1.0],
             default_line: [0.0, 0.0, 0.0, 1.0],
+            sun: None,
         }
     }
 }
