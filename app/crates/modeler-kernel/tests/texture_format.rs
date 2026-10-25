@@ -67,8 +67,8 @@ end
 "#;
 
 #[test]
-fn version_is_three() {
-    assert_eq!(FORMAT_VERSION, 3);
+fn version_is_at_least_three() {
+    const { assert!(FORMAT_VERSION >= 3) };
 }
 
 #[test]

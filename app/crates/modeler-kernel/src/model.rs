@@ -12,6 +12,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use glam::{DMat4, DVec2};
 
+use crate::sun::{Geolocation, ShadowSettings};
 use crate::tape::{Guide, GuideId, Guides};
 use crate::texture::TextureMap;
 use crate::topology::{Context, Edit, FaceId, Record, TopoError, Violation};
@@ -212,6 +213,15 @@ pub enum ModelRecord {
     },
     AddGuide(BodyId, GuideId, Guide),
     RemoveGuide(BodyId, GuideId, Guide),
+    /// Behaviour: `docs/specs/m5-geo-model.md`.
+    SetGeolocation {
+        from: Geolocation,
+        to: Geolocation,
+    },
+    SetShadows {
+        from: ShadowSettings,
+        to: ShadowSettings,
+    },
 }
 
 impl ModelRecord {
@@ -262,6 +272,14 @@ impl ModelRecord {
             },
             ModelRecord::AddGuide(body, id, guide) => ModelRecord::RemoveGuide(*body, *id, *guide),
             ModelRecord::RemoveGuide(body, id, guide) => ModelRecord::AddGuide(*body, *id, *guide),
+            ModelRecord::SetGeolocation { from, to } => ModelRecord::SetGeolocation {
+                from: *to,
+                to: *from,
+            },
+            ModelRecord::SetShadows { from, to } => ModelRecord::SetShadows {
+                from: *to,
+                to: *from,
+            },
         }
     }
 }
@@ -322,6 +340,9 @@ pub enum ModelError {
     BadTexture,
     /// A face's texture map has a non-finite entry.
     BadTextureMap,
+    /// A geolocation or shadow setting is non-finite or out of range
+    /// (`docs/specs/m5-geo-model.md`).
+    BadSettings,
 }
 
 /// A broken model invariant found by `Model::validate`.
@@ -345,6 +366,8 @@ pub struct Model {
     next_instance: u64,
     id: ModelId,
     revision: u64,
+    geolocation: Geolocation,
+    shadows: ShadowSettings,
 }
 
 /// A process-unique identity; a clone takes a fresh one, so caches keyed on it never
@@ -383,6 +406,38 @@ impl Model {
     /// Behaviour: `docs/specs/m2-infer-cache.md`.
     pub fn revision(&self) -> u64 {
         self.revision
+    }
+
+    /// Where the model is on Earth (`docs/specs/m5-geo-model.md`).
+    pub fn geolocation(&self) -> Geolocation {
+        self.geolocation
+    }
+
+    /// How the sun lights the model (`docs/specs/m5-geo-model.md`).
+    pub fn shadow_settings(&self) -> ShadowSettings {
+        self.shadows
+    }
+
+    /// Replace the geolocation as one record in `log`; `BadSettings` (nothing changes) when
+    /// a field is non-finite or out of range.
+    pub fn set_geolocation(
+        &mut self,
+        geolocation: Geolocation,
+        log: &mut ModelEdit,
+    ) -> Result<(), ModelError> {
+        let _ = (geolocation, log);
+        unimplemented!("m5-geo-model")
+    }
+
+    /// Replace the shadow settings as one record in `log`; `BadSettings` (nothing changes)
+    /// when a field is non-finite or out of range.
+    pub fn set_shadow_settings(
+        &mut self,
+        settings: ShadowSettings,
+        log: &mut ModelEdit,
+    ) -> Result<(), ModelError> {
+        let _ = (settings, log);
+        unimplemented!("m5-geo-model")
     }
 
     /// The identity and revision that key a cached flattening of this model.
@@ -1103,6 +1158,9 @@ impl Model {
                 }
                 b.guides.remove(*id);
                 Ok(())
+            }
+            ModelRecord::SetGeolocation { .. } | ModelRecord::SetShadows { .. } => {
+                unimplemented!("m5-geo-model")
             }
         }
     }

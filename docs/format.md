@@ -1,8 +1,8 @@
-# Native model file, version 3
+# Native model file, version 4
 
 The native file stores a whole `Model` (`modeler-kernel`, `src/model.rs`): materials,
 definitions, and for the root and every definition its geometry (vertices, edges, faces),
-face materials, instances and guides. Code: `modeler_kernel::format`. Owner: orchestrator.
+face materials, instances and guides, plus the model's geolocation and shadow settings. Code: `modeler_kernel::format`. Owner: orchestrator.
 
 Design goals: exact round trip (ids and every number come back bit for bit), readable and
 diffable, no dependencies, easy to extend. Lengths are meters.
@@ -44,13 +44,17 @@ Then, one per line:
 | `instance <id> <definition> <material> <m0> ... <m15> <name>` | a placed definition; `material` is an id or `-`; the 16 numbers are the transform in column-major order (`DMat4::to_cols_array`); `name` is a string |
 | `guide <id> line <px> <py> <pz> <dx> <dy> <dz>` | (version 2) an infinite guide line through `p` with unit direction `d` |
 | `guide <id> point <x> <y> <z>` | (version 2) a guide point |
+| `geolocation <latitude> <longitude> <north angle> <utc offset>` | (version 4) where the model is (`modeler_kernel::sun::Geolocation`): degrees north, degrees east, degrees from +Y to true north clockwise seen from above, hours ahead of UTC; at most once, anywhere before `end` |
+| `sun <year> <month> <day> <hour> <minute> <shadows> <sun shading> <light> <dark> <on ground>` | (version 4) the shadow settings (`ShadowSettings`): local date and time as integers, then `on`/`off`, `on`/`off`, two reals in 0..=1, `on`/`off`; at most once, anywhere before `end` |
 | `end` | last record; after it only blank lines may follow |
 
 Every record is applied as soon as it is read, so everything it names must already exist
 (the material for a paint or instance, the definition for a `body` or an instance, the
 vertices of an edge, the edges of a face, the face of a paint or texmap). Ids keep their
 values. A `guide` record in a version 1 file is an unknown record; a `texmap` record in a
-version 1 or 2 file is too.
+version 1 or 2 file is too, and a `geolocation` or `sun` record in a version 1 to 3 file.
+A second `geolocation` or `sun` record is a bad field; values the model refuses (out of
+range, an invalid date) are rejected with `BadSettings`.
 
 In versions 1 and 2 the material record has exactly 8 tokens and a texture's size reads as
 `1` by `1` meters. In version 3 a material with a texture has exactly 10 tokens; without
@@ -59,17 +63,19 @@ model refuses (non-finite or not positive) is rejected.
 
 ## What writers produce
 Exactly this order, one space between tokens, every line ending in `\n`:
-1. the header, with the lowest version that holds the model: `3` when a material's texture
+1. the header, with the lowest version that holds the model: `4` when the geolocation or
+   the shadow settings differ from their defaults; else `3` when a material's texture
    size isn't exactly `1` by `1`, or an existing face has a stored texture map; else `2`
    when a body has guides; else `1`;
-2. `material` records, ascending id; in version 3 a texture also writes its width and
+2. `geolocation`, then `sun`, each only when it differs from its default;
+3. `material` records, ascending id; in version 3 a texture also writes its width and
    height;
-3. `definition` records, ascending id;
-4. `body root`, then `body <id>` for every definition in ascending id (written even when
+4. `definition` records, ascending id;
+5. `body root`, then `body <id>` for every definition in ascending id (written even when
    the body is empty); inside each body: `vertex` records, then `edge`, `face`, `paint`,
    `texmap`, `instance` and `guide` records, each in ascending id; `texmap` is written for
    each existing face with a stored map, `front` before `back`;
-5. `end`.
+6. `end`.
 
 `paint` is written only for faces that exist and have a material on either side.
 `texmap` is written only for faces that exist (face material entries left behind by
@@ -84,5 +90,6 @@ the target. If anything fails, the temporary file is removed and the target is u
 - 1 (M1): everything here except `guide`.
 - 2 (M3): adds `guide` records.
 - 3 (M4): adds texture sizes to `material` records and `texmap` records.
+- 4 (M5): adds `geolocation` and `sun` records.
 
 A later version may add records; a reader for version N reads every version up to N.

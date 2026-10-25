@@ -15,7 +15,8 @@
 //! `docs/specs/m4-paint.md` (paint and materials), `docs/specs/m4-make-component.md`
 //! (make component and group), `docs/specs/m4-explode.md` (explode), `docs/specs/m4-edit-path.md`
 //! (editing inside an instance), `docs/specs/m4-texture-model.md` (texture size and placement),
-//! `docs/specs/m4-copy.md` (copy, clipboard and paste).
+//! `docs/specs/m4-copy.md` (copy, clipboard and paste), `docs/specs/m5-solar.md` (sun position),
+//! `docs/specs/m5-geo-model.md` (geolocation and shadow settings).
 
 pub mod click;
 pub mod component;
@@ -34,6 +35,7 @@ pub mod pushpull;
 pub mod select;
 pub mod shapes;
 pub mod sticky;
+pub mod sun;
 pub mod tape;
 pub mod tess;
 pub mod texture;
