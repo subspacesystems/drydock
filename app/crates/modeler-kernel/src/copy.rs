@@ -594,6 +594,105 @@ pub fn import_component(
     undo: &mut UndoStack,
     label: &str,
 ) -> Result<DefinitionId, CopyError> {
-    let _ = (model, source, name, undo, label);
-    unimplemented!("m6-components-import")
+    let source_root = source.root();
+    if source_root.geometry().edge_count() == 0
+        && source_root.geometry().face_count() == 0
+        && source_root.instances().next().is_none()
+    {
+        return Err(CopyError::Empty);
+    }
+
+    let selection: Vec<Entity> = source_root
+        .geometry()
+        .edges()
+        .map(|(id, _)| Entity::Edge(id))
+        .chain(
+            source_root
+                .geometry()
+                .faces()
+                .map(|(id, _)| Entity::Face(id)),
+        )
+        .chain(source_root.instances().map(|(id, _)| Entity::Instance(id)))
+        .collect();
+    let clipboard = extract(source, BodyId::Root, &selection)?;
+    let clip = clipboard.model();
+
+    let before = model.validate();
+    let mut edit = ModelEdit::new();
+
+    let mut material_map = BTreeMap::new();
+    for (id, material) in clip.materials() {
+        let target = if model.material(id) == Some(material) {
+            id
+        } else if let Some((target, _)) = model.materials().find(|(_, other)| *other == material) {
+            target
+        } else {
+            let mut material = material.clone();
+            material.name = unique_material_name(model, &material.name);
+            model.add_material(material, &mut edit)
+        };
+        material_map.insert(id, target);
+    }
+
+    let definitions: BTreeSet<DefinitionId> = clip.definitions().map(|(id, _)| id).collect();
+    let mut definition_map = BTreeMap::new();
+    for definition in definition_order(clip, &definitions) {
+        let Some(info) = clip.definition(definition) else {
+            continue;
+        };
+        let Some(clip_body) = clip.body(BodyId::Definition(definition)) else {
+            continue;
+        };
+        let new = model.add_definition(
+            DefinitionInfo {
+                name: unique_definition_name(model, &info.name, info.group),
+                group: info.group,
+            },
+            &mut edit,
+        );
+        definition_map.insert(definition, new);
+        if let Err(error) = copy_body_into(
+            model,
+            BodyId::Definition(new),
+            clip_body,
+            &definition_map,
+            &material_map,
+            &mut edit,
+        ) {
+            rollback(model, &edit);
+            return Err(CopyError::Model(error));
+        }
+    }
+
+    let component = model.add_definition(
+        DefinitionInfo {
+            name: unique_definition_name(model, name, false),
+            group: false,
+        },
+        &mut edit,
+    );
+    if let Err(error) = copy_body_into(
+        model,
+        BodyId::Definition(component),
+        clip.root(),
+        &definition_map,
+        &material_map,
+        &mut edit,
+    ) {
+        rollback(model, &edit);
+        return Err(CopyError::Model(error));
+    }
+
+    let added: Vec<ModelViolation> = model
+        .validate()
+        .into_iter()
+        .filter(|violation| !before.contains(violation))
+        .collect();
+    if !added.is_empty() {
+        rollback(model, &edit);
+        return Err(CopyError::Invalid(added));
+    }
+
+    undo.push(label, edit);
+    Ok(component)
 }
