@@ -23,6 +23,7 @@ use modeler::shading;
 use modeler::sun_windows::SunWindows;
 use modeler::texture_handles;
 use modeler::texture_panel::{TextureForm, texture_position_section};
+use modeler::toolbars::{self, Edge, Placement, ToolbarEvent, ToolbarLayout};
 use modeler::viewstate::{Effect, ViewState, scene_bounds, zoom_pivot_at};
 use modeler_dae::{FlatScene, RestView};
 use modeler_kernel::editpath::EditPath;
@@ -139,6 +140,10 @@ pub struct App {
     recent: RecentFiles,
     /// Where `recent` is kept between runs.
     recent_file: Option<PathBuf>,
+    /// The toolbars' buttons, order and placement.
+    toolbars: ToolbarLayout,
+    /// Where `toolbars` is kept between runs.
+    toolbars_file: Option<PathBuf>,
     /// Ctrl/Cmd is held down.
     ctrl_down: bool,
     /// Ctrl/Cmd went down as a lone modifier (no key or button since), so releasing it
@@ -163,6 +168,11 @@ impl App {
         let recent = recent_file
             .as_deref()
             .map(RecentFiles::load)
+            .unwrap_or_default();
+        let toolbars_file = toolbars::toolbars_file(|name| std::env::var_os(name));
+        let toolbars = toolbars_file
+            .as_deref()
+            .map(ToolbarLayout::load)
             .unwrap_or_default();
         let mut app = App {
             view: ViewState::new(),
@@ -192,6 +202,8 @@ impl App {
             shown_path: EditPath::root(),
             recent,
             recent_file,
+            toolbars,
+            toolbars_file,
             ctrl_down: false,
             ctrl_lone: false,
         };
@@ -1527,6 +1539,80 @@ impl App {
     }
 }
 
+impl App {
+    /// Draw the docked panels and floating toolbars; returns what the user did with them.
+    fn draw_toolbars(&mut self, ui: &mut egui::Ui) -> Vec<ToolbarEvent> {
+        let layout = self.toolbars.clone();
+        let current = self.view.tool;
+        let mut events = Vec::new();
+        for edge in [Edge::Top, Edge::Bottom, Edge::Left, Edge::Right] {
+            let indices = layout.docked(edge);
+            if indices.is_empty() {
+                continue;
+            }
+            let vertical = matches!(edge, Edge::Left | Edge::Right);
+            let panel = match edge {
+                Edge::Top => egui::Panel::top("toolbars-top"),
+                Edge::Bottom => egui::Panel::bottom("toolbars-bottom"),
+                Edge::Left => egui::Panel::left("toolbars-left"),
+                Edge::Right => egui::Panel::right("toolbars-right"),
+            };
+            panel.show(ui, |ui| {
+                let strips = |ui: &mut egui::Ui| {
+                    for &index in &indices {
+                        if let Some(event) = toolbars::toolbar_strip(
+                            ui,
+                            &layout.toolbars()[index],
+                            index,
+                            current,
+                            vertical,
+                        ) {
+                            events.push(event);
+                        }
+                    }
+                };
+                if vertical {
+                    ui.vertical(strips);
+                } else {
+                    ui.horizontal(strips);
+                }
+            });
+        }
+        for index in layout.floating() {
+            let Placement::Floating { x, y } = layout.toolbars()[index].placement else {
+                continue;
+            };
+            egui::Area::new(egui::Id::new(("toolbar-area", index)))
+                .fixed_pos(egui::pos2(x, y))
+                .show(ui.ctx(), |ui| {
+                    egui::Frame::new()
+                        .inner_margin(egui::Margin::same(2))
+                        .fill(ui.visuals().window_fill)
+                        .stroke(ui.visuals().widgets.noninteractive.bg_stroke)
+                        .show(ui, |ui| {
+                            if let Some(event) = toolbars::toolbar_strip(
+                                ui,
+                                &layout.toolbars()[index],
+                                index,
+                                current,
+                                false,
+                            ) {
+                                events.push(event);
+                            }
+                        });
+                });
+        }
+        events
+    }
+
+    /// Save the toolbar layout if there is a file for it; write errors are ignored.
+    fn save_toolbars(&self) {
+        if let Some(file) = &self.toolbars_file {
+            let _ = self.toolbars.save(file);
+        }
+    }
+}
+
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
@@ -1547,12 +1633,26 @@ impl eframe::App for App {
         egui::Panel::top("menu").show(ui, |ui| {
             menu_action = chrome::menu_bar(ui, &self.menu_state());
         });
-        let mut tool_action = None;
-        egui::Panel::left("toolbar").show(ui, |ui| {
-            tool_action = chrome::toolbar(ui, self.view.tool);
-        });
-        if let Some(action) = menu_action.or(tool_action) {
+        if let Some(action) = menu_action {
             self.apply(action, &ctx, frame);
+        }
+        let toolbar_events = self.draw_toolbars(ui);
+        for event in toolbar_events {
+            match event {
+                ToolbarEvent::Select(tool) => {
+                    self.apply(input::Action::SelectTool(tool), &ctx, frame);
+                }
+                ToolbarEvent::Dropped { index, pos } => {
+                    match toolbars::drop_target(pos, ctx.content_rect()) {
+                        Some(edge) => {
+                            let position = self.toolbars.docked(edge).len();
+                            self.toolbars.dock(index, edge, position);
+                        }
+                        None => self.toolbars.float(index, pos.x, pos.y),
+                    }
+                    self.save_toolbars();
+                }
+            }
         }
 
         let mut material_action = None;
