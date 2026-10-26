@@ -8,6 +8,7 @@
 //! hold the logic that tests exercise without a display.
 
 pub mod chrome;
+pub mod components_panel;
 pub mod dock;
 pub mod document;
 pub mod editor;
