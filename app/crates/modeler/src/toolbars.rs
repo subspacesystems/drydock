@@ -8,6 +8,7 @@
 //! Behaviour: `docs/specs/m6-toolbar-layout.md`.
 
 use crate::input::Tool;
+use eframe::egui;
 use std::ffi::OsString;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -504,4 +505,47 @@ pub fn tool_from_key(key: &str) -> Option<Tool> {
 /// The file the layout is kept in: `toolbars` in `recent::config_dir`.
 pub fn toolbars_file(var: impl Fn(&str) -> Option<OsString>) -> Option<PathBuf> {
     crate::recent::config_dir(var).map(|dir| dir.join("toolbars"))
+}
+
+/// Distance from a window edge, in points, within which dropping a toolbar docks it there.
+pub const EDGE_ZONE: f32 = 48.0;
+
+/// Length of a toolbar's grip along the toolbar, in points (its other side is
+/// `icons::BUTTON_SIZE`).
+pub const GRIP_LENGTH: f32 = 12.0;
+
+/// What a drawn toolbar reports for the frame.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ToolbarEvent {
+    /// A tool button was clicked.
+    Select(Tool),
+    /// The grip of toolbar `index` was let go with the pointer at `pos`.
+    Dropped { index: usize, pos: egui::Pos2 },
+}
+
+/// The edge of `window` a toolbar dropped at `pos` docks to: the nearest edge `pos` is
+/// within `EDGE_ZONE` of (the first of top, bottom, left, right on a tie), or `None`
+/// (the toolbar floats).
+pub fn drop_target(pos: egui::Pos2, window: egui::Rect) -> Option<Edge> {
+    let _ = (pos, window);
+    unimplemented!("m6-toolbar-ui")
+}
+
+/// The tool button's tooltip: its name and shortcut, like `Line (L)`.
+pub fn tool_tooltip(tool: Tool) -> String {
+    let _ = tool;
+    unimplemented!("m6-toolbar-ui")
+}
+
+/// Draw `toolbar` (number `index` in its layout) as a row, or a column when `vertical`:
+/// a grip, then one icon button per tool. `current` is drawn selected.
+pub fn toolbar_strip(
+    ui: &mut egui::Ui,
+    toolbar: &Toolbar,
+    index: usize,
+    current: Tool,
+    vertical: bool,
+) -> Option<ToolbarEvent> {
+    let _ = (ui, toolbar, index, current, vertical);
+    unimplemented!("m6-toolbar-ui")
 }
