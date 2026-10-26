@@ -7,6 +7,7 @@
 //!
 //! Behaviour: `docs/specs/m3-app-ui.md`.
 
+use crate::dock::PanelId;
 use crate::document::{Stats, format_size};
 use crate::input::{Action, EditKey, Tool};
 use modeler_view::StandardView;
@@ -35,6 +36,12 @@ pub struct MenuState<'a> {
     /// The Shadows window is showing (the View menu's Shadows item is checked;
     /// `docs/specs/m5-app-shadows-ui.md`).
     pub shadows: bool,
+    /// The Entity Info panel is open (View menu; `docs/specs/m6-dock-ui.md`).
+    pub entity_info: bool,
+    /// The Materials panel is open (View menu; `docs/specs/m6-dock-ui.md`).
+    pub materials: bool,
+    /// The Components panel is open (View menu; `docs/specs/m6-dock-ui.md`).
+    pub components: bool,
     /// The File menu's recent files, most recent first (`docs/specs/m4-ui-menus.md`).
     pub recent: &'a [PathBuf],
     /// The current tool (checked in the Tools menu).
@@ -587,8 +594,31 @@ pub fn menu_bar(ui: &mut eframe::egui::Ui, state: &MenuState<'_>) -> Option<Acti
                 chosen = Some(Action::ToggleAxes);
                 ui.close();
             }
-            if ui.selectable_label(state.shadows, "Shadows").clicked() {
-                chosen = Some(Action::ToggleShadows);
+            for (open, label, action) in [
+                (
+                    state.entity_info,
+                    "Entity Info",
+                    Action::TogglePanel(PanelId::EntityInfo),
+                ),
+                (
+                    state.materials,
+                    "Materials",
+                    Action::TogglePanel(PanelId::Materials),
+                ),
+                (
+                    state.components,
+                    "Components",
+                    Action::TogglePanel(PanelId::Components),
+                ),
+                (state.shadows, "Shadows", Action::ToggleShadows),
+            ] {
+                if ui.selectable_label(open, label).clicked() {
+                    chosen = Some(action);
+                    ui.close();
+                }
+            }
+            if ui.button("Reset Panels").clicked() {
+                chosen = Some(Action::ResetPanels);
                 ui.close();
             }
             ui.separator();

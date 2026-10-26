@@ -9,17 +9,24 @@ use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
 use eframe::egui;
-use egui::{Color32, Event, MouseWheelUnit, PointerButton, Pos2, Rect, Sense};
+use egui::{Color32, Event, MouseWheelUnit, PointerButton, Pos2, Rect, Sense, pos2};
 use glam::{DMat4, DVec2, DVec3};
 use modeler::chrome::{self, MenuState};
+use modeler::components_panel::{ComponentAction, ComponentsPanel, components_panel};
+use modeler::dock::{
+    self, DockLayout, PanelEvent, PanelId, Side as DockSide, apply_drop, drop_destination,
+    panel_header,
+};
 use modeler::document::{Document, FileKind, native_path, resolve_texture_path};
-use modeler::editor::{Editor, Viewport as EditorViewport};
+use modeler::editor::{Editor, TextureOp, Viewport as EditorViewport};
+use modeler::entity_info::{EntityInfoPanel, InfoAction, entity_info_panel};
 use modeler::hints::hint_label;
 use modeler::input::{self, Button, Modifiers, Tool};
 use modeler::materials_panel::{MaterialAction, MaterialsPanel, materials_panel};
 use modeler::overlay::{self, Primitive};
 use modeler::recent::{RecentFiles, recent_file};
 use modeler::shading;
+use modeler::shadows_panel::{self, ShadowsEvent};
 use modeler::sun_windows::SunWindows;
 use modeler::texture_handles;
 use modeler::texture_panel::{TextureForm, texture_position_section};
@@ -30,6 +37,7 @@ use modeler_kernel::editpath::EditPath;
 use modeler_kernel::model::{BodyId, Material, Model};
 use modeler_kernel::paint::Side;
 use modeler_kernel::select::Entity;
+use modeler_kernel::sun::ShadowSettings;
 use modeler_kernel::tools::plane::DrawPlane;
 use modeler_kernel::tools::scale;
 use modeler_kernel::topology::FaceId;
@@ -108,6 +116,16 @@ pub struct App {
     name_prompt: Option<chrome::NamePrompt>,
     /// The Materials panel and its open form.
     materials: MaterialsPanel,
+    /// The docked and floating panel layout.
+    dock: DockLayout,
+    /// Where `dock` is kept between runs.
+    dock_file: Option<PathBuf>,
+    /// The Entity Info panel's state.
+    entity_info: EntityInfoPanel,
+    /// The Components panel's state.
+    components: ComponentsPanel,
+    /// The sun settings being dragged in the Shadows panel, not yet recorded.
+    shadows_preview: Option<ShadowSettings>,
     /// The Texture Position panel's typed values.
     texture: TextureForm,
     style: Style,
@@ -174,6 +192,11 @@ impl App {
             .as_deref()
             .map(ToolbarLayout::load)
             .unwrap_or_default();
+        let dock_file = dock::panels_file(|name| std::env::var_os(name));
+        let dock = dock_file
+            .as_deref()
+            .map(DockLayout::load)
+            .unwrap_or_default();
         let mut app = App {
             view: ViewState::new(),
             about_open: false,
@@ -181,6 +204,11 @@ impl App {
             sun_windows: SunWindows::new(),
             name_prompt: None,
             materials: MaterialsPanel::default(),
+            dock,
+            dock_file,
+            entity_info: EntityInfoPanel::default(),
+            components: ComponentsPanel::default(),
+            shadows_preview: None,
             texture: TextureForm::default(),
             style: Style::default(),
             gpu,
@@ -261,6 +289,7 @@ impl App {
         self.editor = Some(Editor::new());
         self.materials = MaterialsPanel::default();
         self.texture = TextureForm::default();
+        self.shadows_preview = None;
         self.shown_path = EditPath::root();
         if let Some(editor) = &mut self.editor {
             editor.set_tool(self.view.tool);
@@ -375,6 +404,7 @@ impl App {
         self.editor = Some(Editor::new());
         self.materials = MaterialsPanel::default();
         self.texture = TextureForm::default();
+        self.shadows_preview = None;
         self.shown_path = EditPath::root();
         self.loading = None;
         self.error = None;
@@ -635,7 +665,13 @@ impl App {
             Effect::Edit(key) => self.edit(key, ctx, frame),
             Effect::About => self.about_open = true,
             Effect::ModelInfo => self.model_info_open = true,
-            Effect::ToggleShadows => self.sun_windows.shadows_open = !self.sun_windows.shadows_open,
+            Effect::ToggleShadows => self.toggle_panel(PanelId::Shadows),
+            Effect::TogglePanel(id) => self.toggle_panel(id),
+            Effect::ResetPanels => {
+                self.dock.reset();
+                self.shadows_preview = None;
+                self.save_panels();
+            }
             Effect::OpenRecent(index) => {
                 let Some(path) = self.recent.paths().get(index).cloned() else {
                     return;
@@ -1421,7 +1457,10 @@ impl App {
                 .as_ref()
                 .is_some_and(|editor| editor.hide_rest()),
             axes: self.view.axes,
-            shadows: self.sun_windows.shadows_open,
+            shadows: self.dock.is_open(PanelId::Shadows),
+            entity_info: self.dock.is_open(PanelId::EntityInfo),
+            materials: self.dock.is_open(PanelId::Materials),
+            components: self.dock.is_open(PanelId::Components),
             recent: self.recent.paths(),
             tool: self.view.tool,
         }
@@ -1611,6 +1650,390 @@ impl App {
             let _ = self.toolbars.save(file);
         }
     }
+
+    /// Save the panel layout if there is a file for it; write errors are ignored.
+    fn save_panels(&self) {
+        if let Some(file) = &self.dock_file {
+            let _ = self.dock.save(file);
+        }
+    }
+
+    /// Show or hide a panel from the View menu, saving the layout.
+    fn toggle_panel(&mut self, id: PanelId) {
+        self.dock.toggle(id);
+        if id == PanelId::Shadows && !self.dock.is_open(id) {
+            self.shadows_preview = None;
+        }
+        self.save_panels();
+    }
+
+    /// Draw the docking columns and floating panels, apply what their headers and contents
+    /// asked for, and save the layout when it changed.
+    fn draw_panels(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, frame: &eframe::Frame) {
+        let layout = self.dock.clone();
+        let mut events = Vec::new();
+        let mut rects: Vec<(PanelId, Rect)> = Vec::new();
+        let mut columns: Vec<(DockSide, Rect)> = Vec::new();
+        let mut actions = Vec::new();
+        let mut changed = false;
+        ctx.data_mut(|data| data.remove::<PanelId>(egui::Id::new("dock-dragging")));
+
+        for side in [DockSide::Left, DockSide::Right] {
+            let ids = layout.docked(side);
+            if ids.is_empty() {
+                continue;
+            }
+            let panel = match side {
+                DockSide::Left => egui::Panel::left("panels-left"),
+                DockSide::Right => egui::Panel::right("panels-right"),
+            };
+            let response = panel
+                .resizable(true)
+                .default_size(layout.width(side))
+                .min_size(dock::MIN_WIDTH)
+                .max_size(dock::MAX_WIDTH)
+                .show(ui, |ui| {
+                    egui::ScrollArea::vertical()
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            for (index, &id) in ids.iter().enumerate() {
+                                let top = ui.cursor().top();
+                                let collapsed = layout.panel(id).collapsed;
+                                if let Some(event) = panel_header(ui, id, collapsed, true) {
+                                    events.push(event);
+                                }
+                                if !collapsed {
+                                    actions.extend(self.panel_body(ui, id));
+                                }
+                                rects.push((
+                                    id,
+                                    Rect::from_min_max(
+                                        pos2(ui.min_rect().left(), top),
+                                        pos2(ui.max_rect().right(), ui.cursor().top()),
+                                    ),
+                                ));
+                                if index + 1 < ids.len() {
+                                    ui.separator();
+                                }
+                            }
+                        });
+                });
+            let rect = response.response.rect;
+            columns.push((side, rect));
+            let width = rect.width();
+            if (width - self.dock.width(side)).abs() > 0.5 {
+                self.dock.set_width(side, width);
+                changed = true;
+            }
+        }
+
+        for id in layout.floating() {
+            let dock::Place::Floating { x, y, w, h } = layout.panel(id).place else {
+                continue;
+            };
+            let response = egui::Window::new(dock::title(id))
+                .id(egui::Id::new(("floating-panel", id)))
+                .title_bar(false)
+                .collapsible(false)
+                .movable(false)
+                .resizable(true)
+                .current_pos(pos2(x, y))
+                .default_size(egui::vec2(w, h))
+                .min_size(egui::vec2(dock::MIN_FLOAT_SIZE.0, dock::MIN_FLOAT_SIZE.1))
+                .show(ctx, |ui| {
+                    if let Some(event) = panel_header(ui, id, false, false) {
+                        events.push(event);
+                    }
+                    actions.extend(self.panel_body(ui, id));
+                });
+            if let Some(response) = response {
+                let rect = response.response.rect;
+                let stored = Rect::from_min_size(pos2(x, y), egui::vec2(w, h));
+                if (rect.min - stored.min).length() > 0.5
+                    || (rect.size() - stored.size()).length() > 0.5
+                {
+                    self.dock.float(id, rect);
+                    changed = true;
+                }
+            }
+        }
+
+        if ctx
+            .data(|data| data.get_temp::<PanelId>(egui::Id::new("dock-dragging")))
+            .is_some()
+            && let Some(pointer) = ctx.input(|input| input.pointer.latest_pos())
+        {
+            let screen = ctx.content_rect();
+            if let Some(side) = self.dock.drop_side(screen, pointer) {
+                let rect = columns
+                    .iter()
+                    .find(|(other, _)| *other == side)
+                    .map(|(_, rect)| *rect)
+                    .unwrap_or_else(|| match side {
+                        DockSide::Left => Rect::from_min_max(
+                            screen.min,
+                            pos2(screen.left() + dock::EDGE_ZONE, screen.bottom()),
+                        ),
+                        DockSide::Right => Rect::from_min_max(
+                            pos2(screen.right() - dock::EDGE_ZONE, screen.top()),
+                            screen.max,
+                        ),
+                    });
+                ctx.layer_painter(egui::LayerId::new(
+                    egui::Order::Foreground,
+                    egui::Id::new("dock-drop-tint"),
+                ))
+                .rect_filled(
+                    rect,
+                    0.0,
+                    Color32::from_rgba_unmultiplied(230, 140, 25, 32),
+                );
+            }
+        }
+
+        for action in actions {
+            match action {
+                PanelAction::Info(action) => self.apply_info_action(action, ctx, frame),
+                PanelAction::Material(action) => self.apply_material_action(action, ctx, frame),
+                PanelAction::Component(ComponentAction::Place(_id)) => {
+                    // TODO: start placing the component once m6-components-place is merged.
+                }
+                PanelAction::Texture(face, side, op) => {
+                    let changed = if let (Some(editor), Some(document)) =
+                        (&mut self.editor, &mut self.model)
+                    {
+                        match document.kernel.as_mut() {
+                            Some(model) => editor.position_texture(model, face, side, op),
+                            None => false,
+                        }
+                    } else {
+                        false
+                    };
+                    if changed {
+                        self.refresh_document(ctx, frame);
+                    }
+                }
+                PanelAction::Handles(action) => {
+                    if let (Some(editor), Some(document)) = (&mut self.editor, &self.model) {
+                        match action {
+                            Some((face, side)) => {
+                                if let Some(model) = document.kernel.as_ref() {
+                                    editor.start_texture_handles(model, face, side);
+                                }
+                            }
+                            None => editor.end_texture_handles(),
+                        }
+                    }
+                }
+                PanelAction::Shadow(event, settings) => {
+                    self.apply_shadow_event(event, settings, ctx, frame);
+                }
+            }
+        }
+
+        for event in events {
+            match event {
+                PanelEvent::ToggleCollapsed(id) => {
+                    let collapsed = self.dock.panel(id).collapsed;
+                    self.dock.set_collapsed(id, !collapsed);
+                }
+                PanelEvent::Close(id) => {
+                    self.dock.set_open(id, false);
+                    if id == PanelId::Shadows {
+                        self.shadows_preview = None;
+                    }
+                }
+                PanelEvent::Dropped { id, pos } => {
+                    let screen = ctx.content_rect();
+                    let middles: Vec<f32> = self
+                        .dock
+                        .drop_side(screen, pos)
+                        .map(|side| {
+                            self.dock
+                                .docked(side)
+                                .into_iter()
+                                .filter(|panel| *panel != id)
+                                .filter_map(|panel| {
+                                    rects
+                                        .iter()
+                                        .find(|(other, _)| *other == panel)
+                                        .map(|(_, rect)| rect.center().y)
+                                })
+                                .collect()
+                        })
+                        .unwrap_or_default();
+                    let target = drop_destination(&self.dock, screen, pos, &middles);
+                    apply_drop(&mut self.dock, id, target, pos);
+                    if id == PanelId::Shadows && !self.dock.is_open(id) {
+                        self.shadows_preview = None;
+                    }
+                }
+            }
+            changed = true;
+        }
+
+        if changed {
+            self.save_panels();
+        }
+    }
+
+    /// The contents under a panel's header.
+    fn panel_body(&mut self, ui: &mut egui::Ui, id: PanelId) -> Vec<PanelAction> {
+        let mut actions = Vec::new();
+        match id {
+            PanelId::EntityInfo => {
+                let (Some(editor), Some(document)) = (&self.editor, &self.model) else {
+                    ui.label("No model");
+                    return actions;
+                };
+                let Some(model) = document.kernel.as_ref() else {
+                    ui.label("No model");
+                    return actions;
+                };
+                let body = editor.path().body(model).unwrap_or(BodyId::Root);
+                if let Some(action) = entity_info_panel(
+                    ui,
+                    &mut self.entity_info,
+                    model,
+                    body,
+                    editor.selection(),
+                    editor.unit,
+                ) {
+                    actions.push(PanelAction::Info(action));
+                }
+            }
+            PanelId::Materials => {
+                let (Some(editor), Some(document)) = (&self.editor, &self.model) else {
+                    ui.label("No model");
+                    return actions;
+                };
+                let Some(model) = document.kernel.as_ref() else {
+                    ui.label("No model");
+                    return actions;
+                };
+                let current = editor.material();
+                let target = self.texture_target(model);
+                let texture_on = self
+                    .editor
+                    .as_ref()
+                    .is_some_and(|editor| editor.texture_handles(model).is_some());
+                if let Some(action) = materials_panel(ui, &mut self.materials, model, current) {
+                    actions.push(PanelAction::Material(action));
+                }
+                ui.separator();
+                let (op, toggled) =
+                    texture_position_section(ui, &mut self.texture, target.is_some(), texture_on);
+                if toggled {
+                    actions.push(PanelAction::Handles(if texture_on { None } else { target }));
+                }
+                if let Some(op) = op
+                    && let Some((face, side)) = target
+                {
+                    actions.push(PanelAction::Texture(face, side, op));
+                }
+            }
+            PanelId::Components => {
+                let (Some(_editor), Some(document)) = (&self.editor, &self.model) else {
+                    ui.label("No model");
+                    return actions;
+                };
+                let Some(model) = document.kernel.as_ref() else {
+                    ui.label("No model");
+                    return actions;
+                };
+                if let Some(action) = components_panel(ui, &mut self.components, model) {
+                    actions.push(PanelAction::Component(action));
+                }
+            }
+            PanelId::Shadows => {
+                let Some(document) = &self.model else {
+                    ui.label("No model");
+                    return actions;
+                };
+                let Some(model) = document.kernel.as_ref() else {
+                    ui.label("No model");
+                    return actions;
+                };
+                let mut settings = self
+                    .shadows_preview
+                    .unwrap_or_else(|| model.shadow_settings());
+                let event = shadows_panel::shadows_panel(ui, &mut settings);
+                if event != ShadowsEvent::None {
+                    actions.push(PanelAction::Shadow(event, settings));
+                }
+            }
+        }
+        actions
+    }
+
+    /// Apply a rename from the Entity Info panel.
+    fn apply_info_action(
+        &mut self,
+        action: InfoAction,
+        ctx: &egui::Context,
+        frame: &eframe::Frame,
+    ) {
+        let changed = if let (Some(editor), Some(document)) = (&mut self.editor, &mut self.model) {
+            match document.kernel.as_mut() {
+                Some(model) => match action {
+                    InfoAction::RenameDefinition(id, name) => {
+                        editor.rename_definition(model, id, &name)
+                    }
+                    InfoAction::RenameInstance(id, name) => {
+                        editor.rename_instance(model, id, &name)
+                    }
+                },
+                None => false,
+            }
+        } else {
+            false
+        };
+        if changed {
+            self.refresh_document(ctx, frame);
+        }
+    }
+
+    /// Preview or commit a change from the Shadows panel.
+    fn apply_shadow_event(
+        &mut self,
+        event: ShadowsEvent,
+        settings: ShadowSettings,
+        ctx: &egui::Context,
+        frame: &eframe::Frame,
+    ) {
+        match event {
+            ShadowsEvent::Preview => self.shadows_preview = Some(settings),
+            ShadowsEvent::Commit => {
+                self.shadows_preview = None;
+                let changed =
+                    if let (Some(editor), Some(document)) = (&mut self.editor, &mut self.model) {
+                        match document.kernel.as_mut() {
+                            Some(model) if settings != model.shadow_settings() => {
+                                editor.set_shadow_settings(model, settings)
+                            }
+                            Some(_) => false,
+                            None => false,
+                        }
+                    } else {
+                        false
+                    };
+                if changed {
+                    self.refresh_document(ctx, frame);
+                }
+            }
+            ShadowsEvent::None => {}
+        }
+    }
+}
+
+/// What a panel's contents asked the app to do.
+enum PanelAction {
+    Info(InfoAction),
+    Material(MaterialAction),
+    Component(ComponentAction),
+    Texture(FaceId, Side, TextureOp),
+    Handles(Option<(FaceId, Side)>),
+    Shadow(ShadowsEvent, ShadowSettings),
 }
 
 impl eframe::App for App {
@@ -1655,75 +2078,7 @@ impl eframe::App for App {
             }
         }
 
-        let mut material_action = None;
-        let mut texture_action = None;
-        let mut handles_action = None;
-        if let Some(model) = self
-            .model
-            .as_ref()
-            .and_then(|document| document.kernel.as_ref())
-        {
-            let current = self.editor.as_ref().and_then(Editor::material);
-            let target = self.texture_target(model);
-            let texture_on = self
-                .editor
-                .as_ref()
-                .is_some_and(|editor| editor.texture_handles(model).is_some());
-            egui::Panel::right("materials")
-                .resizable(true)
-                .default_size(180.0)
-                .show(ui, |ui| {
-                    // Texture Position stays in view at the bottom; a model's material
-                    // list can be far taller than the window, so it scrolls.
-                    egui::Panel::bottom("texture-position").show(ui, |ui| {
-                        let (op, toggled) = texture_position_section(
-                            ui,
-                            &mut self.texture,
-                            target.is_some(),
-                            texture_on,
-                        );
-                        if toggled {
-                            handles_action = Some(if texture_on { None } else { target });
-                        }
-                        if let Some(op) = op
-                            && let Some((face, side)) = target
-                        {
-                            texture_action = Some((face, side, op));
-                        }
-                    });
-                    // The Materials panel scrolls its own list under fixed controls.
-                    material_action = materials_panel(ui, &mut self.materials, model, current);
-                });
-        }
-        if let Some(action) = material_action {
-            self.apply_material_action(action, &ctx, frame);
-        }
-        if let Some((face, side, op)) = texture_action {
-            let changed =
-                if let (Some(editor), Some(document)) = (&mut self.editor, &mut self.model) {
-                    match document.kernel.as_mut() {
-                        Some(model) => editor.position_texture(model, face, side, op),
-                        None => false,
-                    }
-                } else {
-                    false
-                };
-            if changed {
-                self.refresh_document(&ctx, frame);
-            }
-        }
-        if let Some(action) = handles_action
-            && let (Some(editor), Some(document)) = (&mut self.editor, &self.model)
-        {
-            match action {
-                Some((face, side)) => {
-                    if let Some(model) = document.kernel.as_ref() {
-                        editor.start_texture_handles(model, face, side);
-                    }
-                }
-                None => editor.end_texture_handles(),
-            }
-        }
+        self.draw_panels(ui, &ctx, frame);
 
         let dialog_open = self.dialog.is_some()
             || self.save_dialog.is_some()
@@ -1744,11 +2099,18 @@ impl eframe::App for App {
         if sun_changed {
             self.refresh_document(&ctx, frame);
         }
-        let sun = self
+        let sun = if let Some(model) = self
             .model
             .as_ref()
             .and_then(|document| document.kernel.as_ref())
-            .and_then(|model| self.sun_windows.sun_light(model));
+        {
+            match self.shadows_preview {
+                Some(settings) => shading::sun_light_for(&model.geolocation(), &settings),
+                None => self.sun_windows.sun_light(model),
+            }
+        } else {
+            None
+        };
         if shading::update_style(&mut self.style, sun) {
             self.dirty = true;
         }
