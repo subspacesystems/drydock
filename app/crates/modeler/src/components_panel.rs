@@ -41,8 +41,24 @@ pub enum ComponentAction {
 /// `Err` is a one-line message for the user that names the file: the file can't be read, or
 /// it has no usable model.
 pub fn read_component_source(path: &std::path::Path) -> Result<(Model, String), String> {
-    let _ = path;
-    unimplemented!("m6-components-import-ui")
+    let name = path
+        .file_stem()
+        .map(|stem| stem.to_string_lossy().into_owned())
+        .unwrap_or_else(|| path.display().to_string());
+    let document =
+        crate::document::Document::open(path).map_err(|error| error.replace(['\r', '\n'], " "))?;
+    let Some(model) = document.kernel else {
+        let message = document.kernel_error.unwrap_or_else(|| {
+            format!(
+                "{}: no model",
+                path.file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| path.display().to_string())
+            )
+        });
+        return Err(message.replace(['\r', '\n'], " "));
+    };
+    Ok((model, name))
 }
 
 /// The definitions the panel lists for `search`: components only (not groups) whose name
@@ -147,6 +163,7 @@ pub fn components_panel(
             .desired_width(f32::INFINITY),
     );
 
+    let mut action = None;
     ui.horizontal_wrapped(|ui| {
         if icons::icon_button(ui, Icon::List, "List", "Show as a list", !panel.tiles).clicked() {
             panel.tiles = false;
@@ -154,12 +171,14 @@ pub fn components_panel(
         if icons::icon_button(ui, Icon::Tiles, "Tiles", "Show as tiles", panel.tiles).clicked() {
             panel.tiles = true;
         }
+        if ui.button("Import").clicked() {
+            action = Some(ComponentAction::Import);
+        }
     });
 
     let entries = listed(model, &panel.search);
     let has_components = model.definitions().any(|(_, info)| !info.group);
     let tiles = panel.tiles;
-    let mut action = None;
     egui::ScrollArea::vertical()
         .auto_shrink([false, false])
         .show(ui, |ui| {

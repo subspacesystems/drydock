@@ -1580,8 +1580,22 @@ impl Editor {
         source: &Model,
         name: &str,
     ) -> Result<DefinitionId, String> {
-        let _ = (model, source, name);
-        unimplemented!("m6-components-import-ui")
+        let id =
+            match copy::import_component(model, source, name, &mut self.undo, "Import Component") {
+                Ok(id) => id,
+                Err(copy::CopyError::Empty) => {
+                    let message = "Nothing to import".to_string();
+                    self.message = Some(message.clone());
+                    return Err(message);
+                }
+                Err(_) => {
+                    let message = "Import failed".to_string();
+                    self.message = Some(message.clone());
+                    return Err(message);
+                }
+            };
+        self.place_definition(model, id);
+        Ok(id)
     }
 
     /// The definition waiting for its placing click.

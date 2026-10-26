@@ -12,7 +12,9 @@ use eframe::egui;
 use egui::{Color32, Event, MouseWheelUnit, PointerButton, Pos2, Rect, Sense, pos2};
 use glam::{DMat4, DVec2, DVec3};
 use modeler::chrome::{self, MenuState};
-use modeler::components_panel::{ComponentAction, ComponentsPanel, components_panel};
+use modeler::components_panel::{
+    ComponentAction, ComponentsPanel, components_panel, read_component_source,
+};
 use modeler::dock::{
     self, DockLayout, PanelEvent, PanelId, Side as DockSide, apply_drop, drop_destination,
     panel_header,
@@ -423,14 +425,49 @@ impl App {
     }
 
     fn open_dialog(&mut self) {
-        let dir = self
-            .model
+        self.dialog = Some(OpenDialog::new(self.open_folder()));
+    }
+
+    fn open_import_dialog(&mut self) {
+        self.dialog = Some(OpenDialog::import(self.open_folder()));
+    }
+
+    fn open_folder(&self) -> PathBuf {
+        self.model
             .as_ref()
             .and_then(|model| model.path.parent().map(Path::to_path_buf))
             .filter(|dir| dir.is_dir())
             .or_else(|| std::env::current_dir().ok())
-            .unwrap_or_else(|| PathBuf::from("."));
-        self.dialog = Some(OpenDialog::new(dir));
+            .unwrap_or_else(|| PathBuf::from("."))
+    }
+
+    /// Read `path` as a component source, add it to the open model and start placing it.
+    fn import_component_file(&mut self, ctx: &egui::Context, frame: &eframe::Frame, path: &Path) {
+        let (source, name) = match read_component_source(path) {
+            Ok(source) => source,
+            Err(message) => {
+                self.error = Some(message);
+                return;
+            }
+        };
+        let result = if let (Some(editor), Some(document)) = (&mut self.editor, &mut self.model) {
+            match document.kernel.as_mut() {
+                Some(model) => editor.import_component(model, &source, &name),
+                None => Err(document
+                    .kernel_error
+                    .clone()
+                    .unwrap_or_else(|| format!("{}: no model", file_name(path)))),
+            }
+        } else {
+            Err(format!("{}: no open model", file_name(path)))
+        };
+        match result {
+            Ok(_) => {
+                self.error = None;
+                self.refresh_document(ctx, frame);
+            }
+            Err(message) => self.error = Some(message),
+        }
     }
 
     fn open_save_dialog(&mut self) {
@@ -1332,6 +1369,13 @@ impl App {
                 painter.line_segment([a, b], egui::Stroke::new(1.5, preview_color));
             }
         }
+        if let Some(model) = &document.kernel {
+            for (a, b) in editor.place_preview(model) {
+                if let (Some(a), Some(b)) = (project(a), project(b)) {
+                    painter.line_segment([a, b], egui::Stroke::new(1.5, preview_color));
+                }
+            }
+        }
         if let Some(kernel) = &document.kernel {
             let open_body = editor.path().body(kernel).unwrap_or(BodyId::Root);
             let primitives =
@@ -1801,11 +1845,22 @@ impl App {
             match action {
                 PanelAction::Info(action) => self.apply_info_action(action, ctx, frame),
                 PanelAction::Material(action) => self.apply_material_action(action, ctx, frame),
-                PanelAction::Component(ComponentAction::Import) => {
-                    // TODO m6-components-import-ui: file dialog, then import and place.
-                }
-                PanelAction::Component(ComponentAction::Place(_id)) => {
-                    // TODO: start placing the component once m6-components-place is merged.
+                PanelAction::Component(ComponentAction::Import) => self.open_import_dialog(),
+                PanelAction::Component(ComponentAction::Place(id)) => {
+                    let started =
+                        if let (Some(editor), Some(document)) = (&mut self.editor, &self.model) {
+                            match document.kernel.as_ref() {
+                                Some(model) => editor.place_definition(model, id),
+                                None => false,
+                            }
+                        } else {
+                            false
+                        };
+                    if started {
+                        self.refresh_document(ctx, frame);
+                    } else {
+                        self.dirty = true;
+                    }
                 }
                 PanelAction::Texture(face, side, op) => {
                     let changed = if let (Some(editor), Some(document)) =
@@ -2219,8 +2274,13 @@ impl eframe::App for App {
         if let Some(dialog) = &mut self.dialog {
             match dialog.show(&ctx) {
                 DialogOutcome::Open(path) => {
+                    let import = dialog.import;
                     self.dialog = None;
-                    self.start_loading(&ctx, path);
+                    if import {
+                        self.import_component_file(&ctx, frame, &path);
+                    } else {
+                        self.start_loading(&ctx, path);
+                    }
                 }
                 DialogOutcome::Cancel => self.dialog = None,
                 DialogOutcome::Pending => {}
@@ -2497,15 +2557,26 @@ struct OpenDialog {
     entries: Vec<(String, PathBuf, bool)>,
     path_text: String,
     error: Option<String>,
+    /// Pick a component source instead of opening a document.
+    import: bool,
 }
 
 impl OpenDialog {
     fn new(dir: PathBuf) -> OpenDialog {
+        OpenDialog::with_mode(dir, false)
+    }
+
+    fn import(dir: PathBuf) -> OpenDialog {
+        OpenDialog::with_mode(dir, true)
+    }
+
+    fn with_mode(dir: PathBuf, import: bool) -> OpenDialog {
         let mut dialog = OpenDialog {
             dir: PathBuf::new(),
             entries: Vec::new(),
             path_text: String::new(),
             error: None,
+            import,
         };
         dialog.enter(dir);
         dialog
@@ -2543,7 +2614,11 @@ impl OpenDialog {
         let mut enter = None;
         let response = egui::Modal::new(egui::Id::new("open-dialog")).show(ctx, |ui| {
             ui.set_width(520.0);
-            ui.heading("Open model");
+            ui.heading(if self.import {
+                "Import component"
+            } else {
+                "Open model"
+            });
             ui.label(self.dir.display().to_string());
             ui.separator();
             egui::ScrollArea::vertical()
@@ -2581,7 +2656,8 @@ impl OpenDialog {
                 ui.colored_label(ERROR_COLOR, error);
             }
             ui.horizontal(|ui| {
-                if ui.button("Open").clicked() || submitted {
+                let choose = if self.import { "Import" } else { "Open" };
+                if ui.button(choose).clicked() || submitted {
                     let path = PathBuf::from(self.path_text.trim());
                     if path.is_dir() {
                         enter = Some(path);
