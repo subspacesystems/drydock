@@ -1518,6 +1518,27 @@ impl Editor {
         true
     }
 
+    /// Start placing an instance of component `id`: the Select tool is made current and the
+    /// definition's origin follows the cursor until a click places it. False, with a message
+    /// and no change, when `id` is unknown, is a group, or is the body being edited.
+    /// Behaviour: `docs/specs/m6-components-place.md`.
+    pub fn place_definition(&mut self, model: &Model, id: DefinitionId) -> bool {
+        let _ = (model, id);
+        unimplemented!("m6-components-place")
+    }
+
+    /// The definition waiting for its placing click.
+    pub fn placing(&self) -> Option<DefinitionId> {
+        unimplemented!("m6-components-place")
+    }
+
+    /// The definition's own edges as a click would place them now (world coordinates);
+    /// empty when not placing or the cursor has not been over the viewport yet.
+    pub fn place_preview(&self, model: &Model) -> Vec<(DVec3, DVec3)> {
+        let _ = model;
+        unimplemented!("m6-components-place")
+    }
+
     /// Whether a paste is waiting for its click.
     pub fn pasting(&self) -> bool {
         self.paste.is_some()
