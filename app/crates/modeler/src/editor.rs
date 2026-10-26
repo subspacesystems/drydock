@@ -21,8 +21,8 @@ use modeler_kernel::erase::erase;
 use modeler_kernel::explode::explode;
 use modeler_kernel::infer::{self, Inference, Probe, Snap};
 use modeler_kernel::model::{
-    BodyId, DefinitionId, DefinitionInfo, InstanceId, Material, MaterialId, Model, ModelEdit,
-    UndoStack,
+    BodyId, DefinitionId, DefinitionInfo, Instance, InstanceId, Material, MaterialId, Model,
+    ModelEdit, UndoStack,
 };
 use modeler_kernel::paint::{self, Side};
 use modeler_kernel::pushpull::push_pull;
@@ -253,6 +253,12 @@ struct PasteState {
     point: Option<DVec3>,
 }
 
+#[derive(Clone, Copy)]
+struct PlaceState {
+    definition: DefinitionId,
+    point: Option<DVec3>,
+}
+
 /// The texture handles mode: the face and side they act on, the map at grab time, the
 /// grabbed image copy's texture-space pin `base`, and the last valid preview map.
 #[derive(Clone, Debug)]
@@ -303,6 +309,7 @@ pub struct Editor {
     material: Option<MaterialId>,
     clipboard: Option<Clipboard>,
     paste: Option<PasteState>,
+    placing: Option<PlaceState>,
     texture_handles: Option<TextureHandleState>,
     path: EditPath,
     /// Cumulative world transforms of the path's steps; the last one maps the open body to
@@ -467,6 +474,7 @@ impl Editor {
             material: None,
             clipboard: None,
             paste: None,
+            placing: None,
             texture_handles: None,
             path: EditPath::root(),
             transforms: Vec::new(),
@@ -592,6 +600,7 @@ impl Editor {
         self.end_texture_handles();
         self.tool = tool;
         self.paste = None;
+        self.placing = None;
         self.line = LineTool::new();
         self.idle_shapes();
         self.typed.clear();
@@ -655,6 +664,15 @@ impl Editor {
                 self.hint = Some(inf);
                 if let Some(paste) = self.paste.as_mut() {
                     paste.point = Some(inf.point);
+                }
+            }
+            return;
+        }
+        if self.placing.is_some() {
+            if let Some(inf) = self.infer_move_at(model, view, cursor) {
+                self.hint = Some(inf);
+                if let Some(placing) = self.placing.as_mut() {
+                    placing.point = Some(inf.point);
                 }
             }
             return;
@@ -732,6 +750,9 @@ impl Editor {
         }
         if self.paste.is_some() {
             return self.click_paste(model, view, cursor);
+        }
+        if self.placing.is_some() {
+            return self.click_place(model, view, cursor);
         }
         match self.tool {
             Tool::Line => {
@@ -916,6 +937,10 @@ impl Editor {
         match key {
             EditKey::Cancel => {
                 if self.paste.take().is_some() {
+                    self.hint = None;
+                    return false;
+                }
+                if self.placing.take().is_some() {
                     self.hint = None;
                     return false;
                 }
@@ -1523,20 +1548,52 @@ impl Editor {
     /// and no change, when `id` is unknown, is a group, or is the body being edited.
     /// Behaviour: `docs/specs/m6-components-place.md`.
     pub fn place_definition(&mut self, model: &Model, id: DefinitionId) -> bool {
-        let _ = (model, id);
-        unimplemented!("m6-components-place")
+        let Some(definition) = model.definition(id) else {
+            self.message = Some("No such component".to_string());
+            return false;
+        };
+        if definition.group {
+            self.message = Some("Can't place a group".to_string());
+            return false;
+        }
+        if self.body(model) == BodyId::Definition(id) {
+            self.message = Some("Can't place a component inside itself".to_string());
+            return false;
+        }
+        self.set_tool(Tool::Select);
+        self.placing = Some(PlaceState {
+            definition: id,
+            point: None,
+        });
+        self.message = None;
+        true
     }
 
     /// The definition waiting for its placing click.
     pub fn placing(&self) -> Option<DefinitionId> {
-        unimplemented!("m6-components-place")
+        self.placing.map(|placing| placing.definition)
     }
 
     /// The definition's own edges as a click would place them now (world coordinates);
     /// empty when not placing or the cursor has not been over the viewport yet.
     pub fn place_preview(&self, model: &Model) -> Vec<(DVec3, DVec3)> {
-        let _ = model;
-        unimplemented!("m6-components-place")
+        let Some(placing) = self.placing else {
+            return Vec::new();
+        };
+        let Some(point) = placing.point else {
+            return Vec::new();
+        };
+        let Some(body) = model.body(BodyId::Definition(placing.definition)) else {
+            return Vec::new();
+        };
+        body.geometry()
+            .edges()
+            .filter_map(|(_, edge)| {
+                let a = body.geometry().vertex(edge.ends[0])?.position;
+                let b = body.geometry().vertex(edge.ends[1])?.position;
+                Some((self.to_world(a + point), self.to_world(b + point)))
+            })
+            .collect()
     }
 
     /// Whether a paste is waiting for its click.
@@ -1625,6 +1682,40 @@ impl Editor {
         }
     }
 
+    fn click_place(&mut self, model: &mut Model, view: &Viewport, cursor: DVec2) -> bool {
+        let Some(inf) = self.infer_move_at(model, view, cursor) else {
+            return false;
+        };
+        self.hint = Some(inf);
+        let Some(placing) = self.placing else {
+            return false;
+        };
+        if let Some(state) = self.placing.as_mut() {
+            state.point = Some(inf.point);
+        }
+        let body = self.body(model);
+        let instance = Instance {
+            definition: placing.definition,
+            transform: DMat4::from_translation(inf.point),
+            name: String::new(),
+            material: None,
+        };
+        let mut edit = ModelEdit::new();
+        match model.add_instance(body, instance, &mut edit) {
+            Ok(id) => {
+                self.undo.push("Place Component", edit);
+                self.selection = vec![Entity::Instance(id)];
+                self.placing = None;
+                self.message = None;
+                true
+            }
+            Err(_) => {
+                self.message = Some("Can't place that".to_string());
+                self.placing = None;
+                false
+            }
+        }
+    }
     /// Tape: the tool, for drawing the start point (`docs/specs/m3-app-tape.md`). `None` for
     /// other tools.
     pub fn tape_tool(&self) -> Option<&TapeTool> {
@@ -1700,6 +1791,7 @@ impl Editor {
     pub fn erase_selection(&mut self, model: &mut Model) -> bool {
         self.end_texture_handles();
         self.paste = None;
+        self.placing = None;
         self.line = LineTool::new();
         self.idle_shapes();
         self.idle_rotate();
@@ -1764,6 +1856,7 @@ impl Editor {
         };
         self.end_texture_handles();
         self.paste = None;
+        self.placing = None;
         self.path = path;
         self.recompute_transforms(model);
         self.selection.clear();
@@ -1777,6 +1870,7 @@ impl Editor {
             return;
         }
         self.paste = None;
+        self.placing = None;
         self.path = self.path.close();
         self.transforms.pop();
         self.selection.clear();
@@ -1799,6 +1893,7 @@ impl Editor {
     pub fn make_component(&mut self, model: &mut Model, name: &str, group: bool) -> bool {
         self.end_texture_handles();
         self.paste = None;
+        self.placing = None;
         self.line = LineTool::new();
         self.idle_shapes();
         self.idle_rotate();
@@ -1937,6 +2032,7 @@ impl Editor {
     pub fn explode_selection(&mut self, model: &mut Model) -> bool {
         self.end_texture_handles();
         self.paste = None;
+        self.placing = None;
         self.line = LineTool::new();
         self.idle_shapes();
         self.idle_rotate();
