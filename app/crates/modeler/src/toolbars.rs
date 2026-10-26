@@ -623,3 +623,39 @@ fn paint_grip(ui: &egui::Ui, rect: egui::Rect, vertical: bool) {
         }
     }
 }
+
+/// What the View > Toolbars menu asks of the app.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ToolbarsMenuEvent {
+    /// The layout changed (a toolbar was shown or hidden, or the layout was reset).
+    Changed,
+    /// Open the Customize window.
+    Customize,
+}
+
+/// What the Customize window remembers between frames.
+#[derive(Clone, Debug, Default)]
+pub struct CustomizeState {
+    /// The toolbar being edited (an index into the layout; clamped when out of range).
+    pub selected: usize,
+    /// The text in the new-toolbar name field.
+    pub new_name: String,
+}
+
+/// The contents of the View > Toolbars submenu.
+/// Behaviour: `docs/specs/m6-toolbar-customize.md`.
+pub fn toolbars_menu(ui: &mut egui::Ui, layout: &mut ToolbarLayout) -> Option<ToolbarsMenuEvent> {
+    let _ = (ui, layout);
+    unimplemented!("m6-toolbar-customize")
+}
+
+/// The contents of the Customize window. Returns true when the layout changed.
+/// Behaviour: `docs/specs/m6-toolbar-customize.md`.
+pub fn customize_panel(
+    ui: &mut egui::Ui,
+    layout: &mut ToolbarLayout,
+    state: &mut CustomizeState,
+) -> bool {
+    let _ = (ui, layout, state);
+    unimplemented!("m6-toolbar-customize")
+}
