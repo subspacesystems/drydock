@@ -23,7 +23,7 @@ use modeler::shading;
 use modeler::sun_windows::SunWindows;
 use modeler::texture_handles;
 use modeler::texture_panel::{TextureForm, texture_position_section};
-use modeler::toolbars::{self, Edge, Placement, ToolbarEvent, ToolbarLayout};
+use modeler::toolbars::{self, CustomizeState, Edge, Placement, ToolbarEvent, ToolbarLayout};
 use modeler::viewstate::{Effect, ViewState, scene_bounds, zoom_pivot_at};
 use modeler_dae::{FlatScene, RestView};
 use modeler_kernel::editpath::EditPath;
@@ -144,6 +144,10 @@ pub struct App {
     toolbars: ToolbarLayout,
     /// Where `toolbars` is kept between runs.
     toolbars_file: Option<PathBuf>,
+    /// The Customize Toolbars window is showing.
+    customize_open: bool,
+    /// The Customize window's selected toolbar and typed name.
+    customize: CustomizeState,
     /// Ctrl/Cmd is held down.
     ctrl_down: bool,
     /// Ctrl/Cmd went down as a lone modifier (no key or button since), so releasing it
@@ -204,6 +208,8 @@ impl App {
             recent_file,
             toolbars,
             toolbars_file,
+            customize_open: false,
+            customize: CustomizeState::default(),
             ctrl_down: false,
             ctrl_lone: false,
         };
@@ -1630,9 +1636,24 @@ impl eframe::App for App {
         self.poll_loading(&ctx, frame);
 
         let mut menu_action = None;
-        egui::Panel::top("menu").show(ui, |ui| {
-            menu_action = chrome::menu_bar(ui, &self.menu_state());
-        });
+        let mut toolbars_changed = false;
+        let mut customize_toolbars = false;
+        {
+            let mut toolbars = std::mem::take(&mut self.toolbars);
+            egui::Panel::top("menu").show(ui, |ui| {
+                let outcome = chrome::menu_bar_with_toolbars(ui, &self.menu_state(), &mut toolbars);
+                menu_action = outcome.action;
+                toolbars_changed = outcome.toolbars_changed;
+                customize_toolbars = outcome.customize_toolbars;
+            });
+            self.toolbars = toolbars;
+        }
+        if toolbars_changed {
+            self.save_toolbars();
+        }
+        if customize_toolbars {
+            self.customize_open = true;
+        }
         if let Some(action) = menu_action {
             self.apply(action, &ctx, frame);
         }
@@ -1765,6 +1786,21 @@ impl eframe::App for App {
             self.paint_overlays(ui, rect);
         });
         chrome::about_window(&ctx, &mut self.about_open);
+        if self.customize_open {
+            let mut open = true;
+            let mut changed = false;
+            egui::Window::new("Customize Toolbars")
+                .id(egui::Id::new("customize_toolbars"))
+                .open(&mut open)
+                .show(&ctx, |ui| {
+                    changed =
+                        toolbars::customize_panel(ui, &mut self.toolbars, &mut self.customize);
+                });
+            self.customize_open = open;
+            if changed {
+                self.save_toolbars();
+            }
+        }
         if let Some(model) = &self.model {
             let mut lines = chrome::model_info_lines(&model.stats, model.kernel.is_some());
             if let Some(state) = frame.wgpu_render_state() {
