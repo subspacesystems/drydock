@@ -645,8 +645,33 @@ pub struct CustomizeState {
 /// The contents of the View > Toolbars submenu.
 /// Behaviour: `docs/specs/m6-toolbar-customize.md`.
 pub fn toolbars_menu(ui: &mut egui::Ui, layout: &mut ToolbarLayout) -> Option<ToolbarsMenuEvent> {
-    let _ = (ui, layout);
-    unimplemented!("m6-toolbar-customize")
+    let mut event = None;
+    let count = layout.toolbars().len();
+    for index in 0..count {
+        let name = layout.toolbars()[index].name.clone();
+        let mut visible = layout.toolbars()[index].visible;
+        if ui.checkbox(&mut visible, name).clicked() {
+            layout.set_visible(index, visible);
+            event = Some(ToolbarsMenuEvent::Changed);
+        }
+    }
+    ui.separator();
+    if ui.button("Customize...").clicked() {
+        event = Some(ToolbarsMenuEvent::Customize);
+    }
+    if ui.button("Reset Toolbars").clicked() {
+        layout.reset();
+        event = Some(ToolbarsMenuEvent::Changed);
+    }
+    event
+}
+
+fn tool_label(tool: Tool) -> &'static str {
+    TOOL_BUTTONS
+        .iter()
+        .find(|(button, _)| *button == tool)
+        .map(|(_, label)| *label)
+        .unwrap_or("")
 }
 
 /// The contents of the Customize window. Returns true when the layout changed.
@@ -656,6 +681,107 @@ pub fn customize_panel(
     layout: &mut ToolbarLayout,
     state: &mut CustomizeState,
 ) -> bool {
-    let _ = (ui, layout, state);
-    unimplemented!("m6-toolbar-customize")
+    let count = layout.toolbars().len();
+    state.selected = if count == 0 {
+        0
+    } else {
+        state.selected.min(count - 1)
+    };
+    let selected = state.selected;
+    let mut changed = false;
+
+    ui.horizontal_wrapped(|ui| {
+        for (index, toolbar) in layout.toolbars().iter().enumerate() {
+            if ui
+                .selectable_label(selected == index, toolbar.name.as_str())
+                .clicked()
+            {
+                state.selected = index;
+            }
+        }
+    });
+
+    let tools = layout
+        .toolbars()
+        .get(selected)
+        .map(|toolbar| toolbar.tools.clone())
+        .unwrap_or_default();
+    let mut remove = None;
+    let mut earlier = None;
+    let mut later = None;
+    for (at, &tool) in tools.iter().enumerate() {
+        let label = tool_label(tool);
+        ui.horizontal(|ui| {
+            ui.label(label);
+            if ui.button(format!("Remove {label}")).clicked() {
+                remove = Some(at);
+            }
+            if ui
+                .add_enabled(at > 0, egui::Button::new(format!("Move {label} earlier")))
+                .clicked()
+            {
+                earlier = Some(at);
+            }
+            if ui
+                .add_enabled(
+                    at + 1 < tools.len(),
+                    egui::Button::new(format!("Move {label} later")),
+                )
+                .clicked()
+            {
+                later = Some(at);
+            }
+        });
+    }
+    if let Some(at) = remove {
+        layout.remove_tool(selected, at);
+        changed = true;
+    } else if let Some(at) = earlier {
+        layout.move_tool(selected, at, at - 1);
+        changed = true;
+    } else if let Some(at) = later {
+        layout.move_tool(selected, at, at + 1);
+        changed = true;
+    }
+
+    let mut add = None;
+    if selected < layout.toolbars().len() {
+        for (tool, label) in TOOL_BUTTONS {
+            if !tools.contains(&tool) && ui.button(format!("Add {label}")).clicked() {
+                add = Some(tool);
+            }
+        }
+    }
+    if let Some(tool) = add {
+        layout.add_tool(selected, tool, usize::MAX);
+        changed = true;
+    }
+
+    ui.horizontal(|ui| {
+        let label = ui.label("New toolbar name");
+        ui.add(egui::TextEdit::singleline(&mut state.new_name))
+            .labelled_by(label.id);
+    });
+    if ui.button("Create toolbar").clicked() {
+        state.selected = layout.add_toolbar(&state.new_name);
+        state.new_name.clear();
+        changed = true;
+    }
+    if ui.button("Delete toolbar").clicked() && selected < layout.toolbars().len() {
+        layout.remove_toolbar(selected);
+        let remaining = layout.toolbars().len();
+        state.selected = if remaining == 0 {
+            0
+        } else {
+            state.selected.min(remaining - 1)
+        };
+        changed = true;
+    }
+    if ui.button("Reset Toolbars").clicked() {
+        layout.reset();
+        let remaining = layout.toolbars().len();
+        state.selected = state.selected.min(remaining.saturating_sub(1));
+        changed = true;
+    }
+    changed
 }

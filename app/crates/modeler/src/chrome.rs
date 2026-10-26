@@ -10,6 +10,7 @@
 use crate::dock::PanelId;
 use crate::document::{Stats, format_size};
 use crate::input::{Action, EditKey, Tool};
+use crate::toolbars::{self, ToolbarLayout, ToolbarsMenuEvent};
 use modeler_view::StandardView;
 use std::path::PathBuf;
 
@@ -396,9 +397,39 @@ pub fn status_measurement(
     }
 }
 
+/// What the menu bar did this frame.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct MenuOutcome {
+    /// The menu action the user chose, if any.
+    pub action: Option<Action>,
+    /// The View > Toolbars menu changed the layout.
+    pub toolbars_changed: bool,
+    /// The user asked for the Customize Toolbars window.
+    pub customize_toolbars: bool,
+}
+
 /// The File, Edit, View and Help menus.
 pub fn menu_bar(ui: &mut eframe::egui::Ui, state: &MenuState<'_>) -> Option<Action> {
+    menu_bar_inner(ui, state, None).action
+}
+
+/// The menus with the View > Toolbars submenu wired to `toolbars`.
+pub fn menu_bar_with_toolbars(
+    ui: &mut eframe::egui::Ui,
+    state: &MenuState<'_>,
+    toolbars: &mut ToolbarLayout,
+) -> MenuOutcome {
+    menu_bar_inner(ui, state, Some(toolbars))
+}
+
+fn menu_bar_inner(
+    ui: &mut eframe::egui::Ui,
+    state: &MenuState<'_>,
+    toolbars: Option<&mut ToolbarLayout>,
+) -> MenuOutcome {
     let mut chosen = None;
+    let mut toolbars_changed = false;
+    let mut customize_toolbars = false;
     eframe::egui::MenuBar::new().ui(ui, |ui| {
         ui.menu_button("File", |ui| {
             if ui.button("New    Ctrl+N").clicked() {
@@ -621,6 +652,17 @@ pub fn menu_bar(ui: &mut eframe::egui::Ui, state: &MenuState<'_>) -> Option<Acti
                 chosen = Some(Action::ResetPanels);
                 ui.close();
             }
+            if let Some(layout) = toolbars {
+                ui.separator();
+                ui.menu_button("Toolbars", |ui| match toolbars::toolbars_menu(ui, layout) {
+                    Some(ToolbarsMenuEvent::Changed) => toolbars_changed = true,
+                    Some(ToolbarsMenuEvent::Customize) => {
+                        customize_toolbars = true;
+                        ui.close();
+                    }
+                    None => {}
+                });
+            }
             ui.separator();
             if ui.button("Model Info").clicked() {
                 chosen = Some(Action::ModelInfo);
@@ -653,5 +695,9 @@ pub fn menu_bar(ui: &mut eframe::egui::Ui, state: &MenuState<'_>) -> Option<Acti
             }
         });
     });
-    chosen
+    MenuOutcome {
+        action: chosen,
+        toolbars_changed,
+        customize_toolbars,
+    }
 }
