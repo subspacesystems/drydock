@@ -488,3 +488,51 @@ pub fn panel_key(id: PanelId) -> &'static str {
 pub fn panels_file(var: impl Fn(&str) -> Option<OsString>) -> Option<PathBuf> {
     crate::recent::config_dir(var).map(|dir| dir.join("panels"))
 }
+
+/// Height of a panel's title row, in points.
+pub const HEADER_HEIGHT: f32 = 24.0;
+
+/// What a panel's title row reports.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum PanelEvent {
+    /// The collapse button was clicked.
+    ToggleCollapsed(PanelId),
+    /// The close button was clicked.
+    Close(PanelId),
+    /// A drag that started on the title ended with the pointer at `pos`.
+    Dropped { id: PanelId, pos: Pos2 },
+}
+
+/// Draw the title row of panel `id`: the title (`title(id)`) as a drag handle, then, when
+/// `docked`, a collapse button, then a close button. `collapsed` only changes the
+/// collapse button's label.
+pub fn panel_header(
+    ui: &mut eframe::egui::Ui,
+    id: PanelId,
+    collapsed: bool,
+    docked: bool,
+) -> Option<PanelEvent> {
+    let _ = (ui, id, collapsed, docked);
+    unimplemented!("m6-dock-ui")
+}
+
+/// Where a panel dropped with the pointer at `pointer` goes: into the column
+/// `layout.drop_side(screen, pointer)` names, at `drop_position(middles, pointer.y)`, or
+/// floating when that is `None`.
+pub fn drop_destination(
+    layout: &DockLayout,
+    screen: Rect,
+    pointer: Pos2,
+    middles: &[f32],
+) -> DropTarget {
+    let _ = (layout, screen, pointer, middles);
+    unimplemented!("m6-dock-ui")
+}
+
+/// Move `id` to `target`. Docking is `DockLayout::dock`. Floating puts the window's
+/// top-left corner at `pointer`; it keeps the size it floated at before, and a panel that
+/// was docked floats at `DEFAULT_WIDTH` x 300.
+pub fn apply_drop(layout: &mut DockLayout, id: PanelId, target: DropTarget, pointer: Pos2) {
+    let _ = (layout, id, target, pointer);
+    unimplemented!("m6-dock-ui")
+}
