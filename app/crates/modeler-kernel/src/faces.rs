@@ -102,6 +102,11 @@ fn edge_midpoint(ctx: &Context, edge: EdgeId) -> Option<DVec3> {
 /// True when `p` is strictly inside the face: inside the outer loop and outside every
 /// hole (neither inside nor on the boundary).
 pub(crate) fn point_inside_face(ctx: &Context, face: &Face, p: DVec3) -> bool {
+    point_inside_face_tol(ctx, face, p, LINEAR_TOL)
+}
+
+/// `point_inside_face` with points within `tol` of a loop counting as on the boundary.
+fn point_inside_face_tol(ctx: &Context, face: &Face, p: DVec3, tol: f64) -> bool {
     let Some(plane) = face_plane_of(ctx, face) else {
         return false;
     };
@@ -109,12 +114,12 @@ pub(crate) fn point_inside_face(ctx: &Context, face: &Face, p: DVec3) -> bool {
     let (u, v) = geom::plane_basis(n);
     let pp = DVec2::new(p.dot(u), p.dot(v));
     let outer = geom::to_plane_2d(&ctx.loop_points(&face.outer), n);
-    if geom::point_in_polygon_2d(pp, &outer, LINEAR_TOL) != Containment::Inside {
+    if geom::point_in_polygon_2d(pp, &outer, tol) != Containment::Inside {
         return false;
     }
     for l in &face.inner {
         let hole = geom::to_plane_2d(&ctx.loop_points(l), n);
-        if geom::point_in_polygon_2d(pp, &hole, LINEAR_TOL) != Containment::Outside {
+        if geom::point_in_polygon_2d(pp, &hole, tol) != Containment::Outside {
             return false;
         }
     }
@@ -182,7 +187,11 @@ pub(crate) fn region_inside_face(
 ) -> bool {
     let f_edges = face_edges(face);
     if let Some(step) = region.outline.iter().find(|s| !f_edges.contains(&s.edge)) {
-        return point_inside_face(ctx, face, step_midpoint(ctx, step));
+        // The face's loops are edges of the same arrangement, so an edge that isn't one of
+        // them lies wholly inside or wholly outside the face. Test its midpoint without a
+        // tolerance: a sliver region (a line passing just over `LINEAR_TOL` from a vertex)
+        // has its midpoint within `LINEAR_TOL` of the face's loop.
+        return point_inside_face_tol(ctx, face, step_midpoint(ctx, step), 0.0);
     }
     let Some(step) = region.outline.first() else {
         return false;
