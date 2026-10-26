@@ -512,8 +512,90 @@ pub fn panel_header(
     collapsed: bool,
     docked: bool,
 ) -> Option<PanelEvent> {
-    let _ = (ui, id, collapsed, docked);
-    unimplemented!("m6-dock-ui")
+    use eframe::egui::{Align, Align2, FontId, Layout, Sense, Stroke, WidgetInfo, WidgetType};
+
+    const BUTTON_WIDTH: f32 = 22.0;
+    let name = title(id);
+    let mut event = None;
+
+    ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+        ui.spacing_mut().item_spacing.x = 2.0;
+        let buttons = if docked { 2 } else { 1 };
+        let reserved = buttons as f32 * (BUTTON_WIDTH + ui.spacing().item_spacing.x);
+        let title_width = (ui.available_width() - reserved).max(BUTTON_WIDTH);
+        let (title_rect, title_response) = ui.allocate_exact_size(
+            eframe::egui::vec2(title_width, HEADER_HEIGHT),
+            Sense::click_and_drag(),
+        );
+        let enabled = ui.is_enabled();
+        let handle_label = format!("Move {name} panel");
+        title_response
+            .widget_info(|| WidgetInfo::labeled(WidgetType::Button, enabled, &handle_label));
+        let text_color = ui.visuals().text_color();
+        ui.painter().text(
+            title_rect.left_center() + eframe::egui::vec2(4.0, 0.0),
+            Align2::LEFT_CENTER,
+            name,
+            FontId::proportional(13.0),
+            text_color,
+        );
+        if title_response.dragged() {
+            ui.ctx().data_mut(|data| {
+                data.insert_temp(eframe::egui::Id::new("dock-dragging"), id);
+            });
+        }
+        if title_response.drag_stopped()
+            && let Some(pos) = title_response.interact_pointer_pos()
+        {
+            event = Some(PanelEvent::Dropped { id, pos });
+        }
+
+        let button = |ui: &mut eframe::egui::Ui, symbol: &str, label: String| {
+            let (rect, response) = ui.allocate_exact_size(
+                eframe::egui::vec2(BUTTON_WIDTH, HEADER_HEIGHT),
+                Sense::click(),
+            );
+            let enabled = ui.is_enabled();
+            response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, enabled, &label));
+            let color = ui.visuals().text_color();
+            if response.hovered() {
+                ui.painter()
+                    .rect_filled(rect, 3.0, ui.visuals().widgets.hovered.weak_bg_fill);
+            }
+            ui.painter().text(
+                rect.center(),
+                Align2::CENTER_CENTER,
+                symbol,
+                FontId::proportional(14.0),
+                color,
+            );
+            if response.clicked() {
+                ui.painter().rect_stroke(
+                    rect,
+                    3.0,
+                    Stroke::new(1.0, color),
+                    eframe::egui::StrokeKind::Inside,
+                );
+            }
+            response
+        };
+
+        if docked {
+            let (symbol, label) = if collapsed {
+                (">", format!("Expand {name}"))
+            } else {
+                ("v", format!("Collapse {name}"))
+            };
+            if button(ui, symbol, label).clicked() {
+                event = Some(PanelEvent::ToggleCollapsed(id));
+            }
+        }
+        if button(ui, "x", format!("Close {name}")).clicked() {
+            event = Some(PanelEvent::Close(id));
+        }
+    });
+
+    event
 }
 
 /// Where a panel dropped with the pointer at `pointer` goes: into the column
@@ -525,14 +607,27 @@ pub fn drop_destination(
     pointer: Pos2,
     middles: &[f32],
 ) -> DropTarget {
-    let _ = (layout, screen, pointer, middles);
-    unimplemented!("m6-dock-ui")
+    match layout.drop_side(screen, pointer) {
+        Some(side) => DropTarget::Dock {
+            side,
+            position: drop_position(middles, pointer.y),
+        },
+        None => DropTarget::Float,
+    }
 }
 
 /// Move `id` to `target`. Docking is `DockLayout::dock`. Floating puts the window's
 /// top-left corner at `pointer`; it keeps the size it floated at before, and a panel that
 /// was docked floats at `DEFAULT_WIDTH` x 300.
 pub fn apply_drop(layout: &mut DockLayout, id: PanelId, target: DropTarget, pointer: Pos2) {
-    let _ = (layout, id, target, pointer);
-    unimplemented!("m6-dock-ui")
+    match target {
+        DropTarget::Dock { side, position } => layout.dock(id, side, position),
+        DropTarget::Float => {
+            let (w, h) = match layout.panel(id).place {
+                Place::Floating { w, h, .. } => (w, h),
+                Place::Docked { .. } => (DEFAULT_WIDTH, 300.0),
+            };
+            layout.float(id, Rect::from_min_size(pointer, eframe::egui::vec2(w, h)));
+        }
+    }
 }
