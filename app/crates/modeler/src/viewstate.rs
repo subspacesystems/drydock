@@ -7,6 +7,7 @@ use glam::{DVec2, DVec3};
 use modeler_dae::FlatScene;
 use modeler_view::{Bounds, Camera, Projection};
 
+use crate::dock::PanelId;
 use crate::input::{Action, EditKey, Tool};
 
 pub struct ViewState {
@@ -58,6 +59,10 @@ pub enum Effect {
     ModelInfo,
     /// Show or hide the Shadows window.
     ToggleShadows,
+    /// Show or hide one of the docking panels.
+    TogglePanel(PanelId),
+    /// Put every panel back in its default place.
+    ResetPanels,
     /// Ask for a name, then make the selection a component (or a group when `group`).
     MakeComponent {
         group: bool,
@@ -278,6 +283,8 @@ impl ViewState {
             Action::About => return Effect::About,
             Action::ModelInfo => return Effect::ModelInfo,
             Action::ToggleShadows => return Effect::ToggleShadows,
+            Action::TogglePanel(id) => return Effect::TogglePanel(id),
+            Action::ResetPanels => return Effect::ResetPanels,
             Action::MakeComponent => return Effect::MakeComponent { group: false },
             Action::MakeGroup => return Effect::MakeComponent { group: true },
             Action::Explode => return Effect::Explode,

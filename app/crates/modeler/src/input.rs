@@ -7,6 +7,8 @@
 use glam::DVec2;
 use modeler_view::StandardView;
 
+use crate::dock::PanelId;
+
 /// Pixels of vertical drag per zoom step with the Zoom tool.
 pub const ZOOM_DRAG_PIXELS_PER_STEP: f64 = 25.0;
 
@@ -127,6 +129,10 @@ pub enum Action {
     ToggleAxes,
     /// Show or hide the Shadows window (View menu; `docs/specs/m5-app-shadows-ui.md`).
     ToggleShadows,
+    /// Show or hide one of the docking panels (View menu; `docs/specs/m6-dock-ui.md`).
+    TogglePanel(PanelId),
+    /// Put every panel back in its default place (View menu; `docs/specs/m6-dock-ui.md`).
+    ResetPanels,
     /// Show the Model Info window (View menu; `docs/specs/m4-ui-status.md`).
     ModelInfo,
     /// Open the recent file at this index of the File menu's list (most recent first;
