@@ -1801,6 +1801,9 @@ impl App {
             match action {
                 PanelAction::Info(action) => self.apply_info_action(action, ctx, frame),
                 PanelAction::Material(action) => self.apply_material_action(action, ctx, frame),
+                PanelAction::Component(ComponentAction::Import) => {
+                    // TODO m6-components-import-ui: file dialog, then import and place.
+                }
                 PanelAction::Component(ComponentAction::Place(_id)) => {
                     // TODO: start placing the component once m6-components-place is merged.
                 }

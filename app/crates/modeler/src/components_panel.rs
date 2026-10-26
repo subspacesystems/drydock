@@ -32,6 +32,17 @@ pub struct ComponentsPanel {
 pub enum ComponentAction {
     /// Start placing an instance of this definition.
     Place(DefinitionId),
+    /// The Import button was clicked: the app asks for a file.
+    Import,
+}
+
+/// Read the `.dae` or `.modeler` file at `path` as the source of an imported component:
+/// its kernel model and the name for the definition (the file name without its extension).
+/// `Err` is a one-line message for the user that names the file: the file can't be read, or
+/// it has no usable model.
+pub fn read_component_source(path: &std::path::Path) -> Result<(Model, String), String> {
+    let _ = path;
+    unimplemented!("m6-components-import-ui")
 }
 
 /// The definitions the panel lists for `search`: components only (not groups) whose name

@@ -1569,6 +1569,21 @@ impl Editor {
         true
     }
 
+    /// Import `source` as a new component definition named `name` through the editor's undo
+    /// stack (one step labelled "Import Component"), then start placing it as
+    /// `place_definition` does. Returns the definition. `Err` is a one-line message (also
+    /// kept as the editor's message) and nothing changed.
+    /// Behaviour: `docs/specs/m6-components-import-ui.md`.
+    pub fn import_component(
+        &mut self,
+        model: &mut Model,
+        source: &Model,
+        name: &str,
+    ) -> Result<DefinitionId, String> {
+        let _ = (model, source, name);
+        unimplemented!("m6-components-import-ui")
+    }
+
     /// The definition waiting for its placing click.
     pub fn placing(&self) -> Option<DefinitionId> {
         self.placing.map(|placing| placing.definition)
