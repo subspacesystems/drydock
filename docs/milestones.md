@@ -185,7 +185,8 @@ Tyrel's UI items deferred from M4, inserted after M5 at his request.
 | `m6-entity-info` | Entity Info panel widget: selection type, size/length/area, materials, definition and instance names; rename a component or group (one undo step) |  |
 | `m6-components-panel` | Components panel widget: the model's definitions with drawn thumbnails, search, list/tiles; click reports which to place | |
 | `m6-components-place` | Editor: place an instance of a definition (follows the cursor, click places, Esc cancels, one undo step) | `m6-components-panel` |
-| `m6-components-import` | Components panel: import a .dae or model file as a new component definition, then place it | `m6-components-place` |
+| `m6-components-import` | Kernel: `import_component` turns a loaded model into a new component definition (one undo step) | `m6-components-place` |
+| `m6-components-import-ui` | Components panel Import button, file dialog, reads the file, then starts placing the new component | `m6-components-import`, `m6-dock-ui` |
 | `m6-dock-ui` | App: host the four panels in the docking columns or floating windows; drag a title to dock or float, collapse, resize columns; View menu items; Shadows window becomes a panel; layout saved | `m6-dock-layout`, `m6-entity-info`, `m6-components-panel`, `m6-materials-icons` |
 
 - Icon toolbars by tool group (own icons), toolbars that can be shown, hidden and rearranged.

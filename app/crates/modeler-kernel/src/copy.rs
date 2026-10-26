@@ -578,3 +578,22 @@ pub fn copy_selection(
     let clipboard = extract(model, body, selection)?;
     insert(model, body, &clipboard, matrix, undo, label)
 }
+
+/// Add the contents of `source`'s root (its geometry, face materials and instances, with
+/// every definition and material they reach) to `model` as a new component definition,
+/// as one undo step labelled `label`. The definition is named `name` made unique by
+/// `unique_definition_name` (blank = "Component"); points keep their coordinates. No
+/// instance is placed. Returns the new definition.
+///
+/// `Err(Empty)` when `source`'s root has no edge, face or instance. On any error the model
+/// and the undo stack are unchanged. `source` is not changed.
+pub fn import_component(
+    model: &mut Model,
+    source: &Model,
+    name: &str,
+    undo: &mut UndoStack,
+    label: &str,
+) -> Result<DefinitionId, CopyError> {
+    let _ = (model, source, name, undo, label);
+    unimplemented!("m6-components-import")
+}
