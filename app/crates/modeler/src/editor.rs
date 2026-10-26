@@ -1839,8 +1839,52 @@ impl Editor {
     /// same, or there is no such definition.
     /// Behaviour: `docs/specs/m6-entity-info.md`.
     pub fn rename_definition(&mut self, model: &mut Model, id: DefinitionId, name: &str) -> bool {
-        let _ = (model, id, name);
-        unimplemented!()
+        let name = name.trim();
+        if name.is_empty() {
+            return false;
+        }
+        let Some(current) = model.definition(id).cloned() else {
+            return false;
+        };
+        if name == current.name {
+            return false;
+        }
+        let taken = |candidate: &str| {
+            model
+                .definitions()
+                .any(|(other, info)| other != id && info.name == candidate)
+        };
+        let mut new_name = name.to_string();
+        if taken(&new_name) {
+            let mut n = 2u64;
+            loop {
+                let candidate = format!("{name} {n}");
+                if !taken(&candidate) {
+                    new_name = candidate;
+                    break;
+                }
+                n += 1;
+            }
+        }
+        if new_name == current.name {
+            return false;
+        }
+        let mut log = ModelEdit::new();
+        if model
+            .set_definition(
+                id,
+                DefinitionInfo {
+                    name: new_name,
+                    group: current.group,
+                },
+                &mut log,
+            )
+            .is_err()
+        {
+            return false;
+        }
+        self.undo.push("Rename", log);
+        true
     }
 
     /// Rename instance `id` of the open body to `name` (trimmed; blank clears it). One undo
@@ -1848,8 +1892,22 @@ impl Editor {
     /// no such instance.
     /// Behaviour: `docs/specs/m6-entity-info.md`.
     pub fn rename_instance(&mut self, model: &mut Model, id: InstanceId, name: &str) -> bool {
-        let _ = (model, id, name);
-        unimplemented!()
+        let body = self.body(model);
+        let Some(mut instance) = model.body(body).and_then(|body| body.instance(id)).cloned()
+        else {
+            return false;
+        };
+        let name = name.trim();
+        if name == instance.name {
+            return false;
+        }
+        instance.name = name.to_string();
+        let mut log = ModelEdit::new();
+        if model.set_instance(body, id, instance, &mut log).is_err() {
+            return false;
+        }
+        self.undo.push("Rename", log);
+        true
     }
 
     /// Explode the selected instance into the open body. One undo step "Explode"; the
