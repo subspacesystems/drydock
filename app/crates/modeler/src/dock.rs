@@ -518,7 +518,10 @@ pub fn panel_header(
     let name = title(id);
     let mut event = None;
 
-    ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+    // A fixed-height row: `with_layout` alone would take all the remaining height and
+    // centre the header in it.
+    let row = eframe::egui::vec2(ui.available_width(), HEADER_HEIGHT);
+    ui.allocate_ui_with_layout(row, Layout::left_to_right(Align::Center), |ui| {
         ui.spacing_mut().item_spacing.x = 2.0;
         let buttons = if docked { 2 } else { 1 };
         let reserved = buttons as f32 * (BUTTON_WIDTH + ui.spacing().item_spacing.x);
