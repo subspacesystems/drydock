@@ -7,6 +7,8 @@
 //!
 //! Behaviour: `docs/specs/m6-toolbar-layout.md`.
 
+use crate::chrome::{TOOL_BUTTONS, tool_shortcut};
+use crate::icons::{self, Icon};
 use crate::input::Tool;
 use eframe::egui;
 use std::ffi::OsString;
@@ -527,14 +529,29 @@ pub enum ToolbarEvent {
 /// within `EDGE_ZONE` of (the first of top, bottom, left, right on a tie), or `None`
 /// (the toolbar floats).
 pub fn drop_target(pos: egui::Pos2, window: egui::Rect) -> Option<Edge> {
-    let _ = (pos, window);
-    unimplemented!("m6-toolbar-ui")
+    let distances = [
+        (Edge::Top, (pos.y - window.top()).max(0.0)),
+        (Edge::Bottom, (window.bottom() - pos.y).max(0.0)),
+        (Edge::Left, (pos.x - window.left()).max(0.0)),
+        (Edge::Right, (window.right() - pos.x).max(0.0)),
+    ];
+    let mut best: Option<(Edge, f32)> = None;
+    for (edge, distance) in distances {
+        if distance <= EDGE_ZONE && best.is_none_or(|(_, nearest)| distance < nearest) {
+            best = Some((edge, distance));
+        }
+    }
+    best.map(|(edge, _)| edge)
 }
 
 /// The tool button's tooltip: its name and shortcut, like `Line (L)`.
 pub fn tool_tooltip(tool: Tool) -> String {
-    let _ = tool;
-    unimplemented!("m6-toolbar-ui")
+    let label = TOOL_BUTTONS
+        .iter()
+        .find(|(button, _)| *button == tool)
+        .map(|(_, label)| *label)
+        .unwrap_or("");
+    format!("{label} ({})", tool_shortcut(tool))
 }
 
 /// Draw `toolbar` (number `index` in its layout) as a row, or a column when `vertical`:
@@ -546,6 +563,63 @@ pub fn toolbar_strip(
     current: Tool,
     vertical: bool,
 ) -> Option<ToolbarEvent> {
-    let _ = (ui, toolbar, index, current, vertical);
-    unimplemented!("m6-toolbar-ui")
+    let mut event = None;
+    let layout = if vertical {
+        egui::Layout::top_down(egui::Align::Center)
+    } else {
+        egui::Layout::left_to_right(egui::Align::Center)
+    };
+    ui.with_layout(layout, |ui| {
+        let grip_size = if vertical {
+            egui::vec2(icons::BUTTON_SIZE, GRIP_LENGTH)
+        } else {
+            egui::vec2(GRIP_LENGTH, icons::BUTTON_SIZE)
+        };
+        let (grip_rect, grip) = ui.allocate_exact_size(grip_size, egui::Sense::click_and_drag());
+        let grip_label = format!("Move {} toolbar", toolbar.name);
+        let enabled = ui.is_enabled();
+        grip.widget_info(|| {
+            egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, &grip_label)
+        });
+        paint_grip(ui, grip_rect, vertical);
+
+        for &tool in &toolbar.tools {
+            let label = TOOL_BUTTONS
+                .iter()
+                .find(|(button, _)| *button == tool)
+                .map(|(_, label)| *label)
+                .unwrap_or("");
+            let button = icons::icon_button(
+                ui,
+                Icon::Tool(tool),
+                label,
+                &tool_tooltip(tool),
+                tool == current,
+            );
+            if button.clicked() {
+                event = Some(ToolbarEvent::Select(tool));
+            }
+        }
+
+        if grip.drag_stopped()
+            && let Some(pos) = grip.interact_pointer_pos()
+        {
+            event = Some(ToolbarEvent::Dropped { index, pos });
+        }
+    });
+    event
+}
+
+/// A few dots in the theme's text color, arranged along the grip.
+fn paint_grip(ui: &egui::Ui, rect: egui::Rect, vertical: bool) {
+    let color = ui.visuals().text_color().gamma_multiply(0.7);
+    let (columns, rows) = if vertical { (3, 2) } else { (2, 3) };
+    let painter = ui.painter();
+    for column in 0..columns {
+        for row in 0..rows {
+            let x = rect.left() + rect.width() * (column as f32 + 1.0) / (columns as f32 + 1.0);
+            let y = rect.top() + rect.height() * (row as f32 + 1.0) / (rows as f32 + 1.0);
+            painter.circle_filled(egui::pos2(x, y), 1.2, color);
+        }
+    }
 }
