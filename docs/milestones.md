@@ -179,7 +179,8 @@ Tyrel's UI items deferred from M4, inserted after M5 at his request.
 | `m6-icons` | Own vector icons for every tool and the Materials buttons (drawn in code, theme color), icon button with tooltip | |
 | `m6-toolbar-layout` | Toolbar layout data: one toolbar per tool group, show/hide, dock on any edge or float, add/remove/reorder tools, new toolbars; layout file | |
 | `m6-dock-layout` | Panel layout data: Entity Info, Materials, Components, Shadows open/closed, left/right column or floating, collapsed, column widths, drop rules; layout file | |
-| `m6-toolbar-ui` | Draw the toolbars from the layout with icon buttons; drag a toolbar's grip to another edge or to float; View > Toolbars (show/hide, Customize..., Reset); Customize window; layout saved | `m6-icons`, `m6-toolbar-layout` |
+| `m6-toolbar-ui` | Toolbar strip widget (grip, icon buttons, tooltips), drop-target rule; app draws the toolbars from the layout, drag a grip to another edge or to float; layout saved | `m6-icons`, `m6-toolbar-layout` |
+| `m6-toolbar-customize` | View > Toolbars (show/hide, Customize..., Reset); Customize window: add, remove, reorder tools, new toolbars | `m6-toolbar-ui` |
 | `m6-materials-icons` | Materials panel: List/Tiles and New/Edit/Purge as icon buttons with tooltips | `m6-icons` |
 | `m6-entity-info` | Entity Info panel widget: selection type, size/length/area, materials, definition and instance names; rename a component or group (one undo step) |  |
 | `m6-components-panel` | Components panel widget: the model's definitions with drawn thumbnails, search, list/tiles; click one to place an instance (follows the cursor, click places, one undo step) | |
