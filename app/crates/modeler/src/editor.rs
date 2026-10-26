@@ -21,7 +21,8 @@ use modeler_kernel::erase::erase;
 use modeler_kernel::explode::explode;
 use modeler_kernel::infer::{self, Inference, Probe, Snap};
 use modeler_kernel::model::{
-    BodyId, DefinitionInfo, InstanceId, Material, MaterialId, Model, ModelEdit, UndoStack,
+    BodyId, DefinitionId, DefinitionInfo, InstanceId, Material, MaterialId, Model, ModelEdit,
+    UndoStack,
 };
 use modeler_kernel::paint::{self, Side};
 use modeler_kernel::pushpull::push_pull;
@@ -1831,6 +1832,24 @@ impl Editor {
                 false
             }
         }
+    }
+
+    /// Rename definition `id` to `name` (trimmed; numbered when another definition has the
+    /// name). One undo step "Rename". False, with no change, when the name is blank or the
+    /// same, or there is no such definition.
+    /// Behaviour: `docs/specs/m6-entity-info.md`.
+    pub fn rename_definition(&mut self, model: &mut Model, id: DefinitionId, name: &str) -> bool {
+        let _ = (model, id, name);
+        unimplemented!()
+    }
+
+    /// Rename instance `id` of the open body to `name` (trimmed; blank clears it). One undo
+    /// step "Rename". False, with no change, when the name is the same or the open body has
+    /// no such instance.
+    /// Behaviour: `docs/specs/m6-entity-info.md`.
+    pub fn rename_instance(&mut self, model: &mut Model, id: InstanceId, name: &str) -> bool {
+        let _ = (model, id, name);
+        unimplemented!()
     }
 
     /// Explode the selected instance into the open body. One undo step "Explode"; the

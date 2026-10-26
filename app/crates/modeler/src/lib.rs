@@ -11,6 +11,7 @@ pub mod chrome;
 pub mod dock;
 pub mod document;
 pub mod editor;
+pub mod entity_info;
 pub mod geo_panel;
 pub mod globe;
 pub mod hints;
