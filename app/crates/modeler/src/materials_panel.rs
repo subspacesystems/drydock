@@ -13,6 +13,7 @@ use glam::DVec2;
 use modeler_kernel::model::{Material, MaterialId, Model, Texture};
 use modeler_kernel::paint;
 
+use crate::icons::{self, Icon};
 use crate::swatches::Swatches;
 
 /// What the user asked for in the panel this frame.
@@ -156,18 +157,33 @@ pub fn materials_panel(
     let mut new_form = false;
     let mut edit_form = None;
     ui.horizontal_wrapped(|ui| {
-        if ui.button("New...").clicked() {
+        if icons::icon_button(ui, Icon::New, "New...", "New material", false).clicked() {
             new_form = true;
         }
         let editable = current.and_then(|id| model.material(id).map(|material| (id, material)));
-        if ui
-            .add_enabled(editable.is_some(), egui::Button::new("Edit..."))
+        ui.add_enabled_ui(editable.is_some(), |ui| {
+            if icons::icon_button(
+                ui,
+                Icon::Edit,
+                "Edit...",
+                "Edit the current material",
+                false,
+            )
             .clicked()
-            && let Some((id, material)) = editable
+                && let Some((id, material)) = editable
+            {
+                edit_form = Some(MaterialForm::edit(id, material));
+            }
+        });
+        if icons::icon_button(
+            ui,
+            Icon::Purge,
+            "Purge Unused",
+            "Remove the materials nothing uses",
+            false,
+        )
+        .clicked()
         {
-            edit_form = Some(MaterialForm::edit(id, material));
-        }
-        if ui.button("Purge Unused").clicked() {
             panel.purge_confirm = true;
         }
     });
@@ -187,16 +203,10 @@ pub fn materials_panel(
     );
 
     ui.horizontal_wrapped(|ui| {
-        if ui
-            .add(egui::Button::selectable(!panel.tiles, "List"))
-            .clicked()
-        {
+        if icons::icon_button(ui, Icon::List, "List", "Show as a list", !panel.tiles).clicked() {
             panel.tiles = false;
         }
-        if ui
-            .add(egui::Button::selectable(panel.tiles, "Tiles"))
-            .clicked()
-        {
+        if icons::icon_button(ui, Icon::Tiles, "Tiles", "Show as tiles", panel.tiles).clicked() {
             panel.tiles = true;
         }
     });
