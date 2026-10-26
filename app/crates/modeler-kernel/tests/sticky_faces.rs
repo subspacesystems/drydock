@@ -697,3 +697,23 @@ fn face_overlaps_ignores_neighbours_and_other_planes() {
     polygon_face(&mut ctx, &square(0.25, 0.25, 0.5, 0.5));
     assert_eq!(ctx.face_overlaps(), vec![]);
 }
+
+#[test]
+fn line_just_past_a_vertex_splits_the_face_into_a_sliver() {
+    // A wedge with a 80 degree apex at the origin, cut by x = 1.5e-5: the cut ends are
+    // farther than LINEAR_TOL from the apex and from each other, but the cut's midpoint is
+    // within LINEAR_TOL of both sides.
+    let mut ctx = Context::new();
+    let t = 40f64.to_radians().tan();
+    let wedge = [
+        p(0.0, 0.0, 0.0),
+        p(10.0, -10.0 * t, 0.0),
+        p(10.0, 10.0 * t, 0.0),
+    ];
+    let f = polygon_face(&mut ctx, &wedge);
+    let before = area(&ctx, f);
+    let x = 1.5e-5;
+    draw(&mut ctx, p(x, -10.0, 0.0), p(x, 10.0, 0.0));
+    assert_eq!(ctx.face_count(), 2);
+    assert!((total_area(&ctx) - before).abs() < 1e-6 * before);
+}
