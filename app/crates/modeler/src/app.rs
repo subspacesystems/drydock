@@ -1618,7 +1618,7 @@ impl App {
                     Tool::Circle => "Circle",
                     Tool::Arc => "Arc",
                     Tool::Arc3 => "3-Point Arc",
-                    Tool::PushPull => "Push/Pull",
+                    Tool::PushPull => "Extrude",
                     Tool::Rotate => "Rotate",
                     Tool::Move => "Move",
                     Tool::Scale => "Scale",

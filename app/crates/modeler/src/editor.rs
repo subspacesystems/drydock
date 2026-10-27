@@ -2915,7 +2915,7 @@ impl Editor {
             last.face,
             distance,
             &mut self.undo,
-            "Push/Pull",
+            "Extrude",
         ) {
             Ok(_) => {
                 self.message = None;
@@ -2931,7 +2931,7 @@ impl Editor {
             }
             Err(_) => {
                 let _ = self.undo.redo(model);
-                self.message = Some("Can't push/pull that".to_string());
+                self.message = Some("Can't extrude that".to_string());
                 false
             }
         }
@@ -2944,7 +2944,7 @@ impl Editor {
             face,
             distance,
             &mut self.undo,
-            "Push/Pull",
+            "Extrude",
         ) {
             Ok(_) => {
                 self.push = None;
@@ -2961,7 +2961,7 @@ impl Editor {
                 true
             }
             Err(_) => {
-                self.message = Some("Can't push/pull that".to_string());
+                self.message = Some("Can't extrude that".to_string());
                 false
             }
         }

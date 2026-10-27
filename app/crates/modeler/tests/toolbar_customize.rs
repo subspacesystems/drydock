@@ -168,7 +168,7 @@ fn panel_picker_switches_toolbar_without_changing_layout() {
     assert!(!changed);
     assert_eq!(h.state().custom.selected, 2);
     assert_eq!(h.state().layout, ToolbarLayout::default());
-    h.get_by_label("Remove Push/Pull");
+    h.get_by_label("Remove Extrude");
 }
 
 #[test]
