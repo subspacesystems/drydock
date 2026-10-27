@@ -179,9 +179,11 @@ impl DockLayout {
         self.renumber();
     }
 
-    /// Show a panel: open it and, when docked, expand it. Used by the View menu.
-    pub fn reveal(&mut self, _id: PanelId) {
-        unimplemented!("m6-panel-stack")
+    /// Show a panel: open it and expand it. Used by the View menu.
+    pub fn reveal(&mut self, id: PanelId) {
+        let panel = self.panel_mut(id);
+        panel.open = true;
+        panel.collapsed = false;
     }
 
     pub fn toggle(&mut self, id: PanelId) {
@@ -497,6 +499,14 @@ pub fn panels_file(var: impl Fn(&str) -> Option<OsString>) -> Option<PathBuf> {
 /// Height of a panel's title row, in points.
 pub const HEADER_HEIGHT: f32 = 24.0;
 
+/// The glyph drawn on a header button.
+#[derive(Clone, Copy)]
+enum HeaderIcon {
+    Collapse,
+    Expand,
+    Close,
+}
+
 /// What a panel's title row reports.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum PanelEvent {
@@ -558,7 +568,7 @@ pub fn panel_header(
             event = Some(PanelEvent::Dropped { id, pos });
         }
 
-        let button = |ui: &mut eframe::egui::Ui, symbol: &str, label: String| {
+        let button = |ui: &mut eframe::egui::Ui, icon: HeaderIcon, label: String| {
             let (rect, response) = ui.allocate_exact_size(
                 eframe::egui::vec2(BUTTON_WIDTH, HEADER_HEIGHT),
                 Sense::click(),
@@ -570,13 +580,39 @@ pub fn panel_header(
                 ui.painter()
                     .rect_filled(rect, 3.0, ui.visuals().widgets.hovered.weak_bg_fill);
             }
-            ui.painter().text(
-                rect.center(),
-                Align2::CENTER_CENTER,
-                symbol,
-                FontId::proportional(14.0),
-                color,
-            );
+            let center = rect.center();
+            let stroke = Stroke::new(1.5, color);
+            let reach = 4.0;
+            match icon {
+                HeaderIcon::Collapse => {
+                    ui.painter()
+                        .line_segment([center + eframe::egui::vec2(-reach, -2.0), center], stroke);
+                    ui.painter()
+                        .line_segment([center, center + eframe::egui::vec2(reach, -2.0)], stroke);
+                }
+                HeaderIcon::Expand => {
+                    ui.painter()
+                        .line_segment([center + eframe::egui::vec2(-2.0, -reach), center], stroke);
+                    ui.painter()
+                        .line_segment([center, center + eframe::egui::vec2(-2.0, reach)], stroke);
+                }
+                HeaderIcon::Close => {
+                    ui.painter().line_segment(
+                        [
+                            center + eframe::egui::vec2(-reach, -reach),
+                            center + eframe::egui::vec2(reach, reach),
+                        ],
+                        stroke,
+                    );
+                    ui.painter().line_segment(
+                        [
+                            center + eframe::egui::vec2(-reach, reach),
+                            center + eframe::egui::vec2(reach, -reach),
+                        ],
+                        stroke,
+                    );
+                }
+            }
             if response.clicked() {
                 ui.painter().rect_stroke(
                     rect,
@@ -589,16 +625,16 @@ pub fn panel_header(
         };
 
         if docked {
-            let (symbol, label) = if collapsed {
-                (">", format!("Expand {name}"))
+            let (icon, label) = if collapsed {
+                (HeaderIcon::Expand, format!("Expand {name}"))
             } else {
-                ("v", format!("Collapse {name}"))
+                (HeaderIcon::Collapse, format!("Collapse {name}"))
             };
-            if button(ui, symbol, label).clicked() {
+            if button(ui, icon, label).clicked() {
                 event = Some(PanelEvent::ToggleCollapsed(id));
             }
         }
-        if button(ui, "x", format!("Close {name}")).clicked() {
+        if button(ui, HeaderIcon::Close, format!("Close {name}")).clicked() {
             event = Some(PanelEvent::Close(id));
         }
     });
@@ -652,13 +688,73 @@ pub struct StackRow {
 }
 
 /// Height of every row (header included) in a column `available` points tall.
-/// m6-panel-stack: see `docs/specs/m6-panel-stack.md`.
-pub fn stack_heights(_available: f32, _rows: &[StackRow]) -> Vec<f32> {
-    unimplemented!("m6-panel-stack")
+pub fn stack_heights(available: f32, rows: &[StackRow]) -> Vec<f32> {
+    let minimum = HEADER_HEIGHT + MIN_BODY;
+    let mut heights = vec![HEADER_HEIGHT; rows.len()];
+    let collapsed = rows.iter().filter(|row| row.collapsed).count();
+    let mut remaining = available - collapsed as f32 * HEADER_HEIGHT;
+
+    let mut expanded: Vec<usize> = (0..rows.len())
+        .filter(|&index| !rows[index].collapsed)
+        .collect();
+    if expanded.is_empty() {
+        return heights;
+    }
+
+    loop {
+        let weight = |index: usize| {
+            let weight = rows[index].weight;
+            if weight > 0.0 { weight } else { 1.0 }
+        };
+        let total: f32 = expanded.iter().map(|&index| weight(index)).sum();
+        let pinned: Vec<usize> = expanded
+            .iter()
+            .copied()
+            .filter(|&index| remaining * weight(index) / total < minimum)
+            .collect();
+        if pinned.is_empty() {
+            for &index in &expanded {
+                heights[index] = remaining * weight(index) / total;
+            }
+            break;
+        }
+        for &index in &pinned {
+            heights[index] = minimum;
+            remaining -= minimum;
+        }
+        expanded.retain(|index| !pinned.contains(index));
+        if expanded.is_empty() {
+            break;
+        }
+    }
+    heights
 }
 
 /// The user dragged the border under row `index` by `delta` points (positive is down).
-/// m6-panel-stack: see `docs/specs/m6-panel-stack.md`.
-pub fn drag_splitter(_rows: &mut [StackRow], _heights: &[f32], _index: usize, _delta: f32) {
-    unimplemented!("m6-panel-stack")
+pub fn drag_splitter(rows: &mut [StackRow], heights: &[f32], index: usize, delta: f32) {
+    let minimum = HEADER_HEIGHT + MIN_BODY;
+    if index + 1 >= rows.len() || index + 1 >= heights.len() {
+        return;
+    }
+    if rows[index].collapsed || rows[index + 1].collapsed {
+        return;
+    }
+
+    let top = heights[index];
+    let bottom = heights[index + 1];
+    let lower = minimum - top;
+    let upper = bottom - minimum;
+    let delta = if lower <= upper {
+        delta.clamp(lower, upper)
+    } else {
+        0.0
+    };
+    let mut moved = heights.to_vec();
+    moved[index] = top + delta;
+    moved[index + 1] = bottom - delta;
+    for (row, &height) in rows.iter_mut().zip(&moved) {
+        if !row.collapsed {
+            row.weight = height;
+        }
+    }
 }

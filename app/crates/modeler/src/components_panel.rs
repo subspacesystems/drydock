@@ -213,8 +213,6 @@ pub fn components_panel(
     panel: &mut ComponentsPanel,
     model: &Model,
 ) -> Option<ComponentAction> {
-    ui.heading("Components");
-
     ui.add(
         egui::TextEdit::singleline(&mut panel.search)
             .hint_text("Search")

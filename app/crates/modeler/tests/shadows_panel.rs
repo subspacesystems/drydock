@@ -118,7 +118,6 @@ fn panel_shows_its_widgets_and_the_current_time_and_date() {
     };
     let h = harness(settings);
     for label in [
-        "Shadows",
         "Show Shadows",
         "Sun Shading",
         "Shadows on Ground",

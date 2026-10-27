@@ -201,7 +201,10 @@ fn is_selected(h: &Harness<'_, State>, label: &str) -> bool {
 fn panel_lists_default_then_the_materials_in_order() {
     let (model, _, _) = two_materials();
     let h = harness(model, None);
-    h.get_by_label("Materials");
+    assert!(
+        h.query_by_label("Materials").is_none(),
+        "the dock header carries the title"
+    );
     let default = h.get_by_label("Default").rect();
     let brick = h.get_by_label("Brick").rect();
     let oak = h.get_by_label("Oak").rect();

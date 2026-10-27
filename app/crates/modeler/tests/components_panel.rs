@@ -221,7 +221,10 @@ fn selected(h: &Harness<'_, State>, label: &str) -> bool {
 fn list_has_a_row_per_component_in_order() {
     let (model, _) = sample();
     let h = harness(model, false);
-    assert!(h.query_by_label("Components").is_some());
+    assert!(
+        h.query_by_label("Components").is_none(),
+        "the dock header carries the title"
+    );
     let chair = h.get_by_label("Chair").rect();
     let door = h.get_by_label("door").rect();
     let table = h.get_by_label("Table").rect();
@@ -260,10 +263,9 @@ fn tiles_are_bigger_and_wrap() {
 }
 
 #[test]
-fn heading_search_and_switch_are_stacked() {
+fn search_and_switch_are_stacked() {
     let (model, _) = sample();
     let h = harness(model, false);
-    let heading = h.get_by_label("Components").rect();
     let search = h.get_by_role(Role::TextInput).rect();
     let list = h.get_by_label("List");
     let tiles = h.get_by_label("Tiles");
@@ -273,7 +275,6 @@ fn heading_search_and_switch_are_stacked() {
     }
     assert!((list.rect().center().y - tiles.rect().center().y).abs() < 0.5);
     assert!(list.rect().right() <= tiles.rect().left());
-    assert!(heading.bottom() <= search.top() + 0.5);
     assert!(search.bottom() <= list.rect().top() + 0.5);
     assert!(tiles.rect().bottom() <= h.get_by_label("Chair").rect().top() + 0.5);
 }

@@ -117,8 +117,10 @@ fn buttons_search_and_view_toggle_sit_above_the_list() {
     let tiles = h.get_by_label("Tiles").rect();
     let default = h.get_by_label("Default").rect();
     let brick = h.get_by_label("Brick").rect();
-    let heading = h.get_by_label("Materials").rect();
-    assert!(heading.bottom() <= new.top() + 0.5);
+    assert!(
+        h.query_by_label("Materials").is_none(),
+        "the dock header carries the title"
+    );
     for button in [new, edit, purge] {
         assert!(button.bottom() <= list.top() + 0.5, "{button:?} {list:?}");
     }

@@ -152,8 +152,6 @@ pub fn materials_panel(
     }
 
     let mut action = None;
-    ui.heading("Materials");
-
     let mut new_form = false;
     let mut edit_form = None;
     ui.horizontal_wrapped(|ui| {
