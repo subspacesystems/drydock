@@ -16,8 +16,8 @@ use modeler::components_panel::{
     ComponentAction, ComponentsPanel, components_panel, read_component_source,
 };
 use modeler::dock::{
-    self, DockLayout, PanelEvent, PanelId, Side as DockSide, apply_drop, drop_destination,
-    panel_header,
+    self, DockLayout, PanelEvent, PanelId, Side as DockSide, StackRow, apply_drop,
+    drop_destination, panel_header,
 };
 use modeler::document::{Document, FileKind, native_path, resolve_texture_path};
 use modeler::editor::{Editor, TextureOp, Viewport as EditorViewport};
@@ -122,6 +122,8 @@ pub struct App {
     dock: DockLayout,
     /// Where `dock` is kept between runs.
     dock_file: Option<PathBuf>,
+    /// Each column's panel rows, for the height each panel gets.
+    stacks: [Vec<StackRow>; 2],
     /// The Entity Info panel's state.
     entity_info: EntityInfoPanel,
     /// The Components panel's state.
@@ -212,6 +214,7 @@ impl App {
             materials: MaterialsPanel::default(),
             dock,
             dock_file,
+            stacks: [Vec::new(), Vec::new()],
             entity_info: EntityInfoPanel::default(),
             components: ComponentsPanel::default(),
             shadows_preview: None,
@@ -708,8 +711,8 @@ impl App {
             Effect::Edit(key) => self.edit(key, ctx, frame),
             Effect::About => self.about_open = true,
             Effect::ModelInfo => self.model_info_open = true,
-            Effect::ToggleShadows => self.toggle_panel(PanelId::Shadows),
-            Effect::TogglePanel(id) => self.toggle_panel(id),
+            Effect::ToggleShadows => self.reveal_panel(PanelId::Shadows, ctx),
+            Effect::TogglePanel(id) => self.reveal_panel(id, ctx),
             Effect::ResetPanels => {
                 self.dock.reset();
                 self.shadows_preview = None;
@@ -1708,11 +1711,14 @@ impl App {
         }
     }
 
-    /// Show or hide a panel from the View menu, saving the layout.
-    fn toggle_panel(&mut self, id: PanelId) {
-        self.dock.toggle(id);
-        if id == PanelId::Shadows && !self.dock.is_open(id) {
-            self.shadows_preview = None;
+    /// Reveal a panel from the View menu, bringing a floating panel to the front.
+    fn reveal_panel(&mut self, id: PanelId, ctx: &egui::Context) {
+        self.dock.reveal(id);
+        if matches!(self.dock.panel(id).place, dock::Place::Floating { .. }) {
+            ctx.move_to_top(egui::LayerId::new(
+                egui::Order::Middle,
+                egui::Id::new(("floating-panel", id)),
+            ));
         }
         self.save_panels();
     }
@@ -1721,6 +1727,7 @@ impl App {
     /// asked for, and save the layout when it changed.
     fn draw_panels(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, frame: &eframe::Frame) {
         let layout = self.dock.clone();
+        let mut stacks = self.stacks.clone();
         let mut events = Vec::new();
         let mut rects: Vec<(PanelId, Rect)> = Vec::new();
         let mut columns: Vec<(DockSide, Rect)> = Vec::new();
@@ -1733,6 +1740,23 @@ impl App {
             if ids.is_empty() {
                 continue;
             }
+            let stack = match side {
+                DockSide::Left => 0,
+                DockSide::Right => 1,
+            };
+            let rows = &mut stacks[stack];
+            if rows.len() != ids.len() {
+                *rows = ids
+                    .iter()
+                    .map(|_| StackRow {
+                        collapsed: false,
+                        weight: 1.0,
+                    })
+                    .collect();
+            }
+            for (row, id) in rows.iter_mut().zip(&ids) {
+                row.collapsed = layout.panel(*id).collapsed;
+            }
             let panel = match side {
                 DockSide::Left => egui::Panel::left("panels-left"),
                 DockSide::Right => egui::Panel::right("panels-right"),
@@ -1743,27 +1767,60 @@ impl App {
                 .min_size(dock::MIN_WIDTH)
                 .max_size(dock::MAX_WIDTH)
                 .show(ui, |ui| {
+                    let available = ui.available_height();
+                    let heights = dock::stack_heights(available, rows);
                     egui::ScrollArea::vertical()
+                        .id_salt(("panel-column", side))
                         .auto_shrink([false, false])
                         .show(ui, |ui| {
+                            let mut drawn: Vec<(PanelId, Rect)> = Vec::new();
                             for (index, &id) in ids.iter().enumerate() {
-                                let top = ui.cursor().top();
                                 let collapsed = layout.panel(id).collapsed;
-                                if let Some(event) = panel_header(ui, id, collapsed, true) {
-                                    events.push(event);
+                                let height = heights[index].max(dock::HEADER_HEIGHT);
+                                let row = ui.allocate_ui_with_layout(
+                                    egui::vec2(ui.available_width(), height),
+                                    egui::Layout::top_down(egui::Align::Min),
+                                    |ui| {
+                                        if let Some(event) = panel_header(ui, id, collapsed, true) {
+                                            events.push(event);
+                                        }
+                                        if !collapsed {
+                                            let body_height =
+                                                (height - dock::HEADER_HEIGHT).max(0.0);
+                                            egui::ScrollArea::vertical()
+                                                .id_salt(("panel-body", id))
+                                                .max_height(body_height)
+                                                .auto_shrink([false, false])
+                                                .show(ui, |ui| {
+                                                    actions.extend(self.panel_body(ui, id));
+                                                });
+                                        }
+                                    },
+                                );
+                                drawn.push((id, row.response.rect));
+                                rects.push((id, row.response.rect));
+                            }
+
+                            for index in 0..ids.len().saturating_sub(1) {
+                                if rows[index].collapsed || rows[index + 1].collapsed {
+                                    continue;
                                 }
-                                if !collapsed {
-                                    actions.extend(self.panel_body(ui, id));
+                                let rect = drawn[index].1;
+                                let splitter = Rect::from_min_max(
+                                    pos2(rect.left(), rect.bottom() - 2.0),
+                                    pos2(rect.right(), rect.bottom() + 2.0),
+                                );
+                                let response = ui.interact(
+                                    splitter,
+                                    egui::Id::new(("panel-split", ids[index])),
+                                    egui::Sense::drag(),
+                                );
+                                if response.hovered() || response.dragged() {
+                                    ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeVertical);
                                 }
-                                rects.push((
-                                    id,
-                                    Rect::from_min_max(
-                                        pos2(ui.min_rect().left(), top),
-                                        pos2(ui.max_rect().right(), ui.cursor().top()),
-                                    ),
-                                ));
-                                if index + 1 < ids.len() {
-                                    ui.separator();
+                                if response.dragged() {
+                                    let delta = ui.input(|input| input.pointer.delta().y);
+                                    dock::drag_splitter(rows, &heights, index, delta);
                                 }
                             }
                         });
@@ -1776,6 +1833,7 @@ impl App {
                 changed = true;
             }
         }
+        self.stacks = stacks;
 
         for id in layout.floating() {
             let dock::Place::Floating { x, y, w, h } = layout.panel(id).place else {

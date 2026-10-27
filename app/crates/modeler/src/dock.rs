@@ -499,6 +499,14 @@ pub fn panels_file(var: impl Fn(&str) -> Option<OsString>) -> Option<PathBuf> {
 /// Height of a panel's title row, in points.
 pub const HEADER_HEIGHT: f32 = 24.0;
 
+/// The glyph drawn on a header button.
+#[derive(Clone, Copy)]
+enum HeaderIcon {
+    Collapse,
+    Expand,
+    Close,
+}
+
 /// What a panel's title row reports.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum PanelEvent {
@@ -560,7 +568,7 @@ pub fn panel_header(
             event = Some(PanelEvent::Dropped { id, pos });
         }
 
-        let button = |ui: &mut eframe::egui::Ui, symbol: &str, label: String| {
+        let button = |ui: &mut eframe::egui::Ui, icon: HeaderIcon, label: String| {
             let (rect, response) = ui.allocate_exact_size(
                 eframe::egui::vec2(BUTTON_WIDTH, HEADER_HEIGHT),
                 Sense::click(),
@@ -572,13 +580,39 @@ pub fn panel_header(
                 ui.painter()
                     .rect_filled(rect, 3.0, ui.visuals().widgets.hovered.weak_bg_fill);
             }
-            ui.painter().text(
-                rect.center(),
-                Align2::CENTER_CENTER,
-                symbol,
-                FontId::proportional(14.0),
-                color,
-            );
+            let center = rect.center();
+            let stroke = Stroke::new(1.5, color);
+            let reach = 4.0;
+            match icon {
+                HeaderIcon::Collapse => {
+                    ui.painter()
+                        .line_segment([center + eframe::egui::vec2(-reach, -2.0), center], stroke);
+                    ui.painter()
+                        .line_segment([center, center + eframe::egui::vec2(reach, -2.0)], stroke);
+                }
+                HeaderIcon::Expand => {
+                    ui.painter()
+                        .line_segment([center + eframe::egui::vec2(-2.0, -reach), center], stroke);
+                    ui.painter()
+                        .line_segment([center, center + eframe::egui::vec2(-2.0, reach)], stroke);
+                }
+                HeaderIcon::Close => {
+                    ui.painter().line_segment(
+                        [
+                            center + eframe::egui::vec2(-reach, -reach),
+                            center + eframe::egui::vec2(reach, reach),
+                        ],
+                        stroke,
+                    );
+                    ui.painter().line_segment(
+                        [
+                            center + eframe::egui::vec2(-reach, reach),
+                            center + eframe::egui::vec2(reach, -reach),
+                        ],
+                        stroke,
+                    );
+                }
+            }
             if response.clicked() {
                 ui.painter().rect_stroke(
                     rect,
@@ -591,16 +625,16 @@ pub fn panel_header(
         };
 
         if docked {
-            let (symbol, label) = if collapsed {
-                (">", format!("Expand {name}"))
+            let (icon, label) = if collapsed {
+                (HeaderIcon::Expand, format!("Expand {name}"))
             } else {
-                ("v", format!("Collapse {name}"))
+                (HeaderIcon::Collapse, format!("Collapse {name}"))
             };
-            if button(ui, symbol, label).clicked() {
+            if button(ui, icon, label).clicked() {
                 event = Some(PanelEvent::ToggleCollapsed(id));
             }
         }
-        if button(ui, "x", format!("Close {name}")).clicked() {
+        if button(ui, HeaderIcon::Close, format!("Close {name}")).clicked() {
             event = Some(PanelEvent::Close(id));
         }
     });
@@ -708,7 +742,13 @@ pub fn drag_splitter(rows: &mut [StackRow], heights: &[f32], index: usize, delta
 
     let top = heights[index];
     let bottom = heights[index + 1];
-    let delta = delta.clamp(minimum - top, bottom - minimum);
+    let lower = minimum - top;
+    let upper = bottom - minimum;
+    let delta = if lower <= upper {
+        delta.clamp(lower, upper)
+    } else {
+        0.0
+    };
     let mut moved = heights.to_vec();
     moved[index] = top + delta;
     moved[index + 1] = bottom - delta;
