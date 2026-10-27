@@ -18,6 +18,7 @@ pub mod globe;
 pub mod hints;
 pub mod icons;
 pub mod input;
+pub mod look;
 pub mod materials_panel;
 pub mod overlay;
 pub mod recent;
