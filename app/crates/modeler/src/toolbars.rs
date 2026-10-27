@@ -549,8 +549,19 @@ pub fn drop_target(pos: egui::Pos2, window: egui::Rect) -> Option<Edge> {
 /// number of rectangles whose centre is before `pos` along the edge (x for top and
 /// bottom, y for left and right), so `0..=rects.len()`.
 pub fn insertion_index(edge: Edge, rects: &[egui::Rect], pos: egui::Pos2) -> usize {
-    let _ = (edge, rects, pos);
-    unimplemented!("m6-toolbar-drag")
+    let horizontal = matches!(edge, Edge::Top | Edge::Bottom);
+    rects
+        .iter()
+        .filter(|rect| {
+            let centre = if horizontal {
+                rect.center().x
+            } else {
+                rect.center().y
+            };
+            let coordinate = if horizontal { pos.x } else { pos.y };
+            centre < coordinate
+        })
+        .count()
 }
 
 /// The rectangle of size `size` an outline is drawn at to show a toolbar landing at
@@ -566,8 +577,39 @@ pub fn drop_outline(
     window: egui::Rect,
     size: egui::Vec2,
 ) -> egui::Rect {
-    let _ = (edge, rects, index, window, size);
-    unimplemented!("m6-toolbar-drag")
+    let along = match rects.get(index) {
+        Some(rect) => match edge {
+            Edge::Top | Edge::Bottom => rect.left(),
+            Edge::Left | Edge::Right => rect.top(),
+        },
+        None => match rects.last() {
+            Some(rect) => match edge {
+                Edge::Top | Edge::Bottom => rect.right(),
+                Edge::Left | Edge::Right => rect.bottom(),
+            },
+            None => match edge {
+                Edge::Top | Edge::Bottom => window.left(),
+                Edge::Left | Edge::Right => window.top(),
+            },
+        },
+    };
+    let across = match rects.first() {
+        Some(rect) => match edge {
+            Edge::Top | Edge::Bottom => rect.top(),
+            Edge::Left | Edge::Right => rect.left(),
+        },
+        None => match edge {
+            Edge::Top => window.top(),
+            Edge::Bottom => window.bottom() - size.y,
+            Edge::Left => window.left(),
+            Edge::Right => window.right() - size.x,
+        },
+    };
+    let min = match edge {
+        Edge::Top | Edge::Bottom => egui::pos2(along, across),
+        Edge::Left | Edge::Right => egui::pos2(across, along),
+    };
+    egui::Rect::from_min_size(min, size)
 }
 
 /// The tool button's tooltip: its name and shortcut, like `Line (L)`.
@@ -580,6 +622,17 @@ pub fn tool_tooltip(tool: Tool) -> String {
     format!("{label} ({})", tool_shortcut(tool))
 }
 
+/// What drawing one toolbar strip reported.
+#[derive(Clone, Copy, Debug)]
+pub struct ToolbarStripResponse {
+    /// The tool button clicked or the grip dropped this frame.
+    pub event: Option<ToolbarEvent>,
+    /// The whole strip's screen rectangle.
+    pub rect: egui::Rect,
+    /// The grip is being dragged this frame.
+    pub dragging: bool,
+}
+
 /// Draw `toolbar` (number `index` in its layout) as a row, or a column when `vertical`:
 /// a grip, then one icon button per tool. `current` is drawn selected.
 pub fn toolbar_strip(
@@ -589,13 +642,25 @@ pub fn toolbar_strip(
     current: Tool,
     vertical: bool,
 ) -> Option<ToolbarEvent> {
+    toolbar_strip_response(ui, toolbar, index, current, vertical).event
+}
+
+/// Draw one toolbar strip and report its rectangle and whether its grip is being dragged.
+pub fn toolbar_strip_response(
+    ui: &mut egui::Ui,
+    toolbar: &Toolbar,
+    index: usize,
+    current: Tool,
+    vertical: bool,
+) -> ToolbarStripResponse {
     let mut event = None;
+    let mut dragging = false;
     let layout = if vertical {
         egui::Layout::top_down(egui::Align::Center)
     } else {
         egui::Layout::left_to_right(egui::Align::Center)
     };
-    ui.with_layout(layout, |ui| {
+    let response = ui.with_layout(layout, |ui| {
         let grip_size = if vertical {
             egui::vec2(icons::BUTTON_SIZE, GRIP_LENGTH)
         } else {
@@ -627,13 +692,18 @@ pub fn toolbar_strip(
             }
         }
 
+        dragging = grip.dragged();
         if grip.drag_stopped()
             && let Some(pos) = grip.interact_pointer_pos()
         {
             event = Some(ToolbarEvent::Dropped { index, pos });
         }
     });
-    event
+    ToolbarStripResponse {
+        event,
+        rect: response.response.rect,
+        dragging,
+    }
 }
 
 /// A few dots in the theme's text color, arranged along the grip.

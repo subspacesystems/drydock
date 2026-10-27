@@ -164,6 +164,8 @@ pub struct App {
     toolbars: ToolbarLayout,
     /// Where `toolbars` is kept between runs.
     toolbars_file: Option<PathBuf>,
+    /// The screen rectangles of the toolbars drawn this frame, by layout index.
+    toolbar_rects: Vec<(usize, Rect)>,
     /// The Customize Toolbars window is showing.
     customize_open: bool,
     /// The Customize window's selected toolbar and typed name.
@@ -238,6 +240,7 @@ impl App {
             recent_file,
             toolbars,
             toolbars_file,
+            toolbar_rects: Vec::new(),
             customize_open: false,
             customize: CustomizeState::default(),
             ctrl_down: false,
@@ -1634,6 +1637,8 @@ impl App {
         let layout = self.toolbars.clone();
         let current = self.view.tool;
         let mut events = Vec::new();
+        let mut rects: Vec<(usize, Rect)> = Vec::new();
+        let mut dragging: Option<(usize, Rect)> = None;
         for edge in [Edge::Top, Edge::Bottom, Edge::Left, Edge::Right] {
             let indices = layout.docked(edge);
             if indices.is_empty() {
@@ -1649,13 +1654,18 @@ impl App {
             panel.show(ui, |ui| {
                 let strips = |ui: &mut egui::Ui| {
                     for &index in &indices {
-                        if let Some(event) = toolbars::toolbar_strip(
+                        let response = toolbars::toolbar_strip_response(
                             ui,
                             &layout.toolbars()[index],
                             index,
                             current,
                             vertical,
-                        ) {
+                        );
+                        rects.push((index, response.rect));
+                        if response.dragging {
+                            dragging = Some((index, response.rect));
+                        }
+                        if let Some(event) = response.event {
                             events.push(event);
                         }
                     }
@@ -1679,19 +1689,71 @@ impl App {
                         .fill(ui.visuals().window_fill)
                         .stroke(ui.visuals().widgets.noninteractive.bg_stroke)
                         .show(ui, |ui| {
-                            if let Some(event) = toolbars::toolbar_strip(
+                            let response = toolbars::toolbar_strip_response(
                                 ui,
                                 &layout.toolbars()[index],
                                 index,
                                 current,
                                 false,
-                            ) {
+                            );
+                            rects.push((index, response.rect));
+                            if response.dragging {
+                                dragging = Some((index, response.rect));
+                            }
+                            if let Some(event) = response.event {
                                 events.push(event);
                             }
                         });
                 });
         }
+        self.toolbar_rects = rects;
+
+        if let Some((index, rect)) = dragging
+            && let Some(pointer) = ui.ctx().input(|input| input.pointer.latest_pos())
+        {
+            let size = rect.size();
+            let window = ui.ctx().content_rect();
+            let outline = match toolbars::drop_target(pointer, window) {
+                Some(edge) => {
+                    let member_rects = self.edge_toolbar_rects(index, edge);
+                    let at = toolbars::insertion_index(edge, &member_rects, pointer);
+                    toolbars::drop_outline(edge, &member_rects, at, window, size)
+                }
+                None => Rect::from_min_size(pointer, size),
+            };
+            ui.ctx()
+                .layer_painter(egui::LayerId::new(
+                    egui::Order::Foreground,
+                    egui::Id::new("toolbar-drop-outline"),
+                ))
+                .rect_stroke(
+                    outline,
+                    0.0,
+                    egui::Stroke::new(1.5, ui.visuals().selection.bg_fill),
+                    egui::StrokeKind::Inside,
+                );
+        }
         events
+    }
+
+    /// The drawn rectangles of the toolbars docked along `edge`, in docked order, leaving
+    /// out toolbar `index` when it is docked there itself.
+    fn edge_toolbar_rects(&self, index: usize, edge: Edge) -> Vec<Rect> {
+        let own_edge = match self.toolbars.toolbars().get(index).map(|t| t.placement) {
+            Some(Placement::Docked { edge, .. }) => Some(edge),
+            _ => None,
+        };
+        self.toolbars
+            .docked(edge)
+            .into_iter()
+            .filter(|&member| !(own_edge == Some(edge) && member == index))
+            .filter_map(|member| {
+                self.toolbar_rects
+                    .iter()
+                    .find(|(drawn, _)| *drawn == member)
+                    .map(|(_, rect)| *rect)
+            })
+            .collect()
     }
 
     /// Save the toolbar layout if there is a file for it; write errors are ignored.
@@ -2147,7 +2209,8 @@ impl eframe::App for App {
                 ToolbarEvent::Dropped { index, pos } => {
                     match toolbars::drop_target(pos, ctx.content_rect()) {
                         Some(edge) => {
-                            let position = self.toolbars.docked(edge).len();
+                            let rects = self.edge_toolbar_rects(index, edge);
+                            let position = toolbars::insertion_index(edge, &rects, pos);
                             self.toolbars.dock(index, edge, position);
                         }
                         None => self.toolbars.float(index, pos.x, pos.y),
