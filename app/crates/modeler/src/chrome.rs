@@ -9,8 +9,10 @@
 
 use crate::dock::PanelId;
 use crate::document::{Stats, format_size};
+use crate::icons::Icon;
 use crate::input::{Action, EditKey, Tool};
 use crate::toolbars::{self, ToolbarLayout, ToolbarsMenuEvent};
+use eframe::egui::{InnerResponse, Rect, Response, Ui};
 use modeler_view::StandardView;
 use std::path::PathBuf;
 
@@ -395,6 +397,45 @@ pub fn status_measurement(
     if !typed.is_empty() {
         ui.monospace(typed);
     }
+}
+
+/// Where the parts of one menu row go (`docs/specs/m6-menus.md`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ItemLayout {
+    /// The icon's square, if the row has an icon.
+    pub icon: Option<Rect>,
+    /// Left edge of the label text.
+    pub label_left: f32,
+    /// The shortcut text's box, right-aligned in the row.
+    pub shortcut: Rect,
+}
+
+/// Lay out a menu row of `row` for a shortcut text `shortcut_width` wide.
+pub fn menu_item_layout(row: Rect, has_icon: bool, shortcut_width: f32) -> ItemLayout {
+    let _ = (row, has_icon, shortcut_width);
+    unimplemented!("m6-menus")
+}
+
+/// One menu row: optional icon, `label`, and `shortcut` right-aligned (empty for none).
+pub fn menu_item(
+    ui: &mut Ui,
+    icon: Option<Icon>,
+    label: &str,
+    shortcut: &str,
+    selected: bool,
+) -> Response {
+    let _ = (ui, icon, label, shortcut, selected);
+    unimplemented!("m6-menus")
+}
+
+/// A submenu row with a drawn arrow; `add_contents` fills the submenu.
+pub fn submenu_button<R>(
+    ui: &mut Ui,
+    label: &str,
+    add_contents: impl FnOnce(&mut Ui) -> R,
+) -> InnerResponse<Option<R>> {
+    let _ = (ui, label, add_contents);
+    unimplemented!("m6-menus")
 }
 
 /// What the menu bar did this frame.
