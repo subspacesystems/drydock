@@ -307,6 +307,7 @@ pub struct Editor {
     tape_point_guides: bool,
     scale_segments: Vec<(DVec3, DVec3)>,
     material: Option<MaterialId>,
+    eyedropper_armed: bool,
     clipboard: Option<Clipboard>,
     paste: Option<PasteState>,
     placing: Option<PlaceState>,
@@ -472,6 +473,7 @@ impl Editor {
             tape_point_guides: false,
             scale_segments: Vec::new(),
             material: None,
+            eyedropper_armed: false,
             clipboard: None,
             paste: None,
             placing: None,
@@ -598,6 +600,7 @@ impl Editor {
     /// Switch tools; the shape in progress, the typed text and the locks are dropped.
     pub fn set_tool(&mut self, tool: Tool) {
         self.end_texture_handles();
+        self.eyedropper_armed = false;
         self.tool = tool;
         self.paste = None;
         self.placing = None;
@@ -745,6 +748,9 @@ impl Editor {
         count: u32,
     ) -> bool {
         self.refresh_path(model);
+        if self.eyedropper_armed {
+            return self.click_eyedropper(model, view, cursor);
+        }
         if self.texture_handles.is_some() {
             return self.click_texture_handles(model, view, cursor, mods);
         }
@@ -902,6 +908,10 @@ impl Editor {
     /// An editor key. True when the model changed.
     pub fn key(&mut self, key: EditKey, model: &mut Model) -> bool {
         self.refresh_path(model);
+        if key == EditKey::Cancel && self.eyedropper_armed {
+            self.eyedropper_armed = false;
+            return false;
+        }
         if self.texture_handles.is_some() {
             match key {
                 EditKey::Cancel => {
@@ -2703,12 +2713,48 @@ impl Editor {
     /// Arm the eyedropper: the next click on a face or instance, in any tool, makes its
     /// material current and switches to the Paint Bucket. Esc or a tool change disarms.
     pub fn arm_eyedropper(&mut self) {
-        unimplemented!()
+        self.eyedropper_armed = true;
+        self.paste = None;
+        self.placing = None;
     }
 
     /// True while the eyedropper waits for a click.
     pub fn eyedropper_armed(&self) -> bool {
-        unimplemented!()
+        self.eyedropper_armed
+    }
+
+    /// The side of `entity` the camera sees at `cursor`.
+    fn seen_side(&self, model: &Model, view: &Viewport, cursor: DVec2, entity: Entity) -> Side {
+        match entity {
+            Entity::Face(face) => {
+                let (_, dir) = self.body_ray(view, cursor);
+                let plane = model
+                    .body(self.body(model))
+                    .and_then(|body| body.geometry().face_plane(face));
+                match plane {
+                    Some(plane) if dir.dot(plane.normal) > 0.0 => Side::Back,
+                    _ => Side::Front,
+                }
+            }
+            Entity::Edge(_) | Entity::Instance(_) => Side::Front,
+        }
+    }
+
+    /// Eyedropper click: sample the clicked face or instance's material, make it current
+    /// and switch to the Paint Bucket. Edges and empty space keep waiting.
+    fn click_eyedropper(&mut self, model: &mut Model, view: &Viewport, cursor: DVec2) -> bool {
+        let Some(entity) = self.pick_at(model, view, cursor) else {
+            return false;
+        };
+        if matches!(entity, Entity::Edge(_)) {
+            return false;
+        }
+        let seen = self.seen_side(model, view, cursor, entity);
+        self.material = paint::sample(model, self.body(model), entity, seen).flatten();
+        self.message = None;
+        self.set_tool(Tool::Paint);
+        self.eyedropper_armed = false;
+        false
     }
 
     /// Paint Bucket click: paint the clicked side, or the selection when the clicked
@@ -2723,19 +2769,7 @@ impl Editor {
         let Some(entity) = self.pick_at(model, view, cursor) else {
             return false;
         };
-        let seen = match entity {
-            Entity::Face(face) => {
-                let (_, dir) = self.body_ray(view, cursor);
-                let plane = model
-                    .body(self.body(model))
-                    .and_then(|body| body.geometry().face_plane(face));
-                match plane {
-                    Some(plane) if dir.dot(plane.normal) > 0.0 => Side::Back,
-                    _ => Side::Front,
-                }
-            }
-            Entity::Edge(_) | Entity::Instance(_) => Side::Front,
-        };
+        let seen = self.seen_side(model, view, cursor, entity);
         if mods.alt {
             match entity {
                 Entity::Face(_) | Entity::Instance(_) => {

@@ -85,7 +85,14 @@ fn flatten(shapes: Vec<Shape>, out: &mut Vec<Shape>) {
 fn all_lists_every_tool_then_the_panel_icons() {
     let all = icons::all();
     let mut expected: Vec<Icon> = TOOLS.iter().map(|tool| Icon::Tool(*tool)).collect();
-    expected.extend([Icon::List, Icon::Tiles, Icon::New, Icon::Edit, Icon::Purge]);
+    expected.extend([
+        Icon::List,
+        Icon::Tiles,
+        Icon::New,
+        Icon::Edit,
+        Icon::Purge,
+        Icon::Eyedropper,
+    ]);
     assert_eq!(all, expected);
     let tools: Vec<Tool> = modeler::chrome::TOOL_BUTTONS
         .iter()
