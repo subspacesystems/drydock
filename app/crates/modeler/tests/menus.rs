@@ -217,7 +217,8 @@ fn tools_menu_lists_every_tool_with_its_key_in_order() {
         .map(|(tool, _)| top(&h, &tool_label(*tool)))
         .collect();
     assert!(ys.windows(2).all(|w| w[0] < w[1]), "{ys:?}");
-    assert!(h.query_by_label("Push/Pull").is_some());
+    assert!(h.query_by_label("Extrude").is_some());
+    assert!(h.query_by_label("Push/Pull").is_none());
     assert!(h.query_by_label("3-Point Arc").is_some());
     assert!(h.query_by_label("Select").is_some());
 }
