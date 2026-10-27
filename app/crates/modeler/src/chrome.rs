@@ -48,6 +48,8 @@ pub struct MenuState<'a> {
     pub materials: bool,
     /// The Components panel is open (View menu; `docs/specs/m6-dock-ui.md`).
     pub components: bool,
+    /// The Texture Position panel is open (View menu; `docs/specs/m6-texture-panel.md`).
+    pub texture_position: bool,
     /// The File menu's recent files, most recent first (`docs/specs/m4-ui-menus.md`).
     pub recent: &'a [PathBuf],
     /// The current tool (checked in the Tools menu).

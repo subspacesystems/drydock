@@ -30,14 +30,16 @@ pub enum PanelId {
     Materials,
     Components,
     Shadows,
+    TexturePosition,
 }
 
 /// Every panel, in this order.
-pub const PANELS: [PanelId; 4] = [
+pub const PANELS: [PanelId; 5] = [
     PanelId::EntityInfo,
     PanelId::Materials,
     PanelId::Components,
     PanelId::Shadows,
+    PanelId::TexturePosition,
 ];
 
 /// A docking column.
@@ -478,6 +480,7 @@ pub fn title(id: PanelId) -> &'static str {
         PanelId::Materials => "Materials",
         PanelId::Components => "Components",
         PanelId::Shadows => "Shadows",
+        PanelId::TexturePosition => "Texture Position",
     }
 }
 
@@ -488,6 +491,7 @@ pub fn panel_key(id: PanelId) -> &'static str {
         PanelId::Materials => "materials",
         PanelId::Components => "components",
         PanelId::Shadows => "shadows",
+        PanelId::TexturePosition => "texture-position",
     }
 }
 

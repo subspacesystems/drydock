@@ -228,6 +228,7 @@ panel entity-info 1 0 right 0
 panel materials 1 1 right 1
 panel components 0 0 left 0
 panel shadows 1 0 float 100 50 260 360
+panel texture-position 0 0 right 2
 ";
 
 #[test]

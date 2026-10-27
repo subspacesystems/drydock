@@ -1517,6 +1517,7 @@ impl App {
             entity_info: self.dock.is_open(PanelId::EntityInfo),
             materials: self.dock.is_open(PanelId::Materials),
             components: self.dock.is_open(PanelId::Components),
+            texture_position: self.dock.is_open(PanelId::TexturePosition),
             recent: self.recent.paths(),
             tool: self.view.tool,
         }
@@ -2146,6 +2147,8 @@ impl App {
                     actions.push(PanelAction::Shadow(event, settings));
                 }
             }
+            // TODO(m6-texture-panel): move the Texture Position section here from Materials.
+            PanelId::TexturePosition => {}
         }
         actions
     }
