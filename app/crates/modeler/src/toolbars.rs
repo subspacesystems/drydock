@@ -762,6 +762,34 @@ pub fn toolbars_menu(ui: &mut egui::Ui, layout: &mut ToolbarLayout) -> Option<To
     event
 }
 
+/// Where a tool dragged in the Customize window was dropped.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CustomizeDrop {
+    /// Into the "On the toolbar" list, before the entry at this index (the end when past it).
+    OnToolbar(usize),
+    /// Into the "Available" list.
+    Available,
+}
+
+/// The tools of `TOOL_BUTTONS` (in that order) that toolbar `toolbar` does not hold.
+/// Behaviour: `docs/specs/m6-toolbar-customize-2.md`.
+pub fn available_tools(layout: &ToolbarLayout, toolbar: usize) -> Vec<Tool> {
+    let _ = (layout, toolbar);
+    unimplemented!("m6-toolbar-customize-2")
+}
+
+/// Apply a drop of `tool` onto toolbar `toolbar`'s lists; true when the layout changed.
+/// Behaviour: `docs/specs/m6-toolbar-customize-2.md`.
+pub fn apply_customize_drop(
+    layout: &mut ToolbarLayout,
+    toolbar: usize,
+    tool: Tool,
+    drop: CustomizeDrop,
+) -> bool {
+    let _ = (layout, toolbar, tool, drop);
+    unimplemented!("m6-toolbar-customize-2")
+}
+
 fn tool_label(tool: Tool) -> &'static str {
     TOOL_BUTTONS
         .iter()
