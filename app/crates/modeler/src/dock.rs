@@ -179,9 +179,11 @@ impl DockLayout {
         self.renumber();
     }
 
-    /// Show a panel: open it and, when docked, expand it. Used by the View menu.
-    pub fn reveal(&mut self, _id: PanelId) {
-        unimplemented!("m6-panel-stack")
+    /// Show a panel: open it and expand it. Used by the View menu.
+    pub fn reveal(&mut self, id: PanelId) {
+        let panel = self.panel_mut(id);
+        panel.open = true;
+        panel.collapsed = false;
     }
 
     pub fn toggle(&mut self, id: PanelId) {
@@ -652,13 +654,67 @@ pub struct StackRow {
 }
 
 /// Height of every row (header included) in a column `available` points tall.
-/// m6-panel-stack: see `docs/specs/m6-panel-stack.md`.
-pub fn stack_heights(_available: f32, _rows: &[StackRow]) -> Vec<f32> {
-    unimplemented!("m6-panel-stack")
+pub fn stack_heights(available: f32, rows: &[StackRow]) -> Vec<f32> {
+    let minimum = HEADER_HEIGHT + MIN_BODY;
+    let mut heights = vec![HEADER_HEIGHT; rows.len()];
+    let collapsed = rows.iter().filter(|row| row.collapsed).count();
+    let mut remaining = available - collapsed as f32 * HEADER_HEIGHT;
+
+    let mut expanded: Vec<usize> = (0..rows.len())
+        .filter(|&index| !rows[index].collapsed)
+        .collect();
+    if expanded.is_empty() {
+        return heights;
+    }
+
+    loop {
+        let weight = |index: usize| {
+            let weight = rows[index].weight;
+            if weight > 0.0 { weight } else { 1.0 }
+        };
+        let total: f32 = expanded.iter().map(|&index| weight(index)).sum();
+        let pinned: Vec<usize> = expanded
+            .iter()
+            .copied()
+            .filter(|&index| remaining * weight(index) / total < minimum)
+            .collect();
+        if pinned.is_empty() {
+            for &index in &expanded {
+                heights[index] = remaining * weight(index) / total;
+            }
+            break;
+        }
+        for &index in &pinned {
+            heights[index] = minimum;
+            remaining -= minimum;
+        }
+        expanded.retain(|index| !pinned.contains(index));
+        if expanded.is_empty() {
+            break;
+        }
+    }
+    heights
 }
 
 /// The user dragged the border under row `index` by `delta` points (positive is down).
-/// m6-panel-stack: see `docs/specs/m6-panel-stack.md`.
-pub fn drag_splitter(_rows: &mut [StackRow], _heights: &[f32], _index: usize, _delta: f32) {
-    unimplemented!("m6-panel-stack")
+pub fn drag_splitter(rows: &mut [StackRow], heights: &[f32], index: usize, delta: f32) {
+    let minimum = HEADER_HEIGHT + MIN_BODY;
+    if index + 1 >= rows.len() || index + 1 >= heights.len() {
+        return;
+    }
+    if rows[index].collapsed || rows[index + 1].collapsed {
+        return;
+    }
+
+    let top = heights[index];
+    let bottom = heights[index + 1];
+    let delta = delta.clamp(minimum - top, bottom - minimum);
+    let mut moved = heights.to_vec();
+    moved[index] = top + delta;
+    moved[index + 1] = bottom - delta;
+    for (row, &height) in rows.iter_mut().zip(&moved) {
+        if !row.collapsed {
+            row.weight = height;
+        }
+    }
 }

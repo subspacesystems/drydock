@@ -74,7 +74,6 @@ pub fn shadows_panel(ui: &mut egui::Ui, settings: &mut ShadowSettings) -> Shadow
 
     let mut event = ShadowsEvent::None;
 
-    ui.heading("Shadows");
     if ui.checkbox(&mut settings.shadows, "Show Shadows").clicked() {
         event = ShadowsEvent::Commit;
     }
