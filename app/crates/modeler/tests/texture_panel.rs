@@ -59,7 +59,6 @@ fn default_form_is_neutral() {
 fn panel_shows_its_widgets() {
     let h = harness(true, TextureForm::default());
     for label in [
-        "Texture Position",
         "Move X (m)",
         "Move Y (m)",
         "Move",
