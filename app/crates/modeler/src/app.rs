@@ -5,7 +5,6 @@
 //! offscreen-rendered scene. Behaviour: `docs/specs/m0-app.md`.
 
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
 use eframe::egui;
@@ -24,6 +23,7 @@ use modeler::editor::{Editor, TextureOp, Viewport as EditorViewport};
 use modeler::entity_info::{EntityInfoPanel, InfoAction, entity_info_panel};
 use modeler::hints::hint_label;
 use modeler::input::{self, Button, Modifiers, Tool};
+use modeler::look;
 use modeler::materials_panel::{MaterialAction, MaterialsPanel, materials_panel};
 use modeler::overlay::{self, Primitive};
 use modeler::recent::{RecentFiles, recent_file};
@@ -54,21 +54,6 @@ const ACCENT_COLOR: Color32 = Color32::from_rgb(230, 140, 25);
 const PREVIEW_COLOR: Color32 = Color32::from_rgb(55, 60, 70);
 /// The Rotate protractor's radius on screen before its start point is placed.
 const PROTRACTOR_PX: f64 = 48.0;
-
-const ROBOTO: &[u8] = include_bytes!("../assets/fonts/Roboto-Regular.ttf");
-
-/// The app's only font. eframe is built without egui's default fonts.
-pub fn install_fonts(ctx: &egui::Context) {
-    let mut fonts = egui::FontDefinitions::empty();
-    fonts.font_data.insert(
-        "Roboto".to_owned(),
-        Arc::new(egui::FontData::from_static(ROBOTO)),
-    );
-    for family in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
-        fonts.families.insert(family, vec!["Roboto".to_owned()]);
-    }
-    ctx.set_fonts(fonts);
-}
 
 /// The display name of a wgpu backend (`docs/specs/m4-ui-gpu-info.md`).
 fn backend_label(backend: Backend) -> &'static str {
@@ -181,7 +166,7 @@ pub struct App {
 
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>, file: Option<PathBuf>) -> App {
-        install_fonts(&cc.egui_ctx);
+        look::apply(&cc.egui_ctx);
         let gpu = cc.wgpu_render_state.as_ref().map(|state| {
             let renderer = Renderer::new(&state.device);
             let scene = renderer.upload(&state.device, &state.queue, &FlatScene::default());
