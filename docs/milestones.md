@@ -188,6 +188,15 @@ Tyrel's UI items deferred from M4, inserted after M5 at his request.
 | `m6-components-import` | Kernel: `import_component` turns a loaded model into a new component definition (one undo step) | `m6-components-place` |
 | `m6-components-import-ui` | Components panel Import button, file dialog, reads the file, then starts placing the new component | `m6-components-import`, `m6-dock-ui` |
 | `m6-dock-ui` | App: host the four panels in the docking columns or floating windows; drag a title to dock or float, collapse, resize columns; View menu items; Shadows window becomes a panel; layout saved | `m6-dock-layout`, `m6-entity-info`, `m6-components-panel`, `m6-materials-icons` |
+| `m6-panel-speed` | Feedback: Entity Info and Components keep their results between frames; thumbnails capped (the lock-up on a big group) | |
+| `m6-menus` | Feedback: tool icons in the Tools menu, shortcuts right-aligned in every menu, a drawn submenu arrow (Roboto lacks egui's arrow glyph, shown as "?") | |
+| `m6-panel-stack` | Feedback: each docked panel scrolls on its own (Components and Materials scrolled together) and can be resized; no doubled titles; View > panel opens or reveals it, only the close button hides it; drawn header buttons | `m6-panel-speed` |
+| `m6-texture-panel` | Feedback: Texture Position becomes its own panel | `m6-panel-stack` |
+| `m6-toolbar-drag` | Feedback: an outline shows where a dragged toolbar will land; dropping between toolbars inserts it there | |
+| `m6-icons-2` | Feedback: Push/Pull renamed Extrude; Extrude, Rotate, Scale, Tape Measure, Eraser, Paint Bucket and Pan redrawn; Arc centred | |
+| `m6-toolbar-customize-2` | Feedback: Customize window as two lists (on the toolbar / available) with icons; drag between them and to reorder | `m6-icons-2`, `m6-toolbar-drag` |
+| `m6-eyedropper` | Feedback: Materials panel eyedropper; click a face and its material becomes current | `m6-panel-stack` |
+| `m6-native-look` | Feedback: style pass toward a desktop look (system UI font, theme from the OS, spacing, menu highlight) | `m6-menus`, `m6-panel-stack` |
 
 - Icon toolbars by tool group (own icons), toolbars that can be shown, hidden and rearranged.
 - Dockable side panels (Materials, Shadows, Entity Info, Components) instead of floating windows.
