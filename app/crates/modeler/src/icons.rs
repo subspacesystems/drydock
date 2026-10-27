@@ -95,6 +95,12 @@ impl Draw {
             .push(Shape::convex_polygon(points, self.color, Stroke::NONE));
     }
 
+    fn poly_light(&mut self, points: &[(f32, f32)]) {
+        let points = points.iter().map(|(x, y)| self.at(*x, *y)).collect();
+        self.out
+            .push(Shape::convex_polygon(points, self.fill, Stroke::NONE));
+    }
+
     fn circle(&mut self, x: f32, y: f32, r: f32) {
         self.out.push(Shape::circle_stroke(
             self.at(x, y),
@@ -113,11 +119,6 @@ impl Draw {
 
     fn rect(&mut self, x0: f32, y0: f32, x1: f32, y1: f32) {
         self.closed(&[(x0, y0), (x1, y0), (x1, y1), (x0, y1)]);
-    }
-
-    fn rect_fill(&mut self, x0: f32, y0: f32, x1: f32, y1: f32) {
-        let rect = Rect::from_min_max(self.at(x0, y0), self.at(x1, y1));
-        self.out.push(Shape::rect_filled(rect, 0.0, self.fill));
     }
 
     fn quad(&mut self, a: (f32, f32), control: (f32, f32), b: (f32, f32)) {
@@ -178,6 +179,7 @@ pub fn shapes(icon: Icon, rect: Rect, color: Color32) -> Vec<Shape> {
 
     match icon {
         Icon::Tool(Tool::Select) => {
+            d.half *= 0.9;
             d.closed(&[
                 (-0.65, -0.8),
                 (0.5, 0.15),
@@ -201,28 +203,39 @@ pub fn shapes(icon: Icon, rect: Rect, color: Color32) -> Vec<Shape> {
         }
         Icon::Tool(Tool::Arc) => {
             let r = 0.7;
+            let cy = 0.335;
             d.line(&arc_points(
                 0.0,
-                0.0,
+                cy,
                 r,
                 std::f32::consts::PI,
                 std::f32::consts::TAU,
                 20,
             ));
-            d.dot(-r, 0.0, 0.11);
-            d.dot(r, 0.0, 0.11);
-            d.seg((0.0, 0.0), (0.0, -r));
+            d.dot(-r, cy, 0.11);
+            d.dot(r, cy, 0.11);
+            d.seg((0.0, cy), (0.0, cy - r));
         }
         Icon::Tool(Tool::Arc3) => {
-            d.quad((-0.78, 0.45), (0.0, -0.78), (0.78, 0.45));
-            d.dot(-0.78, 0.45, 0.12);
-            d.dot(0.0, -0.165, 0.12);
-            d.dot(0.78, 0.45, 0.12);
+            let dy = 0.085;
+            d.quad((-0.86, 0.12 + dy), (0.0, -0.7 + dy), (0.86, 0.12 + dy));
+            d.dot(-0.86, 0.12 + dy, 0.12);
+            d.dot(0.0, -0.29 + dy, 0.12);
+            d.dot(0.86, 0.12 + dy, 0.12);
         }
         Icon::Tool(Tool::PushPull) => {
-            d.closed(&[(-0.8, 0.45), (-0.1, 0.18), (0.8, 0.45), (0.1, 0.72)]);
-            d.seg((0.0, 0.34), (0.0, -0.78));
-            d.arrow((0.0, 0.1), (0.0, -0.8), 0.26);
+            let dy = 0.056;
+            let top = [(0.0, -0.34), (0.56, -0.08), (0.0, 0.18), (-0.56, -0.08)]
+                .map(|(x, y)| (x, y + dy));
+            d.poly_light(&top);
+            d.closed(&top);
+            let (l2, b2, r2) = ((-0.56, 0.4 + dy), (0.0, 0.66 + dy), (0.56, 0.4 + dy));
+            d.seg(top[3], l2);
+            d.seg(top[2], b2);
+            d.seg(top[1], r2);
+            d.line(&[l2, b2, r2]);
+            d.seg((0.0, -0.05 + dy), (0.0, -0.8 + dy));
+            d.arrow((0.0, -0.35 + dy), (0.0, -0.82 + dy), 0.26);
         }
         Icon::Tool(Tool::Move) => {
             d.dot(0.0, 0.0, 0.15);
@@ -236,68 +249,84 @@ pub fn shapes(icon: Icon, rect: Rect, color: Color32) -> Vec<Shape> {
             d.arrow((0.0, -0.5), (0.0, -0.86), 0.34);
         }
         Icon::Tool(Tool::Rotate) => {
-            let r = 0.68;
-            let start = 0.1 * std::f32::consts::PI;
-            let end = 1.9 * std::f32::consts::PI;
-            let pts = arc_points(0.0, 0.0, r, start, end, 24);
+            let r = 0.64;
+            let start = 0.25 * std::f32::consts::PI;
+            let end = 1.75 * std::f32::consts::PI;
+            let pts = arc_points(0.0875, 0.011, r, start, end, 30);
             let tip = *pts.last().unwrap();
             let from = pts[pts.len() - 3];
             d.line(&pts);
-            d.arrow(from, tip, 0.24);
-            d.dot(0.0, 0.0, 0.12);
+            d.arrow(from, tip, 0.26);
         }
         Icon::Tool(Tool::Scale) => {
-            d.rect(-0.8, -0.1, 0.35, 0.8);
-            d.rect_fill(-0.8, 0.35, -0.35, 0.8);
-            d.seg((-0.2, 0.1), (0.72, -0.72));
-            d.arrow((-0.35, 0.0), (0.82, -0.82), 0.24);
+            d.rect(-0.78, -0.78, 0.78, 0.78);
+            d.poly(&[(-0.78, 0.24), (-0.24, 0.24), (-0.24, 0.78), (-0.78, 0.78)]);
+            d.seg((-0.45, 0.45), (0.45, -0.45));
+            d.arrow((-0.25, 0.25), (-0.62, 0.62), 0.24);
+            d.arrow((0.25, -0.25), (0.62, -0.62), 0.24);
         }
         Icon::Tool(Tool::Tape) => {
-            d.circle(-0.3, -0.1, 0.5);
-            d.dot(-0.3, -0.1, 0.12);
-            let a = (0.05, 0.1);
-            let b = (0.82, 0.75);
-            d.seg(a, b);
-            for f in [0.25, 0.5, 0.75] {
-                let x = a.0 + (b.0 - a.0) * f;
-                let y = a.1 + (b.1 - a.1) * f;
-                d.seg((x - 0.11, y + 0.09), (x + 0.11, y - 0.09));
+            let ox = 0.0667;
+            let (x0, y0, x1, y1, r) = (-0.8 + ox, -0.45, 0.05 + ox, 0.45, 0.14);
+            d.seg((x0 + r, y0), (x1 - r, y0));
+            d.quad((x1 - r, y0), (x1, y0), (x1, y0 + r));
+            d.seg((x1, y0 + r), (x1, y1 - r));
+            d.quad((x1, y1 - r), (x1, y1), (x1 - r, y1));
+            d.seg((x1 - r, y1), (x0 + r, y1));
+            d.quad((x0 + r, y1), (x0, y1), (x0, y1 - r));
+            d.seg((x0, y1 - r), (x0, y0 + r));
+            d.quad((x0, y0 + r), (x0, y0), (x0 + r, y0));
+            let (ty0, ty1) = (0.02, 0.18);
+            let (te, hx) = (0.7 + ox, 0.58 + ox);
+            d.seg((x1 - 0.02, ty0), (te, ty0));
+            d.seg((x1 - 0.02, ty1), (te, ty1));
+            d.seg((te, ty0), (te, ty1));
+            d.line(&[(te, ty1), (te, 0.3), (hx, 0.3)]);
+            for x in [0.2, 0.33, 0.46, 0.59] {
+                d.seg((x + ox, ty0), (x + ox, ty0 + 0.08));
             }
         }
         Icon::Tool(Tool::Erase) => {
-            let a = -0.38;
-            let corners = [
-                rotate((-0.72, -0.34), a),
-                rotate((0.55, -0.34), a),
-                rotate((0.55, 0.34), a),
-                rotate((-0.72, 0.34), a),
-            ];
-            d.closed(&corners);
-            let divider = [rotate((0.15, -0.34), a), rotate((0.15, 0.34), a)];
-            d.seg(divider[0], divider[1]);
+            let a = -0.28;
+            let (cx, cy, l, h) = (0.0, -0.0686, 0.66, 0.27);
+            let corner = |x: f32, y: f32| {
+                let (rx, ry) = rotate((x, y), a);
+                (cx + rx, cy + ry)
+            };
+            let (c1, c2, c3, c4) = (corner(-l, -h), corner(l, -h), corner(l, h), corner(-l, h));
+            let (m1, m2) = (corner(0.02, -h), corner(0.02, h));
+            d.poly(&[c1, m1, m2, c4]);
+            d.closed(&[c1, c2, c3, c4]);
+            d.seg(m1, m2);
+            d.seg((-0.45, 0.5314), (0.45, 0.5314));
         }
         Icon::Tool(Tool::Paint) => {
-            let a = -0.5;
-            let body = [
-                rotate((-0.6, -0.45), a),
-                rotate((0.45, -0.45), a),
-                rotate((0.3, 0.42), a),
-                rotate((-0.42, 0.42), a),
-            ];
+            let a = 0.32;
+            let (ox, oy) = (-0.0767, 0.17);
+            let t = |x: f32, y: f32| {
+                let (rx, ry) = rotate((x, y), a);
+                (rx + ox, ry + oy)
+            };
+            let body = [t(-0.52, -0.42), t(0.38, -0.42), t(0.24, 0.4), t(-0.38, 0.4)];
+            d.poly_light(&body);
             d.closed(&body);
+            d.seg(t(-0.52, -0.42), t(0.38, -0.42));
+            d.seg(t(-0.44, -0.3), t(0.3, -0.3));
             let handle: Vec<(f32, f32)> = arc_points(
-                -0.08,
-                -0.45,
-                0.53,
+                -0.07,
+                -0.42,
+                0.4,
                 std::f32::consts::PI,
                 std::f32::consts::TAU,
-                12,
+                14,
             )
             .into_iter()
-            .map(|p| rotate(p, a))
+            .map(|(x, y)| t(x, y))
             .collect();
             d.line(&handle);
-            d.poly(&[(0.73, -0.92), (0.9, -0.58), (0.56, -0.58)]);
+            let drop = |x: f32, y: f32| (x + ox, y + oy);
+            d.poly(&[drop(0.55, -0.02), drop(0.7, 0.1), drop(0.56, 0.16)]);
+            d.dot(0.62 + ox, 0.12 + oy, 0.09);
         }
         Icon::Tool(Tool::Orbit) => {
             let mut pts = Vec::new();
@@ -314,19 +343,38 @@ pub fn shapes(icon: Icon, rect: Rect, color: Color32) -> Vec<Shape> {
             d.dot(0.0, 0.0, 0.14);
         }
         Icon::Tool(Tool::Pan) => {
-            d.seg((-0.6, -0.05), (0.55, -0.05));
-            d.seg((-0.45, -0.05), (-0.45, -0.75));
-            d.seg((-0.17, -0.05), (-0.17, -0.82));
-            d.seg((0.11, -0.05), (0.11, -0.8));
-            d.seg((0.39, -0.05), (0.39, -0.68));
-            d.seg((-0.6, 0.2), (-0.85, 0.52));
-            d.line(&[
-                (-0.6, -0.05),
-                (-0.6, 0.4),
-                (0.0, 0.75),
-                (0.55, 0.45),
-                (0.55, -0.05),
-            ]);
+            let hand = [
+                (-0.3, 0.78),
+                (-0.44, 0.22),
+                (-0.57, 0.08),
+                (-0.75, -0.08),
+                (-0.67, -0.3),
+                (-0.4, -0.12),
+                (-0.4, -0.66),
+                (-0.33, -0.78),
+                (-0.24, -0.76),
+                (-0.22, -0.6),
+                (-0.2, -0.1),
+                (-0.16, -0.1),
+                (-0.16, -0.86),
+                (-0.08, -0.95),
+                (0.0, -0.86),
+                (0.02, -0.1),
+                (0.06, -0.1),
+                (0.08, -0.78),
+                (0.16, -0.88),
+                (0.24, -0.78),
+                (0.26, -0.1),
+                (0.3, -0.1),
+                (0.34, -0.56),
+                (0.42, -0.66),
+                (0.5, -0.56),
+                (0.52, -0.06),
+                (0.46, 0.22),
+                (0.3, 0.78),
+            ];
+            let hand = hand.map(|(x, y)| (x + 0.124, y + 0.114));
+            d.closed(&hand);
         }
         Icon::Tool(Tool::Zoom) => {
             d.circle(-0.15, -0.2, 0.55);
