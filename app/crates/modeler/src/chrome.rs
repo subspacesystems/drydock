@@ -133,7 +133,7 @@ pub const TOOL_BUTTONS: [(Tool, &str); 16] = [
     (Tool::Circle, "Circle"),
     (Tool::Arc, "Arc"),
     (Tool::Arc3, "3-Point Arc"),
-    (Tool::PushPull, "Push/Pull"),
+    (Tool::PushPull, "Extrude"),
     (Tool::Move, "Move"),
     (Tool::Rotate, "Rotate"),
     (Tool::Scale, "Scale"),
