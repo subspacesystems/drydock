@@ -643,6 +643,11 @@ impl App {
         frame: &eframe::Frame,
     ) {
         match action {
+            MaterialAction::Eyedropper => {
+                if let Some(editor) = &mut self.editor {
+                    editor.arm_eyedropper();
+                }
+            }
             MaterialAction::Choose(material) => {
                 if let Some(editor) = &mut self.editor {
                     editor.set_material(material);

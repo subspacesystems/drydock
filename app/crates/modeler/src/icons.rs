@@ -27,6 +27,8 @@ pub enum Icon {
     Edit,
     /// Materials panel: purge unused materials.
     Purge,
+    /// Materials panel: pick a material from the model.
+    Eyedropper,
 }
 
 /// Every tool, in `chrome::TOOL_BUTTONS` order.
@@ -409,6 +411,7 @@ pub fn shapes(icon: Icon, rect: Rect, color: Color32) -> Vec<Shape> {
             d.closed(&body);
             d.seg(rotate((0.4, -0.17), a), rotate((0.4, 0.17), a));
         }
+        Icon::Eyedropper => {}
         Icon::Purge => {
             d.line(&[(-0.2, -0.5), (-0.2, -0.72), (0.2, -0.72), (0.2, -0.5)]);
             d.seg((-0.65, -0.5), (0.65, -0.5));

@@ -2700,6 +2700,17 @@ impl Editor {
         self.material = material;
     }
 
+    /// Arm the eyedropper: the next click on a face or instance, in any tool, makes its
+    /// material current and switches to the Paint Bucket. Esc or a tool change disarms.
+    pub fn arm_eyedropper(&mut self) {
+        unimplemented!()
+    }
+
+    /// True while the eyedropper waits for a click.
+    pub fn eyedropper_armed(&self) -> bool {
+        unimplemented!()
+    }
+
     /// Paint Bucket click: paint the clicked side, or the selection when the clicked
     /// entity is selected; Alt samples instead. Behaviour: `docs/specs/m4-app-paint.md`.
     fn click_paint(

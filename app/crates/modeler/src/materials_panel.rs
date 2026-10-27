@@ -27,6 +27,8 @@ pub enum MaterialAction {
     Edit(MaterialId, Material),
     /// Remove the materials nothing uses.
     Purge,
+    /// Arm the eyedropper: the next click on a face or instance picks its material.
+    Eyedropper,
 }
 
 /// The fields of the new / edit form.
