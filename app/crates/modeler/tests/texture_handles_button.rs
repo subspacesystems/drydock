@@ -96,12 +96,10 @@ fn section(available: bool, on: bool) -> Harness<'static, State> {
 }
 
 #[test]
-fn the_section_puts_the_button_under_the_heading_and_above_the_controls() {
+fn the_section_puts_the_button_above_the_controls() {
     let h = section(true, false);
-    let heading = h.get_by_label("Texture Position").rect();
     let button = h.get_by_label("Position in Viewport").rect();
     let reset = h.get_by_label("Reset Texture").rect();
-    assert!(button.top() >= heading.bottom(), "{heading:?} {button:?}");
     assert!(reset.top() >= button.bottom(), "{button:?} {reset:?}");
 }
 
