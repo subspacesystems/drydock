@@ -305,20 +305,29 @@ pub struct EntityInfoPanel {
 /// the selection are the same.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct DescribeCache {
-    // Fields are the implementer's choice; keep the derives.
+    key: Option<((u64, u64), BodyId, Vec<Entity>)>,
+    info: Option<EntityInfo>,
+    computed: u64,
 }
 
 impl DescribeCache {
     /// `describe(model, body, selection)`, computed only when one of them changed since
     /// the last call.
     pub fn get(&mut self, model: &Model, body: BodyId, selection: &[Entity]) -> &EntityInfo {
-        let _ = (model, body, selection);
-        unimplemented!()
+        let key = (model.cache_key(), body, selection.to_vec());
+        if !self.key.as_ref().is_some_and(|current| *current == key) {
+            self.info = Some(describe(model, body, selection));
+            self.key = Some(key);
+            self.computed += 1;
+        }
+        self.info
+            .as_ref()
+            .expect("the description exists once the key does")
     }
 
     /// How many times `get` computed a description.
     pub fn computed(&self) -> u64 {
-        unimplemented!()
+        self.computed
     }
 }
 
@@ -332,7 +341,7 @@ pub fn entity_info_panel(
     selection: &[Entity],
     unit: Unit,
 ) -> Option<InfoAction> {
-    let info = describe(model, body, selection);
+    let info = panel.cache.get(model, body, selection).clone();
     let mut action = None;
 
     if let Some(instance) = &info.instance {

@@ -8,6 +8,8 @@
 //!
 //! Behaviour: `docs/specs/m6-components-panel.md`.
 
+use std::collections::HashMap;
+
 use eframe::egui::{self, Color32, Pos2, Rect, Response, Sense, Stroke, Vec2, pos2, vec2};
 use modeler_kernel::model::{BodyId, DefinitionId, Model};
 
@@ -36,20 +38,32 @@ pub const MAX_THUMBNAIL_SEGMENTS: usize = 400;
 /// same.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ThumbnailCache {
-    // Fields are the implementer's choice; keep the derives.
+    key: Option<(u64, u64)>,
+    per_definition: HashMap<DefinitionId, Vec<[Pos2; 2]>>,
+    computed: u64,
 }
 
 impl ThumbnailCache {
     /// `thumbnail_segments(model, definition)`, computed only the first time for this
     /// model state.
     pub fn get(&mut self, model: &Model, definition: DefinitionId) -> &[[Pos2; 2]] {
-        let _ = (model, definition);
-        unimplemented!()
+        let key = model.cache_key();
+        if self.key != Some(key) {
+            self.key = Some(key);
+            self.per_definition.clear();
+        }
+        if let std::collections::hash_map::Entry::Vacant(entry) =
+            self.per_definition.entry(definition)
+        {
+            entry.insert(thumbnail_segments(model, definition));
+            self.computed += 1;
+        }
+        &self.per_definition[&definition]
     }
 
     /// How many times `get` computed a thumbnail.
     pub fn computed(&self) -> u64 {
-        unimplemented!()
+        self.computed
     }
 }
 
@@ -161,9 +175,25 @@ pub fn thumbnail_segments(model: &Model, definition: DefinitionId) -> Vec<[egui:
             ((y - min_y) * scale + offset_y) as f32,
         )
     };
-    projected
-        .into_iter()
-        .map(|(a, b)| [to_screen(a), to_screen(b)])
+    if projected.len() <= MAX_THUMBNAIL_SEGMENTS {
+        return projected
+            .into_iter()
+            .map(|(a, b)| [to_screen(a), to_screen(b)])
+            .collect();
+    }
+    // Every edge is in, so the framing covers it all; keep only the longest segments
+    // on screen.
+    let mut kept: Vec<(usize, f64)> = projected
+        .iter()
+        .enumerate()
+        .map(|(i, (a, b))| (i, (b.0 - a.0).hypot(b.1 - a.1)))
+        .collect();
+    kept.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap().then_with(|| a.0.cmp(&b.0)));
+    (0..MAX_THUMBNAIL_SEGMENTS)
+        .map(|i| {
+            let (a, b) = projected[kept[i].0];
+            [to_screen(a), to_screen(b)]
+        })
         .collect()
 }
 
@@ -204,14 +234,12 @@ pub fn components_panel(
         }
     });
 
-    let entries = listed(model, &panel.search);
-    let has_components = model.definitions().any(|(_, info)| !info.group);
-    let tiles = panel.tiles;
     egui::ScrollArea::vertical()
         .auto_shrink([false, false])
         .show(ui, |ui| {
+            let entries = listed(model, &panel.search);
             if entries.is_empty() {
-                ui.label(if has_components {
+                ui.label(if model.definitions().any(|(_, info)| !info.group) {
                     "No matches"
                 } else {
                     "No components"
@@ -219,14 +247,14 @@ pub fn components_panel(
                 return;
             }
             let color = ui.visuals().text_color();
-            if tiles {
+            if panel.tiles {
                 ui.horizontal_wrapped(|ui| {
                     for id in &entries {
                         let Some(info) = model.definition(*id) else {
                             continue;
                         };
-                        let segments = thumbnail_segments(model, *id);
-                        if tile(ui, &info.name, &segments, color).clicked() && action.is_none() {
+                        let segments = panel.thumbnails.get(model, *id);
+                        if tile(ui, &info.name, segments, color).clicked() && action.is_none() {
                             action = Some(ComponentAction::Place(*id));
                         }
                     }
@@ -236,8 +264,8 @@ pub fn components_panel(
                     let Some(info) = model.definition(*id) else {
                         continue;
                     };
-                    let segments = thumbnail_segments(model, *id);
-                    if list_row(ui, &info.name, &segments, color).clicked() && action.is_none() {
+                    let segments = panel.thumbnails.get(model, *id);
+                    if list_row(ui, &info.name, segments, color).clicked() && action.is_none() {
                         action = Some(ComponentAction::Place(*id));
                     }
                 }
