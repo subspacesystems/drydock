@@ -774,8 +774,16 @@ pub enum CustomizeDrop {
 /// The tools of `TOOL_BUTTONS` (in that order) that toolbar `toolbar` does not hold.
 /// Behaviour: `docs/specs/m6-toolbar-customize-2.md`.
 pub fn available_tools(layout: &ToolbarLayout, toolbar: usize) -> Vec<Tool> {
-    let _ = (layout, toolbar);
-    unimplemented!("m6-toolbar-customize-2")
+    let held = layout
+        .toolbars()
+        .get(toolbar)
+        .map(|toolbar| toolbar.tools.as_slice())
+        .unwrap_or(&[]);
+    TOOL_BUTTONS
+        .iter()
+        .map(|(tool, _)| *tool)
+        .filter(|tool| !held.contains(tool))
+        .collect()
 }
 
 /// Apply a drop of `tool` onto toolbar `toolbar`'s lists; true when the layout changed.
@@ -786,8 +794,33 @@ pub fn apply_customize_drop(
     tool: Tool,
     drop: CustomizeDrop,
 ) -> bool {
-    let _ = (layout, toolbar, tool, drop);
-    unimplemented!("m6-toolbar-customize-2")
+    let Some(entry) = layout.toolbars().get(toolbar) else {
+        return false;
+    };
+    let at = entry.tools.iter().position(|&existing| existing == tool);
+    match drop {
+        CustomizeDrop::OnToolbar(index) => match at {
+            Some(at) => {
+                let target = if index <= at { index } else { index - 1 };
+                if target == at {
+                    return false;
+                }
+                layout.move_tool(toolbar, at, target);
+                true
+            }
+            None => {
+                layout.add_tool(toolbar, tool, index);
+                true
+            }
+        },
+        CustomizeDrop::Available => match at {
+            Some(at) => {
+                layout.remove_tool(toolbar, at);
+                true
+            }
+            None => false,
+        },
+    }
 }
 
 fn tool_label(tool: Tool) -> &'static str {
@@ -798,8 +831,26 @@ fn tool_label(tool: Tool) -> &'static str {
         .unwrap_or("")
 }
 
+fn customize_drag_handle(ui: &mut egui::Ui, tool: Tool, label: &str) -> egui::Response {
+    let (rect, response) = ui.allocate_exact_size(
+        egui::Vec2::splat(icons::BUTTON_SIZE),
+        egui::Sense::click_and_drag(),
+    );
+    let enabled = ui.is_enabled();
+    response.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, format!("Drag {label}"))
+    });
+    icons::paint(
+        ui.painter(),
+        rect.shrink(4.0),
+        Icon::Tool(tool),
+        ui.visuals().text_color(),
+    );
+    response.on_hover_cursor(egui::CursorIcon::Grab)
+}
+
 /// The contents of the Customize window. Returns true when the layout changed.
-/// Behaviour: `docs/specs/m6-toolbar-customize.md`.
+/// Behaviour: `docs/specs/m6-toolbar-customize-2.md`.
 pub fn customize_panel(
     ui: &mut egui::Ui,
     layout: &mut ToolbarLayout,
@@ -830,33 +881,94 @@ pub fn customize_panel(
         .get(selected)
         .map(|toolbar| toolbar.tools.clone())
         .unwrap_or_default();
+    let available = available_tools(layout, selected);
     let mut remove = None;
     let mut earlier = None;
     let mut later = None;
-    for (at, &tool) in tools.iter().enumerate() {
-        let label = tool_label(tool);
-        ui.horizontal(|ui| {
-            ui.label(label);
-            if ui.button(format!("Remove {label}")).clicked() {
-                remove = Some(at);
+    let mut add = None;
+    let mut dropped: Option<(Tool, egui::Pos2)> = None;
+    let mut dragging: Option<egui::Pos2> = None;
+    let mut row_rects = Vec::new();
+
+    let (on_rect, available_rect) = ui.columns(2, |columns| {
+        let on_rect = {
+            let ui = &mut columns[0];
+            ui.heading("On the toolbar");
+            for (at, &tool) in tools.iter().enumerate() {
+                let label = tool_label(tool);
+                let row = ui.horizontal(|ui| {
+                    let handle = customize_drag_handle(ui, tool, label);
+                    if handle.dragged() {
+                        dragging = handle.interact_pointer_pos();
+                    }
+                    if handle.drag_stopped() {
+                        dropped = handle.interact_pointer_pos().map(|pos| (tool, pos));
+                    }
+                    ui.label(label);
+                    if ui.button(format!("Remove {label}")).clicked() {
+                        remove = Some(at);
+                    }
+                    if ui
+                        .add_enabled(at > 0, egui::Button::new(format!("Move {label} earlier")))
+                        .clicked()
+                    {
+                        earlier = Some(at);
+                    }
+                    if ui
+                        .add_enabled(
+                            at + 1 < tools.len(),
+                            egui::Button::new(format!("Move {label} later")),
+                        )
+                        .clicked()
+                    {
+                        later = Some(at);
+                    }
+                });
+                row_rects.push(row.response.rect);
             }
-            if ui
-                .add_enabled(at > 0, egui::Button::new(format!("Move {label} earlier")))
-                .clicked()
-            {
-                earlier = Some(at);
+            ui.min_rect()
+        };
+        let available_rect = {
+            let ui = &mut columns[1];
+            ui.heading("Available");
+            for &tool in &available {
+                let label = tool_label(tool);
+                ui.horizontal(|ui| {
+                    let handle = customize_drag_handle(ui, tool, label);
+                    if handle.dragged() {
+                        dragging = handle.interact_pointer_pos();
+                    }
+                    if handle.drag_stopped() {
+                        dropped = handle.interact_pointer_pos().map(|pos| (tool, pos));
+                    }
+                    ui.label(label);
+                    if ui.button(format!("Add {label}")).clicked() {
+                        add = Some(tool);
+                    }
+                });
             }
-            if ui
-                .add_enabled(
-                    at + 1 < tools.len(),
-                    egui::Button::new(format!("Move {label} later")),
-                )
-                .clicked()
-            {
-                later = Some(at);
-            }
-        });
+            ui.min_rect()
+        };
+        (on_rect, available_rect)
+    });
+
+    if let Some(pos) = dragging
+        && on_rect.contains(pos)
+    {
+        let index = insertion_index(Edge::Left, &row_rects, pos);
+        let y = row_rects.get(index).map_or_else(
+            || row_rects.last().map_or(on_rect.top(), |rect| rect.bottom()),
+            |rect| rect.top(),
+        );
+        ui.painter().line_segment(
+            [
+                egui::pos2(on_rect.left(), y),
+                egui::pos2(on_rect.right(), y),
+            ],
+            egui::Stroke::new(2.0, ui.visuals().selection.stroke.color),
+        );
     }
+
     if let Some(at) = remove {
         layout.remove_tool(selected, at);
         changed = true;
@@ -868,17 +980,28 @@ pub fn customize_panel(
         changed = true;
     }
 
-    let mut add = None;
-    if selected < layout.toolbars().len() {
-        for (tool, label) in TOOL_BUTTONS {
-            if !tools.contains(&tool) && ui.button(format!("Add {label}")).clicked() {
-                add = Some(tool);
-            }
-        }
-    }
     if let Some(tool) = add {
         layout.add_tool(selected, tool, usize::MAX);
         changed = true;
+    }
+
+    if let Some((tool, pos)) = dropped {
+        let target = if on_rect.contains(pos) {
+            Some(CustomizeDrop::OnToolbar(insertion_index(
+                Edge::Left,
+                &row_rects,
+                pos,
+            )))
+        } else if available_rect.contains(pos) {
+            Some(CustomizeDrop::Available)
+        } else {
+            None
+        };
+        if let Some(target) = target
+            && apply_customize_drop(layout, selected, tool, target)
+        {
+            changed = true;
+        }
     }
 
     ui.horizontal(|ui| {
