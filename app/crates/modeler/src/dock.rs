@@ -179,6 +179,11 @@ impl DockLayout {
         self.renumber();
     }
 
+    /// Show a panel: open it and, when docked, expand it. Used by the View menu.
+    pub fn reveal(&mut self, _id: PanelId) {
+        unimplemented!("m6-panel-stack")
+    }
+
     pub fn toggle(&mut self, id: PanelId) {
         let open = self.is_open(id);
         self.set_open(id, !open);
@@ -633,4 +638,27 @@ pub fn apply_drop(layout: &mut DockLayout, id: PanelId, target: DropTarget, poin
             layout.float(id, Rect::from_min_size(pointer, eframe::egui::vec2(w, h)));
         }
     }
+}
+
+/// Smallest body (below the header) of an expanded docked panel, in points.
+pub const MIN_BODY: f32 = 60.0;
+
+/// One docked panel in a column, for sizing.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct StackRow {
+    pub collapsed: bool,
+    /// Share of the free height this panel gets; kept between frames, not saved to the file.
+    pub weight: f32,
+}
+
+/// Height of every row (header included) in a column `available` points tall.
+/// m6-panel-stack: see `docs/specs/m6-panel-stack.md`.
+pub fn stack_heights(_available: f32, _rows: &[StackRow]) -> Vec<f32> {
+    unimplemented!("m6-panel-stack")
+}
+
+/// The user dragged the border under row `index` by `delta` points (positive is down).
+/// m6-panel-stack: see `docs/specs/m6-panel-stack.md`.
+pub fn drag_splitter(_rows: &mut [StackRow], _heights: &[f32], _index: usize, _delta: f32) {
+    unimplemented!("m6-panel-stack")
 }
