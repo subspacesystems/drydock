@@ -52,9 +52,10 @@ impl ThumbnailCache {
             self.key = Some(key);
             self.per_definition.clear();
         }
-        if !self.per_definition.contains_key(&definition) {
-            self.per_definition
-                .insert(definition, thumbnail_segments(model, definition));
+        if let std::collections::hash_map::Entry::Vacant(entry) =
+            self.per_definition.entry(definition)
+        {
+            entry.insert(thumbnail_segments(model, definition));
             self.computed += 1;
         }
         &self.per_definition[&definition]
@@ -187,11 +188,7 @@ pub fn thumbnail_segments(model: &Model, definition: DefinitionId) -> Vec<[egui:
         .enumerate()
         .map(|(i, (a, b))| (i, (b.0 - a.0).hypot(b.1 - a.1)))
         .collect();
-    kept.sort_by(|a, b| {
-        b.1.partial_cmp(&a.1)
-            .unwrap()
-            .then_with(|| a.0.cmp(&b.0))
-    });
+    kept.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap().then_with(|| a.0.cmp(&b.0)));
     (0..MAX_THUMBNAIL_SEGMENTS)
         .map(|i| {
             let (a, b) = projected[kept[i].0];
@@ -237,7 +234,6 @@ pub fn components_panel(
         }
     });
 
-    let mut action = None;
     egui::ScrollArea::vertical()
         .auto_shrink([false, false])
         .show(ui, |ui| {
