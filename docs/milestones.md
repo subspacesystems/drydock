@@ -193,8 +193,9 @@ Tyrel's UI items deferred from M4, inserted after M5 at his request.
 | `m6-panel-stack` | Feedback: each docked panel scrolls on its own (Components and Materials scrolled together) and can be resized; no doubled titles; View > panel opens or reveals it, only the close button hides it; drawn header buttons | `m6-panel-speed` |
 | `m6-texture-panel` | Feedback: Texture Position becomes its own panel | `m6-panel-stack` |
 | `m6-toolbar-drag` | Feedback: an outline shows where a dragged toolbar will land; dropping between toolbars inserts it there | |
-| `m6-icons-2` | Feedback: Push/Pull renamed Extrude; Extrude, Rotate, Scale, Tape Measure, Eraser, Paint Bucket and Pan redrawn; Arc centred | |
-| `m6-toolbar-customize-2` | Feedback: Customize window as two lists (on the toolbar / available) with icons; drag between them and to reorder | `m6-icons-2`, `m6-toolbar-drag` |
+| `m6-icons-2` | Feedback: Extrude, Rotate, Scale, Tape Measure, Eraser, Paint Bucket and Pan redrawn; arcs centred; every icon centred in its square | |
+| `m6-rename-extrude` | Feedback: Push/Pull renamed Extrude in toolbar, menus, tooltips (after menus and toolbar-drag merge: shared test files) | `m6-menus`, `m6-toolbar-drag` |
+| `m6-toolbar-customize-2` | Feedback: Customize window as two lists (on the toolbar / available) with icons; drag between them and to reorder | `m6-icons-2`, `m6-toolbar-drag`, `m6-rename-extrude` |
 | `m6-eyedropper` | Feedback: Materials panel eyedropper; click a face and its material becomes current | `m6-panel-stack` |
 | `m6-native-look` | Feedback: style pass toward a desktop look (system UI font, theme from the OS, spacing, menu highlight) | `m6-menus`, `m6-panel-stack` |
 
