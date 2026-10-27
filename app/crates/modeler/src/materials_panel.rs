@@ -186,6 +186,17 @@ pub fn materials_panel(
         {
             panel.purge_confirm = true;
         }
+        if icons::icon_button(
+            ui,
+            Icon::Eyedropper,
+            "Eyedropper",
+            "Pick a material from the model",
+            false,
+        )
+        .clicked()
+        {
+            action = Some(MaterialAction::Eyedropper);
+        }
     });
     if new_form {
         panel.form = Some(MaterialForm::new_material());

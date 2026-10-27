@@ -51,10 +51,17 @@ pub const TOOLS: [Tool; 16] = [
     Tool::Zoom,
 ];
 
-/// Every icon: the tools in `TOOLS` order, then List, Tiles, New, Edit, Purge.
+/// Every icon: the tools in `TOOLS` order, then List, Tiles, New, Edit, Purge, Eyedropper.
 pub fn all() -> Vec<Icon> {
     let mut icons: Vec<Icon> = TOOLS.iter().map(|tool| Icon::Tool(*tool)).collect();
-    icons.extend([Icon::List, Icon::Tiles, Icon::New, Icon::Edit, Icon::Purge]);
+    icons.extend([
+        Icon::List,
+        Icon::Tiles,
+        Icon::New,
+        Icon::Edit,
+        Icon::Purge,
+        Icon::Eyedropper,
+    ]);
     icons
 }
 
@@ -411,7 +418,11 @@ pub fn shapes(icon: Icon, rect: Rect, color: Color32) -> Vec<Shape> {
             d.closed(&body);
             d.seg(rotate((0.4, -0.17), a), rotate((0.4, 0.17), a));
         }
-        Icon::Eyedropper => {}
+        Icon::Eyedropper => {
+            d.circle(0.42, -0.42, 0.3);
+            d.seg((0.2, -0.2), (-0.42, 0.42));
+            d.poly(&[(-0.38, 0.5), (-0.55, 0.35), (-0.72, 0.72)]);
+        }
         Icon::Purge => {
             d.line(&[(-0.2, -0.5), (-0.2, -0.72), (0.2, -0.72), (0.2, -0.5)]);
             d.seg((-0.65, -0.5), (0.65, -0.5));
