@@ -805,6 +805,11 @@ fn menu_bar_inner(
                     Action::TogglePanel(PanelId::Components),
                 ),
                 (state.shadows, "Shadows", Action::ToggleShadows),
+                (
+                    state.texture_position,
+                    "Texture Position",
+                    Action::TogglePanel(PanelId::TexturePosition),
+                ),
             ] {
                 if menu_item(ui, None, label, "", open).clicked() {
                     chosen = Some(action);

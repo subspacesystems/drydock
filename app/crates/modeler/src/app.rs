@@ -2097,24 +2097,8 @@ impl App {
                     return actions;
                 };
                 let current = editor.material();
-                let target = self.texture_target(model);
-                let texture_on = self
-                    .editor
-                    .as_ref()
-                    .is_some_and(|editor| editor.texture_handles(model).is_some());
                 if let Some(action) = materials_panel(ui, &mut self.materials, model, current) {
                     actions.push(PanelAction::Material(action));
-                }
-                ui.separator();
-                let (op, toggled) =
-                    texture_position_section(ui, &mut self.texture, target.is_some(), texture_on);
-                if toggled {
-                    actions.push(PanelAction::Handles(if texture_on { None } else { target }));
-                }
-                if let Some(op) = op
-                    && let Some((face, side)) = target
-                {
-                    actions.push(PanelAction::Texture(face, side, op));
                 }
             }
             PanelId::Components => {
@@ -2147,8 +2131,28 @@ impl App {
                     actions.push(PanelAction::Shadow(event, settings));
                 }
             }
-            // TODO(m6-texture-panel): move the Texture Position section here from Materials.
-            PanelId::TexturePosition => {}
+            PanelId::TexturePosition => {
+                let (Some(editor), Some(document)) = (&self.editor, &self.model) else {
+                    ui.label("No model");
+                    return actions;
+                };
+                let Some(model) = document.kernel.as_ref() else {
+                    ui.label("No model");
+                    return actions;
+                };
+                let target = self.texture_target(model);
+                let texture_on = editor.texture_handles(model).is_some();
+                let (op, toggled) =
+                    texture_position_section(ui, &mut self.texture, target.is_some(), texture_on);
+                if toggled {
+                    actions.push(PanelAction::Handles(if texture_on { None } else { target }));
+                }
+                if let Some(op) = op
+                    && let Some((face, side)) = target
+                {
+                    actions.push(PanelAction::Texture(face, side, op));
+                }
+            }
         }
         actions
     }
