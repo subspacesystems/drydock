@@ -12,7 +12,10 @@ use crate::document::{Stats, format_size};
 use crate::icons::Icon;
 use crate::input::{Action, EditKey, Tool};
 use crate::toolbars::{self, ToolbarLayout, ToolbarsMenuEvent};
-use eframe::egui::{InnerResponse, Rect, Response, Ui};
+use eframe::egui::{
+    Align2, InnerResponse, Label, Rect, Response, RichText, Sense, Shape, Stroke, TextStyle, Ui,
+    WidgetInfo, WidgetType, pos2, vec2,
+};
 use modeler_view::StandardView;
 use std::path::PathBuf;
 
@@ -412,8 +415,22 @@ pub struct ItemLayout {
 
 /// Lay out a menu row of `row` for a shortcut text `shortcut_width` wide.
 pub fn menu_item_layout(row: Rect, has_icon: bool, shortcut_width: f32) -> ItemLayout {
-    let _ = (row, has_icon, shortcut_width);
-    unimplemented!("m6-menus")
+    let icon = has_icon.then(|| {
+        Rect::from_center_size(
+            pos2(row.left() + 4.0 + 8.0, row.center().y),
+            vec2(16.0, 16.0),
+        )
+    });
+    let label_left = icon.map_or(row.left() + 6.0, |icon| icon.right() + 6.0);
+    let shortcut = Rect::from_min_size(
+        pos2(row.right() - 6.0 - shortcut_width, row.top()),
+        vec2(shortcut_width, row.height()),
+    );
+    ItemLayout {
+        icon,
+        label_left,
+        shortcut,
+    }
 }
 
 /// One menu row: optional icon, `label`, and `shortcut` right-aligned (empty for none).
@@ -424,8 +441,72 @@ pub fn menu_item(
     shortcut: &str,
     selected: bool,
 ) -> Response {
-    let _ = (ui, icon, label, shortcut, selected);
-    unimplemented!("m6-menus")
+    let font_id = TextStyle::Body.resolve(ui.style());
+    let text_color = ui.visuals().text_color();
+    let label_galley = ui
+        .painter()
+        .layout_no_wrap(label.to_owned(), font_id.clone(), text_color);
+    let shortcut_galley = (!shortcut.is_empty()).then(|| {
+        ui.painter()
+            .layout_no_wrap(shortcut.to_owned(), font_id.clone(), text_color)
+    });
+    let shortcut_width = shortcut_galley
+        .as_ref()
+        .map_or(0.0, |galley| galley.size().x);
+    let row_height = ui
+        .spacing()
+        .interact_size
+        .y
+        .max(label_galley.size().y)
+        .max(
+            shortcut_galley
+                .as_ref()
+                .map_or(0.0, |galley| galley.size().y),
+        )
+        .max(if icon.is_some() { 16.0 } else { 0.0 });
+    let label_space = if icon.is_some() {
+        4.0 + 16.0 + 6.0
+    } else {
+        6.0
+    };
+    let needed = label_space + label_galley.size().x + 24.0 + shortcut_width + 6.0;
+    let width = ui.available_width().max(needed);
+    let (row, response) = ui.allocate_exact_size(vec2(width, row_height), Sense::click());
+
+    let layout = menu_item_layout(row, icon.is_some(), shortcut_width);
+    let enabled = ui.is_enabled();
+    response.widget_info(|| WidgetInfo::selected(WidgetType::Button, enabled, selected, label));
+
+    let visuals = ui.style().interact_selectable(&response, selected);
+    let painter = ui.painter().clone();
+    if selected || response.hovered() {
+        painter.rect_filled(row, 4.0, visuals.weak_bg_fill);
+    }
+    let color = visuals.fg_stroke.color;
+    if let (Some(icon), Some(icon_rect)) = (icon, layout.icon) {
+        crate::icons::paint(&painter, icon_rect, icon, color);
+    }
+    painter.text(
+        pos2(layout.label_left, row.center().y),
+        Align2::LEFT_CENTER,
+        label,
+        font_id.clone(),
+        color,
+    );
+    if let Some(galley) = shortcut_galley {
+        let rect = Rect::from_min_size(
+            pos2(
+                layout.shortcut.right() - galley.size().x,
+                layout.shortcut.center().y - galley.size().y / 2.0,
+            ),
+            galley.size(),
+        );
+        ui.place(
+            rect,
+            Label::new(RichText::new(shortcut).font(font_id)).selectable(false),
+        );
+    }
+    response
 }
 
 /// A submenu row with a drawn arrow; `add_contents` fills the submenu.
@@ -434,8 +515,46 @@ pub fn submenu_button<R>(
     label: &str,
     add_contents: impl FnOnce(&mut Ui) -> R,
 ) -> InnerResponse<Option<R>> {
-    let _ = (ui, label, add_contents);
-    unimplemented!("m6-menus")
+    let font_id = TextStyle::Body.resolve(ui.style());
+    let text_color = ui.visuals().text_color();
+    let label_galley = ui
+        .painter()
+        .layout_no_wrap(label.to_owned(), font_id.clone(), text_color);
+    let row_height = ui.spacing().interact_size.y.max(label_galley.size().y);
+    let needed = 6.0 + label_galley.size().x + 24.0 + 6.0;
+    let width = ui.available_width().max(needed);
+    let (row, response) = ui.allocate_exact_size(vec2(width, row_height), Sense::click());
+
+    let enabled = ui.is_enabled();
+    response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, enabled, label));
+
+    let visuals = ui.style().interact(&response);
+    let painter = ui.painter().clone();
+    if response.hovered() {
+        painter.rect_filled(row, 4.0, visuals.weak_bg_fill);
+    }
+    let color = visuals.fg_stroke.color;
+    painter.text(
+        pos2(row.left() + 6.0, row.center().y),
+        Align2::LEFT_CENTER,
+        label,
+        font_id,
+        color,
+    );
+    let cx = row.right() - 12.0;
+    let cy = row.center().y;
+    painter.add(Shape::convex_polygon(
+        vec![
+            pos2(cx - 4.0, cy - 5.0),
+            pos2(cx + 4.0, cy),
+            pos2(cx - 4.0, cy + 5.0),
+        ],
+        color,
+        Stroke::NONE,
+    ));
+
+    let popup = eframe::egui::containers::menu::SubMenu::new().show(ui, &response, add_contents);
+    InnerResponse::new(popup.map(|inner| inner.inner), response)
 }
 
 /// What the menu bar did this frame.
@@ -473,20 +592,20 @@ fn menu_bar_inner(
     let mut customize_toolbars = false;
     eframe::egui::MenuBar::new().ui(ui, |ui| {
         ui.menu_button("File", |ui| {
-            if ui.button("New    Ctrl+N").clicked() {
+            if menu_item(ui, None, "New", "Ctrl+N", false).clicked() {
                 chosen = Some(Action::New);
                 ui.close();
             }
-            if ui.button("Open...    Ctrl+O").clicked() {
+            if menu_item(ui, None, "Open...", "Ctrl+O", false).clicked() {
                 chosen = Some(Action::Open);
                 ui.close();
             }
             ui.separator();
-            if ui.button("Save    Ctrl+S").clicked() {
+            if menu_item(ui, None, "Save", "Ctrl+S", false).clicked() {
                 chosen = Some(Action::Save);
                 ui.close();
             }
-            if ui.button("Save As...    Ctrl+Shift+S").clicked() {
+            if menu_item(ui, None, "Save As...", "Ctrl+Shift+S", false).clicked() {
                 chosen = Some(Action::SaveAs);
                 ui.close();
             }
@@ -498,8 +617,7 @@ fn menu_bar_inner(
                     .zip(recent_labels(state.recent))
                     .enumerate()
                 {
-                    if ui
-                        .button(label)
+                    if menu_item(ui, None, &label, "", false)
                         .on_hover_text(path.display().to_string())
                         .clicked()
                     {
@@ -509,101 +627,101 @@ fn menu_bar_inner(
                 }
             }
             ui.separator();
-            if ui.button("Exit").clicked() {
+            if menu_item(ui, None, "Exit", "", false).clicked() {
                 chosen = Some(Action::Exit);
                 ui.close();
             }
         });
         ui.menu_button("Edit", |ui| {
-            let undo_text = match state.undo {
-                Some(label) => format!("Undo {label}    Ctrl+Z"),
-                None => "Undo    Ctrl+Z".to_owned(),
+            let undo_label = match state.undo {
+                Some(label) => format!("Undo {label}"),
+                None => "Undo".to_owned(),
             };
-            if ui
-                .add_enabled(state.undo.is_some(), eframe::egui::Button::new(undo_text))
-                .clicked()
-            {
+            let undo = ui
+                .add_enabled_ui(state.undo.is_some(), |ui| {
+                    menu_item(ui, None, &undo_label, "Ctrl+Z", false)
+                })
+                .inner;
+            if undo.clicked() {
                 chosen = Some(Action::Edit(EditKey::Undo));
                 ui.close();
             }
-            let redo_text = match state.redo {
-                Some(label) => format!("Redo {label}    Ctrl+Y"),
-                None => "Redo    Ctrl+Y".to_owned(),
+            let redo_label = match state.redo {
+                Some(label) => format!("Redo {label}"),
+                None => "Redo".to_owned(),
             };
-            if ui
-                .add_enabled(state.redo.is_some(), eframe::egui::Button::new(redo_text))
-                .clicked()
-            {
+            let redo = ui
+                .add_enabled_ui(state.redo.is_some(), |ui| {
+                    menu_item(ui, None, &redo_label, "Ctrl+Y", false)
+                })
+                .inner;
+            if redo.clicked() {
                 chosen = Some(Action::Edit(EditKey::Redo));
                 ui.close();
             }
             ui.separator();
-            if ui
-                .add_enabled(
-                    state.has_selection,
-                    eframe::egui::Button::new("Cut    Ctrl+X"),
-                )
-                .clicked()
-            {
+            let cut = ui
+                .add_enabled_ui(state.has_selection, |ui| {
+                    menu_item(ui, None, "Cut", "Ctrl+X", false)
+                })
+                .inner;
+            if cut.clicked() {
                 chosen = Some(Action::Cut);
                 ui.close();
             }
-            if ui
-                .add_enabled(
-                    state.has_selection,
-                    eframe::egui::Button::new("Copy    Ctrl+C"),
-                )
-                .clicked()
-            {
+            let copy = ui
+                .add_enabled_ui(state.has_selection, |ui| {
+                    menu_item(ui, None, "Copy", "Ctrl+C", false)
+                })
+                .inner;
+            if copy.clicked() {
                 chosen = Some(Action::Copy);
                 ui.close();
             }
-            if ui
-                .add_enabled(
-                    state.has_clipboard,
-                    eframe::egui::Button::new("Paste    Ctrl+V"),
-                )
-                .clicked()
-            {
+            let paste = ui
+                .add_enabled_ui(state.has_clipboard, |ui| {
+                    menu_item(ui, None, "Paste", "Ctrl+V", false)
+                })
+                .inner;
+            if paste.clicked() {
                 chosen = Some(Action::Paste);
                 ui.close();
             }
             ui.separator();
-            if ui
-                .add_enabled(
-                    state.has_selection,
-                    eframe::egui::Button::new("Erase    Delete"),
-                )
-                .clicked()
-            {
+            let erase = ui
+                .add_enabled_ui(state.has_selection, |ui| {
+                    menu_item(ui, None, "Erase", "Delete", false)
+                })
+                .inner;
+            if erase.clicked() {
                 chosen = Some(Action::Erase);
                 ui.close();
             }
             ui.separator();
-            if ui
-                .add_enabled(
-                    state.has_selection,
-                    eframe::egui::Button::new("Make Component..."),
-                )
-                .clicked()
-            {
+            let make_component = ui
+                .add_enabled_ui(state.has_selection, |ui| {
+                    menu_item(ui, None, "Make Component...", "", false)
+                })
+                .inner;
+            if make_component.clicked() {
                 chosen = Some(Action::MakeComponent);
                 ui.close();
             }
-            if ui
-                .add_enabled(
-                    state.has_selection,
-                    eframe::egui::Button::new("Make Group..."),
-                )
-                .clicked()
-            {
+            let make_group = ui
+                .add_enabled_ui(state.has_selection, |ui| {
+                    menu_item(ui, None, "Make Group...", "", false)
+                })
+                .inner;
+            if make_group.clicked() {
                 chosen = Some(Action::MakeGroup);
                 ui.close();
             }
-            if ui
-                .add_enabled(state.can_explode, eframe::egui::Button::new("Explode"))
-                .clicked()
-            {
+            let explode = ui
+                .add_enabled_ui(state.can_explode, |ui| {
+                    menu_item(ui, None, "Explode", "", false)
+                })
+                .inner;
+            if explode.clicked() {
                 chosen = Some(Action::Explode);
                 ui.close();
             }
@@ -613,10 +731,12 @@ fn menu_bar_inner(
                 (1, "Flip Along Green"),
                 (2, "Flip Along Blue"),
             ] {
-                if ui
-                    .add_enabled(state.has_selection, eframe::egui::Button::new(label))
-                    .clicked()
-                {
+                let flip = ui
+                    .add_enabled_ui(state.has_selection, |ui| {
+                        menu_item(ui, None, label, "", false)
+                    })
+                    .inner;
+                if flip.clicked() {
                     chosen = Some(Action::Flip(axis));
                     ui.close();
                 }
@@ -624,29 +744,29 @@ fn menu_bar_inner(
         });
         ui.menu_button("View", |ui| {
             let projection = if state.parallel {
-                "Switch to Perspective    Shift+P"
+                "Switch to Perspective"
             } else {
-                "Switch to Parallel Projection    Shift+P"
+                "Switch to Parallel Projection"
             };
-            if ui.button(projection).clicked() {
+            if menu_item(ui, None, projection, "Shift+P", false).clicked() {
                 chosen = Some(Action::ToggleProjection);
                 ui.close();
             }
-            if ui.button("Zoom Extents    Shift+Z").clicked() {
+            if menu_item(ui, None, "Zoom Extents", "Shift+Z", false).clicked() {
                 chosen = Some(Action::ZoomExtents);
                 ui.close();
             }
             ui.separator();
-            for (label, view) in [
-                ("Iso    F2", StandardView::Iso),
-                ("Top    F3", StandardView::Top),
-                ("Front    F4", StandardView::Front),
-                ("Right    F5", StandardView::Right),
-                ("Back    F6", StandardView::Back),
-                ("Left    F7", StandardView::Left),
-                ("Bottom    F8", StandardView::Bottom),
+            for (label, shortcut, view) in [
+                ("Iso", "F2", StandardView::Iso),
+                ("Top", "F3", StandardView::Top),
+                ("Front", "F4", StandardView::Front),
+                ("Right", "F5", StandardView::Right),
+                ("Back", "F6", StandardView::Back),
+                ("Left", "F7", StandardView::Left),
+                ("Bottom", "F8", StandardView::Bottom),
             ] {
-                if ui.button(label).clicked() {
+                if menu_item(ui, None, label, shortcut, false).clicked() {
                     chosen = Some(Action::View(view));
                     ui.close();
                 }
@@ -657,12 +777,12 @@ fn menu_bar_inner(
             } else {
                 "Hide Rest of Model"
             };
-            if ui.button(label).clicked() {
+            if menu_item(ui, None, label, "", false).clicked() {
                 chosen = Some(Action::ToggleHideRest);
                 ui.close();
             }
             ui.separator();
-            if ui.selectable_label(state.axes, "Axes").clicked() {
+            if menu_item(ui, None, "Axes", "", state.axes).clicked() {
                 chosen = Some(Action::ToggleAxes);
                 ui.close();
             }
@@ -684,28 +804,30 @@ fn menu_bar_inner(
                 ),
                 (state.shadows, "Shadows", Action::ToggleShadows),
             ] {
-                if ui.selectable_label(open, label).clicked() {
+                if menu_item(ui, None, label, "", open).clicked() {
                     chosen = Some(action);
                     ui.close();
                 }
             }
-            if ui.button("Reset Panels").clicked() {
+            if menu_item(ui, None, "Reset Panels", "", false).clicked() {
                 chosen = Some(Action::ResetPanels);
                 ui.close();
             }
             if let Some(layout) = toolbars {
                 ui.separator();
-                ui.menu_button("Toolbars", |ui| match toolbars::toolbars_menu(ui, layout) {
-                    Some(ToolbarsMenuEvent::Changed) => toolbars_changed = true,
-                    Some(ToolbarsMenuEvent::Customize) => {
-                        customize_toolbars = true;
-                        ui.close();
+                submenu_button(ui, "Toolbars", |ui| {
+                    match toolbars::toolbars_menu(ui, layout) {
+                        Some(ToolbarsMenuEvent::Changed) => toolbars_changed = true,
+                        Some(ToolbarsMenuEvent::Customize) => {
+                            customize_toolbars = true;
+                            ui.close();
+                        }
+                        None => {}
                     }
-                    None => {}
                 });
             }
             ui.separator();
-            if ui.button("Model Info").clicked() {
+            if menu_item(ui, None, "Model Info", "", false).clicked() {
                 chosen = Some(Action::ModelInfo);
                 ui.close();
             }
@@ -721,8 +843,15 @@ fn menu_bar_inner(
                         .find(|(button, _)| button == tool)
                         .map(|(_, label)| *label)
                         .unwrap_or("");
-                    let text = format!("{label}    {}", tool_shortcut(*tool));
-                    if ui.selectable_label(state.tool == *tool, text).clicked() {
+                    if menu_item(
+                        ui,
+                        Some(Icon::Tool(*tool)),
+                        label,
+                        tool_shortcut(*tool),
+                        state.tool == *tool,
+                    )
+                    .clicked()
+                    {
                         chosen = Some(Action::SelectTool(*tool));
                         ui.close();
                     }
@@ -730,12 +859,13 @@ fn menu_bar_inner(
             }
         });
         ui.menu_button("Help", |ui| {
-            if ui.button("About modeler").clicked() {
+            if menu_item(ui, None, "About modeler", "", false).clicked() {
                 chosen = Some(Action::About);
                 ui.close();
             }
         });
     });
+
     MenuOutcome {
         action: chosen,
         toolbars_changed,
