@@ -544,6 +544,32 @@ pub fn drop_target(pos: egui::Pos2, window: egui::Rect) -> Option<Edge> {
     best.map(|(edge, _)| edge)
 }
 
+/// Where a toolbar dropped at `pos` goes among the toolbars docked along `edge`.
+/// `rects` are those toolbars' screen rectangles in docked order. The answer is the
+/// number of rectangles whose centre is before `pos` along the edge (x for top and
+/// bottom, y for left and right), so `0..=rects.len()`.
+pub fn insertion_index(edge: Edge, rects: &[egui::Rect], pos: egui::Pos2) -> usize {
+    let _ = (edge, rects, pos);
+    unimplemented!("m6-toolbar-drag")
+}
+
+/// The rectangle of size `size` an outline is drawn at to show a toolbar landing at
+/// `index` among the `rects` docked along `edge` inside `window`.
+/// Along the edge it starts where `rects[index]` starts, or where the last rectangle
+/// ends when `index == rects.len()`. Across the edge it starts where `rects[0]` does.
+/// With no rectangles it starts at the window's start of that edge (left for top and
+/// bottom, top for left and right) and sits against the edge itself.
+pub fn drop_outline(
+    edge: Edge,
+    rects: &[egui::Rect],
+    index: usize,
+    window: egui::Rect,
+    size: egui::Vec2,
+) -> egui::Rect {
+    let _ = (edge, rects, index, window, size);
+    unimplemented!("m6-toolbar-drag")
+}
+
 /// The tool button's tooltip: its name and shortcut, like `Line (L)`.
 pub fn tool_tooltip(tool: Tool) -> String {
     let label = TOOL_BUTTONS
