@@ -202,8 +202,8 @@ fn harness(model: Model, tiles: bool) -> Harness<'static, State> {
             },
             State {
                 panel: ComponentsPanel {
-                    search: String::new(),
                     tiles,
+                    ..ComponentsPanel::default()
                 },
                 model,
                 actions: Vec::new(),

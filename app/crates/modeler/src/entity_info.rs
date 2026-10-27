@@ -297,6 +297,29 @@ pub struct EntityInfoPanel {
     pub instance_name: String,
     /// The instance and the names the fields were last filled from.
     pub shown: Option<(InstanceId, String, String)>,
+    /// The last description, so a frame doesn't redo it (`docs/specs/m6-panel-speed.md`).
+    pub cache: DescribeCache,
+}
+
+/// The last `describe` result, reused while the model (`Model::cache_key`), the body and
+/// the selection are the same.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct DescribeCache {
+    // Fields are the implementer's choice; keep the derives.
+}
+
+impl DescribeCache {
+    /// `describe(model, body, selection)`, computed only when one of them changed since
+    /// the last call.
+    pub fn get(&mut self, model: &Model, body: BodyId, selection: &[Entity]) -> &EntityInfo {
+        let _ = (model, body, selection);
+        unimplemented!()
+    }
+
+    /// How many times `get` computed a description.
+    pub fn computed(&self) -> u64 {
+        unimplemented!()
+    }
 }
 
 /// Draw the panel into `ui` for `selection` in `body`, lengths in `unit`. `Some` on the

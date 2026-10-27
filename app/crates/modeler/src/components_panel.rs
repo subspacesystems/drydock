@@ -25,6 +25,32 @@ pub struct ComponentsPanel {
     pub search: String,
     /// Tiles instead of a list.
     pub tiles: bool,
+    /// Thumbnails already worked out (`docs/specs/m6-panel-speed.md`).
+    pub thumbnails: ThumbnailCache,
+}
+
+/// Most segments a thumbnail keeps: the longest ones on screen.
+pub const MAX_THUMBNAIL_SEGMENTS: usize = 400;
+
+/// `thumbnail_segments` per definition, kept while the model (`Model::cache_key`) is the
+/// same.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ThumbnailCache {
+    // Fields are the implementer's choice; keep the derives.
+}
+
+impl ThumbnailCache {
+    /// `thumbnail_segments(model, definition)`, computed only the first time for this
+    /// model state.
+    pub fn get(&mut self, model: &Model, definition: DefinitionId) -> &[[Pos2; 2]] {
+        let _ = (model, definition);
+        unimplemented!()
+    }
+
+    /// How many times `get` computed a thumbnail.
+    pub fn computed(&self) -> u64 {
+        unimplemented!()
+    }
 }
 
 /// What the user asked for in the panel this frame.
@@ -83,7 +109,9 @@ pub fn listed(model: &Model, search: &str) -> Vec<DefinitionId> {
 
 /// The definition's edges seen from the standard isometric direction, as segments inside
 /// the unit square (y down), scaled uniformly so the larger extent is exactly 1 and
-/// centred on the other axis. Empty when the definition has no edges.
+/// centred on the other axis. Empty when the definition has no edges. At most
+/// `MAX_THUMBNAIL_SEGMENTS`: beyond that the longest on screen are kept, and the framing
+/// still covers every edge.
 pub fn thumbnail_segments(model: &Model, definition: DefinitionId) -> Vec<[egui::Pos2; 2]> {
     let Some(body) = model.body(BodyId::Definition(definition)) else {
         return Vec::new();

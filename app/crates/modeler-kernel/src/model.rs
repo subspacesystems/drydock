@@ -484,8 +484,9 @@ impl Model {
         Ok(())
     }
 
-    /// The identity and revision that key a cached flattening of this model.
-    pub(crate) fn cache_key(&self) -> (u64, u64) {
+    /// The identity and revision that key a cached flattening of this model (or anything
+    /// else derived from it, like the Entity Info description).
+    pub fn cache_key(&self) -> (u64, u64) {
         (self.id.0, self.revision)
     }
 
