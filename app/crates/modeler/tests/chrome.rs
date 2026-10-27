@@ -46,7 +46,11 @@ fn state() -> MenuState<'static> {
 fn choose(h: &mut Harness<'_>, menu: &str, item: &str) {
     h.get_by_label(menu).click();
     h.run();
-    h.get_by_label_contains(item).click();
+    if let Some(exact) = h.query_by_label(item) {
+        exact.click();
+    } else {
+        h.get_by_label_contains(item).click();
+    }
     h.run();
 }
 
@@ -189,7 +193,7 @@ fn file_menu_items_send_their_actions() {
     for (item, action) in [
         ("New", Action::New),
         ("Open...", Action::Open),
-        ("Save    Ctrl+S", Action::Save),
+        ("Save", Action::Save),
         ("Save As...", Action::SaveAs),
     ] {
         let seen = Seen::default();

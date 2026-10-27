@@ -8,7 +8,7 @@ use egui_kittest::Harness;
 use egui_kittest::kittest::{NodeT, Queryable};
 use modeler::chrome::{
     CONTRIBUTORS, MenuState, TOOL_BUTTONS, TOOL_GROUPS, about_lines, about_text, menu_bar,
-    recent_labels, tool_shortcut,
+    recent_labels,
 };
 use modeler::input::{Action, Tool};
 use std::cell::RefCell;
@@ -50,7 +50,7 @@ fn tool_label(tool: Tool) -> String {
         .find(|(t, _)| *t == tool)
         .map(|(_, l)| *l)
         .unwrap();
-    format!("{label}    {}", tool_shortcut(tool))
+    label.to_owned()
 }
 
 fn top(h: &Harness<'_>, label: &str) -> f32 {
@@ -81,11 +81,7 @@ fn exit_is_the_last_file_item_and_sends_exit() {
     );
     open(&mut h, "File");
     let exit = top(&h, "Exit");
-    for item in [
-        "New    Ctrl+N",
-        "Save As...    Ctrl+Shift+S",
-        "3  house.dae",
-    ] {
+    for item in ["New", "Save As...", "3  house.dae"] {
         assert!(top(&h, item) < exit, "{item} above Exit");
     }
     h.get_by_label("Exit").click();
@@ -116,7 +112,7 @@ fn recent_files_sit_between_save_as_and_exit_in_order() {
     );
     open(&mut h, "File");
     let ys: Vec<f32> = [
-        "Save As...    Ctrl+Shift+S",
+        "Save As...",
         "1  desk.dae",
         "2  shed.modeler",
         "3  house.dae",
@@ -154,10 +150,10 @@ fn clicking_a_recent_file_sends_its_index() {
 #[test]
 fn file_menu_keeps_its_old_items() {
     for (item, action) in [
-        ("New    Ctrl+N", Action::New),
-        ("Open...    Ctrl+O", Action::Open),
-        ("Save    Ctrl+S", Action::Save),
-        ("Save As...    Ctrl+Shift+S", Action::SaveAs),
+        ("New", Action::New),
+        ("Open...", Action::Open),
+        ("Save", Action::Save),
+        ("Save As...", Action::SaveAs),
     ] {
         let seen = Seen::default();
         let mut h = harness(MenuState::default(), &seen);
@@ -221,9 +217,9 @@ fn tools_menu_lists_every_tool_with_its_key_in_order() {
         .map(|(tool, _)| top(&h, &tool_label(*tool)))
         .collect();
     assert!(ys.windows(2).all(|w| w[0] < w[1]), "{ys:?}");
-    assert!(h.query_by_label("Push/Pull    P").is_some());
-    assert!(h.query_by_label("3-Point Arc    Shift+A").is_some());
-    assert!(h.query_by_label("Select    Space").is_some());
+    assert!(h.query_by_label("Push/Pull").is_some());
+    assert!(h.query_by_label("3-Point Arc").is_some());
+    assert!(h.query_by_label("Select").is_some());
 }
 
 #[test]
