@@ -511,6 +511,13 @@ pub fn menu_item(
     response
 }
 
+/// A menu row that shows or hides something: a check mark in the icon column while
+/// `checked`, no row highlight for it (`docs/specs/m6-menus-2.md`).
+pub fn menu_check_item(ui: &mut Ui, label: &str, checked: bool) -> Response {
+    let _ = (ui, label, checked);
+    unimplemented!()
+}
+
 /// A submenu row with a drawn arrow; `add_contents` fills the submenu.
 pub fn submenu_button<R>(
     ui: &mut Ui,
