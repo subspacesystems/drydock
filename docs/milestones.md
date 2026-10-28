@@ -11,9 +11,10 @@ In build order. Each milestone ends when every listed task is merged and Tyrel's
 | M4 | Components and materials | Components, materials | M3 |
 | M5 | Sun | Geolocation and shadows | M4 |
 | M6 | UI | Tyrel's deferred UI items: icon toolbars, docking panels, Entity Info, Components | M5 |
-| M7 | Medium priority | Follow Me, offset | M3 |
-| M8 | Low priority | Tags, model library hook | M4 |
-| M9 | Windows | Windows build and installer | M4 |
+| M7 | 3D printing (proposed) | Solid check and repair, 3MF/STL export and import, print setup, print helpers | M6 |
+| M8 | Medium priority | Follow Me, offset | M3 |
+| M9 | Low priority | Tags, model library hook | M4 |
+| M10 | Windows | Windows build and installer | M4 |
 
 MVP = M0 to M5 (all High features).
 
@@ -213,16 +214,41 @@ Tyrel's UI items deferred from M4, inserted after M5 at his request.
 
 Done when: tools are icon buttons grouped by kind along the top by default; each toolbar can be hidden, moved to another edge or floated, and customized (tools added, removed, reordered), and the arrangement survives a restart; Entity Info, Materials, Components and Shadows dock in the left or right column or float, collapse, and survive a restart; Entity Info describes the selection and renames components and groups; Components lists the model's definitions with thumbnails, places one by click, and imports a file; the Materials panel buttons are icons. Checked in the real window before Tyrel tries it.
 
-## M7: Follow Me and offset
+## M7: 3D printing (proposed)
+
+Tyrel's request: print-ready solids without plugins. Placed right after M6 at his suggestion; Follow Me/offset, tags and Windows moved down one number (2026-10-28). Task list proposed; not started until Tyrel confirms the order and the limit reaches M7.
+
+| Task | What | Needs |
+| --- | --- | --- |
+| `m7-solid-check` | Kernel: per group or component, a solid report: open edges, edges shared by more than two faces, flipped faces, internal faces, zero-area faces; volume when solid (kernel, orchestrator) | |
+| `m7-solid-repair` | Kernel: reverse flipped faces, remove internal and stray faces, fill a hole whose border is one flat loop; one undo step; report what it couldn't fix (kernel, orchestrator) | `m7-solid-check` |
+| `m7-curves` | Kernel: arcs and circles keep their center, radius and angles through edits and save (native format v5), so export can re-segment them by chord tolerance (kernel, orchestrator) | |
+| `m7-print-mesh` | Export mesh: each solid group or component (whole model or selection) as world-space triangles in mm, with name and material color; curves at the chosen tolerance | `m7-solid-check`, `m7-curves` |
+| `m7-export-stl` | Binary STL writer: one file per object, or all in one | `m7-print-mesh` |
+| `m7-export-3mf` | 3MF writer: units, one object per solid, names, colors from materials | `m7-print-mesh` |
+| `m7-import-mesh` | STL (binary and ASCII) and 3MF import: weld vertices, merge coplanar triangles into editable faces with the DAE import's merge; each object a group | |
+| `m7-roundtrip` | Acceptance: closed corpus solids exported to 3MF and STL and re-imported keep volume and bounding box; deliberately broken models found by the check and fixed by repair; own mesh validator in the oracle | `m7-export-stl`, `m7-export-3mf`, `m7-import-mesh`, `m7-solid-repair` |
+| `m7-solid-ui` | Solid status and volume in Entity Info, problem edges and faces highlighted in the viewport, Repair button | `m7-solid-repair` |
+| `m7-export-ui` | File > Export 3MF... and Export STL...: selection or whole model, units (mm default), curve tolerance | `m7-export-stl`, `m7-export-3mf` |
+| `m7-print-setup` | Print Setup panel: bed presets and custom size, bed outline in the viewport, fits-the-bed check, Drop to Bed | `m7-print-mesh` |
+| `m7-overhang` | Faces steeper than a chosen overhang angle tinted in the viewport | |
+| `m7-clearance` | Clearance for parts that fit together (design waits for Tyrel's answer) | `m7-solid-check` |
+| `m7-text-3d` | 3D text from the app's font outlines, embossed on or engraved into a face | |
+
+## M8: Follow Me and offset
 
 - Follow Me: extrude a face along a path of connected edges.
 - Offset: offset a face's edges inward/outward by a distance, with typed value.
 
-## M8: Tags and model library hook
+## M9: Tags and model library hook
 
 - Tags: assign entities to tags; show/hide tags.
 - Library hook: import pipeline abstracted behind a "model source" interface so an online library could be added later.
 
-## M9: Windows
+## M10: Windows
 
 - Windows build in CI (cross-compile or a Windows runner), installer, release artifacts.
+
+## Future (unscheduled)
+
+Ideas parked (woodworking, drawings, CNC export, plugin API, design library and more). Nothing there is planned until Tyrel opens its own issue or asks for it to be scheduled.
