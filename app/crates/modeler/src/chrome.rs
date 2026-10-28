@@ -654,6 +654,8 @@ pub struct MenuOutcome {
     pub toolbars_changed: bool,
     /// The user asked for the Customize Toolbars window.
     pub customize_toolbars: bool,
+    /// The user chose View > Toolbars > Reset Toolbars... (`docs/specs/m6-confirm.md`).
+    pub reset_toolbars: bool,
 }
 
 /// The File, Edit, View and Help menus.
@@ -678,6 +680,7 @@ fn menu_bar_inner(
     let mut chosen = None;
     let mut toolbars_changed = false;
     let mut customize_toolbars = false;
+    let mut reset_toolbars = false;
     eframe::egui::MenuBar::new().ui(ui, |ui| {
         ui.menu_button("File", |ui| {
             if menu_item(ui, None, "New", "Ctrl+N", false).clicked() {
@@ -912,6 +915,10 @@ fn menu_bar_inner(
                             customize_toolbars = true;
                             ui.close();
                         }
+                        Some(ToolbarsMenuEvent::Reset) => {
+                            reset_toolbars = true;
+                            ui.close();
+                        }
                         None => {}
                     }
                 });
@@ -964,5 +971,6 @@ fn menu_bar_inner(
         action: chosen,
         toolbars_changed,
         customize_toolbars,
+        reset_toolbars,
     }
 }

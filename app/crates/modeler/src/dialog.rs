@@ -79,3 +79,31 @@ pub fn button_row(ui: &mut egui::Ui, buttons: &[DialogButton<'_>]) -> Option<usi
         None
     }
 }
+
+/// A modal confirmation (`docs/specs/m6-confirm.md`): `title`, `message`, then a
+/// [`button_row`] of `action` and "Cancel", Cancel the default. `Some(true)` on the frame
+/// `action` is clicked, `Some(false)` on Cancel, Enter or Escape, `None` while it waits.
+pub fn confirm_dialog(
+    ctx: &egui::Context,
+    id: egui::Id,
+    title: &str,
+    message: &str,
+    action: &str,
+) -> Option<bool> {
+    let _ = (ctx, id, title, message, action);
+    unimplemented!("m6-confirm")
+}
+
+/// A modal name prompt (`docs/specs/m6-confirm.md`): `title`, a "Name:" text box editing
+/// `name`, then a [`button_row`] of "OK" (the default, enabled while `name` isn't blank)
+/// and "Cancel". `Some(true)` on OK or Enter with a name, `Some(false)` on Cancel or
+/// Escape, `None` while it waits.
+pub fn name_dialog(
+    ctx: &egui::Context,
+    id: egui::Id,
+    title: &str,
+    name: &mut String,
+) -> Option<bool> {
+    let _ = (ctx, id, title, name);
+    unimplemented!("m6-confirm")
+}

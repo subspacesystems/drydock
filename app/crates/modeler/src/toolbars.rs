@@ -787,6 +787,9 @@ pub enum ToolbarsMenuEvent {
     Changed,
     /// Open the Customize window.
     Customize,
+    /// "Reset Toolbars..." was chosen: the app asks before resetting
+    /// (`docs/specs/m6-confirm.md`).
+    Reset,
 }
 
 /// What the Customize window remembers between frames.
@@ -799,6 +802,21 @@ pub struct CustomizeState {
     /// The rename field: which toolbar it was filled for and its text. `None` until the
     /// window first draws. Behaviour: `docs/specs/m6-toolbar-customize-3.md`.
     pub rename: Option<(usize, String)>,
+    /// The dialog open over the window, if any (`docs/specs/m6-confirm.md`).
+    pub prompt: Option<CustomizePrompt>,
+}
+
+/// A dialog the Customize window shows over itself (`docs/specs/m6-confirm.md`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum CustomizePrompt {
+    /// "New Toolbar...": ask for the new toolbar's name.
+    New { name: String },
+    /// "Rename Toolbar...": ask for toolbar `index`'s new name.
+    Rename { index: usize, name: String },
+    /// "Delete Toolbar...": confirm deleting toolbar `index`.
+    Delete { index: usize },
+    /// "Reset Toolbars...": confirm the reset.
+    Reset,
 }
 
 /// The contents of the View > Toolbars submenu.
