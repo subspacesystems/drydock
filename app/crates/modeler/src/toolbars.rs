@@ -7,7 +7,7 @@
 //!
 //! Behaviour: `docs/specs/m6-toolbar-layout.md`.
 
-use crate::chrome::{TOOL_BUTTONS, tool_shortcut};
+use crate::chrome::{TOOL_BUTTONS, menu_check_item, menu_item, tool_shortcut};
 use crate::icons::{self, Icon};
 use crate::input::Tool;
 use eframe::egui;
@@ -745,17 +745,17 @@ pub fn toolbars_menu(ui: &mut egui::Ui, layout: &mut ToolbarLayout) -> Option<To
     let count = layout.toolbars().len();
     for index in 0..count {
         let name = layout.toolbars()[index].name.clone();
-        let mut visible = layout.toolbars()[index].visible;
-        if ui.checkbox(&mut visible, name).clicked() {
-            layout.set_visible(index, visible);
+        let visible = layout.toolbars()[index].visible;
+        if menu_check_item(ui, &name, visible).clicked() {
+            layout.set_visible(index, !visible);
             event = Some(ToolbarsMenuEvent::Changed);
         }
     }
     ui.separator();
-    if ui.button("Customize...").clicked() {
+    if menu_item(ui, None, "Customize...", "", false).clicked() {
         event = Some(ToolbarsMenuEvent::Customize);
     }
-    if ui.button("Reset Toolbars").clicked() {
+    if menu_item(ui, None, "Reset Toolbars", "", false).clicked() {
         layout.reset();
         event = Some(ToolbarsMenuEvent::Changed);
     }
