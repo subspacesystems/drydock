@@ -440,6 +440,22 @@ impl Model {
         self.shadows
     }
 
+    /// How the model shows lengths (`docs/specs/m6-units.md`).
+    pub fn length_format(&self) -> crate::units::LengthFormat {
+        unimplemented!("m6-units")
+    }
+
+    /// Replace the length format as one record in `log`; `BadSettings` (nothing changes)
+    /// when it isn't valid (`docs/specs/m6-units.md`).
+    pub fn set_length_format(
+        &mut self,
+        format: crate::units::LengthFormat,
+        log: &mut ModelEdit,
+    ) -> Result<(), ModelError> {
+        let _ = (format, log);
+        unimplemented!("m6-units")
+    }
+
     /// Replace the geolocation as one record in `log`; `BadSettings` (nothing changes) when
     /// a field is non-finite or out of range.
     pub fn set_geolocation(

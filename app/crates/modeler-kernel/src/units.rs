@@ -224,3 +224,57 @@ pub fn format_length(meters: f64, unit: Unit, decimals: u32) -> String {
     };
     if neg { format!("-{body}") } else { body }
 }
+
+/// How a model shows lengths, and the unit a bare typed number is read in: the model's
+/// units setting (`docs/specs/m6-units.md`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LengthFormat {
+    /// Decimal numbers in `unit`, rounded to `decimals` places (0 to
+    /// [`LengthFormat::MAX_DECIMALS`]). `Unit::Foot` here means decimal feet (`5.25'`).
+    Decimal { unit: Unit, decimals: u8 },
+    /// Feet and inches, the inches rounded to the nearest 1/`denominator` inch (one of
+    /// [`LengthFormat::DENOMINATORS`]): `5' 4 1/2"`.
+    Architectural { denominator: u8 },
+}
+
+impl Default for LengthFormat {
+    /// Inches to two places, what the measurement box used before the setting existed.
+    fn default() -> Self {
+        LengthFormat::Decimal {
+            unit: Unit::Inch,
+            decimals: 2,
+        }
+    }
+}
+
+impl LengthFormat {
+    /// The most decimal places a `Decimal` format may ask for.
+    pub const MAX_DECIMALS: u8 = 6;
+    /// The inch fractions an `Architectural` format may round to (1 is whole inches).
+    pub const DENOMINATORS: [u8; 7] = [1, 2, 4, 8, 16, 32, 64];
+
+    /// True when `decimals` is at most `MAX_DECIMALS`, or `denominator` is in
+    /// `DENOMINATORS`.
+    pub fn is_valid(self) -> bool {
+        unimplemented!("m6-units")
+    }
+
+    /// The unit a bare typed number is read in: the decimal unit, or inches for
+    /// `Architectural`.
+    pub fn input_unit(self) -> Unit {
+        unimplemented!("m6-units")
+    }
+}
+
+/// A length in meters as text in `format` (`docs/specs/m6-units.md`).
+pub fn format_with(meters: f64, format: LengthFormat) -> String {
+    let _ = (meters, format);
+    unimplemented!("m6-units")
+}
+
+/// An area in square meters as text in the square of `format`'s unit
+/// (`docs/specs/m6-units.md`).
+pub fn format_area_with(square_meters: f64, format: LengthFormat) -> String {
+    let _ = (square_meters, format);
+    unimplemented!("m6-units")
+}
