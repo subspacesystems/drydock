@@ -30,6 +30,7 @@ pub mod swatches;
 pub mod texture_handles;
 pub mod texture_panel;
 pub mod toolbars;
+pub mod units_ui;
 pub mod viewstate;
 
 /// One-line product banner.

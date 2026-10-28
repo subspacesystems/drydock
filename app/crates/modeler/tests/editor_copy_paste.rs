@@ -61,7 +61,7 @@ impl World {
             editor: Editor::new(),
             view: view(),
         };
-        w.editor.unit = Unit::Meter;
+        set_unit(&mut w.model, Unit::Meter);
         let n = SQUARE.len();
         let segs: Vec<_> = (0..n).map(|i| (SQUARE[i], SQUARE[(i + 1) % n])).collect();
         let mut undo = UndoStack::new();
@@ -420,4 +420,14 @@ fn pasting_a_selection_of_edges_keeps_them_edges() {
     // Anchor: middle of the edge (1.5, 0), z lowest: so the edge now spans x -4.5..-3.5 at y -4.
     assert!(w.has(v(-4.5, -4.0, 0.0)));
     assert!(w.has(v(-3.5, -4.0, 0.0)));
+}
+
+/// Typed numbers and measurements in `unit`, 2 places.
+fn set_unit(model: &mut Model, unit: Unit) {
+    model
+        .set_length_format(
+            modeler_kernel::units::LengthFormat::Decimal { unit, decimals: 2 },
+            &mut modeler_kernel::model::ModelEdit::new(),
+        )
+        .unwrap();
 }

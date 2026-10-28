@@ -74,7 +74,7 @@ impl World {
             editor: Editor::new(),
             view: view(StandardView::Top),
         };
-        w.editor.unit = Unit::Meter;
+        set_unit(&mut w.model, Unit::Meter);
         let n = SQUARE.len();
         let segs: Vec<_> = (0..n).map(|i| (SQUARE[i], SQUARE[(i + 1) % n])).collect();
         let mut undo = UndoStack::new();
@@ -159,7 +159,10 @@ fn tape_tool_only_with_tape() {
 #[test]
 fn measurement_is_an_empty_length_at_first() {
     let w = World::new();
-    assert_eq!(w.editor.measurement(), Some(("Length", String::new())));
+    assert_eq!(
+        w.editor.measurement(&w.model),
+        Some(("Length", String::new()))
+    );
     assert!(w.editor.preview().is_empty());
 }
 
@@ -169,15 +172,18 @@ fn plain_measurement_reads_the_distance_and_changes_nothing() {
     assert!(!w.click(v(4.0, 3.0, 0.0)));
     assert_eq!(w.stage(), TapeStage::End);
     assert_eq!(w.editor.tape_tool().unwrap().edge(), None);
-    assert_eq!(w.editor.measurement(), Some(("Length", String::new())));
+    assert_eq!(
+        w.editor.measurement(&w.model),
+        Some(("Length", String::new()))
+    );
     w.move_to(v(7.0, 7.0, 0.0));
-    assert_eq!(w.editor.measurement(), Some(("Length", f(5.0))));
+    assert_eq!(w.editor.measurement(&w.model), Some(("Length", f(5.0))));
     assert!(!w.click(v(7.0, 7.0, 0.0)));
     assert_eq!(w.stage(), TapeStage::Start);
     assert_eq!(w.undo_count(), 0);
     assert!(w.guides().is_empty());
     assert_eq!(w.editor.message(), None);
-    assert_eq!(w.editor.measurement(), Some(("Length", f(5.0))));
+    assert_eq!(w.editor.measurement(&w.model), Some(("Length", f(5.0))));
 }
 
 #[test]
@@ -217,7 +223,7 @@ fn clicking_beside_an_edge_leaves_a_parallel_guide() {
     let mut w = World::new();
     w.start_on_edge();
     w.move_to(v(1.5, -2.0, 0.0));
-    assert_eq!(w.editor.measurement(), Some(("Length", f(2.0))));
+    assert_eq!(w.editor.measurement(&w.model), Some(("Length", f(2.0))));
     assert!(w.click(v(1.5, -2.0, 0.0)));
     assert_eq!(w.undo_count(), 1);
     assert_eq!(w.stage(), TapeStage::Start);
@@ -225,7 +231,7 @@ fn clicking_beside_an_edge_leaves_a_parallel_guide() {
     let guides = w.guides();
     assert_eq!(guides.len(), 1);
     assert_line(&guides[0], -2.0);
-    assert_eq!(w.editor.measurement(), Some(("Length", f(2.0))));
+    assert_eq!(w.editor.measurement(&w.model), Some(("Length", f(2.0))));
     assert!(w.key(EditKey::Undo));
     assert!(w.guides().is_empty());
     assert!(w.key(EditKey::Redo));
@@ -256,7 +262,7 @@ fn typed_offset_places_the_guide() {
     let guides = w.guides();
     assert_eq!(guides.len(), 1);
     assert_line(&guides[0], 0.5);
-    assert_eq!(w.editor.measurement(), Some(("Length", f(0.5))));
+    assert_eq!(w.editor.measurement(&w.model), Some(("Length", f(0.5))));
 }
 
 #[test]
@@ -368,10 +374,13 @@ fn switching_tools_forgets_the_last_distance() {
     let mut w = World::new();
     w.click(v(4.0, 3.0, 0.0));
     w.click(v(7.0, 7.0, 0.0));
-    assert_eq!(w.editor.measurement(), Some(("Length", f(5.0))));
+    assert_eq!(w.editor.measurement(&w.model), Some(("Length", f(5.0))));
     w.editor.set_tool(Tool::Select);
     w.editor.set_tool(Tool::Tape);
-    assert_eq!(w.editor.measurement(), Some(("Length", String::new())));
+    assert_eq!(
+        w.editor.measurement(&w.model),
+        Some(("Length", String::new()))
+    );
 }
 
 #[test]
@@ -388,4 +397,14 @@ fn a_guide_does_not_touch_the_geometry() {
             .iter()
             .all(|e| matches!(e, Entity::Edge(_)))
     );
+}
+
+/// Typed numbers and measurements in `unit`, 2 places.
+fn set_unit(model: &mut Model, unit: Unit) {
+    model
+        .set_length_format(
+            modeler_kernel::units::LengthFormat::Decimal { unit, decimals: 2 },
+            &mut modeler_kernel::model::ModelEdit::new(),
+        )
+        .unwrap();
 }

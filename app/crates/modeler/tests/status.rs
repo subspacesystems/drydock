@@ -12,6 +12,7 @@ use modeler::chrome::{
 use modeler::document::Stats;
 use modeler::input::Action;
 use modeler::viewstate::{Effect, ViewState};
+use modeler_kernel::units::LengthFormat;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -29,7 +30,7 @@ fn stats() -> Stats {
 #[test]
 fn lines_without_a_kernel_model_list_the_scene_numbers() {
     assert_eq!(
-        model_info_lines(&stats(), false),
+        model_info_lines(&stats(), false, LengthFormat::default()),
         vec![
             "Triangles: 120".to_owned(),
             "Lines: 7".to_owned(),
@@ -42,7 +43,7 @@ fn lines_without_a_kernel_model_list_the_scene_numbers() {
 #[test]
 fn lines_with_a_kernel_model_add_faces_and_edges() {
     assert_eq!(
-        model_info_lines(&stats(), true),
+        model_info_lines(&stats(), true, LengthFormat::default()),
         vec![
             "Triangles: 120".to_owned(),
             "Lines: 7".to_owned(),
@@ -58,7 +59,7 @@ fn lines_with_a_kernel_model_add_faces_and_edges() {
 fn window_shows_every_line_and_close_clears_open() {
     let open = Rc::new(RefCell::new(true));
     let flag = open.clone();
-    let lines = model_info_lines(&stats(), true);
+    let lines = model_info_lines(&stats(), true, LengthFormat::default());
     let shown = lines.clone();
     let mut h = Harness::new_ui(move |ui| {
         let mut value = *flag.borrow();
@@ -77,7 +78,7 @@ fn window_shows_every_line_and_close_clears_open() {
 
 #[test]
 fn window_draws_nothing_while_closed() {
-    let lines = model_info_lines(&stats(), true);
+    let lines = model_info_lines(&stats(), true, LengthFormat::default());
     let mut h = Harness::new_ui(move |ui| {
         let mut open = false;
         model_info_window(ui.ctx(), &mut open, &lines);

@@ -89,7 +89,7 @@ impl World {
             editor: Editor::new(),
             view: view(StandardView::Top),
         };
-        w.editor.unit = Unit::Meter;
+        set_unit(&mut w.model, Unit::Meter);
         let n = shape.len();
         let segs: Vec<_> = (0..n).map(|i| (shape[i], shape[(i + 1) % n])).collect();
         let mut undo = UndoStack::new();
@@ -203,7 +203,10 @@ fn scale_tool_only_with_scale() {
 #[test]
 fn measurement_is_an_empty_scale_at_first() {
     let w = World::new();
-    assert_eq!(w.editor.measurement(), Some(("Scale", String::new())));
+    assert_eq!(
+        w.editor.measurement(&w.model),
+        Some(("Scale", String::new()))
+    );
     assert!(w.editor.preview().is_empty());
     assert!(w.editor.hint().is_none());
 }
@@ -271,7 +274,10 @@ fn a_corner_scales_uniformly() {
     w.grab_corner();
     w.move_to(v(3.0, 2.0, 0.0));
     assert!(w.editor.hint().is_some());
-    assert_eq!(w.editor.measurement(), Some(("Scale", "2.000".to_string())));
+    assert_eq!(
+        w.editor.measurement(&w.model),
+        Some(("Scale", "2.000".to_string()))
+    );
     assert!(w.click(v(3.0, 2.0, 0.0)));
     w.assert_positions(&[
         v(1.0, 0.0, 0.0),
@@ -283,7 +289,10 @@ fn a_corner_scales_uniformly() {
     assert_eq!(w.stage(), ScaleStage::Pick);
     assert_eq!(w.editor.message(), None);
     assert!(w.editor.selection().contains(&Entity::Face(w.face())));
-    assert_eq!(w.editor.measurement(), Some(("Scale", "2.000".to_string())));
+    assert_eq!(
+        w.editor.measurement(&w.model),
+        Some(("Scale", "2.000".to_string()))
+    );
     assert!(w.key(EditKey::Undo));
     w.assert_positions(&SQUARE);
 }
@@ -304,7 +313,7 @@ fn an_edge_handle_scales_along_one_axis() {
         v(1.0, -1.0, 0.0),
     ]);
     assert_eq!(
-        w.editor.measurement(),
+        w.editor.measurement(&w.model),
         Some(("Scale", "1.000, 2.000, 1.000".to_string()))
     );
 }
@@ -438,7 +447,10 @@ fn typed_factor_right_after_changes_the_scale() {
         v(1.0, 3.0, 0.0),
     ]);
     assert_eq!(w.undo_count(), 1);
-    assert_eq!(w.editor.measurement(), Some(("Scale", "3.000".to_string())));
+    assert_eq!(
+        w.editor.measurement(&w.model),
+        Some(("Scale", "3.000".to_string()))
+    );
     // The same value again changes nothing.
     assert!(!w.enter("3"));
     assert_eq!(w.undo_count(), 1);
@@ -494,7 +506,10 @@ fn switching_tools_forgets_the_scale() {
     w.editor.set_tool(Tool::Move);
     w.editor.set_tool(Tool::Scale);
     assert_eq!(w.stage(), ScaleStage::Pick);
-    assert_eq!(w.editor.measurement(), Some(("Scale", String::new())));
+    assert_eq!(
+        w.editor.measurement(&w.model),
+        Some(("Scale", String::new()))
+    );
     assert!(!w.enter("2"));
     assert_eq!(w.editor.message(), Some("Click a handle first"));
 }
@@ -548,4 +563,14 @@ fn flip_is_ignored_while_scaling() {
     assert!(!w.editor.flip(0, &mut w.model));
     assert_eq!(w.undo_count(), 0);
     w.assert_positions(&TRIANGLE);
+}
+
+/// Typed numbers and measurements in `unit`, 2 places.
+fn set_unit(model: &mut Model, unit: Unit) {
+    model
+        .set_length_format(
+            modeler_kernel::units::LengthFormat::Decimal { unit, decimals: 2 },
+            &mut modeler_kernel::model::ModelEdit::new(),
+        )
+        .unwrap();
 }

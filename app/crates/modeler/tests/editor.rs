@@ -69,10 +69,11 @@ struct World {
 impl World {
     fn new(tool: Tool) -> World {
         let mut editor = Editor::new();
-        editor.unit = Unit::Meter;
+        let mut model = Model::new();
+        set_unit(&mut model, Unit::Meter);
         editor.set_tool(tool);
         World {
-            model: Model::new(),
+            model,
             editor,
             view: top_view(),
         }
@@ -270,14 +271,14 @@ fn project_behind_a_perspective_camera_is_none() {
 fn new_editor_defaults() {
     let e = Editor::new();
     assert_eq!(e.tool(), Tool::Orbit);
-    assert_eq!(e.unit, Unit::Inch);
+    assert_eq!(Model::new().length_format().input_unit(), Unit::Inch);
     assert!(e.selection().is_empty());
     assert_eq!(e.undo_stack().undo_count(), 0);
     assert_eq!(e.typed(), "");
     assert_eq!(e.hint(), None);
     assert_eq!(e.lock(), None);
     assert!(e.preview().is_empty());
-    assert_eq!(e.measurement(), None);
+    assert_eq!(e.measurement(&Model::new()), None);
     assert_eq!(e.message(), None);
     assert_eq!(Editor::default().tool(), Tool::Orbit);
 }
@@ -290,7 +291,7 @@ fn view_tools_ignore_clicks_and_moves() {
         assert_eq!(w.editor.hint(), None);
         assert!(!w.click_n(v(1.0, 1.0, 0.0), NONE, 1));
         assert_eq!(w.ctx().edge_count(), 0);
-        assert_eq!(w.editor.measurement(), None);
+        assert_eq!(w.editor.measurement(&w.model), None);
         assert!(!w.editor.text("5"));
         assert_eq!(w.editor.typed(), "");
     }
@@ -306,7 +307,10 @@ fn line_tool_hint_follows_the_cursor() {
     assert_close(hint.point, v(1.0, 0.5, 0.0));
     assert_eq!(hint.snap, Snap::Ground);
     assert!(w.editor.preview().is_empty(), "no start yet");
-    assert_eq!(w.editor.measurement(), Some(("Length", String::new())));
+    assert_eq!(
+        w.editor.measurement(&w.model),
+        Some(("Length", String::new()))
+    );
 }
 
 #[test]
@@ -318,7 +322,10 @@ fn line_two_clicks_draw_an_edge() {
     assert_eq!(preview.len(), 1);
     assert_close(preview[0].0, v(0.0, 0.0, 0.0));
     assert_close(preview[0].1, v(2.0, 0.0, 0.0));
-    assert_eq!(w.editor.measurement(), Some(("Length", "2m".to_string())));
+    assert_eq!(
+        w.editor.measurement(&w.model),
+        Some(("Length", "2m".to_string()))
+    );
     assert!(w.click_n(v(2.0, 0.0, 0.0), NONE, 1));
     assert_eq!(w.ctx().edge_count(), 1);
     assert_eq!(w.editor.undo_stack().undo_count(), 1);
@@ -383,12 +390,15 @@ fn line_axis_hint() {
 }
 
 #[test]
-fn measurement_uses_the_editor_unit() {
+fn measurement_uses_the_model_unit() {
     let mut w = World::new(Tool::Line);
-    w.editor.unit = Unit::Inch;
+    set_unit(&mut w.model, Unit::Inch);
     w.click(v(0.0, 0.0, 0.0));
     w.move_to(v(0.0254 * 40.0, 0.0, 0.0), NONE);
-    assert_eq!(w.editor.measurement(), Some(("Length", "40\"".to_string())));
+    assert_eq!(
+        w.editor.measurement(&w.model),
+        Some(("Length", "40\"".to_string()))
+    );
 }
 
 // ---------------------------------------------------------------- typed text
@@ -409,9 +419,9 @@ fn typed_length_draws_along_the_cursor() {
 }
 
 #[test]
-fn typed_bare_number_uses_the_editor_unit() {
+fn typed_bare_number_uses_the_model_unit() {
     let mut w = World::new(Tool::Line);
-    w.editor.unit = Unit::Inch;
+    set_unit(&mut w.model, Unit::Inch);
     w.click(v(0.0, 0.0, 0.0));
     w.move_to(v(0.0, 1.0, 0.0), NONE);
     w.editor.text("10");
@@ -709,7 +719,7 @@ fn select_tool_has_no_hint_and_draws_nothing() {
     assert_eq!(w.editor.hint(), None);
     assert!(!w.click_n(v(1.0, 1.0, 0.0), NONE, 1));
     assert!(w.editor.preview().is_empty());
-    assert_eq!(w.editor.measurement(), None);
+    assert_eq!(w.editor.measurement(&w.model), None);
 }
 
 #[test]
@@ -883,4 +893,14 @@ fn drawing_through_a_selected_edge_prunes_it() {
         let Entity::Edge(id) = e else { panic!("{e:?}") };
         assert!(w.ctx().edge(*id).is_some(), "stale {e:?}");
     }
+}
+
+/// Typed numbers and measurements in `unit`, 2 places.
+fn set_unit(model: &mut Model, unit: Unit) {
+    model
+        .set_length_format(
+            modeler_kernel::units::LengthFormat::Decimal { unit, decimals: 2 },
+            &mut modeler_kernel::model::ModelEdit::new(),
+        )
+        .unwrap();
 }

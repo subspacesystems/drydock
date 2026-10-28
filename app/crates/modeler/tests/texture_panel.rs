@@ -9,6 +9,7 @@ use egui_kittest::kittest::Queryable;
 use glam::DVec2;
 use modeler::editor::TextureOp;
 use modeler::texture_panel::{TextureForm, texture_panel};
+use modeler_kernel::units::Unit;
 
 struct State {
     form: TextureForm,
@@ -19,7 +20,7 @@ struct State {
 fn harness(available: bool, form: TextureForm) -> Harness<'static, State> {
     let mut h = Harness::new_ui_state(
         |ui, state: &mut State| {
-            if let Some(op) = texture_panel(ui, &mut state.form, state.available) {
+            if let Some(op) = texture_panel(ui, &mut state.form, state.available, Unit::Meter) {
                 state.ops.push(op);
             }
         },

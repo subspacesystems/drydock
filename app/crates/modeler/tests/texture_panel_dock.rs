@@ -10,6 +10,7 @@ use modeler::chrome::{MenuState, menu_bar};
 use modeler::dock::{DockLayout, PANELS, PanelId, Side, panel_key, title};
 use modeler::input::Action;
 use modeler::texture_panel::{TextureForm, texture_panel, texture_position_section};
+use modeler_kernel::units::Unit;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -17,7 +18,7 @@ use std::rc::Rc;
 fn the_panel_draws_no_heading_of_its_own() {
     let mut form = TextureForm::default();
     let mut h = Harness::new_ui(move |ui| {
-        texture_panel(ui, &mut form, true);
+        texture_panel(ui, &mut form, true, Unit::Meter);
     });
     h.run();
     assert!(h.query_by_label("Texture Position").is_none());
@@ -28,7 +29,7 @@ fn the_panel_draws_no_heading_of_its_own() {
 fn the_section_draws_no_heading_and_keeps_the_button_above_the_controls() {
     let mut form = TextureForm::default();
     let mut h = Harness::new_ui(move |ui| {
-        texture_position_section(ui, &mut form, true, false);
+        texture_position_section(ui, &mut form, true, false, Unit::Meter);
     });
     h.run();
     assert!(h.query_by_label("Texture Position").is_none());

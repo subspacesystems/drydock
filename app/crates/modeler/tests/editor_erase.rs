@@ -61,7 +61,7 @@ impl World {
             editor: Editor::new(),
             view: top_view(),
         };
-        w.editor.unit = Unit::Meter;
+        set_unit(&mut w.model, Unit::Meter);
         let segs: Vec<_> = (0..4).map(|i| (SQUARE[i], SQUARE[(i + 1) % 4])).collect();
         let mut undo = UndoStack::new();
         let mut t = Target {
@@ -257,4 +257,14 @@ fn keys_delete_and_e() {
         ..NONE
     };
     assert_eq!(input::key("Delete", shift), None);
+}
+
+/// Typed numbers and measurements in `unit`, 2 places.
+fn set_unit(model: &mut Model, unit: Unit) {
+    model
+        .set_length_format(
+            modeler_kernel::units::LengthFormat::Decimal { unit, decimals: 2 },
+            &mut modeler_kernel::model::ModelEdit::new(),
+        )
+        .unwrap();
 }

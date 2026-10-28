@@ -58,10 +58,11 @@ struct World {
 impl World {
     fn new() -> World {
         let mut editor = Editor::new();
-        editor.unit = Unit::Meter;
+        let mut model = Model::new();
+        set_unit(&mut model, Unit::Meter);
         editor.set_tool(Tool::PushPull);
         World {
-            model: Model::new(),
+            model,
             editor,
             view: iso_view(),
         }
@@ -541,13 +542,16 @@ fn text_is_taken() {
 fn measurement_shows_the_distance() {
     let mut w = World::new();
     w.slab();
-    assert_eq!(w.editor.measurement(), Some(("Distance", String::new())));
+    assert_eq!(
+        w.editor.measurement(&w.model),
+        Some(("Distance", String::new()))
+    );
     w.click(v(1.0, 0.7, 1.0));
     w.move_to(v(1.0, 0.7, 0.75));
-    assert_eq!(w.editor.measurement(), Some(("Distance", f(0.25))));
+    assert_eq!(w.editor.measurement(&w.model), Some(("Distance", f(0.25))));
     w.click(v(1.0, 0.7, 0.75));
     // After the push it shows the distance just used.
-    assert_eq!(w.editor.measurement(), Some(("Distance", f(0.25))));
+    assert_eq!(w.editor.measurement(&w.model), Some(("Distance", f(0.25))));
 }
 
 #[test]
@@ -595,4 +599,14 @@ fn pushed_face_selection_is_kept_when_it_survives() {
     w.click(v(1.0, 0.7, 1.0));
     w.enter("0.5");
     assert_eq!(w.editor.selection(), selected.as_slice());
+}
+
+/// Typed numbers and measurements in `unit`, 2 places.
+fn set_unit(model: &mut Model, unit: Unit) {
+    model
+        .set_length_format(
+            modeler_kernel::units::LengthFormat::Decimal { unit, decimals: 2 },
+            &mut modeler_kernel::model::ModelEdit::new(),
+        )
+        .unwrap();
 }

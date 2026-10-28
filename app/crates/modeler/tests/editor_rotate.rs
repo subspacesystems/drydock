@@ -82,7 +82,7 @@ impl World {
             editor: Editor::new(),
             view: view(StandardView::Top),
         };
-        w.editor.unit = Unit::Meter;
+        set_unit(&mut w.model, Unit::Meter);
         w.draw(&SQUARE);
         w.editor.set_tool(Tool::Rotate);
         w
@@ -204,7 +204,10 @@ fn rotate_tool_and_plane_only_with_rotate() {
 #[test]
 fn measurement_is_an_empty_angle_at_first() {
     let w = World::new();
-    assert_eq!(w.editor.measurement(), Some(("Angle", String::new())));
+    assert_eq!(
+        w.editor.measurement(&w.model),
+        Some(("Angle", String::new()))
+    );
     assert!(w.editor.preview().is_empty());
 }
 
@@ -217,7 +220,10 @@ fn three_clicks_rotate_the_selection() {
     w.start_at_origin();
     w.move_to(v(0.0, 2.0, 0.0));
     assert!((w.angle() - 90.0).abs() < 1e-9);
-    assert_eq!(w.editor.measurement(), Some(("Angle", "90.0°".to_string())));
+    assert_eq!(
+        w.editor.measurement(&w.model),
+        Some(("Angle", "90.0°".to_string()))
+    );
     assert!(w.click(v(0.0, 2.0, 0.0)));
     w.assert_positions(&rotated(&SQUARE, DVec3::ZERO, DVec3::Z, 90.0));
     assert_eq!(w.undo_count(), 1);
@@ -226,7 +232,10 @@ fn three_clicks_rotate_the_selection() {
     // The face survives and stays selected.
     assert_eq!(w.editor.selection(), &[Entity::Face(w.square_face())][..]);
     // The finished angle stays in the box while it can be retyped.
-    assert_eq!(w.editor.measurement(), Some(("Angle", "90.0°".to_string())));
+    assert_eq!(
+        w.editor.measurement(&w.model),
+        Some(("Angle", "90.0°".to_string()))
+    );
     assert!(w.key(EditKey::Undo));
     w.assert_positions(&SQUARE);
 }
@@ -263,7 +272,10 @@ fn cursor_angles_snap_to_15_degrees() {
     assert!((w.angle() - 45.0).abs() < 1e-9, "{}", w.angle());
     w.move_to(at(DVec3::ZERO, 3.0, 40.0));
     assert!((w.angle() - 40.0).abs() < 1e-6, "{}", w.angle());
-    assert_eq!(w.editor.measurement(), Some(("Angle", "40.0°".to_string())));
+    assert_eq!(
+        w.editor.measurement(&w.model),
+        Some(("Angle", "40.0°".to_string()))
+    );
     w.move_to(at(DVec3::ZERO, 3.0, -30.5));
     assert!((w.angle() + 30.0).abs() < 1e-9, "{}", w.angle());
     assert!(w.click(at(DVec3::ZERO, 3.0, -30.5)));
@@ -372,11 +384,17 @@ fn typed_angle_right_after_changes_the_rotation() {
     assert!(w.enter("30"));
     w.assert_positions(&rotated(&SQUARE, DVec3::ZERO, DVec3::Z, 30.0));
     assert_eq!(w.undo_count(), 1);
-    assert_eq!(w.editor.measurement(), Some(("Angle", "30.0°".to_string())));
+    assert_eq!(
+        w.editor.measurement(&w.model),
+        Some(("Angle", "30.0°".to_string()))
+    );
     assert!(w.key(EditKey::Undo));
     w.assert_positions(&SQUARE);
     // After the undo the angle is no longer shown or changeable.
-    assert_eq!(w.editor.measurement(), Some(("Angle", String::new())));
+    assert_eq!(
+        w.editor.measurement(&w.model),
+        Some(("Angle", String::new()))
+    );
     assert!(!w.enter("10"));
     assert_eq!(w.editor.message(), Some("Click the center first"));
     w.assert_positions(&SQUARE);
@@ -451,7 +469,10 @@ fn switching_tools_forgets_the_rotation() {
     w.editor.set_tool(Tool::Line);
     w.editor.set_tool(Tool::Rotate);
     assert_eq!(w.stage(), RotateStage::Center);
-    assert_eq!(w.editor.measurement(), Some(("Angle", String::new())));
+    assert_eq!(
+        w.editor.measurement(&w.model),
+        Some(("Angle", String::new()))
+    );
     assert!(!w.enter("45"));
     w.assert_positions(&rotated(&SQUARE, DVec3::ZERO, DVec3::Z, 90.0));
 }
@@ -500,7 +521,7 @@ fn slab_world() -> World {
         editor: Editor::new(),
         view: view(StandardView::Iso),
     };
-    w.editor.unit = Unit::Meter;
+    set_unit(&mut w.model, Unit::Meter);
     w.draw(&[
         v(0.0, 0.0, 0.0),
         v(2.0, 0.0, 0.0),
@@ -584,4 +605,14 @@ fn points_after_the_center_lie_in_the_protractor_plane() {
     assert!(w.enter("90"));
     let got = w.positions();
     assert!(got.iter().all(|q| q.y.abs() < 1e-6), "{got:?}");
+}
+
+/// Typed numbers and measurements in `unit`, 2 places.
+fn set_unit(model: &mut Model, unit: Unit) {
+    model
+        .set_length_format(
+            modeler_kernel::units::LengthFormat::Decimal { unit, decimals: 2 },
+            &mut modeler_kernel::model::ModelEdit::new(),
+        )
+        .unwrap();
 }

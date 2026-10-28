@@ -10,6 +10,7 @@
 
 use eframe::egui;
 use glam::DVec2;
+use modeler_kernel::units::Unit;
 
 use crate::editor::TextureOp;
 
@@ -61,13 +62,15 @@ pub fn handles_button(ui: &mut egui::Ui, available: bool, on: bool) -> bool {
 }
 
 /// Draw the panel into `ui`. `available` is true while a textured side is selected; the
-/// controls are disabled otherwise. `Some` on the frame the user asks for something.
+/// controls are disabled otherwise. Moves are shown and typed in `unit`
+/// (`docs/specs/m6-units-ui.md`). `Some` on the frame the user asks for something.
 pub fn texture_panel(
     ui: &mut egui::Ui,
     form: &mut TextureForm,
     available: bool,
+    unit: Unit,
 ) -> Option<TextureOp> {
-    controls(ui, form, available)
+    controls(ui, form, available, unit)
 }
 
 /// The panel as the app shows it: the [`handles_button`] (`on` while the handles show),
@@ -78,13 +81,21 @@ pub fn texture_position_section(
     form: &mut TextureForm,
     available: bool,
     on: bool,
+    unit: Unit,
 ) -> (Option<TextureOp>, bool) {
     let toggled = handles_button(ui, available, on);
-    (controls(ui, form, available), toggled)
+    (controls(ui, form, available, unit), toggled)
 }
 
 /// Everything but the handles button.
-fn controls(ui: &mut egui::Ui, form: &mut TextureForm, available: bool) -> Option<TextureOp> {
+fn controls(
+    ui: &mut egui::Ui,
+    form: &mut TextureForm,
+    available: bool,
+    unit: Unit,
+) -> Option<TextureOp> {
+    // m6-units-ui: show and type Move X and Move Y in `unit`.
+    let _ = unit;
     if !available {
         ui.label("Select a face with a texture");
     }

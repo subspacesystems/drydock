@@ -103,7 +103,7 @@ impl World {
         )
         .expect("blue");
         let mut editor = Editor::new();
-        editor.unit = Unit::Meter;
+        set_unit(&mut model, Unit::Meter);
         editor.set_tool(Tool::Paint);
         editor.set_material(Some(red));
         World {
@@ -479,7 +479,7 @@ fn instance_world() -> (Model, InstanceId, MaterialId, Editor) {
     )
     .unwrap();
     let mut editor = Editor::new();
-    editor.unit = Unit::Meter;
+    set_unit(&mut model, Unit::Meter);
     editor.set_tool(Tool::Paint);
     (model, i, red, editor)
 }
@@ -531,4 +531,14 @@ fn alt_clicking_an_instance_samples_its_material() {
     let c = view.project(v(8.0, 2.0, 0.0)).unwrap();
     assert!(!editor.click(&mut model, &view, c, ALT, 1));
     assert_eq!(editor.material(), Some(red));
+}
+
+/// Typed numbers and measurements in `unit`, 2 places.
+fn set_unit(model: &mut Model, unit: Unit) {
+    model
+        .set_length_format(
+            modeler_kernel::units::LengthFormat::Decimal { unit, decimals: 2 },
+            &mut modeler_kernel::model::ModelEdit::new(),
+        )
+        .unwrap();
 }

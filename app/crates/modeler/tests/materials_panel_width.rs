@@ -9,6 +9,7 @@ use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
 use modeler::materials_panel::{MaterialAction, MaterialsPanel, materials_panel};
 use modeler_kernel::model::{Material, MaterialId, Model, ModelEdit};
+use modeler_kernel::units::Unit;
 
 const WIDTH: f32 = 160.0;
 
@@ -154,7 +155,7 @@ fn the_texture_position_panel_fits_the_same_column() {
                 move |ui, state: &mut (TextureForm, f32)| {
                     let response = ui.allocate_ui(egui::vec2(WIDTH, 760.0), |ui| {
                         ui.set_max_width(WIDTH);
-                        let _ = texture_panel(ui, &mut state.0, available);
+                        let _ = texture_panel(ui, &mut state.0, available, Unit::Meter);
                         ui.min_rect().width()
                     });
                     state.1 = response.inner;

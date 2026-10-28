@@ -94,7 +94,7 @@ proptest! {
         let mut model = Model::new();
         wall(&mut model);
         let mut editor = Editor::new();
-        editor.unit = Unit::Meter;
+        set_unit(&mut model, Unit::Meter);
         editor.set_tool([Tool::Rectangle, Tool::Circle, Tool::Arc][usize::from(first)]);
         for op in ops {
             let undo_before = editor.undo_stack().undo_count();
@@ -147,4 +147,14 @@ proptest! {
             }
         }
     }
+}
+
+/// Typed numbers and measurements in `unit`, 2 places.
+fn set_unit(model: &mut Model, unit: Unit) {
+    model
+        .set_length_format(
+            modeler_kernel::units::LengthFormat::Decimal { unit, decimals: 2 },
+            &mut modeler_kernel::model::ModelEdit::new(),
+        )
+        .unwrap();
 }

@@ -67,10 +67,11 @@ impl World {
 
     fn with_view(tool: Tool, standard: StandardView) -> World {
         let mut editor = Editor::new();
-        editor.unit = Unit::Meter;
+        let mut model = Model::new();
+        set_unit(&mut model, Unit::Meter);
         editor.set_tool(tool);
         World {
-            model: Model::new(),
+            model,
             editor,
             view: view(standard),
         }
@@ -135,7 +136,7 @@ impl World {
     }
 
     fn measurement(&self) -> (&'static str, String) {
-        self.editor.measurement().expect("measurement")
+        self.editor.measurement(&self.model).expect("measurement")
     }
 }
 
@@ -558,4 +559,14 @@ fn off_the_face_the_point_stays_in_the_draw_plane() {
     for p in w.vertices() {
         assert!(p.y.abs() < 1e-6, "{p:?}");
     }
+}
+
+/// Typed numbers and measurements in `unit`, 2 places.
+fn set_unit(model: &mut Model, unit: Unit) {
+    model
+        .set_length_format(
+            modeler_kernel::units::LengthFormat::Decimal { unit, decimals: 2 },
+            &mut modeler_kernel::model::ModelEdit::new(),
+        )
+        .unwrap();
 }

@@ -540,11 +540,17 @@ struct State {
     panel: EntityInfoPanel,
     model: Model,
     selection: Vec<Entity>,
-    unit: Unit,
     actions: Vec<InfoAction>,
 }
 
-fn harness(model: Model, selection: Vec<Entity>, unit: Unit) -> Harness<'static, State> {
+/// The panel for `selection`, the model's lengths in `unit` to 2 places.
+fn harness(mut model: Model, selection: Vec<Entity>, unit: Unit) -> Harness<'static, State> {
+    model
+        .set_length_format(
+            modeler_kernel::units::LengthFormat::Decimal { unit, decimals: 2 },
+            &mut modeler_kernel::model::ModelEdit::new(),
+        )
+        .unwrap();
     let mut h = Harness::new_ui_state(
         |ui, state: &mut State| {
             if let Some(action) = entity_info_panel(
@@ -553,7 +559,6 @@ fn harness(model: Model, selection: Vec<Entity>, unit: Unit) -> Harness<'static,
                 &state.model,
                 BodyId::Root,
                 &state.selection,
-                state.unit,
             ) {
                 state.actions.push(action);
             }
@@ -562,7 +567,6 @@ fn harness(model: Model, selection: Vec<Entity>, unit: Unit) -> Harness<'static,
             panel: EntityInfoPanel::default(),
             model,
             selection,
-            unit,
             actions: Vec::new(),
         },
     );

@@ -107,7 +107,7 @@ fn setup() -> (Model, Editor, FaceId, Viewport) {
     let face = square(&mut model, BodyId::Root, &mut log);
     texture_front(&mut model, BodyId::Root, face);
     let mut editor = Editor::new();
-    editor.unit = Unit::Meter;
+    set_unit(&mut model, Unit::Meter);
     editor.set_tool(Tool::Select);
     (model, editor, face, top(-2.0, 5.0))
 }
@@ -554,7 +554,7 @@ fn instance_world() -> (Model, Editor, InstanceId, FaceId, BodyId) {
         )
         .unwrap();
     let mut editor = Editor::new();
-    editor.unit = Unit::Meter;
+    set_unit(&mut model, Unit::Meter);
     editor.set_tool(Tool::Select);
     assert!(editor.open_instance(&model, i));
     (model, editor, i, face, body)
@@ -582,4 +582,14 @@ fn handles_work_inside_an_open_instance() {
     assert!(editor.click(&mut model, &view, px(&view, world(p2)), NONE, 1));
     let m1 = map(&model, body, face);
     assert!(close2(m1.apply(p2), m0.apply(p1)));
+}
+
+/// Typed numbers and measurements in `unit`, 2 places.
+fn set_unit(model: &mut Model, unit: Unit) {
+    model
+        .set_length_format(
+            modeler_kernel::units::LengthFormat::Decimal { unit, decimals: 2 },
+            &mut modeler_kernel::model::ModelEdit::new(),
+        )
+        .unwrap();
 }

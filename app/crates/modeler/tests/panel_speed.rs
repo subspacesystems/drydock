@@ -13,7 +13,6 @@ use modeler::entity_info::*;
 use modeler_kernel::component::make_component;
 use modeler_kernel::model::*;
 use modeler_kernel::select::Entity;
-use modeler_kernel::units::Unit;
 
 fn v(x: f64, y: f64, z: f64) -> DVec3 {
     DVec3::new(x, y, z)
@@ -211,7 +210,6 @@ fn info_harness(model: Model, selection: Vec<Entity>) -> Harness<'static, InfoSt
                 &state.model,
                 BodyId::Root,
                 &state.selection,
-                Unit::Meter,
             );
         },
         InfoState {

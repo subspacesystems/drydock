@@ -1614,8 +1614,12 @@ impl App {
                     Projection::Parallel => "Parallel",
                 });
                 ui.separator();
-                if let Some(editor) = &self.editor {
-                    let measurement = editor.measurement().map(|(label, value)| {
+                if let Some((editor, kernel)) = self.editor.as_ref().zip(
+                    self.model
+                        .as_ref()
+                        .and_then(|document| document.kernel.as_ref()),
+                ) {
+                    let measurement = editor.measurement(kernel).map(|(label, value)| {
                         let label = if label == "Distance"
                             && editor.tool() == Tool::Move
                             && editor.move_copy()
@@ -2102,14 +2106,9 @@ impl App {
                     return actions;
                 };
                 let body = editor.path().body(model).unwrap_or(BodyId::Root);
-                if let Some(action) = entity_info_panel(
-                    ui,
-                    &mut self.entity_info,
-                    model,
-                    body,
-                    editor.selection(),
-                    editor.unit,
-                ) {
+                if let Some(action) =
+                    entity_info_panel(ui, &mut self.entity_info, model, body, editor.selection())
+                {
                     actions.push(PanelAction::Info(action));
                 }
             }
@@ -2169,8 +2168,13 @@ impl App {
                 };
                 let target = self.texture_target(model);
                 let texture_on = editor.texture_handles(model).is_some();
-                let (op, toggled) =
-                    texture_position_section(ui, &mut self.texture, target.is_some(), texture_on);
+                let (op, toggled) = texture_position_section(
+                    ui,
+                    &mut self.texture,
+                    target.is_some(),
+                    texture_on,
+                    model.length_format().input_unit(),
+                );
                 if toggled {
                     actions.push(PanelAction::Handles(if texture_on { None } else { target }));
                 }
@@ -2415,7 +2419,12 @@ impl eframe::App for App {
             }
         }
         if let Some(model) = &self.model {
-            let mut lines = chrome::model_info_lines(&model.stats, model.kernel.is_some());
+            let format = model
+                .kernel
+                .as_ref()
+                .map(Model::length_format)
+                .unwrap_or_default();
+            let mut lines = chrome::model_info_lines(&model.stats, model.kernel.is_some(), format);
             if let Some(state) = frame.wgpu_render_state() {
                 let info = state.adapter.get_info();
                 lines.push(chrome::adapter_line(

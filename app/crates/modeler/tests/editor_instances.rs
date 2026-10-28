@@ -76,8 +76,8 @@ fn world() -> (Model, InstanceId, Editor, Viewport) {
             &mut log,
         )
         .unwrap();
-    let mut editor = Editor::new();
-    editor.unit = Unit::Meter;
+    let editor = Editor::new();
+    set_unit(&mut model, Unit::Meter);
     (model, i, editor, top_view())
 }
 
@@ -142,7 +142,7 @@ fn a_box_over_the_instance_selects_it() {
 #[test]
 fn the_line_tool_snaps_to_an_instance_corner() {
     let (mut model, _, mut editor, view) = world();
-    editor.unit = Unit::Meter;
+    set_unit(&mut model, Unit::Meter);
     editor.set_tool(Tool::Line);
     // A little off the corner (6, 0).
     let c = px(&view, v(6.0, 0.0, 0.0)) + DVec2::new(3.0, -2.0);
@@ -192,4 +192,14 @@ fn the_rectangle_tool_snaps_to_an_instance_corner() {
         "{:?}",
         hint.point
     );
+}
+
+/// Typed numbers and measurements in `unit`, 2 places.
+fn set_unit(model: &mut Model, unit: Unit) {
+    model
+        .set_length_format(
+            modeler_kernel::units::LengthFormat::Decimal { unit, decimals: 2 },
+            &mut modeler_kernel::model::ModelEdit::new(),
+        )
+        .unwrap();
 }

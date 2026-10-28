@@ -80,6 +80,7 @@ fn section(available: bool, on: bool) -> Harness<'static, State> {
                 &mut form,
                 state.available,
                 state.on,
+                modeler_kernel::units::Unit::Meter,
             );
             if toggled {
                 state.clicks += 1;

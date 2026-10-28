@@ -78,7 +78,7 @@ impl World {
             editor: Editor::new(),
             view: view(StandardView::Top),
         };
-        w.editor.unit = Unit::Meter;
+        set_unit(&mut w.model, Unit::Meter);
         let n = SQUARE.len();
         let segs: Vec<_> = (0..n).map(|i| (SQUARE[i], SQUARE[(i + 1) % n])).collect();
         let mut undo = UndoStack::new();
@@ -179,7 +179,10 @@ fn move_tool_only_with_move() {
 #[test]
 fn measurement_is_an_empty_distance_at_first() {
     let w = World::new();
-    assert_eq!(w.editor.measurement(), Some(("Distance", String::new())));
+    assert_eq!(
+        w.editor.measurement(&w.model),
+        Some(("Distance", String::new()))
+    );
     assert!(w.editor.preview().is_empty());
 }
 
@@ -188,14 +191,14 @@ fn two_clicks_move_the_selection() {
     let mut w = World::new();
     w.select_square();
     w.start_moving();
-    assert_eq!(w.editor.measurement(), Some(("Distance", f(3.0))));
+    assert_eq!(w.editor.measurement(&w.model), Some(("Distance", f(3.0))));
     assert!(w.click(v(4.5, 0.5, 0.0)));
     w.assert_positions(&shifted(&SQUARE, v(3.0, 0.0, 0.0)));
     assert_eq!(w.undo_count(), 1);
     assert_eq!(w.stage(), MoveStage::From);
     assert_eq!(w.editor.message(), None);
     assert_eq!(w.editor.selection(), &[Entity::Face(w.square_face())][..]);
-    assert_eq!(w.editor.measurement(), Some(("Distance", f(3.0))));
+    assert_eq!(w.editor.measurement(&w.model), Some(("Distance", f(3.0))));
     assert!(w.key(EditKey::Undo));
     w.assert_positions(&SQUARE);
 }
@@ -276,7 +279,7 @@ fn typed_distance_right_after_changes_the_move() {
     assert!(w.enter("1"));
     w.assert_positions(&shifted(&SQUARE, v(1.0, 0.0, 0.0)));
     assert_eq!(w.undo_count(), 1);
-    assert_eq!(w.editor.measurement(), Some(("Distance", f(1.0))));
+    assert_eq!(w.editor.measurement(&w.model), Some(("Distance", f(1.0))));
     assert!(w.enter("-2"));
     w.assert_positions(&shifted(&SQUARE, v(-2.0, 0.0, 0.0)));
     assert_eq!(w.undo_count(), 1);
@@ -355,5 +358,18 @@ fn switching_tools_forgets_the_move() {
     w.editor.set_tool(Tool::Select);
     w.editor.set_tool(Tool::Move);
     assert!(!w.enter("1"));
-    assert_eq!(w.editor.measurement(), Some(("Distance", String::new())));
+    assert_eq!(
+        w.editor.measurement(&w.model),
+        Some(("Distance", String::new()))
+    );
+}
+
+/// Typed numbers and measurements in `unit`, 2 places.
+fn set_unit(model: &mut Model, unit: Unit) {
+    model
+        .set_length_format(
+            modeler_kernel::units::LengthFormat::Decimal { unit, decimals: 2 },
+            &mut modeler_kernel::model::ModelEdit::new(),
+        )
+        .unwrap();
 }

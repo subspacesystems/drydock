@@ -45,7 +45,7 @@ use modeler_kernel::tools::translate::{MoveError, MoveStage, MoveTool};
 use modeler_kernel::tools::{Input, Target, ToolError};
 use modeler_kernel::topology::FaceId;
 use modeler_kernel::transform;
-use modeler_kernel::units::{self, Unit};
+use modeler_kernel::units::{self, LengthFormat, Unit};
 use modeler_view::{Camera, Projection};
 
 use crate::input::{EditKey, Modifiers, Tool};
@@ -277,8 +277,6 @@ struct TextureHandleState {
 }
 
 pub struct Editor {
-    /// The unit for typed numbers without a unit, and for the measurement display.
-    pub unit: Unit,
     tool: Tool,
     selection: Vec<Entity>,
     undo: UndoStack,
@@ -441,10 +439,9 @@ fn box_edges(bounds: Bounds) -> Vec<(DVec3, DVec3)> {
 }
 
 impl Editor {
-    /// Orbit tool, nothing selected, empty undo stack, inches.
+    /// Orbit tool, nothing selected, empty undo stack.
     pub fn new() -> Editor {
         Editor {
-            unit: Unit::Inch,
             tool: Tool::Orbit,
             selection: Vec::new(),
             undo: UndoStack::new(),
@@ -724,12 +721,13 @@ impl Editor {
         match inf {
             Some(inf) => {
                 self.hint = Some(inf);
+                let unit = model.length_format().input_unit();
                 let body = self.body(model);
                 let mut target = Target {
                     model,
                     body,
                     undo: &mut self.undo,
-                    unit: self.unit,
+                    unit,
                 };
                 let _ = self.line.handle(Input::Move(inf.point), &mut target);
             }
@@ -768,12 +766,13 @@ impl Editor {
                 };
                 self.hint = Some(inf);
                 let result = {
+                    let unit = model.length_format().input_unit();
                     let body = self.body(model);
                     let mut target = Target {
                         model,
                         body,
                         undo: &mut self.undo,
-                        unit: self.unit,
+                        unit,
                     };
                     self.line.handle(Input::Click(inf.point), &mut target)
                 };
@@ -1003,12 +1002,13 @@ impl Editor {
                 }
                 let before = self.undo.undo_count();
                 let result = if self.tool == Tool::Line {
+                    let unit = model.length_format().input_unit();
                     let body = self.body(model);
                     let mut target = Target {
                         model,
                         body,
                         undo: &mut self.undo,
-                        unit: self.unit,
+                        unit,
                     };
                     self.line.handle(Input::Typed(text), &mut target)
                 } else {
@@ -1120,11 +1120,13 @@ impl Editor {
         &self.typed
     }
 
-    /// The measurement box's label and value for the shape in progress.
-    pub fn measurement(&self) -> Option<(&'static str, String)> {
+    /// The measurement box's label and value for the shape in progress, lengths in
+    /// `model`'s length format.
+    pub fn measurement(&self, model: &Model) -> Option<(&'static str, String)> {
         let scale = self.world().to_scale_rotation_translation().0;
         let factor = scale.length() / 3f64.sqrt();
-        let length = |value: f64| units::format_length(value * factor, self.unit, 2);
+        let format = model.length_format();
+        let length = |value: f64| units::format_with(value * factor, format);
         match self.tool {
             Tool::Line => {
                 let value = match self.line.length() {
@@ -2195,6 +2197,14 @@ impl Editor {
         }
     }
 
+    /// Replace the model's length format as one undo step "Set Units" (none when nothing
+    /// changes). True when accepted; false with a message when refused.
+    /// Behaviour: `docs/specs/m6-units-ui.md`.
+    pub fn set_length_format(&mut self, model: &mut Model, format: LengthFormat) -> bool {
+        let _ = (model, format);
+        unimplemented!("m6-units-ui")
+    }
+
     /// Position the texture on `side` of `face` in the open body: apply `op` to the map in
     /// use there. One undo step "Position Texture" ("Reset Texture" for `Reset`). True when
     /// the model changed. Behaviour: `docs/specs/m4-app-texture-position.md`.
@@ -2954,7 +2964,7 @@ impl Editor {
     }
 
     fn enter_push(&mut self, text: String, model: &mut Model) -> bool {
-        let length = match units::parse_length(&text, self.unit) {
+        let length = match units::parse_length(&text, model.length_format().input_unit()) {
             Ok(length) => length,
             Err(_) => {
                 self.message = Some("Not a length".to_string());
@@ -3074,12 +3084,13 @@ impl Editor {
     }
 
     fn handle_shape(&mut self, input: Input, model: &mut Model) -> Result<(), ToolError> {
+        let unit = model.length_format().input_unit();
         let body = self.body(model);
         let mut target = Target {
             model,
             body,
             undo: &mut self.undo,
-            unit: self.unit,
+            unit,
         };
         match self.tool {
             Tool::Rectangle => self.rect.handle(input, &mut target),
@@ -3097,7 +3108,7 @@ impl Editor {
             model: &mut model,
             body: BodyId::Root,
             undo: &mut undo,
-            unit: self.unit,
+            unit: Unit::Inch,
         };
         let _ = self.rect.handle(Input::Cancel, &mut target);
         let _ = self.circle.handle(Input::Cancel, &mut target);
@@ -3117,12 +3128,13 @@ impl Editor {
         let point = self.rotate_input_point(inf, origin, dir);
         self.hint = Some(Inference { point, ..inf });
         self.rotate.set_angle_snap(free_point(&inf));
+        let unit = model.length_format().input_unit();
         let body = self.body(model);
         let mut target = Target {
             model,
             body,
             undo: &mut self.undo,
-            unit: self.unit,
+            unit,
         };
         let _ = self
             .rotate
@@ -3155,12 +3167,13 @@ impl Editor {
         self.hint = Some(Inference { point, ..inf });
         self.rotate.set_angle_snap(free_point(&inf));
         let result = {
+            let unit = model.length_format().input_unit();
             let body = self.body(model);
             let mut target = Target {
                 model,
                 body,
                 undo: &mut self.undo,
-                unit: self.unit,
+                unit,
             };
             self.rotate
                 .handle(Input::Click(point), &self.selection, &mut target)
@@ -3185,12 +3198,13 @@ impl Editor {
         let before = self.undo.undo_count();
         let before_angle = self.rotate.last_angle(&self.undo);
         let result = {
+            let unit = model.length_format().input_unit();
             let body = self.body(model);
             let mut target = Target {
                 model,
                 body,
                 undo: &mut self.undo,
-                unit: self.unit,
+                unit,
             };
             self.rotate
                 .handle(Input::Typed(text), &self.selection, &mut target)
@@ -3215,7 +3229,7 @@ impl Editor {
             model: &mut model,
             body: BodyId::Root,
             undo: &mut undo,
-            unit: self.unit,
+            unit: Unit::Inch,
         };
         let _ = self.rotate.handle(Input::Cancel, &[], &mut target);
         self.rotate_segments.clear();
@@ -3276,12 +3290,13 @@ impl Editor {
             return;
         };
         self.hint = Some(inf);
+        let unit = model.length_format().input_unit();
         let body = self.body(model);
         let mut target = Target {
             model,
             body,
             undo: &mut self.undo,
-            unit: self.unit,
+            unit,
         };
         let _ = self
             .scale
@@ -3326,12 +3341,13 @@ impl Editor {
         self.hint = Some(inf);
         let before = self.undo.undo_count();
         let result = {
+            let unit = model.length_format().input_unit();
             let body = self.body(model);
             let mut target = Target {
                 model,
                 body,
                 undo: &mut self.undo,
-                unit: self.unit,
+                unit,
             };
             self.scale
                 .handle(Input::Click(inf.point), &self.selection, &mut target)
@@ -3351,12 +3367,13 @@ impl Editor {
         let before = self.undo.undo_count();
         let before_factors = self.scale.last_factors(&self.undo);
         let result = {
+            let unit = model.length_format().input_unit();
             let body = self.body(model);
             let mut target = Target {
                 model,
                 body,
                 undo: &mut self.undo,
-                unit: self.unit,
+                unit,
             };
             self.scale
                 .handle(Input::Typed(text), &self.selection, &mut target)
@@ -3383,7 +3400,7 @@ impl Editor {
             model: &mut model,
             body: BodyId::Root,
             undo: &mut undo,
-            unit: self.unit,
+            unit: Unit::Inch,
         };
         let _ = self.scale.handle(Input::Cancel, &[], &mut target);
         self.scale_segments.clear();
@@ -3417,12 +3434,13 @@ impl Editor {
             return;
         };
         self.hint = Some(inf);
+        let unit = model.length_format().input_unit();
         let body = self.body(model);
         let mut target = Target {
             model,
             body,
             undo: &mut self.undo,
-            unit: self.unit,
+            unit,
         };
         let _ = self
             .translate
@@ -3450,12 +3468,13 @@ impl Editor {
         self.hint = Some(inf);
         if !was_from && self.move_copy {
             {
+                let unit = model.length_format().input_unit();
                 let body = self.body(model);
                 let mut target = Target {
                     model,
                     body,
                     undo: &mut self.undo,
-                    unit: self.unit,
+                    unit,
                 };
                 let _ = self
                     .translate
@@ -3483,12 +3502,13 @@ impl Editor {
             }
         }
         let result = {
+            let unit = model.length_format().input_unit();
             let body = self.body(model);
             let mut target = Target {
                 model,
                 body,
                 undo: &mut self.undo,
-                unit: self.unit,
+                unit,
             };
             self.translate
                 .handle(Input::Click(inf.point), &self.selection, &mut target)
@@ -3513,7 +3533,7 @@ impl Editor {
         let before = self.undo.undo_count();
         let before_offset = self.translate.last_offset(&self.undo);
         if self.move_copy && self.translate.stage() == MoveStage::To {
-            let value = match units::parse_length(&text, self.unit) {
+            let value = match units::parse_length(&text, model.length_format().input_unit()) {
                 Ok(value) => value,
                 Err(error) => {
                     self.message = Some(move_error_message(&MoveError::Parse(error)).to_string());
@@ -3550,12 +3570,13 @@ impl Editor {
             }
         }
         let result = {
+            let unit = model.length_format().input_unit();
             let body = self.body(model);
             let mut target = Target {
                 model,
                 body,
                 undo: &mut self.undo,
-                unit: self.unit,
+                unit,
             };
             self.translate
                 .handle(Input::Typed(text), &self.selection, &mut target)
@@ -3580,7 +3601,7 @@ impl Editor {
             model: &mut model,
             body: BodyId::Root,
             undo: &mut undo,
-            unit: self.unit,
+            unit: Unit::Inch,
         };
         let _ = self.translate.handle(Input::Cancel, &[], &mut target);
         self.move_segments.clear();
@@ -3593,12 +3614,13 @@ impl Editor {
             return;
         };
         self.hint = Some(inf);
+        let unit = model.length_format().input_unit();
         let body = self.body(model);
         let mut target = Target {
             model,
             body,
             undo: &mut self.undo,
-            unit: self.unit,
+            unit,
         };
         let _ = self.tape.handle(Input::Move(inf.point), &mut target);
     }
@@ -3613,12 +3635,13 @@ impl Editor {
         };
         self.hint = Some(inf);
         let result = {
+            let unit = model.length_format().input_unit();
             let body = self.body(model);
             let mut target = Target {
                 model,
                 body,
                 undo: &mut self.undo,
-                unit: self.unit,
+                unit,
             };
             self.tape.handle(Input::Click(inf.point), &mut target)
         };
@@ -3632,12 +3655,13 @@ impl Editor {
     fn enter_tape(&mut self, text: String, model: &mut Model) -> bool {
         let before = self.undo.undo_count();
         let result = {
+            let unit = model.length_format().input_unit();
             let body = self.body(model);
             let mut target = Target {
                 model,
                 body,
                 undo: &mut self.undo,
-                unit: self.unit,
+                unit,
             };
             self.tape.handle(Input::Typed(text), &mut target)
         };
@@ -3655,7 +3679,7 @@ impl Editor {
             model: &mut model,
             body: BodyId::Root,
             undo: &mut undo,
-            unit: self.unit,
+            unit: Unit::Inch,
         };
         let _ = self.tape.handle(Input::Cancel, &mut target);
     }

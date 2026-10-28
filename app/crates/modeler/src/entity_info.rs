@@ -331,16 +331,17 @@ impl DescribeCache {
     }
 }
 
-/// Draw the panel into `ui` for `selection` in `body`, lengths in `unit`. `Some` on the
-/// frame the user renames something.
+/// Draw the panel into `ui` for `selection` in `body`, lengths and areas in `model`'s length
+/// format (`docs/specs/m6-units-ui.md`). `Some` on the frame the user renames something.
 pub fn entity_info_panel(
     ui: &mut egui::Ui,
     panel: &mut EntityInfoPanel,
     model: &Model,
     body: BodyId,
     selection: &[Entity],
-    unit: Unit,
 ) -> Option<InfoAction> {
+    // m6-units-ui: write lengths with `format_with` and areas with `format_area_with`.
+    let unit = model.length_format().input_unit();
     let info = panel.cache.get(model, body, selection).clone();
     let mut action = None;
 

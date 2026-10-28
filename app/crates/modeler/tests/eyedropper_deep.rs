@@ -151,7 +151,7 @@ impl World {
         let plain = square_def(&mut model, "plain");
         place(&mut model, plain, v(0.0, 6.0, 0.0), Some(red));
         let mut editor = Editor::new();
-        editor.unit = Unit::Meter;
+        set_unit(&mut model, Unit::Meter);
         editor.set_tool(Tool::Select);
         World {
             model,
@@ -236,4 +236,14 @@ fn empty_space_keeps_waiting() {
     w.click_with(v(12.0, 12.0, 0.0), NONE);
     assert_eq!(w.editor.material(), Some(w.red));
     assert!(w.editor.eyedropper_armed(), "still armed");
+}
+
+/// Typed numbers and measurements in `unit`, 2 places.
+fn set_unit(model: &mut Model, unit: Unit) {
+    model
+        .set_length_format(
+            modeler_kernel::units::LengthFormat::Decimal { unit, decimals: 2 },
+            &mut modeler_kernel::model::ModelEdit::new(),
+        )
+        .unwrap();
 }

@@ -126,7 +126,7 @@ impl World {
         )
         .expect("paint");
         let mut editor = Editor::new();
-        editor.unit = Unit::Meter;
+        set_unit(&mut model, Unit::Meter);
         editor.set_tool(Tool::Select);
         editor.set_material(Some(red));
         World {
@@ -358,4 +358,14 @@ fn while_armed_the_button_is_pushed_in_and_a_click_cancels() {
     h.get_by_label("Eyedropper").click();
     h.run();
     assert_eq!(h.state().actions, vec![MaterialAction::CancelEyedropper]);
+}
+
+/// Typed numbers and measurements in `unit`, 2 places.
+fn set_unit(model: &mut Model, unit: Unit) {
+    model
+        .set_length_format(
+            modeler_kernel::units::LengthFormat::Decimal { unit, decimals: 2 },
+            &mut modeler_kernel::model::ModelEdit::new(),
+        )
+        .unwrap();
 }

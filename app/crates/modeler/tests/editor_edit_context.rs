@@ -93,7 +93,7 @@ impl World {
             )
             .unwrap();
         let mut editor = Editor::new();
-        editor.unit = Unit::Meter;
+        set_unit(&mut model, Unit::Meter);
         editor.set_tool(Tool::Select);
         World {
             model,
@@ -445,4 +445,14 @@ fn the_root_behaves_as_before_when_nothing_is_open() {
     w.editor.set_tool(Tool::Erase);
     assert!(w.click(v(-3.0, -4.0, 0.0), 1));
     assert_eq!(w.model.root().geometry().edge_count(), 0);
+}
+
+/// Typed numbers and measurements in `unit`, 2 places.
+fn set_unit(model: &mut Model, unit: Unit) {
+    model
+        .set_length_format(
+            modeler_kernel::units::LengthFormat::Decimal { unit, decimals: 2 },
+            &mut modeler_kernel::model::ModelEdit::new(),
+        )
+        .unwrap();
 }
