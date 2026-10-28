@@ -13,7 +13,7 @@ use std::rc::Rc;
 
 use crate::editpath::EditPath;
 use crate::geom::{self, Containment};
-use crate::model::{BodyId, DefinitionId, InstanceId, Model};
+use crate::model::{BodyId, DefinitionId, InstanceId, MaterialId, Model};
 use crate::select::Entity;
 use crate::topology::{Context, EdgeId, FaceId, VertexId};
 use glam::{DMat4, DVec2, DVec3};
@@ -1250,6 +1250,23 @@ pub fn pick_in(model: &Model, path: &EditPath, rest: bool, probe: &Probe) -> Opt
         Owner::Instance(id) => Some(Entity::Instance(id)),
         Owner::Rest => None,
     })
+}
+
+/// The material drawn where the ray of `probe` first meets a face, with the body open at
+/// `path` and, with `rest`, the rest of the model (`docs/specs/m6-eyedropper-deep.md`). The
+/// probe is in the open body's coordinates. Faces at any depth inside instances count. The
+/// result is the material on the side of that face the ray sees, or, when that side is
+/// unpainted, the material of the innermost painted instance that holds the face (the
+/// open path's instances included); `Some(None)` is the default material. `None` when the
+/// ray meets no face or the path doesn't resolve. Edges are ignored.
+pub fn material_in(
+    model: &Model,
+    path: &EditPath,
+    rest: bool,
+    probe: &Probe,
+) -> Option<Option<MaterialId>> {
+    let _ = (model, path, rest, probe);
+    unimplemented!("m6-eyedropper-deep")
 }
 
 /// Like [`infer_model`], for the body open at `path` (`docs/specs/m4-edit-path.md`). The probe
