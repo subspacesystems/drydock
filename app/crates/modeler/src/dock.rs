@@ -694,17 +694,13 @@ pub struct StackRow {
 /// Height of every row (header included) in a column `available` points tall.
 pub fn stack_heights(available: f32, rows: &[StackRow]) -> Vec<f32> {
     let minimum = HEADER_HEIGHT + MIN_BODY;
-    let mut heights = vec![HEADER_HEIGHT; rows.len()];
-    let collapsed = rows.iter().filter(|row| row.collapsed).count();
-    let mut remaining = available - collapsed as f32 * HEADER_HEIGHT;
-
-    let mut expanded: Vec<usize> = (0..rows.len())
-        .filter(|&index| !rows[index].collapsed)
-        .collect();
-    if expanded.is_empty() {
-        return heights;
+    if rows.is_empty() {
+        return Vec::new();
     }
+    let mut heights = vec![minimum; rows.len()];
+    let mut remaining = available;
 
+    let mut expanded: Vec<usize> = (0..rows.len()).collect();
     loop {
         let weight = |index: usize| {
             let weight = rows[index].weight;
@@ -731,6 +727,12 @@ pub fn stack_heights(available: f32, rows: &[StackRow]) -> Vec<f32> {
             break;
         }
     }
+
+    for (height, row) in heights.iter_mut().zip(rows) {
+        if row.collapsed {
+            *height = HEADER_HEIGHT;
+        }
+    }
     heights
 }
 
@@ -753,12 +755,14 @@ pub fn drag_splitter(rows: &mut [StackRow], heights: &[f32], index: usize, delta
     } else {
         0.0
     };
-    let mut moved = heights.to_vec();
-    moved[index] = top + delta;
-    moved[index + 1] = bottom - delta;
-    for (row, &height) in rows.iter_mut().zip(&moved) {
-        if !row.collapsed {
-            row.weight = height;
-        }
-    }
+
+    let weight = |row: &StackRow| {
+        let weight = row.weight;
+        if weight > 0.0 { weight } else { 1.0 }
+    };
+    let pair = weight(&rows[index]) + weight(&rows[index + 1]);
+    let top = top + delta;
+    let bottom = bottom - delta;
+    rows[index].weight = pair * top / (top + bottom);
+    rows[index + 1].weight = pair * bottom / (top + bottom);
 }
