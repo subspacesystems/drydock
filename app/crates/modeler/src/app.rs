@@ -22,6 +22,7 @@ use modeler::document::{Document, FileKind, native_path, resolve_texture_path};
 use modeler::editor::{Editor, TextureOp, Viewport as EditorViewport};
 use modeler::entity_info::{EntityInfoPanel, InfoAction, entity_info_panel};
 use modeler::hints::hint_label;
+use modeler::icons::{self, Icon};
 use modeler::input::{self, Button, Modifiers, Tool};
 use modeler::look;
 use modeler::materials_panel::{MaterialAction, MaterialsPanel, materials_panel};
@@ -977,6 +978,14 @@ impl App {
         });
         let tool = self.editor.as_ref().map(Editor::tool);
         if response.contains_pointer()
+            && self
+                .editor
+                .as_ref()
+                .is_some_and(|editor| editor.eyedropper_armed())
+        {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::None);
+        }
+        if response.contains_pointer()
             && let Some(handles) = self.editor.as_ref().and_then(|editor| {
                 self.model
                     .as_ref()
@@ -1474,6 +1483,27 @@ impl App {
                 egui::StrokeKind::Inside,
             );
             painter.galley(box_rect.min + padding, galley, color);
+        }
+        if editor.eyedropper_armed()
+            && let Some(pointer) = ui.ctx().input(|input| input.pointer.latest_pos())
+            && rect.contains(pointer)
+        {
+            let cursor_rect = icons::eyedropper_cursor_rect(pointer);
+            let painter = ui.ctx().layer_painter(egui::LayerId::new(
+                egui::Order::Foreground,
+                egui::Id::new("eyedropper-cursor"),
+            ));
+            let color = ui.style().visuals.text_color();
+            let brightness = u32::from(color.r()) + u32::from(color.g()) + u32::from(color.b());
+            let contrast = if brightness > 384 {
+                Color32::BLACK
+            } else {
+                Color32::WHITE
+            };
+            let shadow =
+                Rect::from_min_size(cursor_rect.min + egui::vec2(1.0, 1.0), cursor_rect.size());
+            icons::paint(&painter, shadow, Icon::Eyedropper, contrast);
+            icons::paint(&painter, cursor_rect, Icon::Eyedropper, color);
         }
     }
 
@@ -2092,6 +2122,7 @@ impl App {
                     return actions;
                 };
                 let current = editor.material();
+                self.materials.eyedropper_armed = editor.eyedropper_armed();
                 if let Some(action) = materials_panel(ui, &mut self.materials, model, current) {
                     actions.push(PanelAction::Material(action));
                 }

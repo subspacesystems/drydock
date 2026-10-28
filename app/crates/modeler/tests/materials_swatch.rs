@@ -180,10 +180,16 @@ fn a_tile_shows_the_image_above_its_name() {
     let rects = drawn_with(&h, id);
     assert_eq!(rects.len(), 1, "{rects:?}");
     let swatch = rects[0];
-    assert!((swatch.width() - 64.0).abs() < 0.5, "{swatch:?}");
-    assert!((swatch.height() - 40.0).abs() < 0.5, "{swatch:?}");
-    let label = h.get_by_label("Oak").rect();
-    assert!(swatch.bottom() <= label.top() + 0.5, "{swatch:?} {label:?}");
+    // m6-eyedropper-2: the tile is one widget (swatch and name) and the swatch may be
+    // inset a little so the selection box shows around it.
+    assert!((52.0..=64.5).contains(&swatch.width()), "{swatch:?}");
+    assert!((32.0..=40.5).contains(&swatch.height()), "{swatch:?}");
+    let tile = h.get_by_label("Oak").rect();
+    assert!(tile.contains_rect(swatch), "{swatch:?} {tile:?}");
+    assert!(
+        swatch.bottom() <= tile.bottom() - 16.0,
+        "the name goes under the image: {swatch:?} {tile:?}"
+    );
 }
 
 #[test]

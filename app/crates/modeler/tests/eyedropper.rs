@@ -2,11 +2,12 @@
 // Copyright (C) 2026 Subspace Systems
 
 //! m6-eyedropper: the Materials panel's eyedropper button and the editor's armed sampling
-//! click. See docs/specs/m6-eyedropper.md.
+//! click. See docs/specs/m6-eyedropper.md; m6-eyedropper-2 (docs/specs/m6-eyedropper-2.md)
+//! keeps the tool after a sample and makes the button a toggle.
 
 use eframe::egui;
 use egui_kittest::Harness;
-use egui_kittest::kittest::Queryable;
+use egui_kittest::kittest::{NodeT, Queryable};
 use glam::{DVec2, DVec3};
 use modeler::editor::*;
 use modeler::icons::BUTTON_SIZE;
@@ -164,7 +165,7 @@ fn a_new_editor_is_not_armed() {
 }
 
 #[test]
-fn the_next_click_samples_in_any_tool_and_switches_to_the_paint_bucket() {
+fn the_next_click_samples_in_any_tool_and_keeps_the_tool() {
     let mut w = World::new();
     w.editor.arm_eyedropper();
     assert!(w.editor.eyedropper_armed());
@@ -172,7 +173,7 @@ fn the_next_click_samples_in_any_tool_and_switches_to_the_paint_bucket() {
     let before = w.model.clone();
     assert!(!w.click(PAINTED), "sampling changes nothing in the model");
     assert_eq!(w.editor.material(), Some(w.blue));
-    assert_eq!(w.editor.tool(), Tool::Paint);
+    assert_eq!(w.editor.tool(), Tool::Select, "sampling keeps the tool");
     assert!(!w.editor.eyedropper_armed(), "one shot");
     assert_eq!(w.model, before);
     assert_eq!(w.steps(), 0);
@@ -185,15 +186,44 @@ fn sampling_an_unpainted_face_makes_the_default_material_current() {
     w.editor.arm_eyedropper();
     w.click(UNPAINTED);
     assert_eq!(w.editor.material(), None);
-    assert_eq!(w.editor.tool(), Tool::Paint);
+    assert_eq!(w.editor.tool(), Tool::Select);
     assert!(!w.editor.eyedropper_armed());
 }
 
 #[test]
-fn the_click_after_a_sample_paints_normally() {
+fn the_click_after_a_sample_acts_in_the_tool_that_was_active() {
     let mut w = World::new();
     w.editor.arm_eyedropper();
     w.click(PAINTED);
+    let before = w.model.clone();
+    assert!(!w.click(UNPAINTED), "a Select click paints nothing");
+    assert_eq!(w.model, before);
+    assert_eq!(w.steps(), 0);
+    assert_eq!(w.editor.selection().len(), 1, "a plain Select click");
+}
+
+#[test]
+fn a_double_click_while_armed_samples_and_paints_nothing() {
+    let mut w = World::new();
+    w.editor.arm_eyedropper();
+    let c = w.px(UNPAINTED);
+    w.editor.pointer_move(&mut w.model, &w.view, c, NONE);
+    let before = w.model.clone();
+    w.editor.click(&mut w.model, &w.view, c, NONE, 1);
+    w.editor.click(&mut w.model, &w.view, c, NONE, 2);
+    assert_eq!(w.editor.material(), None, "the first click sampled");
+    assert_eq!(w.editor.tool(), Tool::Select);
+    assert_eq!(w.model, before, "the second click painted nothing");
+    assert_eq!(w.steps(), 0);
+}
+
+#[test]
+fn in_the_paint_bucket_the_click_after_a_sample_paints_with_it() {
+    let mut w = World::new();
+    w.editor.set_tool(Tool::Paint);
+    w.editor.arm_eyedropper();
+    w.click(PAINTED);
+    assert_eq!(w.editor.tool(), Tool::Paint);
     assert!(
         w.click(UNPAINTED),
         "the Paint Bucket paints with the sample"
@@ -207,6 +237,21 @@ fn the_click_after_a_sample_paints_normally() {
         })
         .count();
     assert_eq!(painted, 2);
+}
+
+#[test]
+fn disarm_eyedropper_disarms_and_changes_nothing_else() {
+    let mut w = World::new();
+    w.editor.disarm_eyedropper();
+    assert!(!w.editor.eyedropper_armed(), "a no-op when not armed");
+    w.editor.arm_eyedropper();
+    w.editor.disarm_eyedropper();
+    assert!(!w.editor.eyedropper_armed());
+    assert_eq!(w.editor.tool(), Tool::Select);
+    assert_eq!(w.editor.material(), Some(w.red));
+    w.click(PAINTED);
+    assert_eq!(w.editor.material(), Some(w.red), "the next click selects");
+    assert_eq!(w.editor.selection().len(), 1);
 }
 
 #[test]
@@ -297,4 +342,20 @@ fn the_eyedropper_button_has_a_tooltip_and_asks_to_arm() {
     h.get_by_label("Eyedropper").click();
     h.run();
     assert_eq!(h.state().actions, vec![MaterialAction::Eyedropper]);
+}
+
+#[test]
+fn while_armed_the_button_is_pushed_in_and_a_click_cancels() {
+    use egui::accesskit::Toggled;
+    let mut h = harness();
+    let pushed = |h: &Harness<'_, State>| {
+        h.get_by_label("Eyedropper").accesskit_node().toggled() == Some(Toggled::True)
+    };
+    assert!(!pushed(&h));
+    h.state_mut().panel.eyedropper_armed = true;
+    h.run();
+    assert!(pushed(&h), "pushed in while armed");
+    h.get_by_label("Eyedropper").click();
+    h.run();
+    assert_eq!(h.state().actions, vec![MaterialAction::CancelEyedropper]);
 }

@@ -419,9 +419,14 @@ pub fn shapes(icon: Icon, rect: Rect, color: Color32) -> Vec<Shape> {
             d.seg(rotate((0.4, -0.17), a), rotate((0.4, 0.17), a));
         }
         Icon::Eyedropper => {
-            d.circle(0.42, -0.42, 0.3);
-            d.seg((0.2, -0.2), (-0.42, 0.42));
-            d.poly(&[(-0.38, 0.5), (-0.55, 0.35), (-0.72, 0.72)]);
+            // A pipette on the diagonal: a solid bulb top right, a short collar across
+            // it, then a narrow tube to a pointed tip at the bottom left.
+            let bulb = (0.42, -0.42);
+            d.dot(bulb.0, bulb.1, 0.28);
+            d.seg((-0.006, -0.306), (0.306, -0.006));
+            d.seg((0.103, -0.003), (-0.527, 0.633));
+            d.seg((-0.003, -0.103), (-0.633, 0.527));
+            d.poly(&[(-0.527, 0.633), (-0.633, 0.527), (-0.72, 0.72)]);
         }
         Icon::Purge => {
             d.line(&[(-0.2, -0.5), (-0.2, -0.72), (0.2, -0.72), (0.2, -0.5)]);
@@ -443,8 +448,9 @@ pub const CURSOR_SIZE: f32 = 24.0;
 /// `CURSOR_SIZE` square placed so the pipette's tip is at the pointer
 /// (`docs/specs/m6-eyedropper-2.md`).
 pub fn eyedropper_cursor_rect(pointer: Pos2) -> Rect {
-    let _ = pointer;
-    unimplemented!()
+    let half = CURSOR_SIZE * 0.45;
+    let tip = vec2(-0.72, 0.72);
+    Rect::from_center_size(pointer - tip * half, Vec2::splat(CURSOR_SIZE))
 }
 
 /// Draw `icon` inside `rect`.
