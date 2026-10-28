@@ -524,8 +524,24 @@ pub const SIDE_MARGIN: f32 = 3.0;
 /// exactly as wide as a toolbar column (`icons::BUTTON_SIZE` plus `SIDE_MARGIN` each side),
 /// not resizable (`docs/specs/m6-toolbar-side-width.md`).
 pub fn edge_panel(edge: Edge, style: &egui::Style) -> egui::Panel {
-    let _ = (edge, style);
-    unimplemented!()
+    match edge {
+        Edge::Top => egui::Panel::top("toolbars-top"),
+        Edge::Bottom => egui::Panel::bottom("toolbars-bottom"),
+        Edge::Left => egui::Panel::left("toolbars-left")
+            .resizable(false)
+            .exact_size(icons::BUTTON_SIZE + 2.0 * SIDE_MARGIN)
+            .frame(
+                egui::Frame::side_top_panel(style)
+                    .inner_margin(egui::Margin::symmetric(SIDE_MARGIN as i8, 2)),
+            ),
+        Edge::Right => egui::Panel::right("toolbars-right")
+            .resizable(false)
+            .exact_size(icons::BUTTON_SIZE + 2.0 * SIDE_MARGIN)
+            .frame(
+                egui::Frame::side_top_panel(style)
+                    .inner_margin(egui::Margin::symmetric(SIDE_MARGIN as i8, 2)),
+            ),
+    }
 }
 
 /// What a drawn toolbar reports for the frame.
