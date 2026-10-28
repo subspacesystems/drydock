@@ -275,12 +275,12 @@ fn new_opens_the_form_with_defaults() {
     assert_eq!(h.state().panel.form, Some(MaterialForm::new_material()));
     assert!(h.state().actions.is_empty());
     h.get_by_label("New Material");
-    h.get_by_label("Name");
-    h.get_by_label("Color");
-    h.get_by_label("Opacity");
-    h.get_by_label("Texture image");
-    h.get_by_label("Width (m)");
-    h.get_by_label("Height (m)");
+    h.get_by_label("Name:");
+    h.get_by_label("Color:");
+    h.get_by_label("Opacity:");
+    h.get_by_label("Texture image:");
+    h.get_by_label("Width (m):");
+    h.get_by_label("Height (m):");
     h.get_by_label("OK");
     h.get_by_label("Cancel");
 }

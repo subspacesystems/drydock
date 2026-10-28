@@ -13,6 +13,7 @@ use glam::DVec2;
 use modeler_kernel::model::{Material, MaterialId, Model, Texture};
 use modeler_kernel::paint;
 
+use crate::dialog::{DialogButton, button_row, field_label};
 use crate::icons::{self, Icon};
 use crate::swatches::Swatches;
 
@@ -256,7 +257,7 @@ pub fn materials_panel(
                 });
 
                 ui.horizontal(|ui| {
-                    ui.label("Name");
+                    ui.label(field_label("Name"));
                     let hint = paint::unique_material_name(model, "Material");
                     let response = ui.add(
                         egui::TextEdit::singleline(&mut form.name)
@@ -269,7 +270,7 @@ pub fn materials_panel(
                 });
 
                 ui.horizontal(|ui| {
-                    ui.label("Color");
+                    ui.label(field_label("Color"));
                     let mut color = form.color;
                     if ui.color_edit_button_rgb(&mut color).changed() {
                         form.color = color;
@@ -277,7 +278,7 @@ pub fn materials_panel(
                 });
 
                 ui.horizontal(|ui| {
-                    ui.label("Opacity");
+                    ui.label(field_label("Opacity"));
                     let value_width = ui.spacing().interact_size.x;
                     let spacing = ui.spacing().item_spacing.x;
                     ui.spacing_mut().slider_width =
@@ -285,36 +286,47 @@ pub fn materials_panel(
                     ui.add(egui::Slider::new(&mut form.opacity, 0.0..=1.0));
                 });
 
-                ui.label("Texture image");
+                ui.label(field_label("Texture image"));
                 ui.add(egui::TextEdit::singleline(&mut form.texture).desired_width(f32::INFINITY));
 
                 ui.horizontal(|ui| {
-                    ui.label("Width (m)");
+                    ui.label(field_label("Width (m)"));
                     ui.add(egui::DragValue::new(&mut form.size[0]));
                 });
                 ui.horizontal(|ui| {
-                    ui.label("Height (m)");
+                    ui.label(field_label("Height (m)"));
                     ui.add(egui::DragValue::new(&mut form.size[1]));
                 });
 
                 let material = form.material();
                 let editing = form.editing;
-                ui.horizontal(|ui| {
-                    if ui
-                        .add_enabled(material.is_some(), egui::Button::new("OK"))
-                        .clicked()
-                        && let Some(material) = material
-                    {
-                        action = Some(match editing {
-                            Some(id) => MaterialAction::Edit(id, material),
-                            None => MaterialAction::Create(material),
-                        });
-                        close = true;
+                match button_row(
+                    ui,
+                    &[
+                        DialogButton {
+                            label: "OK",
+                            default: true,
+                            enabled: material.is_some(),
+                        },
+                        DialogButton {
+                            label: "Cancel",
+                            default: false,
+                            enabled: true,
+                        },
+                    ],
+                ) {
+                    Some(0) => {
+                        if let Some(material) = material {
+                            action = Some(match editing {
+                                Some(id) => MaterialAction::Edit(id, material),
+                                None => MaterialAction::Create(material),
+                            });
+                            close = true;
+                        }
                     }
-                    if ui.button("Cancel").clicked() {
-                        close = true;
-                    }
-                });
+                    Some(1) => close = true,
+                    _ => {}
+                }
             }
 
             let entries = if tiles {
@@ -357,7 +369,15 @@ pub fn materials_panel(
             ui.set_width(360.0);
             if unused.is_empty() {
                 ui.label("No unused materials to remove.");
-                if ui.button("OK").clicked() {
+                if button_row(
+                    ui,
+                    &[DialogButton {
+                        label: "OK",
+                        default: true,
+                        enabled: true,
+                    }],
+                ) == Some(0)
+                {
                     close = true;
                 }
             } else {
@@ -372,15 +392,28 @@ pub fn materials_panel(
                             }
                         }
                     });
-                ui.horizontal(|ui| {
-                    if ui.button("Purge").clicked() {
+                match button_row(
+                    ui,
+                    &[
+                        DialogButton {
+                            label: "Purge",
+                            default: true,
+                            enabled: true,
+                        },
+                        DialogButton {
+                            label: "Cancel",
+                            default: false,
+                            enabled: true,
+                        },
+                    ],
+                ) {
+                    Some(0) => {
                         purge = true;
                         close = true;
                     }
-                    if ui.button("Cancel").clicked() {
-                        close = true;
-                    }
-                });
+                    Some(1) => close = true,
+                    _ => {}
+                }
             }
         });
         if close || response.should_close() {

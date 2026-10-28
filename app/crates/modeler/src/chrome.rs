@@ -7,6 +7,7 @@
 //!
 //! Behaviour: `docs/specs/m3-app-ui.md`.
 
+use crate::dialog::{DialogButton, button_row, field_label};
 use crate::dock::PanelId;
 use crate::document::{Stats, format_size};
 use crate::icons::Icon;
@@ -102,25 +103,35 @@ pub fn name_prompt(ctx: &eframe::egui::Context, prompt: &mut NamePrompt) -> Opti
         .resizable(false)
         .open(&mut open)
         .show(ctx, |ui| {
-            ui.label("Name");
+            ui.label(field_label("Name"));
             let field = ui.add(egui::TextEdit::singleline(&mut prompt.name));
             field.request_focus();
-            ui.horizontal(|ui| {
-                if ui.button("OK").clicked() {
+            match button_row(
+                ui,
+                &[
+                    DialogButton {
+                        label: "OK",
+                        default: true,
+                        enabled: true,
+                    },
+                    DialogButton {
+                        label: "Cancel",
+                        default: false,
+                        enabled: true,
+                    },
+                ],
+            ) {
+                Some(0) => {
                     outcome = Some(PromptOutcome::Ok(prompt.name.trim().to_owned()));
                 }
-                if ui.button("Cancel").clicked() {
-                    outcome = Some(PromptOutcome::Cancel);
-                }
-            });
+                Some(1) => outcome = Some(PromptOutcome::Cancel),
+                _ => {}
+            }
         });
 
     if outcome.is_none() {
-        let (enter, escape) =
-            ctx.input(|i| (i.key_pressed(Key::Enter), i.key_pressed(Key::Escape)));
-        if enter {
-            outcome = Some(PromptOutcome::Ok(prompt.name.trim().to_owned()));
-        } else if escape || !open {
+        let escape = ctx.input(|i| i.key_pressed(Key::Escape));
+        if escape || !open {
             outcome = Some(PromptOutcome::Cancel);
         }
     }
@@ -309,7 +320,15 @@ pub fn about_window(ctx: &eframe::egui::Context, open: &mut bool) {
             for line in about_lines() {
                 ui.label(line);
             }
-            if ui.button("Close").clicked() {
+            if button_row(
+                ui,
+                &[DialogButton {
+                    label: "Close",
+                    default: false,
+                    enabled: true,
+                }],
+            ) == Some(0)
+            {
                 close = true;
             }
         });
@@ -377,7 +396,15 @@ pub fn model_info_window_with(
                 ui.label(line);
             }
             extra(ui);
-            if ui.button("Close").clicked() {
+            if button_row(
+                ui,
+                &[DialogButton {
+                    label: "Close",
+                    default: false,
+                    enabled: true,
+                }],
+            ) == Some(0)
+            {
                 close = true;
             }
         });
