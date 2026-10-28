@@ -8,7 +8,6 @@ use eframe::egui::accesskit::Toggled;
 use eframe::egui::vec2;
 use egui_kittest::Harness;
 use egui_kittest::kittest::{NodeT, Queryable};
-use modeler::input::Tool;
 use modeler::toolbars::{
     CustomizeState, Placement, ToolbarLayout, ToolbarsMenuEvent, customize_panel, toolbars_menu,
 };
@@ -62,10 +61,6 @@ fn panel(layout: ToolbarLayout, selected: usize) -> Harness<'static, PanelState>
         );
     h.run();
     h
-}
-
-fn tools(layout: &ToolbarLayout, index: usize) -> Vec<Tool> {
-    layout.toolbars()[index].tools.clone()
 }
 
 fn changed_since(
@@ -130,89 +125,41 @@ fn menu_reset_restores_the_default() {
 fn panel_shows_the_selected_toolbars_tools() {
     let h = panel(ToolbarLayout::default(), 1);
     for label in [
-        "Remove Line",
-        "Remove Rectangle",
-        "Remove Circle",
-        "Remove Arc",
-        "Remove 3-Point Arc",
+        "Drag Line",
+        "Drag Rectangle",
+        "Drag Circle",
+        "Drag Arc",
+        "Drag 3-Point Arc",
+        "Drag Move",
+        "Drag Select",
     ] {
         h.get_by_label(label);
     }
-    assert!(h.query_by_label("Remove Move").is_none());
-    // Tools already there have no Add button; others do.
-    assert!(h.query_by_label("Add Line").is_none());
-    h.get_by_label("Add Move");
-    h.get_by_label("Add Select");
-    // Earlier is disabled on the first row, later on the last.
-    assert!(
-        h.get_by_label("Move Line earlier")
-            .accesskit_node()
-            .is_disabled()
-    );
-    assert!(
-        !h.get_by_label("Move Line later")
-            .accesskit_node()
-            .is_disabled()
-    );
-    assert!(
-        h.get_by_label("Move 3-Point Arc later")
-            .accesskit_node()
-            .is_disabled()
-    );
+    // The per-tool buttons are gone: dragging replaces them (round 3).
+    for label in [
+        "Remove Line",
+        "Add Move",
+        "Move Line earlier",
+        "Move Line later",
+    ] {
+        assert!(h.query_by_label(label).is_none(), "{label} should be gone");
+    }
 }
 
 #[test]
 fn panel_picker_switches_toolbar_without_changing_layout() {
     let mut h = panel(ToolbarLayout::default(), 0);
-    h.get_by_label("Remove Select");
     let changed = changed_since(&mut h, |h| h.get_by_label("Modification").click());
     assert!(!changed);
     assert_eq!(h.state().custom.selected, 2);
     assert_eq!(h.state().layout, ToolbarLayout::default());
-    h.get_by_label("Remove Extrude");
-}
-
-#[test]
-fn panel_remove_and_move() {
-    let mut h = panel(ToolbarLayout::default(), 1);
-    let changed = changed_since(&mut h, |h| h.get_by_label("Remove Rectangle").click());
-    assert!(changed);
-    assert_eq!(
-        tools(&h.state().layout, 1),
-        vec![Tool::Line, Tool::Circle, Tool::Arc, Tool::Arc3]
-    );
-    h.get_by_label("Add Rectangle");
-    h.get_by_label("Move Circle earlier").click();
-    h.run();
-    assert_eq!(
-        tools(&h.state().layout, 1),
-        vec![Tool::Circle, Tool::Line, Tool::Arc, Tool::Arc3]
-    );
-    h.get_by_label("Move Line later").click();
-    h.run();
-    assert_eq!(
-        tools(&h.state().layout, 1),
-        vec![Tool::Circle, Tool::Arc, Tool::Line, Tool::Arc3]
-    );
-}
-
-#[test]
-fn panel_add_appends() {
-    let mut h = panel(ToolbarLayout::default(), 1);
-    let changed = changed_since(&mut h, |h| h.get_by_label("Add Move").click());
-    assert!(changed);
-    assert_eq!(tools(&h.state().layout, 1).last(), Some(&Tool::Move));
-    assert!(h.query_by_label("Add Move").is_none());
-    h.get_by_label("Remove Move");
-    // The toolbar it came from keeps it.
-    assert!(tools(&h.state().layout, 2).contains(&Tool::Move));
 }
 
 #[test]
 fn panel_creates_and_selects_a_toolbar() {
     let mut h = panel(ToolbarLayout::default(), 0);
-    h.get_by_label("New toolbar name").click();
-    h.get_by_label("New toolbar name").type_text("Mine");
+    h.get_by_label("New toolbar name:").click();
+    h.get_by_label("New toolbar name:").type_text("Mine");
     h.run();
     assert_eq!(h.state().custom.new_name, "Mine");
     let changed = changed_since(&mut h, |h| h.get_by_label("Create toolbar").click());
@@ -226,8 +173,7 @@ fn panel_creates_and_selects_a_toolbar() {
     ));
     assert_eq!(h.state().custom.selected, 5);
     assert_eq!(h.state().custom.new_name, "");
-    // The new toolbar is empty: every tool can be added.
-    h.get_by_label("Add Line");
+    assert!(layout.toolbars()[5].tools.is_empty());
 }
 
 #[test]
@@ -259,7 +205,7 @@ fn panel_deletes_and_clamps_selection() {
 fn panel_out_of_range_selection_is_clamped() {
     let h = panel(ToolbarLayout::default(), 99);
     assert_eq!(h.state().custom.selected, 4);
-    h.get_by_label("Remove Orbit");
+    h.get_by_label("Drag Orbit");
 }
 
 #[test]

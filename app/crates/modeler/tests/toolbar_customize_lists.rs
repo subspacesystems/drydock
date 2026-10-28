@@ -214,9 +214,9 @@ fn window_has_two_headed_lists_with_drag_handles() {
     h.get_by_label("Available");
     h.get_by_label("Drag Line");
     h.get_by_label("Drag Move");
-    // Existing controls stay.
-    h.get_by_label("Remove Line");
-    h.get_by_label("Add Move");
+    // No per-tool buttons (round 3).
+    assert!(h.query_by_label("Remove Line").is_none());
+    assert!(h.query_by_label("Add Move").is_none());
 }
 
 #[test]
@@ -232,8 +232,6 @@ fn dragging_an_available_tool_into_the_list_inserts_it() {
         [Tool::Line, Tool::Move, Tool::Rectangle]
     );
     assert!(h.state().changed.iter().any(|&c| c));
-    h.get_by_label("Remove Move");
-    assert!(h.query_by_label("Add Move").is_none());
 }
 
 #[test]
@@ -264,7 +262,6 @@ fn dragging_a_row_to_available_removes_it() {
         tools(&h.state().layout),
         vec![Tool::Line, Tool::Rectangle, Tool::Arc, Tool::Arc3]
     );
-    h.get_by_label("Add Circle");
 }
 
 #[test]
