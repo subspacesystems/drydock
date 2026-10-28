@@ -204,5 +204,5 @@ fn toolbars_submenu_has_no_missing_glyph_and_opens() {
     h.get_by_label("Toolbars").click();
     h.run();
     assert!(h.query_by_label("Customize...").is_some());
-    assert!(h.query_by_label("Reset Toolbars").is_some());
+    assert!(h.query_by_label("Reset Toolbars...").is_some());
 }

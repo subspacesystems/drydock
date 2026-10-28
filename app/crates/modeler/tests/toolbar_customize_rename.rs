@@ -2,20 +2,14 @@
 // Copyright (C) 2026 Subspace Systems
 
 //! Acceptance tests for `docs/specs/m6-toolbar-customize-3.md`: renaming a toolbar, in the
-//! layout and in the Customize window.
+//! layout. The Customize window's rename dialog is tested in `tests/confirm.rs` (m6-confirm).
 
-use eframe::egui::{Key, vec2};
+use eframe::egui::vec2;
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
-use modeler::toolbars::{
-    CustomizeState, ToolbarLayout, ToolbarsMenuEvent, customize_panel, toolbars_menu,
-};
+use modeler::toolbars::{ToolbarLayout, ToolbarsMenuEvent, toolbars_menu};
 
 const DRAWING: usize = 1;
-
-fn names(layout: &ToolbarLayout) -> Vec<String> {
-    layout.toolbars().iter().map(|t| t.name.clone()).collect()
-}
 
 #[test]
 fn rename_sets_the_name_and_keeps_everything_else() {
@@ -85,135 +79,4 @@ fn view_menu_lists_the_new_name() {
     h.run();
     h.get_by_label("Sketch");
     assert!(h.query_by_label("Drawing").is_none());
-}
-
-struct State {
-    layout: ToolbarLayout,
-    custom: CustomizeState,
-    changed: Vec<bool>,
-}
-
-fn panel(selected: usize) -> Harness<'static, State> {
-    let mut h = Harness::builder()
-        .with_size(vec2(700.0, 800.0))
-        .build_ui_state(
-            |ui, state: &mut State| {
-                let changed = customize_panel(ui, &mut state.layout, &mut state.custom);
-                state.changed.push(changed);
-            },
-            State {
-                layout: ToolbarLayout::default(),
-                custom: CustomizeState {
-                    selected,
-                    ..CustomizeState::default()
-                },
-                changed: Vec::new(),
-            },
-        );
-    h.run();
-    h
-}
-
-fn rename_text(h: &Harness<'_, State>) -> Option<(usize, String)> {
-    h.state().custom.rename.clone()
-}
-
-fn changed_since(h: &mut Harness<'_, State>, action: impl FnOnce(&mut Harness<'_, State>)) -> bool {
-    h.state_mut().changed.clear();
-    action(h);
-    h.run();
-    h.state().changed.iter().any(|&c| c)
-}
-
-#[test]
-fn rename_field_holds_the_selected_toolbars_name() {
-    let mut h = panel(DRAWING);
-    h.get_by_label("Toolbar name:");
-    h.get_by_label("Rename toolbar");
-    assert_eq!(rename_text(&h), Some((DRAWING, "Drawing".to_string())));
-    let changed = changed_since(&mut h, |h| h.get_by_label("Camera").click());
-    assert!(!changed);
-    assert_eq!(rename_text(&h), Some((4, "Camera".to_string())));
-}
-
-#[test]
-fn rename_button_renames_the_selected_toolbar() {
-    let mut h = panel(DRAWING);
-    h.state_mut().custom.rename = Some((DRAWING, "Sketch".to_string()));
-    h.run();
-    let changed = changed_since(&mut h, |h| h.get_by_label("Rename toolbar").click());
-    assert!(changed);
-    assert_eq!(h.state().layout.toolbars()[DRAWING].name, "Sketch");
-    assert_eq!(rename_text(&h), Some((DRAWING, "Sketch".to_string())));
-    // The picker shows the new name.
-    h.get_by_label("Sketch");
-}
-
-#[test]
-fn typing_a_name_and_pressing_enter_renames() {
-    let mut h = panel(DRAWING);
-    h.state_mut().custom.rename = Some((DRAWING, String::new()));
-    h.run();
-    h.get_by_label("Toolbar name:").click();
-    h.run();
-    h.get_by_label("Toolbar name:").type_text("Shapes");
-    h.run();
-    assert_eq!(rename_text(&h), Some((DRAWING, "Shapes".to_string())));
-    // Typing alone renames nothing.
-    assert_eq!(h.state().layout.toolbars()[DRAWING].name, "Drawing");
-    let changed = changed_since(&mut h, |h| h.key_press(Key::Enter));
-    assert!(changed);
-    assert_eq!(h.state().layout.toolbars()[DRAWING].name, "Shapes");
-}
-
-#[test]
-fn a_taken_name_is_numbered_and_the_field_shows_it() {
-    let mut h = panel(DRAWING);
-    h.state_mut().custom.rename = Some((DRAWING, "Camera".to_string()));
-    h.run();
-    h.get_by_label("Rename toolbar").click();
-    h.run();
-    assert_eq!(h.state().layout.toolbars()[DRAWING].name, "Camera 2");
-    assert_eq!(rename_text(&h), Some((DRAWING, "Camera 2".to_string())));
-}
-
-#[test]
-fn an_empty_name_changes_nothing_and_restores_the_field() {
-    let mut h = panel(DRAWING);
-    h.state_mut().custom.rename = Some((DRAWING, "  ".to_string()));
-    h.run();
-    let changed = changed_since(&mut h, |h| h.get_by_label("Rename toolbar").click());
-    assert!(!changed);
-    assert_eq!(h.state().layout, ToolbarLayout::default());
-    assert_eq!(rename_text(&h), Some((DRAWING, "Drawing".to_string())));
-}
-
-#[test]
-fn field_follows_the_selection_after_delete_create_and_reset() {
-    // Deleting Modification leaves the selection on index 2, now Construction.
-    let mut h = panel(2);
-    h.get_by_label("Delete toolbar").click();
-    h.run();
-    assert_eq!(h.state().custom.selected, 2);
-    assert_eq!(rename_text(&h), Some((2, "Construction".to_string())));
-
-    // A new toolbar is selected and the field shows its name.
-    h.state_mut().custom.new_name = "Mine".to_string();
-    h.run();
-    h.get_by_label("Create toolbar").click();
-    h.run();
-    let selected = h.state().custom.selected;
-    assert_eq!(h.state().layout.toolbars()[selected].name, "Mine");
-    assert_eq!(rename_text(&h), Some((selected, "Mine".to_string())));
-
-    // Reset brings back the default names; a renamed toolbar's field goes back too.
-    let mut h = panel(DRAWING);
-    h.state_mut().custom.rename = Some((DRAWING, "Sketch".to_string()));
-    h.run();
-    h.get_by_label("Rename toolbar").click();
-    h.run();
-    h.get_by_label("Reset Toolbars").click();
-    h.run();
-    assert_eq!(names(&h.state().layout)[DRAWING], "Drawing");
-    assert_eq!(rename_text(&h), Some((DRAWING, "Drawing".to_string())));
 }

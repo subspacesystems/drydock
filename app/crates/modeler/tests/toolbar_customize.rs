@@ -2,14 +2,15 @@
 // Copyright (C) 2026 Subspace Systems
 
 //! Acceptance tests for `docs/specs/m6-toolbar-customize.md`: the View > Toolbars menu
-//! contents and the Customize window contents, driven with egui_kittest.
+//! contents and the Customize window contents, driven with egui_kittest. Creating, renaming,
+//! deleting and resetting go through dialogs since m6-confirm (`tests/confirm.rs`).
 
 use eframe::egui::accesskit::Toggled;
 use eframe::egui::vec2;
 use egui_kittest::Harness;
 use egui_kittest::kittest::{NodeT, Queryable};
 use modeler::toolbars::{
-    CustomizeState, Placement, ToolbarLayout, ToolbarsMenuEvent, customize_panel, toolbars_menu,
+    CustomizeState, ToolbarLayout, ToolbarsMenuEvent, customize_panel, toolbars_menu,
 };
 
 struct MenuState {
@@ -53,7 +54,6 @@ fn panel(layout: ToolbarLayout, selected: usize) -> Harness<'static, PanelState>
                 layout,
                 custom: CustomizeState {
                     selected,
-                    new_name: String::new(),
                     ..CustomizeState::default()
                 },
                 changed: Vec::new(),
@@ -84,7 +84,7 @@ fn menu_lists_every_toolbar_with_its_visibility() {
         assert_eq!(on, i != 2, "{}", t.name);
     }
     h.get_by_label("Customize...");
-    h.get_by_label("Reset Toolbars");
+    h.get_by_label("Reset Toolbars...");
 }
 
 #[test]
@@ -107,18 +107,6 @@ fn menu_customize_only_reports() {
     h.run();
     assert_eq!(h.state().events, vec![ToolbarsMenuEvent::Customize]);
     assert_eq!(h.state().layout, ToolbarLayout::default());
-}
-
-#[test]
-fn menu_reset_restores_the_default() {
-    let mut layout = ToolbarLayout::default();
-    layout.set_visible(0, false);
-    layout.add_toolbar("Mine");
-    let mut h = menu(layout);
-    h.get_by_label("Reset Toolbars").click();
-    h.run();
-    assert_eq!(h.state().layout, ToolbarLayout::default());
-    assert_eq!(h.state().events, vec![ToolbarsMenuEvent::Changed]);
 }
 
 #[test]
@@ -156,65 +144,8 @@ fn panel_picker_switches_toolbar_without_changing_layout() {
 }
 
 #[test]
-fn panel_creates_and_selects_a_toolbar() {
-    let mut h = panel(ToolbarLayout::default(), 0);
-    h.get_by_label("New toolbar name:").click();
-    h.get_by_label("New toolbar name:").type_text("Mine");
-    h.run();
-    assert_eq!(h.state().custom.new_name, "Mine");
-    let changed = changed_since(&mut h, |h| h.get_by_label("Create toolbar").click());
-    assert!(changed);
-    let layout = &h.state().layout;
-    assert_eq!(layout.toolbars().len(), 6);
-    assert_eq!(layout.toolbars()[5].name, "Mine");
-    assert!(matches!(
-        layout.toolbars()[5].placement,
-        Placement::Floating { .. }
-    ));
-    assert_eq!(h.state().custom.selected, 5);
-    assert_eq!(h.state().custom.new_name, "");
-    assert!(layout.toolbars()[5].tools.is_empty());
-}
-
-#[test]
-fn panel_creates_with_an_empty_name() {
-    let mut h = panel(ToolbarLayout::default(), 0);
-    h.get_by_label("Create toolbar").click();
-    h.run();
-    assert_eq!(h.state().layout.toolbars().len(), 6);
-    assert_eq!(h.state().layout.toolbars()[5].name, "Toolbar");
-}
-
-#[test]
-fn panel_deletes_and_clamps_selection() {
-    let mut h = panel(ToolbarLayout::default(), 4);
-    let changed = changed_since(&mut h, |h| h.get_by_label("Delete toolbar").click());
-    assert!(changed);
-    assert_eq!(h.state().layout.toolbars().len(), 4);
-    assert_eq!(h.state().custom.selected, 3);
-    assert!(
-        h.state()
-            .layout
-            .toolbars()
-            .iter()
-            .all(|t| t.name != "Camera")
-    );
-}
-
-#[test]
 fn panel_out_of_range_selection_is_clamped() {
     let h = panel(ToolbarLayout::default(), 99);
     assert_eq!(h.state().custom.selected, 4);
     h.get_by_label("Drag Orbit");
-}
-
-#[test]
-fn panel_reset_restores_the_default() {
-    let mut layout = ToolbarLayout::default();
-    layout.add_toolbar("Mine");
-    layout.remove_tool(1, 0);
-    let mut h = panel(layout, 1);
-    let changed = changed_since(&mut h, |h| h.get_by_label("Reset Toolbars").click());
-    assert!(changed);
-    assert_eq!(h.state().layout, ToolbarLayout::default());
 }
