@@ -214,9 +214,9 @@ Tyrel's UI items deferred from M4, inserted after M5 at his request.
 
 Done when: tools are icon buttons grouped by kind along the top by default; each toolbar can be hidden, moved to another edge or floated, and customized (tools added, removed, reordered), and the arrangement survives a restart; Entity Info, Materials, Components and Shadows dock in the left or right column or float, collapse, and survive a restart; Entity Info describes the selection and renames components and groups; Components lists the model's definitions with thumbnails, places one by click, and imports a file; the Materials panel buttons are icons. Checked in the real window before Tyrel tries it.
 
-## M7: 3D printing (proposed)
+## M7: 3D printing
 
-Tyrel's request: print-ready solids without plugins. Placed right after M6 at his suggestion; Follow Me/offset, tags and Windows moved down one number (2026-10-28). Task list proposed; not started until Tyrel confirms the order and the limit reaches M7.
+Tyrel's request: print-ready solids without plugins. Placed right after M6; order confirmed by Tyrel (2026-10-28): 3D printing, then Windows, then Follow Me/offset, then tags. Not started until the limit reaches M7.
 
 | Task | What | Needs |
 | --- | --- | --- |
@@ -232,23 +232,29 @@ Tyrel's request: print-ready solids without plugins. Placed right after M6 at hi
 | `m7-export-ui` | File > Export 3MF... and Export STL...: selection or whole model, units (mm default), curve tolerance | `m7-export-stl`, `m7-export-3mf` |
 | `m7-print-setup` | Print Setup panel: bed presets and custom size, bed outline in the viewport, fits-the-bed check, Drop to Bed | `m7-print-mesh` |
 | `m7-overhang` | Faces steeper than a chosen overhang angle tinted in the viewport | |
-| `m7-clearance` | Clearance for parts that fit together (design waits for Tyrel's answer) | `m7-solid-check` |
+| `m7-clearance` | Fit check: pick two parts, highlight where the gap between them is under the clearance (default 0.2 mm) (Tyrel chose fit check first) | `m7-solid-check` |
+| `m7-clearance-offset` | Grow/Shrink by clearance: move every face of a flat-faced solid in or out by the clearance, one undo step; report parts it can't handle | `m7-clearance`, `m7-solid-repair` |
 | `m7-text-3d` | 3D text from the app's font outlines, embossed on or engraved into a face | |
 
-## M8: Follow Me and offset
+## M8: Windows
+
+Moved up by Tyrel (2026-10-28) so beta testers can try the app after 3D printing.
+
+- Windows build in CI (cross-compile or a Windows runner), release artifacts.
+- A simple installer that removes older installed versions (upgrade in place) and an uninstaller. Auto-update comes later (Future).
+
+## M9: Follow Me and offset
 
 - Follow Me: extrude a face along a path of connected edges.
 - Offset: offset a face's edges inward/outward by a distance, with typed value.
 
-## M9: Tags and model library hook
+## M10: Tags and model library hook
 
 - Tags: assign entities to tags; show/hide tags.
 - Library hook: import pipeline abstracted behind a "model source" interface so an online library could be added later.
 
-## M10: Windows
-
-- Windows build in CI (cross-compile or a Windows runner), installer, release artifacts.
-
 ## Future (unscheduled)
 
 Ideas parked (woodworking, drawings, CNC export, plugin API, design library and more). Nothing there is planned until Tyrel opens its own issue or asks for it to be scheduled.
+
+- Auto-update for the Windows build (Tyrel: wanted eventually; M8 ships a plain installer first).
