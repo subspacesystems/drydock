@@ -151,7 +151,7 @@ fn choose_model_info() -> Vec<Action> {
     h.run();
     h.get_by_label("View").click();
     h.run();
-    h.get_by_label("Model Info").click();
+    h.get_by_label("Model Info...").click();
     h.run();
     seen.borrow().clone()
 }

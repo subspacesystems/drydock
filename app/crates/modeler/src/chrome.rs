@@ -423,7 +423,7 @@ pub fn menu_item_layout(row: Rect, has_icon: bool, shortcut_width: f32) -> ItemL
             vec2(16.0, 16.0),
         )
     });
-    let label_left = icon.map_or(row.left() + 6.0, |icon| icon.right() + 6.0);
+    let label_left = row.left() + 26.0;
     let shortcut = Rect::from_min_size(
         pos2(row.right() - 6.0 - shortcut_width, row.top()),
         vec2(shortcut_width, row.height()),
@@ -466,13 +466,15 @@ pub fn menu_item(
                 .map_or(0.0, |galley| galley.size().y),
         )
         .max(if icon.is_some() { 16.0 } else { 0.0 });
-    let label_space = if icon.is_some() {
-        4.0 + 16.0 + 6.0
+    let mut needed = 26.0 + label_galley.size().x + 6.0;
+    if !shortcut.is_empty() {
+        needed += 24.0 + shortcut_width;
+    }
+    let width = if ui.is_sizing_pass() {
+        needed
     } else {
-        6.0
+        ui.available_width().max(needed)
     };
-    let needed = label_space + label_galley.size().x + 24.0 + shortcut_width + 6.0;
-    let width = ui.available_width().max(needed);
     let (row, response) = ui.allocate_exact_size(vec2(width, row_height), Sense::click());
 
     let layout = menu_item_layout(row, icon.is_some(), shortcut_width);
@@ -481,11 +483,21 @@ pub fn menu_item(
 
     let visuals = ui.style().interact_selectable(&response, selected);
     let painter = ui.painter().clone();
-    if selected || response.hovered() {
+    if response.hovered() {
         painter.rect_filled(row, 4.0, visuals.weak_bg_fill);
     }
     let color = visuals.fg_stroke.color;
     if let (Some(icon), Some(icon_rect)) = (icon, layout.icon) {
+        if selected {
+            let box_rect = icon_rect.expand(3.0);
+            painter.rect(
+                box_rect,
+                3.0,
+                ui.visuals().selection.bg_fill,
+                Stroke::new(1.0, ui.visuals().selection.stroke.color),
+                eframe::egui::StrokeKind::Inside,
+            );
+        }
         crate::icons::paint(&painter, icon_rect, icon, color);
     }
     painter.text(
@@ -514,8 +526,44 @@ pub fn menu_item(
 /// A menu row that shows or hides something: a check mark in the icon column while
 /// `checked`, no row highlight for it (`docs/specs/m6-menus-2.md`).
 pub fn menu_check_item(ui: &mut Ui, label: &str, checked: bool) -> Response {
-    let _ = (ui, label, checked);
-    unimplemented!()
+    let font_id = TextStyle::Body.resolve(ui.style());
+    let text_color = ui.visuals().text_color();
+    let label_galley = ui
+        .painter()
+        .layout_no_wrap(label.to_owned(), font_id.clone(), text_color);
+    let row_height = ui.spacing().interact_size.y.max(label_galley.size().y);
+    let needed = 26.0 + label_galley.size().x + 6.0;
+    let width = if ui.is_sizing_pass() {
+        needed
+    } else {
+        ui.available_width().max(needed)
+    };
+    let (row, response) = ui.allocate_exact_size(vec2(width, row_height), Sense::click());
+
+    let layout = menu_item_layout(row, true, 0.0);
+    let enabled = ui.is_enabled();
+    response.widget_info(|| WidgetInfo::selected(WidgetType::Checkbox, enabled, checked, label));
+
+    let visuals = ui.style().interact(&response);
+    let painter = ui.painter().clone();
+    if response.hovered() {
+        painter.rect_filled(row, 4.0, visuals.weak_bg_fill);
+    }
+    let color = visuals.fg_stroke.color;
+    if checked && let Some(icon) = layout.icon {
+        let p1 = pos2(icon.left() + 3.5, icon.center().y);
+        let p2 = pos2(icon.left() + 6.5, icon.center().y + 3.0);
+        let p3 = pos2(icon.right() - 3.0, icon.center().y - 3.0);
+        painter.add(Shape::line(vec![p1, p2, p3], Stroke::new(1.8, color)));
+    }
+    painter.text(
+        pos2(layout.label_left, row.center().y),
+        Align2::LEFT_CENTER,
+        label,
+        font_id,
+        color,
+    );
+    response
 }
 
 /// A submenu row with a drawn arrow; `add_contents` fills the submenu.
@@ -530,8 +578,12 @@ pub fn submenu_button<R>(
         .painter()
         .layout_no_wrap(label.to_owned(), font_id.clone(), text_color);
     let row_height = ui.spacing().interact_size.y.max(label_galley.size().y);
-    let needed = 6.0 + label_galley.size().x + 24.0 + 6.0;
-    let width = ui.available_width().max(needed);
+    let needed = 26.0 + label_galley.size().x + 24.0 + 6.0;
+    let width = if ui.is_sizing_pass() {
+        needed
+    } else {
+        ui.available_width().max(needed)
+    };
     let (row, response) = ui.allocate_exact_size(vec2(width, row_height), Sense::click());
 
     let enabled = ui.is_enabled();
@@ -544,7 +596,7 @@ pub fn submenu_button<R>(
     }
     let color = visuals.fg_stroke.color;
     painter.text(
-        pos2(row.left() + 6.0, row.center().y),
+        pos2(menu_item_layout(row, false, 0.0).label_left, row.center().y),
         Align2::LEFT_CENTER,
         label,
         font_id,
@@ -791,10 +843,11 @@ fn menu_bar_inner(
                 ui.close();
             }
             ui.separator();
-            if menu_item(ui, None, "Axes", "", state.axes).clicked() {
+            if menu_check_item(ui, "Axes", state.axes).clicked() {
                 chosen = Some(Action::ToggleAxes);
                 ui.close();
             }
+            ui.separator();
             for (open, label, action) in [
                 (
                     state.entity_info,
@@ -818,14 +871,10 @@ fn menu_bar_inner(
                     Action::TogglePanel(PanelId::TexturePosition),
                 ),
             ] {
-                if menu_item(ui, None, label, "", open).clicked() {
+                if menu_check_item(ui, label, open).clicked() {
                     chosen = Some(action);
                     ui.close();
                 }
-            }
-            if menu_item(ui, None, "Reset Panels", "", false).clicked() {
-                chosen = Some(Action::ResetPanels);
-                ui.close();
             }
             if let Some(layout) = toolbars {
                 ui.separator();
@@ -840,8 +889,12 @@ fn menu_bar_inner(
                     }
                 });
             }
+            if menu_item(ui, None, "Reset Panels", "", false).clicked() {
+                chosen = Some(Action::ResetPanels);
+                ui.close();
+            }
             ui.separator();
-            if menu_item(ui, None, "Model Info", "", false).clicked() {
+            if menu_item(ui, None, "Model Info...", "", false).clicked() {
                 chosen = Some(Action::ModelInfo);
                 ui.close();
             }
@@ -873,7 +926,7 @@ fn menu_bar_inner(
             }
         });
         ui.menu_button("Help", |ui| {
-            if menu_item(ui, None, "About modeler", "", false).clicked() {
+            if menu_item(ui, None, "About modeler...", "", false).clicked() {
                 chosen = Some(Action::About);
                 ui.close();
             }

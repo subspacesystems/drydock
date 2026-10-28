@@ -29,6 +29,8 @@ fn menus(state: MenuState<'static>, seen: &Seen) -> Harness<'static> {
 }
 
 fn open(h: &mut Harness<'_>, menu: &str) {
+    // m6-menus-2: menus are as wide as their text, so the text needs real fonts.
+    h.ctx.set_fonts(modeler::look::font_definitions(None));
     h.run();
     h.get_by_label(menu).click();
     h.run();
@@ -43,7 +45,8 @@ fn layout_without_icon_puts_the_label_at_the_left_and_the_shortcut_at_the_right(
     let r = row(200.0);
     let l = menu_item_layout(r, false, 50.0);
     assert!(l.icon.is_none());
-    assert!((l.label_left - (r.left() + 6.0)).abs() < 0.01);
+    // m6-menus-2: every row leaves the icon column (4 + 16 + 6) before its label.
+    assert!((l.label_left - (r.left() + 26.0)).abs() < 0.01);
     assert!((l.shortcut.right() - (r.right() - 6.0)).abs() < 0.01);
     assert!((l.shortcut.width() - 50.0).abs() < 0.01);
     assert!((l.shortcut.center().y - r.center().y).abs() < 0.01);
