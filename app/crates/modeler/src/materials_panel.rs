@@ -125,6 +125,10 @@ pub struct MaterialsPanel {
     /// The editor's eyedropper is armed; the app sets this before each draw and the
     /// eyedropper button shows pushed in (`docs/specs/m6-eyedropper-2.md`).
     pub eyedropper_armed: bool,
+    /// The material that was current when the panel last drew; `None` before the first
+    /// draw. Used to scroll a newly current material into view
+    /// (`docs/specs/m6-eyedropper-2.md`).
+    last_current: Option<Option<MaterialId>>,
 }
 
 impl MaterialsPanel {
@@ -196,11 +200,15 @@ pub fn materials_panel(
             Icon::Eyedropper,
             "Eyedropper",
             "Pick a material from the model",
-            false,
+            panel.eyedropper_armed,
         )
         .clicked()
         {
-            action = Some(MaterialAction::Eyedropper);
+            action = Some(if panel.eyedropper_armed {
+                MaterialAction::CancelEyedropper
+            } else {
+                MaterialAction::Eyedropper
+            });
         }
     });
     if new_form {
@@ -231,6 +239,10 @@ pub fn materials_panel(
     let tiles = panel.tiles;
     let mut swatches = panel.swatches.clone();
     let focus_name = std::mem::take(&mut panel.focus_name);
+    // Scroll to the current material only when it changes, so the user's own scrolling
+    // sticks (`docs/specs/m6-eyedropper-2.md`).
+    let scroll_to_current = panel.last_current != Some(current);
+    panel.last_current = Some(current);
     let mut close = false;
     egui::ScrollArea::vertical()
         .auto_shrink([false, false])
@@ -307,11 +319,27 @@ pub fn materials_panel(
 
             let entries = if tiles {
                 ui.horizontal_wrapped(|ui| {
-                    material_entries(ui, &mut swatches, model, current, &search, true)
+                    material_entries(
+                        ui,
+                        &mut swatches,
+                        model,
+                        current,
+                        &search,
+                        true,
+                        scroll_to_current,
+                    )
                 })
                 .inner
             } else {
-                material_entries(ui, &mut swatches, model, current, &search, false)
+                material_entries(
+                    ui,
+                    &mut swatches,
+                    model,
+                    current,
+                    &search,
+                    false,
+                    scroll_to_current,
+                )
             };
             if action.is_none() {
                 action = entries;
@@ -374,6 +402,7 @@ fn material_entries(
     current: Option<MaterialId>,
     search: &str,
     tiles: bool,
+    scroll_to_current: bool,
 ) -> Option<MaterialAction> {
     let mut action = None;
     if matches_search("Default", search) {
@@ -396,6 +425,9 @@ fn material_entries(
                 None,
             )
         };
+        if current.is_none() && scroll_to_current {
+            response.scroll_to_me(None);
+        }
         if response.clicked() {
             action = Some(MaterialAction::Choose(None));
         }
@@ -419,6 +451,9 @@ fn material_entries(
         } else {
             material_row(ui, swatches, &material.name, color, selected, texture)
         };
+        if selected && scroll_to_current {
+            response.scroll_to_me(None);
+        }
         if response.clicked() {
             action = Some(MaterialAction::Choose(Some(id)));
         }
@@ -451,7 +486,8 @@ fn material_row(
     response.on_hover_text(tooltip)
 }
 
-/// One selectable tile: a color swatch with the material's name under it.
+/// One selectable tile: the whole tile is one widget, with a color swatch and the
+/// material's name under it.
 fn material_tile(
     ui: &mut egui::Ui,
     swatches: &mut Swatches,
@@ -461,27 +497,62 @@ fn material_tile(
     hover: Option<&str>,
 ) -> egui::Response {
     let height = 40.0 + ui.spacing().item_spacing.y + ui.spacing().interact_size.y;
-    let response = ui
-        .allocate_ui_with_layout(
-            egui::vec2(64.0, height),
-            egui::Layout::top_down(egui::Align::Center),
-            |ui| {
-                let (rect, swatch) =
-                    ui.allocate_exact_size(egui::vec2(64.0, 40.0), egui::Sense::click());
-                paint_swatch(ui, swatches, rect, color, hover);
-                let text = ui.add_sized(
-                    [64.0, ui.spacing().interact_size.y],
-                    egui::Button::selectable(selected, label).truncate(),
-                );
-                swatch.union(text)
-            },
-        )
-        .inner;
+    let (rect, response) = ui.allocate_exact_size(egui::vec2(64.0, height), egui::Sense::click());
+    let enabled = ui.is_enabled();
+    response.widget_info(|| {
+        egui::WidgetInfo::selected(egui::WidgetType::Button, enabled, selected, label)
+    });
+
+    let widgets = ui.style().interact_selectable(&response, selected);
+    let selection = ui.style().visuals.selection;
+    if selected {
+        let fill = if response.hovered() {
+            widgets.weak_bg_fill
+        } else {
+            selection.bg_fill
+        };
+        ui.painter().rect_filled(rect, 2.0, fill);
+        ui.painter()
+            .rect_stroke(rect, 2.0, selection.stroke, egui::StrokeKind::Inside);
+    } else if response.hovered() {
+        ui.painter().rect_filled(rect, 2.0, widgets.weak_bg_fill);
+    }
+
+    let swatch = egui::Rect::from_min_size(
+        rect.min + egui::vec2(2.0, 2.0),
+        egui::vec2(rect.width() - 4.0, 36.0),
+    );
+    paint_swatch(ui, swatches, swatch, color, hover);
+
+    let text = egui::Rect::from_min_max(
+        egui::pos2(rect.left() + 2.0, rect.top() + 40.0),
+        egui::pos2(rect.right() - 2.0, rect.bottom()),
+    );
+    let text_color = if selected {
+        selection.stroke.color
+    } else {
+        ui.style().visuals.text_color()
+    };
+    paint_tile_name(ui, text, label, text_color);
+
     let tooltip = match hover {
         Some(texture) => format!("{label}\n{texture}"),
         None => label.to_owned(),
     };
     response.on_hover_text(tooltip)
+}
+
+/// Draw `name` on one line, centred in `rect` and truncated with an ellipsis.
+fn paint_tile_name(ui: &egui::Ui, rect: egui::Rect, name: &str, color: Color32) {
+    let font = egui::TextStyle::Button.resolve(ui.style());
+    let mut job = egui::text::LayoutJob::simple_singleline(name.to_owned(), font, color);
+    job.wrap = egui::text::TextWrapping::truncate_at_width(rect.width().max(0.0));
+    let galley = ui.painter().layout_job(job);
+    let pos = egui::pos2(
+        rect.center().x - galley.size().x / 2.0,
+        rect.center().y - galley.size().y / 2.0,
+    );
+    ui.painter().galley(pos, galley, color);
 }
 
 /// The swatch: a texture preview when it's ready, otherwise the flat color.

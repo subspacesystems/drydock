@@ -2711,7 +2711,7 @@ impl Editor {
     }
 
     /// Arm the eyedropper: the next click on a face or instance, in any tool, makes its
-    /// material current and switches to the Paint Bucket. Esc or a tool change disarms.
+    /// material current. Esc or a tool change disarms.
     pub fn arm_eyedropper(&mut self) {
         self.eyedropper_armed = true;
         self.paste = None;
@@ -2720,7 +2720,7 @@ impl Editor {
 
     /// Disarm the eyedropper with no other effect (`docs/specs/m6-eyedropper-2.md`).
     pub fn disarm_eyedropper(&mut self) {
-        unimplemented!()
+        self.eyedropper_armed = false;
     }
 
     /// True while the eyedropper waits for a click.
@@ -2745,8 +2745,8 @@ impl Editor {
         }
     }
 
-    /// Eyedropper click: sample the clicked face or instance's material, make it current
-    /// and switch to the Paint Bucket. Edges and empty space keep waiting.
+    /// Eyedropper click: sample the clicked face or instance's material and make it
+    /// current, keeping the active tool. Edges and empty space keep waiting.
     fn click_eyedropper(&mut self, model: &mut Model, view: &Viewport, cursor: DVec2) -> bool {
         let Some(entity) = self.pick_at(model, view, cursor) else {
             return false;
@@ -2757,7 +2757,6 @@ impl Editor {
         let seen = self.seen_side(model, view, cursor, entity);
         self.material = paint::sample(model, self.body(model), entity, seen).flatten();
         self.message = None;
-        self.set_tool(Tool::Paint);
         self.eyedropper_armed = false;
         false
     }
