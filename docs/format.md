@@ -1,8 +1,8 @@
-# Native model file, version 4
+# Native model file, version 5
 
 The native file stores a whole `Model` (`modeler-kernel`, `src/model.rs`): materials,
 definitions, and for the root and every definition its geometry (vertices, edges, faces),
-face materials, instances and guides, plus the model's geolocation and shadow settings. Code: `modeler_kernel::format`. Owner: orchestrator.
+face materials, instances and guides, plus the model's geolocation, shadow settings and length format. Code: `modeler_kernel::format`. Owner: orchestrator.
 
 Design goals: exact round trip (ids and every number come back bit for bit), readable and
 diffable, no dependencies, easy to extend. Lengths are meters.
@@ -46,15 +46,19 @@ Then, one per line:
 | `guide <id> point <x> <y> <z>` | (version 2) a guide point |
 | `geolocation <latitude> <longitude> <north angle> <utc offset>` | (version 4) where the model is (`modeler_kernel::sun::Geolocation`): degrees north, degrees east, degrees from +Y to true north clockwise seen from above, hours ahead of UTC; at most once, anywhere before `end` |
 | `sun <year> <month> <day> <hour> <minute> <shadows> <sun shading> <light> <dark> <on ground>` | (version 4) the shadow settings (`ShadowSettings`): local date and time as integers, then `on`/`off`, `on`/`off`, two reals in 0..=1, `on`/`off`; at most once, anywhere before `end` |
+| `units decimal <unit> <decimals>` / `units architectural <denominator>` | (version 5) the model's length format (`modeler_kernel::units::LengthFormat`, `docs/specs/m6-units.md`): `<unit>` one of `mm cm m in ft`, `<decimals>` 0 to 6; or architectural with `<denominator>` one of 1 2 4 8 16 32 64; at most once, anywhere before `end` |
 | `end` | last record; after it only blank lines may follow |
 
 Every record is applied as soon as it is read, so everything it names must already exist
 (the material for a paint or instance, the definition for a `body` or an instance, the
 vertices of an edge, the edges of a face, the face of a paint or texmap). Ids keep their
 values. A `guide` record in a version 1 file is an unknown record; a `texmap` record in a
-version 1 or 2 file is too, and a `geolocation` or `sun` record in a version 1 to 3 file.
-A second `geolocation` or `sun` record is a bad field; values the model refuses (out of
-range, an invalid date) are rejected with `BadSettings`.
+version 1 or 2 file is too, a `geolocation` or `sun` record in a version 1 to 3 file, and a
+`units` record in a version 1 to 4 file.
+A second `geolocation`, `sun` or `units` record is a bad field; so is a `units` record with
+the wrong token count, an unknown kind or unit, or a number that isn't an unsigned integer.
+Values the model refuses (out of range, an invalid date, 7 decimals, a 1/3 fraction) are
+rejected with `BadSettings`.
 
 In versions 1 and 2 the material record has exactly 8 tokens and a texture's size reads as
 `1` by `1` meters. In version 3 a material with a texture has exactly 10 tokens; without
@@ -63,11 +67,12 @@ model refuses (non-finite or not positive) is rejected.
 
 ## What writers produce
 Exactly this order, one space between tokens, every line ending in `\n`:
-1. the header, with the lowest version that holds the model: `4` when the geolocation or
+1. the header, with the lowest version that holds the model: `5` when the length format
+   differs from its default (inches, 2 places); else `4` when the geolocation or
    the shadow settings differ from their defaults; else `3` when a material's texture
    size isn't exactly `1` by `1`, or an existing face has a stored texture map; else `2`
    when a body has guides; else `1`;
-2. `geolocation`, then `sun`, each only when it differs from its default;
+2. `geolocation`, then `sun`, then `units`, each only when it differs from its default;
 3. `material` records, ascending id; in version 3 a texture also writes its width and
    height;
 4. `definition` records, ascending id;
@@ -91,5 +96,6 @@ the target. If anything fails, the temporary file is removed and the target is u
 - 2 (M3): adds `guide` records.
 - 3 (M4): adds texture sizes to `material` records and `texmap` records.
 - 4 (M5): adds `geolocation` and `sun` records.
+- 5 (M6): adds the `units` record.
 
 A later version may add records; a reader for version N reads every version up to N.

@@ -205,6 +205,10 @@ Tyrel's UI items deferred from M4, inserted after M5 at his request.
 | `m6-toolbar-side-width` | Round 3: a toolbar docked left or right is as narrow as the toolbar, no resize handle | `m6-toolbar-drag` |
 | `m6-toolbar-customize-3` | Round 3: Customize window drops the old per-tool buttons; rename a toolbar | `m6-menus-2` (toolbars.rs) |
 | `m6-dialogs` | Round 3: dialogs after the Windows guidelines: text box labels end with ":", buttons at the bottom right on one line with a gap above, a highlighted default button that Enter presses, larger, bordered buttons | `m6-menus-2`, `m6-eyedropper-2` |
+| `m6-eyedropper-deep` | Round 4: eyedropper and Alt+click sample the material drawn under the cursor, also on faces inside components (kernel `infer::material_in`) | `m6-eyedropper-2` |
+| `m6-confirm` | Round 4: confirmation before deleting or resetting toolbars and resetting panels; New/Rename Toolbar ask for the name in a dialog | `m6-toolbar-customize-3`, `m6-dialogs` |
+| `m6-units` | Round 4: kernel length format per model (mm, cm, m, in, decimal ft, architectural with 1/1 to 1/64 in), lengths and areas written in it, undoable setting, native file version 5 | |
+| `m6-units-ui` | Round 4: Model Info "Units" section; every length and area in the app (measurement box, Entity Info, status bar, Model Info, texture and material sizes) in the model's format (write after `m6-units` merges) | `m6-units` |
 
 - Icon toolbars by tool group (own icons), toolbars that can be shown, hidden and rearranged.
 - Dockable side panels (Materials, Shadows, Entity Info, Components) instead of floating windows.
@@ -212,7 +216,7 @@ Tyrel's UI items deferred from M4, inserted after M5 at his request.
 - Components pane: the model's definitions with thumbnails, place by drag or click.
 - List/Tiles icons in the Materials panel.
 
-Done when: tools are icon buttons grouped by kind along the top by default; each toolbar can be hidden, moved to another edge or floated, and customized (tools added, removed, reordered), and the arrangement survives a restart; Entity Info, Materials, Components and Shadows dock in the left or right column or float, collapse, and survive a restart; Entity Info describes the selection and renames components and groups; Components lists the model's definitions with thumbnails, places one by click, and imports a file; the Materials panel buttons are icons. Checked in the real window before Tyrel tries it.
+Done when: tools are icon buttons grouped by kind along the top by default; each toolbar can be hidden, moved to another edge or floated, and customized (tools added, removed, reordered), and the arrangement survives a restart; Entity Info, Materials, Components and Shadows dock in the left or right column or float, collapse, and survive a restart; Entity Info describes the selection and renames components and groups; every length and area shows in the model's units, chosen in Model Info; Components lists the model's definitions with thumbnails, places one by click, and imports a file; the Materials panel buttons are icons. Checked in the real window before Tyrel tries it.
 
 ## M7: 3D printing
 
