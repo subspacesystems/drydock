@@ -2745,17 +2745,43 @@ impl Editor {
         }
     }
 
-    /// Eyedropper click: sample the clicked face or instance's material and make it
-    /// current, keeping the active tool. Edges and empty space keep waiting.
+    /// The material drawn under the cursor, or `None` when an edge of the open body is
+    /// there or the ray meets no face.
+    fn material_at(
+        &self,
+        model: &Model,
+        view: &Viewport,
+        cursor: DVec2,
+    ) -> Option<Option<MaterialId>> {
+        if matches!(self.pick_at(model, view, cursor), Some(Entity::Edge(_))) {
+            return None;
+        }
+        let (origin, dir) = self.body_ray(view, cursor);
+        let project = |p: DVec3| view.project(self.to_world(p));
+        let centers: [DVec3; 0] = [];
+        let axes = self.body_axes();
+        let probe = Probe {
+            cursor,
+            origin,
+            dir,
+            parallel: view.camera.projection == Projection::Parallel,
+            project: &project,
+            radius: SNAP_RADIUS_PX,
+            anchor: None,
+            axes,
+            centers: &centers,
+            lock: None,
+        };
+        infer::material_in(model, &self.path, !self.hide_rest, &probe)
+    }
+
+    /// Eyedropper click: sample the material drawn under the cursor and make it current,
+    /// keeping the active tool. Edges and empty space keep waiting.
     fn click_eyedropper(&mut self, model: &mut Model, view: &Viewport, cursor: DVec2) -> bool {
-        let Some(entity) = self.pick_at(model, view, cursor) else {
+        let Some(material) = self.material_at(model, view, cursor) else {
             return false;
         };
-        if matches!(entity, Entity::Edge(_)) {
-            return false;
-        }
-        let seen = self.seen_side(model, view, cursor, entity);
-        self.material = paint::sample(model, self.body(model), entity, seen).flatten();
+        self.material = material;
         self.message = None;
         self.eyedropper_armed = false;
         false
@@ -2770,20 +2796,17 @@ impl Editor {
         cursor: DVec2,
         mods: Modifiers,
     ) -> bool {
+        if mods.alt {
+            if let Some(material) = self.material_at(model, view, cursor) {
+                self.material = material;
+                self.message = None;
+            }
+            return false;
+        }
         let Some(entity) = self.pick_at(model, view, cursor) else {
             return false;
         };
         let seen = self.seen_side(model, view, cursor, entity);
-        if mods.alt {
-            match entity {
-                Entity::Face(_) | Entity::Instance(_) => {
-                    self.material = paint::sample(model, self.body(model), entity, seen).flatten();
-                    self.message = None;
-                }
-                Entity::Edge(_) => {}
-            }
-            return false;
-        }
         if matches!(entity, Entity::Edge(_)) && !self.selection.contains(&entity) {
             return false;
         }

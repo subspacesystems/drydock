@@ -1252,6 +1252,147 @@ pub fn pick_in(model: &Model, path: &EditPath, rest: bool, probe: &Probe) -> Opt
     })
 }
 
+struct MaterialHit {
+    t: f64,
+    context: u64,
+    face: FaceId,
+    material: Option<MaterialId>,
+}
+
+struct MaterialWalk<'a> {
+    model: &'a Model,
+    origin: DVec3,
+    dir: DVec3,
+    best: Option<MaterialHit>,
+    next_context: u64,
+}
+
+impl MaterialWalk<'_> {
+    fn consider(&mut self, t: f64, context: u64, face: FaceId, material: Option<MaterialId>) {
+        let better = match &self.best {
+            None => true,
+            Some(best) => {
+                t < best.t || (t == best.t && (context, face) < (best.context, best.face))
+            }
+        };
+        if better {
+            self.best = Some(MaterialHit {
+                t,
+                context,
+                face,
+                material,
+            });
+        }
+    }
+
+    fn faces(&mut self, body: BodyId, xform: DMat4, inherited: Option<MaterialId>, context: u64) {
+        let model = self.model;
+        let Some(b) = model.body(body) else {
+            return;
+        };
+        let inv = xform.inverse();
+        if !inv.is_finite() {
+            return;
+        }
+        let origin = inv.transform_point3(self.origin);
+        let dir = inv.transform_vector3(self.dir);
+        let ctx = b.geometry();
+        for (id, _) in ctx.faces() {
+            let Some(t) = face_t(ctx, id, origin, dir) else {
+                continue;
+            };
+            let Some(plane) = ctx.face_plane(id) else {
+                continue;
+            };
+            let materials = b.face_materials(id);
+            let material = if dir.dot(plane.normal) < 0.0 {
+                materials.front
+            } else {
+                materials.back
+            }
+            .or(inherited);
+            self.consider(t, context, id, material);
+        }
+    }
+
+    fn body(
+        &mut self,
+        body: BodyId,
+        xform: DMat4,
+        inherited: Option<MaterialId>,
+        context: u64,
+        def_path: &mut Vec<DefinitionId>,
+    ) {
+        self.faces(body, xform, inherited, context);
+        let model = self.model;
+        let Some(b) = model.body(body) else {
+            return;
+        };
+        for (_id, instance) in b.instances() {
+            if def_path.contains(&instance.definition) {
+                continue;
+            }
+            def_path.push(instance.definition);
+            let child_context = self.next_context;
+            self.next_context += 1;
+            self.body(
+                BodyId::Definition(instance.definition),
+                xform * instance.transform,
+                instance.material.or(inherited),
+                child_context,
+                def_path,
+            );
+            def_path.pop();
+        }
+    }
+
+    fn rest(
+        &mut self,
+        body: BodyId,
+        xform: DMat4,
+        inherited: Option<MaterialId>,
+        context: u64,
+        step: usize,
+        steps: &[InstanceId],
+    ) {
+        self.faces(body, xform, inherited, context);
+        let model = self.model;
+        let Some(b) = model.body(body) else {
+            return;
+        };
+        let Some(&open) = steps.get(step) else {
+            return;
+        };
+        for (id, instance) in b.instances() {
+            if id == open {
+                continue;
+            }
+            let child_context = self.next_context;
+            self.next_context += 1;
+            self.body(
+                BodyId::Definition(instance.definition),
+                xform * instance.transform,
+                instance.material.or(inherited),
+                child_context,
+                &mut Vec::new(),
+            );
+        }
+        let Some(instance) = b.instance(open) else {
+            return;
+        };
+        let child_context = self.next_context;
+        self.next_context += 1;
+        self.rest(
+            BodyId::Definition(instance.definition),
+            xform * instance.transform,
+            instance.material.or(inherited),
+            child_context,
+            step + 1,
+            steps,
+        );
+    }
+}
+
 /// The material drawn where the ray of `probe` first meets a face, with the body open at
 /// `path` and, with `rest`, the rest of the model (`docs/specs/m6-eyedropper-deep.md`). The
 /// probe is in the open body's coordinates. Faces at any depth inside instances count. The
@@ -1265,8 +1406,33 @@ pub fn material_in(
     rest: bool,
     probe: &Probe,
 ) -> Option<Option<MaterialId>> {
-    let _ = (model, path, rest, probe);
-    unimplemented!("m6-eyedropper-deep")
+    let (open_body, open_xform) = open_transform(model, path)?;
+    let dir = valid_probe(probe)?;
+    let mut inherited = None;
+    let mut body = BodyId::Root;
+    for &step in &path.steps {
+        let instance = model.body(body)?.instance(step)?;
+        inherited = instance.material.or(inherited);
+        body = BodyId::Definition(instance.definition);
+    }
+    let mut walk = MaterialWalk {
+        model,
+        origin: probe.origin,
+        dir,
+        best: None,
+        next_context: 1,
+    };
+    walk.body(open_body, DMat4::IDENTITY, inherited, 0, &mut Vec::new());
+    if rest && !path.is_root() {
+        let to_open = open_xform.inverse();
+        if !to_open.is_finite() {
+            return None;
+        }
+        let rest_context = walk.next_context;
+        walk.next_context += 1;
+        walk.rest(BodyId::Root, to_open, None, rest_context, 0, &path.steps);
+    }
+    walk.best.map(|hit| hit.material)
 }
 
 /// Like [`infer_model`], for the body open at `path` (`docs/specs/m4-edit-path.md`). The probe
