@@ -1875,7 +1875,11 @@ impl App {
                                                 .max_height(body_height)
                                                 .auto_shrink([false, false])
                                                 .show(ui, |ui| {
-                                                    actions.extend(self.panel_body(ui, id));
+                                                    // Rows are sibling uis with one id;
+                                                    // give each panel's state its own.
+                                                    ui.push_id(("panel", id), |ui| {
+                                                        actions.extend(self.panel_body(ui, id));
+                                                    });
                                                 });
                                         }
                                     },

@@ -245,7 +245,10 @@ pub fn materials_panel(
     let scroll_to_current = panel.last_current != Some(current);
     panel.last_current = Some(current);
     let mut close = false;
+    // Its own id salt: sibling panels' uis share an id, so unsalted lists would share
+    // one scroll state.
     egui::ScrollArea::vertical()
+        .id_salt("materials-list")
         .auto_shrink([false, false])
         .show(ui, |ui| {
             if let Some(form) = &mut panel.form {

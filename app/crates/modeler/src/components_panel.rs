@@ -232,7 +232,10 @@ pub fn components_panel(
         }
     });
 
+    // Its own id salt: sibling panels' uis share an id, so unsalted lists would share
+    // one scroll state.
     egui::ScrollArea::vertical()
+        .id_salt("components-list")
         .auto_shrink([false, false])
         .show(ui, |ui| {
             let entries = listed(model, &panel.search);
