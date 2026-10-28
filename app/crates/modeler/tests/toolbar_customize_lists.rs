@@ -164,6 +164,7 @@ fn panel() -> Harness<'static, State> {
                 custom: CustomizeState {
                     selected: DRAWING,
                     new_name: String::new(),
+                    ..CustomizeState::default()
                 },
                 changed: Vec::new(),
             },

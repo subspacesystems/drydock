@@ -55,6 +55,7 @@ fn panel(layout: ToolbarLayout, selected: usize) -> Harness<'static, PanelState>
                 custom: CustomizeState {
                     selected,
                     new_name: String::new(),
+                    ..CustomizeState::default()
                 },
                 changed: Vec::new(),
             },

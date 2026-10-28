@@ -264,6 +264,13 @@ impl ToolbarLayout {
         index
     }
 
+    /// Rename toolbar `index`; true when its name changed.
+    /// Behaviour: `docs/specs/m6-toolbar-customize-3.md`.
+    pub fn rename_toolbar(&mut self, index: usize, name: &str) -> bool {
+        let _ = (index, name);
+        unimplemented!("m6-toolbar-customize-3")
+    }
+
     /// Delete toolbar `index`.
     pub fn remove_toolbar(&mut self, index: usize) {
         if index >= self.toolbars.len() {
@@ -748,6 +755,9 @@ pub struct CustomizeState {
     pub selected: usize,
     /// The text in the new-toolbar name field.
     pub new_name: String,
+    /// The rename field: which toolbar it was filled for and its text. `None` until the
+    /// window first draws. Behaviour: `docs/specs/m6-toolbar-customize-3.md`.
+    pub rename: Option<(usize, String)>,
 }
 
 /// The contents of the View > Toolbars submenu.
