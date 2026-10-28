@@ -516,6 +516,18 @@ pub const EDGE_ZONE: f32 = 48.0;
 /// `icons::BUTTON_SIZE`).
 pub const GRIP_LENGTH: f32 = 12.0;
 
+/// Space left and right of the buttons in a toolbar column docked on the left or right edge,
+/// in points.
+pub const SIDE_MARGIN: f32 = 3.0;
+
+/// The panel holding the toolbars docked on `edge`. Top and bottom as before; left and right
+/// exactly as wide as a toolbar column (`icons::BUTTON_SIZE` plus `SIDE_MARGIN` each side),
+/// not resizable (`docs/specs/m6-toolbar-side-width.md`).
+pub fn edge_panel(edge: Edge, style: &egui::Style) -> egui::Panel {
+    let _ = (edge, style);
+    unimplemented!()
+}
+
 /// What a drawn toolbar reports for the frame.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ToolbarEvent {
