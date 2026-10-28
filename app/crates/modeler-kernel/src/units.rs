@@ -256,25 +256,115 @@ impl LengthFormat {
     /// True when `decimals` is at most `MAX_DECIMALS`, or `denominator` is in
     /// `DENOMINATORS`.
     pub fn is_valid(self) -> bool {
-        unimplemented!("m6-units")
+        match self {
+            LengthFormat::Decimal { decimals, .. } => decimals <= Self::MAX_DECIMALS,
+            LengthFormat::Architectural { denominator } => {
+                Self::DENOMINATORS.contains(&denominator)
+            }
+        }
     }
 
     /// The unit a bare typed number is read in: the decimal unit, or inches for
     /// `Architectural`.
     pub fn input_unit(self) -> Unit {
-        unimplemented!("m6-units")
+        match self {
+            LengthFormat::Decimal { unit, .. } => unit,
+            LengthFormat::Architectural { .. } => Unit::Inch,
+        }
     }
+}
+
+fn gcd(mut a: u128, mut b: u128) -> u128 {
+    while b != 0 {
+        (a, b) = (b, a % b);
+    }
+    a
 }
 
 /// A length in meters as text in `format` (`docs/specs/m6-units.md`).
 pub fn format_with(meters: f64, format: LengthFormat) -> String {
-    let _ = (meters, format);
-    unimplemented!("m6-units")
+    let meters = if meters.is_finite() { meters } else { 0.0 };
+    match format {
+        LengthFormat::Decimal {
+            unit: Unit::Foot,
+            decimals,
+        } => {
+            let d = decimals.min(LengthFormat::MAX_DECIMALS) as usize;
+            let scale = 10f64.powi(d as i32);
+            let n = (meters.abs() / 0.3048 * scale).round();
+            let neg = n > 0.0 && meters < 0.0;
+            let body = format!("{}'", trim_num(n / scale, d));
+            if neg { format!("-{body}") } else { body }
+        }
+        LengthFormat::Decimal { unit, decimals } => {
+            format_length(meters, unit, u32::from(decimals))
+        }
+        LengthFormat::Architectural { denominator } => {
+            let d = u128::from(denominator);
+            let steps = (meters.abs() / 0.0254 * d as f64).round() as u128;
+            let per_foot = 12 * d;
+            let feet = steps / per_foot;
+            let rest = steps % per_foot;
+            let whole = rest / d;
+            let mut num = rest % d;
+            let mut den = d;
+            if num > 0 {
+                let g = gcd(num, den);
+                num /= g;
+                den /= g;
+            }
+            let fraction = if num > 0 {
+                format!("{num}/{den}")
+            } else {
+                String::new()
+            };
+            let body = if feet > 0 {
+                if num > 0 {
+                    format!("{feet}' {whole} {fraction}\"")
+                } else {
+                    format!("{feet}' {whole}\"")
+                }
+            } else if whole > 0 {
+                if num > 0 {
+                    format!("{whole} {fraction}\"")
+                } else {
+                    format!("{whole}\"")
+                }
+            } else if num > 0 {
+                format!("{fraction}\"")
+            } else {
+                "0\"".to_string()
+            };
+            if steps > 0 && meters < 0.0 {
+                format!("-{body}")
+            } else {
+                body
+            }
+        }
+    }
 }
 
 /// An area in square meters as text in the square of `format`'s unit
 /// (`docs/specs/m6-units.md`).
 pub fn format_area_with(square_meters: f64, format: LengthFormat) -> String {
-    let _ = (square_meters, format);
-    unimplemented!("m6-units")
+    let square_meters = if square_meters.is_finite() {
+        square_meters
+    } else {
+        0.0
+    };
+    let (unit, decimals) = match format {
+        LengthFormat::Decimal { unit, decimals } => (unit, decimals),
+        LengthFormat::Architectural { .. } => (Unit::Foot, 2),
+    };
+    let suffix = match unit {
+        Unit::Millimeter => "mm²",
+        Unit::Centimeter => "cm²",
+        Unit::Meter => "m²",
+        Unit::Inch => "in²",
+        Unit::Foot => "ft²",
+    };
+    let meters = meters_per(unit);
+    let value = square_meters / (meters * meters);
+    let d = decimals.min(LengthFormat::MAX_DECIMALS) as usize;
+    format!("{}{suffix}", trim_num(value, d))
 }
