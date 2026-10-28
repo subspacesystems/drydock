@@ -2718,6 +2718,11 @@ impl Editor {
         self.placing = None;
     }
 
+    /// Disarm the eyedropper with no other effect (`docs/specs/m6-eyedropper-2.md`).
+    pub fn disarm_eyedropper(&mut self) {
+        unimplemented!()
+    }
+
     /// True while the eyedropper waits for a click.
     pub fn eyedropper_armed(&self) -> bool {
         self.eyedropper_armed

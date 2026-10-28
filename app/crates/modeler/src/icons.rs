@@ -436,6 +436,17 @@ pub fn shapes(icon: Icon, rect: Rect, color: Color32) -> Vec<Shape> {
     d.out
 }
 
+/// Side of the eyedropper cursor in points.
+pub const CURSOR_SIZE: f32 = 24.0;
+
+/// Where to draw `Icon::Eyedropper` as the mouse cursor for a pointer at `pointer`: a
+/// `CURSOR_SIZE` square placed so the pipette's tip is at the pointer
+/// (`docs/specs/m6-eyedropper-2.md`).
+pub fn eyedropper_cursor_rect(pointer: Pos2) -> Rect {
+    let _ = pointer;
+    unimplemented!()
+}
+
 /// Draw `icon` inside `rect`.
 pub fn paint(painter: &egui::Painter, rect: Rect, icon: Icon, color: Color32) {
     painter.extend(shapes(icon, rect, color));

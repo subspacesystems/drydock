@@ -633,6 +633,11 @@ impl App {
                     editor.arm_eyedropper();
                 }
             }
+            MaterialAction::CancelEyedropper => {
+                if let Some(editor) = &mut self.editor {
+                    editor.disarm_eyedropper();
+                }
+            }
             MaterialAction::Choose(material) => {
                 if let Some(editor) = &mut self.editor {
                     editor.set_material(material);

@@ -29,6 +29,8 @@ pub enum MaterialAction {
     Purge,
     /// Arm the eyedropper: the next click on a face or instance picks its material.
     Eyedropper,
+    /// Disarm the eyedropper (its button clicked again while it is pushed in).
+    CancelEyedropper,
 }
 
 /// The fields of the new / edit form.
@@ -120,6 +122,9 @@ pub struct MaterialsPanel {
     focus_name: bool,
     /// The Purge Unused confirmation shows (`docs/specs/m4-purge-confirm.md`).
     purge_confirm: bool,
+    /// The editor's eyedropper is armed; the app sets this before each draw and the
+    /// eyedropper button shows pushed in (`docs/specs/m6-eyedropper-2.md`).
+    pub eyedropper_armed: bool,
 }
 
 impl MaterialsPanel {
