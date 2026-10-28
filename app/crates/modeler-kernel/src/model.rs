@@ -222,6 +222,11 @@ pub enum ModelRecord {
         from: ShadowSettings,
         to: ShadowSettings,
     },
+    /// Behaviour: `docs/specs/m6-units.md`.
+    SetLengthFormat {
+        from: crate::units::LengthFormat,
+        to: crate::units::LengthFormat,
+    },
 }
 
 impl ModelRecord {
@@ -273,6 +278,10 @@ impl ModelRecord {
             ModelRecord::AddGuide(body, id, guide) => ModelRecord::RemoveGuide(*body, *id, *guide),
             ModelRecord::RemoveGuide(body, id, guide) => ModelRecord::AddGuide(*body, *id, *guide),
             ModelRecord::SetGeolocation { from, to } => ModelRecord::SetGeolocation {
+                from: *to,
+                to: *from,
+            },
+            ModelRecord::SetLengthFormat { from, to } => ModelRecord::SetLengthFormat {
                 from: *to,
                 to: *from,
             },
@@ -1235,6 +1244,7 @@ impl Model {
                 self.geolocation = *to;
                 Ok(())
             }
+            ModelRecord::SetLengthFormat { .. } => unimplemented!("m6-units"),
             ModelRecord::SetShadows { from, to } => {
                 if !shadow_settings_are_good(to) {
                     return Err(ModelError::BadSettings);
