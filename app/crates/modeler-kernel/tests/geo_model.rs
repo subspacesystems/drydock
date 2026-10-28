@@ -384,8 +384,9 @@ fn a_failed_edit_rolls_settings_back() {
 // -- native file --------------------------------------------------------------------------
 
 #[test]
-fn version_is_four() {
-    assert_eq!(FORMAT_VERSION, 4);
+fn version_is_at_least_four() {
+    // Version 5 (m6-units) adds the `units` record.
+    const { assert!(FORMAT_VERSION >= 4) };
 }
 
 #[test]
