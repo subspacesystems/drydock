@@ -267,8 +267,33 @@ impl ToolbarLayout {
     /// Rename toolbar `index`; true when its name changed.
     /// Behaviour: `docs/specs/m6-toolbar-customize-3.md`.
     pub fn rename_toolbar(&mut self, index: usize, name: &str) -> bool {
-        let _ = (index, name);
-        unimplemented!("m6-toolbar-customize-3")
+        let Some(current) = self.toolbars.get(index).map(|toolbar| toolbar.name.clone()) else {
+            return false;
+        };
+        let cleaned: String = name
+            .chars()
+            .map(|c| if c == '\r' || c == '\n' { ' ' } else { c })
+            .collect();
+        let base = cleaned.trim();
+        if base.is_empty() {
+            return false;
+        }
+        let mut candidate = base.to_string();
+        let mut suffix = 2;
+        while self
+            .toolbars
+            .iter()
+            .enumerate()
+            .any(|(i, toolbar)| i != index && toolbar.name == candidate)
+        {
+            candidate = format!("{base} {suffix}");
+            suffix += 1;
+        }
+        if candidate == current {
+            return false;
+        }
+        self.toolbars[index].name = candidate;
+        true
     }
 
     /// Delete toolbar `index`.
@@ -898,16 +923,19 @@ pub fn customize_panel(
         }
     });
 
+    let stale = state
+        .rename
+        .as_ref()
+        .is_none_or(|(index, _)| *index != selected);
+    if stale && count > 0 {
+        state.rename = Some((selected, layout.toolbars()[selected].name.clone()));
+    }
     let tools = layout
         .toolbars()
         .get(selected)
         .map(|toolbar| toolbar.tools.clone())
         .unwrap_or_default();
     let available = available_tools(layout, selected);
-    let mut remove = None;
-    let mut earlier = None;
-    let mut later = None;
-    let mut add = None;
     let mut dropped: Option<(Tool, egui::Pos2)> = None;
     let mut dragging: Option<egui::Pos2> = None;
     let mut row_rects = Vec::new();
@@ -916,7 +944,7 @@ pub fn customize_panel(
         let on_rect = {
             let ui = &mut columns[0];
             ui.heading("On the toolbar");
-            for (at, &tool) in tools.iter().enumerate() {
+            for &tool in &tools {
                 let label = tool_label(tool);
                 let row = ui.horizontal(|ui| {
                     let handle = customize_drag_handle(ui, tool, label);
@@ -927,24 +955,6 @@ pub fn customize_panel(
                         dropped = handle.interact_pointer_pos().map(|pos| (tool, pos));
                     }
                     ui.label(label);
-                    if ui.button(format!("Remove {label}")).clicked() {
-                        remove = Some(at);
-                    }
-                    if ui
-                        .add_enabled(at > 0, egui::Button::new(format!("Move {label} earlier")))
-                        .clicked()
-                    {
-                        earlier = Some(at);
-                    }
-                    if ui
-                        .add_enabled(
-                            at + 1 < tools.len(),
-                            egui::Button::new(format!("Move {label} later")),
-                        )
-                        .clicked()
-                    {
-                        later = Some(at);
-                    }
                 });
                 row_rects.push(row.response.rect);
             }
@@ -964,9 +974,6 @@ pub fn customize_panel(
                         dropped = handle.interact_pointer_pos().map(|pos| (tool, pos));
                     }
                     ui.label(label);
-                    if ui.button(format!("Add {label}")).clicked() {
-                        add = Some(tool);
-                    }
                 });
             }
             ui.min_rect()
@@ -991,22 +998,6 @@ pub fn customize_panel(
         );
     }
 
-    if let Some(at) = remove {
-        layout.remove_tool(selected, at);
-        changed = true;
-    } else if let Some(at) = earlier {
-        layout.move_tool(selected, at, at - 1);
-        changed = true;
-    } else if let Some(at) = later {
-        layout.move_tool(selected, at, at + 1);
-        changed = true;
-    }
-
-    if let Some(tool) = add {
-        layout.add_tool(selected, tool, usize::MAX);
-        changed = true;
-    }
-
     if let Some((tool, pos)) = dropped {
         let target = if on_rect.contains(pos) {
             Some(CustomizeDrop::OnToolbar(insertion_index(
@@ -1026,14 +1017,36 @@ pub fn customize_panel(
         }
     }
 
+    if let Some(entry) = state.rename.as_mut() {
+        let mut attempted = false;
+        ui.horizontal(|ui| {
+            let label = ui.label("Toolbar name:");
+            let response = ui.add(egui::TextEdit::singleline(&mut entry.1));
+            attempted = response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+            response.labelled_by(label.id);
+            if ui.button("Rename toolbar").clicked() {
+                attempted = true;
+            }
+        });
+        if attempted {
+            if layout.rename_toolbar(selected, &entry.1) {
+                changed = true;
+            }
+            state.rename = Some((selected, layout.toolbars()[selected].name.clone()));
+        }
+    }
     ui.horizontal(|ui| {
-        let label = ui.label("New toolbar name");
+        let label = ui.label("New toolbar name:");
         ui.add(egui::TextEdit::singleline(&mut state.new_name))
             .labelled_by(label.id);
     });
     if ui.button("Create toolbar").clicked() {
         state.selected = layout.add_toolbar(&state.new_name);
         state.new_name.clear();
+        state.rename = layout
+            .toolbars()
+            .get(state.selected)
+            .map(|toolbar| (state.selected, toolbar.name.clone()));
         changed = true;
     }
     if ui.button("Delete toolbar").clicked() && selected < layout.toolbars().len() {
@@ -1044,12 +1057,20 @@ pub fn customize_panel(
         } else {
             state.selected.min(remaining - 1)
         };
+        state.rename = layout
+            .toolbars()
+            .get(state.selected)
+            .map(|toolbar| (state.selected, toolbar.name.clone()));
         changed = true;
     }
     if ui.button("Reset Toolbars").clicked() {
         layout.reset();
         let remaining = layout.toolbars().len();
         state.selected = state.selected.min(remaining.saturating_sub(1));
+        state.rename = layout
+            .toolbars()
+            .get(state.selected)
+            .map(|toolbar| (state.selected, toolbar.name.clone()));
         changed = true;
     }
     changed
