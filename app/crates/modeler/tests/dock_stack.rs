@@ -31,11 +31,12 @@ fn heights_follow_the_weights() {
 }
 
 #[test]
-fn a_collapsed_panel_is_just_its_header_and_the_others_take_the_rest() {
-    let h = stack_heights(500.0, &[row(false, 1.0), row(true, 1.0), row(false, 1.0)]);
+fn a_collapsed_panel_is_just_its_header_and_the_others_keep_their_height() {
+    // Changed by m6-panel-collapse: the others no longer take the collapsed panel's space.
+    let h = stack_heights(600.0, &[row(false, 1.0), row(true, 1.0), row(false, 1.0)]);
     assert!(near(h[1], HEADER_HEIGHT), "{h:?}");
-    assert!(near(h[0], h[2]), "{h:?}");
-    assert!(near(h.iter().sum::<f32>(), 500.0), "{h:?}");
+    assert!(near(h[0], 200.0) && near(h[2], 200.0), "{h:?}");
+    assert!(h.iter().sum::<f32>() < 600.0, "{h:?}");
 }
 
 #[test]
