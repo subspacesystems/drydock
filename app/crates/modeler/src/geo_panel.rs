@@ -86,6 +86,20 @@ pub fn geo_panel(ui: &mut egui::Ui, form: &mut GeoForm) -> Option<Geolocation> {
     }
 }
 
+/// The four labelled fields and the error line of [`geo_panel`], without the Apply button
+/// (the window's button row has it). True when Enter was pressed in a field.
+pub fn geo_fields(ui: &mut egui::Ui, form: &mut GeoForm) -> bool {
+    let _ = (ui, form);
+    unimplemented!("m6-dialogs")
+}
+
+/// The globe above [`geo_fields`] (the globe part of [`geo_panel_with_globe`]). True when
+/// Enter was pressed in a field.
+pub fn geo_fields_with_globe(ui: &mut egui::Ui, form: &mut GeoForm, view: &mut GlobeView) -> bool {
+    let _ = (ui, form, view);
+    unimplemented!("m6-dialogs")
+}
+
 /// The globe above [`geo_panel`]: clicking it fills the latitude, longitude and an estimated
 /// UTC offset into `form` (nothing is applied until the user does). Behaviour:
 /// `docs/specs/m5-geo-globe.md`.

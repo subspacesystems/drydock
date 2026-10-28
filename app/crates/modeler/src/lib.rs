@@ -9,6 +9,7 @@
 
 pub mod chrome;
 pub mod components_panel;
+pub mod dialog;
 pub mod dock;
 pub mod document;
 pub mod editor;
