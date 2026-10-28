@@ -313,7 +313,7 @@ fn help_menu_still_opens_about() {
     let seen = Seen::default();
     let mut h = harness(MenuState::default(), &seen);
     open(&mut h, "Help");
-    h.get_by_label("About modeler").click();
+    h.get_by_label("About modeler...").click();
     h.run();
     assert_eq!(*seen.borrow(), vec![Action::About]);
 }
