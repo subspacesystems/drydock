@@ -226,13 +226,13 @@ fn geolocation_window_shows_the_models_location() {
     s.model.set_geolocation(g, &mut log).unwrap();
     s.windows.geo_open = true;
     let h = harness(s);
-    h.get_by_label("Latitude (deg)");
+    h.get_by_label("Latitude (deg):");
     assert_eq!(
-        h.get_by_label("Latitude (deg)").value().as_deref(),
+        h.get_by_label("Latitude (deg):").value().as_deref(),
         Some("47.5")
     );
     assert_eq!(
-        h.get_by_label("Longitude (deg)").value().as_deref(),
+        h.get_by_label("Longitude (deg):").value().as_deref(),
         Some("-122.25")
     );
 }
@@ -242,11 +242,11 @@ fn applying_the_geolocation_sets_it_in_one_step_and_closes() {
     let mut s = state();
     s.windows.geo_open = true;
     let mut h = harness(s);
-    h.get_by_label("Latitude (deg)").focus();
-    h.get_by_label("Latitude (deg)").type_text("47.5");
+    h.get_by_label("Latitude (deg):").focus();
+    h.get_by_label("Latitude (deg):").type_text("47.5");
     h.run();
     let typed: f64 = h
-        .get_by_label("Latitude (deg)")
+        .get_by_label("Latitude (deg):")
         .value()
         .unwrap()
         .parse()
@@ -266,8 +266,8 @@ fn a_bad_geolocation_changes_nothing_and_stays_open() {
     let mut s = state();
     s.windows.geo_open = true;
     let mut h = harness(s);
-    h.get_by_label("Latitude (deg)").focus();
-    h.get_by_label("Latitude (deg)").type_text("95");
+    h.get_by_label("Latitude (deg):").focus();
+    h.get_by_label("Latitude (deg):").type_text("95");
     h.run();
     h.get_by_label_contains("Latitude must be a number from -90 to 90");
     let s = h.state();
@@ -280,8 +280,8 @@ fn reopening_geolocation_shows_the_current_values_not_stale_text() {
     let mut s = state();
     s.windows.geo_open = true;
     let mut h = harness(s);
-    h.get_by_label("Latitude (deg)").focus();
-    h.get_by_label("Latitude (deg)").type_text("12");
+    h.get_by_label("Latitude (deg):").focus();
+    h.get_by_label("Latitude (deg):").type_text("12");
     h.run();
     h.get_by_label("Close").click();
     h.run();
@@ -290,7 +290,7 @@ fn reopening_geolocation_shows_the_current_values_not_stale_text() {
     h.run();
     let want = format!("{}", Geolocation::default().latitude);
     assert_eq!(
-        h.get_by_label("Latitude (deg)").value().as_deref(),
+        h.get_by_label("Latitude (deg):").value().as_deref(),
         Some(want.as_str())
     );
 }

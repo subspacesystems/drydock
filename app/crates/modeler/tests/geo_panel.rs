@@ -156,10 +156,10 @@ fn panel_shows_its_widgets() {
     let h = harness(GeoForm::default());
     for label in [
         "Geolocation",
-        "Latitude (deg)",
-        "Longitude (deg)",
-        "North angle (deg)",
-        "UTC offset (h)",
+        "Latitude (deg):",
+        "Longitude (deg):",
+        "North angle (deg):",
+        "UTC offset (h):",
         "Apply",
     ] {
         h.get_by_label(label);
@@ -206,9 +206,9 @@ fn a_bad_field_shows_its_message_and_disables_apply() {
 fn typing_into_an_empty_field_fills_the_form() {
     let mut h = harness(form("", "0", "0", "0"));
     assert!(apply_disabled(&h));
-    h.get_by_label("Latitude (deg)").focus();
+    h.get_by_label("Latitude (deg):").focus();
     h.run();
-    h.get_by_label("Latitude (deg)").type_text("47.5");
+    h.get_by_label("Latitude (deg):").type_text("47.5");
     h.run();
     assert_eq!(h.state().form.latitude, "47.5");
     assert!(!apply_disabled(&h));
