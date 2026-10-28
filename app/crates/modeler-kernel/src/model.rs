@@ -16,6 +16,7 @@ use crate::sun::{Geolocation, ShadowSettings};
 use crate::tape::{Guide, GuideId, Guides};
 use crate::texture::TextureMap;
 use crate::topology::{Context, Edit, FaceId, Record, TopoError, Violation};
+use crate::units::LengthFormat;
 
 /// A good guide has only finite numbers and, for a line, a unit-length direction.
 fn guide_is_good(guide: &Guide) -> bool {
@@ -378,6 +379,7 @@ pub struct Model {
     revision: u64,
     geolocation: Geolocation,
     shadows: ShadowSettings,
+    length_format: LengthFormat,
 }
 
 /// A process-unique identity; a clone takes a fresh one, so caches keyed on it never
@@ -406,6 +408,7 @@ impl PartialEq for Model {
             && self.materials == other.materials
             && self.geolocation == other.geolocation
             && self.shadows == other.shadows
+            && self.length_format == other.length_format
     }
 }
 
@@ -450,19 +453,30 @@ impl Model {
     }
 
     /// How the model shows lengths (`docs/specs/m6-units.md`).
-    pub fn length_format(&self) -> crate::units::LengthFormat {
-        unimplemented!("m6-units")
+    pub fn length_format(&self) -> LengthFormat {
+        self.length_format
     }
 
     /// Replace the length format as one record in `log`; `BadSettings` (nothing changes)
     /// when it isn't valid (`docs/specs/m6-units.md`).
     pub fn set_length_format(
         &mut self,
-        format: crate::units::LengthFormat,
+        format: LengthFormat,
         log: &mut ModelEdit,
     ) -> Result<(), ModelError> {
-        let _ = (format, log);
-        unimplemented!("m6-units")
+        if !format.is_valid() {
+            return Err(ModelError::BadSettings);
+        }
+        if format == self.length_format {
+            return Ok(());
+        }
+        let record = ModelRecord::SetLengthFormat {
+            from: self.length_format,
+            to: format,
+        };
+        self.apply(&record)?;
+        log.records.push(record);
+        Ok(())
     }
 
     /// Replace the geolocation as one record in `log`; `BadSettings` (nothing changes) when
@@ -1017,7 +1031,9 @@ impl Model {
         self.apply_record(record)?;
         if !matches!(
             record,
-            ModelRecord::SetGeolocation { .. } | ModelRecord::SetShadows { .. }
+            ModelRecord::SetGeolocation { .. }
+                | ModelRecord::SetShadows { .. }
+                | ModelRecord::SetLengthFormat { .. }
         ) {
             self.revision = self.revision.wrapping_add(1);
         }
@@ -1244,7 +1260,16 @@ impl Model {
                 self.geolocation = *to;
                 Ok(())
             }
-            ModelRecord::SetLengthFormat { .. } => unimplemented!("m6-units"),
+            ModelRecord::SetLengthFormat { from, to } => {
+                if !to.is_valid() {
+                    return Err(ModelError::BadSettings);
+                }
+                if *from != self.length_format {
+                    return Err(ModelError::Mismatch);
+                }
+                self.length_format = *to;
+                Ok(())
+            }
             ModelRecord::SetShadows { from, to } => {
                 if !shadow_settings_are_good(to) {
                     return Err(ModelError::BadSettings);

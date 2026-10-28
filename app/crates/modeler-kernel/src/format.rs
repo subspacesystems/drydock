@@ -23,9 +23,10 @@ use crate::tape::{Guide, GuideId};
 use crate::topology::{
     Edge, EdgeId, EdgeUse, Face, FaceId, Loop, Record, TopoError, Vertex, VertexId,
 };
+use crate::units::{LengthFormat, Unit};
 
 /// The version this code writes, and the newest it reads.
-pub const FORMAT_VERSION: u32 = 4;
+pub const FORMAT_VERSION: u32 = 5;
 
 /// Why a model can't be written. Nothing was written.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -254,7 +255,10 @@ pub fn to_text(model: &Model) -> Result<String, WriteError> {
     let has_guides = bodies().any(|body| !body.guides().is_empty());
     let has_settings = model.geolocation() != Geolocation::default()
         || model.shadow_settings() != ShadowSettings::default();
-    let version = if has_settings {
+    let has_units = model.length_format() != LengthFormat::default();
+    let version = if has_units {
+        5
+    } else if has_settings {
         4
     } else if needs_three {
         3
@@ -295,6 +299,24 @@ pub fn to_text(model: &Model) -> Result<String, WriteError> {
             s.dark,
             flag(s.on_ground)
         ));
+    }
+
+    if has_units {
+        match model.length_format() {
+            LengthFormat::Decimal { unit, decimals } => {
+                let unit = match unit {
+                    Unit::Millimeter => "mm",
+                    Unit::Centimeter => "cm",
+                    Unit::Meter => "m",
+                    Unit::Inch => "in",
+                    Unit::Foot => "ft",
+                };
+                out.push_str(&format!("units decimal {unit} {decimals}\n"));
+            }
+            LengthFormat::Architectural { denominator } => {
+                out.push_str(&format!("units architectural {denominator}\n"));
+            }
+        }
     }
 
     for (id, material) in model.materials() {
@@ -862,6 +884,45 @@ fn apply_line(
                     from,
                     to: geolocation,
                 })
+                .map_err(rejected)?;
+            Ok(false)
+        }
+        "units" => {
+            if version < 5 {
+                return Err(ReadErrorKind::UnknownRecord);
+            }
+            if !settings_seen.insert("units") {
+                return Err(ReadErrorKind::BadField);
+            }
+            let format = match tokens.get(1).map(bare).transpose()? {
+                Some("decimal") => {
+                    expect_count(tokens, 4)?;
+                    let unit = match bare(&tokens[2])? {
+                        "mm" => Unit::Millimeter,
+                        "cm" => Unit::Centimeter,
+                        "m" => Unit::Meter,
+                        "in" => Unit::Inch,
+                        "ft" => Unit::Foot,
+                        _ => return Err(ReadErrorKind::BadField),
+                    };
+                    let decimals = parse_u64(&tokens[3])?;
+                    let decimals =
+                        u8::try_from(decimals).map_err(|_| rejected(ModelError::BadSettings))?;
+                    LengthFormat::Decimal { unit, decimals }
+                }
+                Some("architectural") => {
+                    expect_count(tokens, 3)?;
+                    let denominator = parse_u64(&tokens[2])?;
+                    let denominator =
+                        u8::try_from(denominator).map_err(|_| rejected(ModelError::BadSettings))?;
+                    LengthFormat::Architectural { denominator }
+                }
+                Some(_) => return Err(ReadErrorKind::BadField),
+                None => return Err(ReadErrorKind::BadField),
+            };
+            let from = model.length_format();
+            model
+                .apply(&ModelRecord::SetLengthFormat { from, to: format })
                 .map_err(rejected)?;
             Ok(false)
         }
