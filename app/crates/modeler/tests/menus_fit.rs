@@ -392,7 +392,7 @@ fn toolbars_submenu_uses_check_items_too() {
         assert_eq!(node.accesskit_node().toggled(), Some(Toggled::True));
     }
     assert!(has_row(&h, "Customize..."));
-    assert!(has_row(&h, "Reset Toolbars"));
+    assert!(has_row(&h, "Reset Toolbars..."));
 }
 
 // ---- View grouping ----
@@ -409,7 +409,7 @@ fn view_groups_axes_panels_and_layout_items_apart() {
         "Shadows",
         "Texture Position",
         "Toolbars",
-        "Reset Panels",
+        "Reset Panels...",
         "Model Info...",
     ];
     let rects: Vec<Rect> = order.iter().map(|l| row(&h, l)).collect();

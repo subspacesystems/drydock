@@ -163,7 +163,6 @@ fn panel() -> Harness<'static, State> {
                 layout: ToolbarLayout::default(),
                 custom: CustomizeState {
                     selected: DRAWING,
-                    new_name: String::new(),
                     ..CustomizeState::default()
                 },
                 changed: Vec::new(),
