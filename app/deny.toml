@@ -1,5 +1,8 @@
 # Merge gate: dependency licenses, sources and advisories (docs/PLAN.md section 3).
 # Changing the allow list needs an ADR and Tyrel's approval.
+# The app is GPL-3.0-or-later (ADR-007): every allowed license must be compatible with
+# GPLv3. Anything not listed is rejected, which covers the incompatible ones
+# (GPL-2.0-only, EPL, CDDL, MPL-1.1, proprietary, ...); do not add them.
 
 [graph]
 all-features = true
@@ -25,6 +28,12 @@ exceptions = [
     # Windows clipboard, always enabled by eframe. Boost license, permissive.
     { crate = "clipboard-win", allow = ["BSL-1.0"] },
     { crate = "error-code", allow = ["BSL-1.0"] },
+    # Our own crates: GPLv3 (ADR-007).
+    { crate = "modeler", allow = ["GPL-3.0-or-later"] },
+    { crate = "modeler-dae", allow = ["GPL-3.0-or-later"] },
+    { crate = "modeler-kernel", allow = ["GPL-3.0-or-later"] },
+    { crate = "modeler-render", allow = ["GPL-3.0-or-later"] },
+    { crate = "modeler-view", allow = ["GPL-3.0-or-later"] },
 ]
 
 [bans]

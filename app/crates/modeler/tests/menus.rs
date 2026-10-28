@@ -281,7 +281,10 @@ fn tools_menu_marks_only_the_current_tool() {
 fn about_lines_name_version_license_and_contributors() {
     let lines = about_lines();
     assert_eq!(lines[0], about_text());
-    assert_eq!(lines[1], "License: GPL-3.0-or-later");
+    assert_eq!(
+        lines[1],
+        "License: GPL-3.0-or-later"
+    );
     assert_eq!(lines[2], "Copyright (c) 2026 Subspace Systems");
     assert_eq!(lines[3], "Contributors:");
     let names: Vec<&str> = CONTRIBUTORS
