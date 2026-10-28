@@ -1674,12 +1674,7 @@ impl App {
                 continue;
             }
             let vertical = matches!(edge, Edge::Left | Edge::Right);
-            let panel = match edge {
-                Edge::Top => egui::Panel::top("toolbars-top"),
-                Edge::Bottom => egui::Panel::bottom("toolbars-bottom"),
-                Edge::Left => egui::Panel::left("toolbars-left"),
-                Edge::Right => egui::Panel::right("toolbars-right"),
-            };
+            let panel = toolbars::edge_panel(edge, &ui.style().clone());
             panel.show(ui, |ui| {
                 let strips = |ui: &mut egui::Ui| {
                     for &index in &indices {
