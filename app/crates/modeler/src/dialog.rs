@@ -90,8 +90,35 @@ pub fn confirm_dialog(
     message: &str,
     action: &str,
 ) -> Option<bool> {
-    let _ = (ctx, id, title, message, action);
-    unimplemented!("m6-confirm")
+    let mut answer = None;
+    let response = egui::Modal::new(id).show(ctx, |ui| {
+        ui.set_width(360.0);
+        dialog_title(ui, title);
+        ui.label(message);
+        match button_row(
+            ui,
+            &[
+                DialogButton {
+                    label: action,
+                    default: false,
+                    enabled: true,
+                },
+                DialogButton {
+                    label: "Cancel",
+                    default: true,
+                    enabled: true,
+                },
+            ],
+        ) {
+            Some(0) => answer = Some(true),
+            Some(1) => answer = Some(false),
+            _ => {}
+        }
+    });
+    if answer.is_none() && response.should_close() {
+        answer = Some(false);
+    }
+    answer
 }
 
 /// A modal name prompt (`docs/specs/m6-confirm.md`): `title`, a "Name:" text box editing
@@ -104,6 +131,46 @@ pub fn name_dialog(
     title: &str,
     name: &mut String,
 ) -> Option<bool> {
-    let _ = (ctx, id, title, name);
-    unimplemented!("m6-confirm")
+    let mut answer = None;
+    let response = egui::Modal::new(id).show(ctx, |ui| {
+        ui.set_width(360.0);
+        dialog_title(ui, title);
+        ui.horizontal(|ui| {
+            let label = ui.label(field_label("Name"));
+            let field = ui
+                .add(egui::TextEdit::singleline(name))
+                .labelled_by(label.id);
+            field.request_focus();
+        });
+        let enabled = !name.trim().is_empty();
+        match button_row(
+            ui,
+            &[
+                DialogButton {
+                    label: "OK",
+                    default: true,
+                    enabled,
+                },
+                DialogButton {
+                    label: "Cancel",
+                    default: false,
+                    enabled: true,
+                },
+            ],
+        ) {
+            Some(0) if enabled => answer = Some(true),
+            Some(1) => answer = Some(false),
+            _ => {}
+        }
+    });
+    if answer.is_none() && response.should_close() {
+        answer = Some(false);
+    }
+    answer
+}
+
+/// The dialog's title: strong, and a little larger than the body text.
+fn dialog_title(ui: &mut egui::Ui, title: &str) {
+    let size = ui.text_style_height(&egui::TextStyle::Body) + 3.0;
+    ui.label(egui::RichText::new(title).strong().size(size));
 }

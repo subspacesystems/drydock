@@ -923,7 +923,7 @@ fn menu_bar_inner(
                     }
                 });
             }
-            if menu_item(ui, None, "Reset Panels", "", false).clicked() {
+            if menu_item(ui, None, "Reset Panels...", "", false).clicked() {
                 chosen = Some(Action::ResetPanels);
                 ui.close();
             }

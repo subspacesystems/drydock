@@ -8,6 +8,7 @@
 //! Behaviour: `docs/specs/m6-toolbar-layout.md`.
 
 use crate::chrome::{TOOL_BUTTONS, menu_check_item, menu_item, tool_shortcut};
+use crate::dialog::{confirm_dialog, name_dialog};
 use crate::icons::{self, Icon};
 use crate::input::Tool;
 use eframe::egui;
@@ -797,11 +798,6 @@ pub enum ToolbarsMenuEvent {
 pub struct CustomizeState {
     /// The toolbar being edited (an index into the layout; clamped when out of range).
     pub selected: usize,
-    /// The text in the new-toolbar name field.
-    pub new_name: String,
-    /// The rename field: which toolbar it was filled for and its text. `None` until the
-    /// window first draws. Behaviour: `docs/specs/m6-toolbar-customize-3.md`.
-    pub rename: Option<(usize, String)>,
     /// The dialog open over the window, if any (`docs/specs/m6-confirm.md`).
     pub prompt: Option<CustomizePrompt>,
 }
@@ -836,9 +832,8 @@ pub fn toolbars_menu(ui: &mut egui::Ui, layout: &mut ToolbarLayout) -> Option<To
     if menu_item(ui, None, "Customize...", "", false).clicked() {
         event = Some(ToolbarsMenuEvent::Customize);
     }
-    if menu_item(ui, None, "Reset Toolbars", "", false).clicked() {
-        layout.reset();
-        event = Some(ToolbarsMenuEvent::Changed);
+    if menu_item(ui, None, "Reset Toolbars...", "", false).clicked() {
+        event = Some(ToolbarsMenuEvent::Reset);
     }
     event
 }
@@ -957,13 +952,6 @@ pub fn customize_panel(
         }
     });
 
-    let stale = state
-        .rename
-        .as_ref()
-        .is_none_or(|(index, _)| *index != selected);
-    if stale && count > 0 {
-        state.rename = Some((selected, layout.toolbars()[selected].name.clone()));
-    }
     let tools = layout
         .toolbars()
         .get(selected)
@@ -1051,61 +1039,99 @@ pub fn customize_panel(
         }
     }
 
-    if let Some(entry) = state.rename.as_mut() {
-        let mut attempted = false;
-        ui.horizontal(|ui| {
-            let label = ui.label("Toolbar name:");
-            let response = ui.add(egui::TextEdit::singleline(&mut entry.1));
-            attempted = response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
-            response.labelled_by(label.id);
-            if ui.button("Rename toolbar").clicked() {
-                attempted = true;
-            }
-        });
-        if attempted {
-            if layout.rename_toolbar(selected, &entry.1) {
-                changed = true;
-            }
-            state.rename = Some((selected, layout.toolbars()[selected].name.clone()));
-        }
-    }
     ui.horizontal(|ui| {
-        let label = ui.label("New toolbar name:");
-        ui.add(egui::TextEdit::singleline(&mut state.new_name))
-            .labelled_by(label.id);
+        if ui.button("New Toolbar...").clicked() {
+            state.prompt = Some(CustomizePrompt::New {
+                name: String::new(),
+            });
+        }
+        let toolbars = count > 0;
+        if ui
+            .add_enabled(toolbars, egui::Button::new("Rename Toolbar..."))
+            .clicked()
+            && let Some(toolbar) = layout.toolbars().get(selected)
+        {
+            state.prompt = Some(CustomizePrompt::Rename {
+                index: selected,
+                name: toolbar.name.clone(),
+            });
+        }
+        if ui
+            .add_enabled(toolbars, egui::Button::new("Delete Toolbar..."))
+            .clicked()
+        {
+            state.prompt = Some(CustomizePrompt::Delete { index: selected });
+        }
+        if ui.button("Reset Toolbars...").clicked() {
+            state.prompt = Some(CustomizePrompt::Reset);
+        }
     });
-    if ui.button("Create toolbar").clicked() {
-        state.selected = layout.add_toolbar(&state.new_name);
-        state.new_name.clear();
-        state.rename = layout
-            .toolbars()
-            .get(state.selected)
-            .map(|toolbar| (state.selected, toolbar.name.clone()));
-        changed = true;
-    }
-    if ui.button("Delete toolbar").clicked() && selected < layout.toolbars().len() {
-        layout.remove_toolbar(selected);
-        let remaining = layout.toolbars().len();
-        state.selected = if remaining == 0 {
-            0
-        } else {
-            state.selected.min(remaining - 1)
-        };
-        state.rename = layout
-            .toolbars()
-            .get(state.selected)
-            .map(|toolbar| (state.selected, toolbar.name.clone()));
-        changed = true;
-    }
-    if ui.button("Reset Toolbars").clicked() {
-        layout.reset();
-        let remaining = layout.toolbars().len();
-        state.selected = state.selected.min(remaining.saturating_sub(1));
-        state.rename = layout
-            .toolbars()
-            .get(state.selected)
-            .map(|toolbar| (state.selected, toolbar.name.clone()));
-        changed = true;
+
+    if let Some(mut prompt) = state.prompt.take() {
+        let id = egui::Id::new("customize-prompt");
+        let mut done = false;
+        match &mut prompt {
+            CustomizePrompt::New { name } => {
+                if let Some(ok) = name_dialog(ui.ctx(), id, "New Toolbar", name) {
+                    done = true;
+                    if ok {
+                        state.selected = layout.add_toolbar(name);
+                        changed = true;
+                    }
+                }
+            }
+            CustomizePrompt::Rename { index, name } => {
+                if let Some(ok) = name_dialog(ui.ctx(), id, "Rename Toolbar", name) {
+                    done = true;
+                    if ok && layout.rename_toolbar(*index, name) {
+                        changed = true;
+                    }
+                }
+            }
+            CustomizePrompt::Delete { index } => {
+                let name = layout
+                    .toolbars()
+                    .get(*index)
+                    .map(|toolbar| toolbar.name.clone())
+                    .unwrap_or_default();
+                let message = format!("Delete the toolbar \"{name}\"?");
+                if let Some(ok) = confirm_dialog(ui.ctx(), id, "Delete Toolbar", &message, "Delete")
+                {
+                    done = true;
+                    if ok {
+                        layout.remove_toolbar(*index);
+                        let remaining = layout.toolbars().len();
+                        state.selected = if remaining == 0 {
+                            0
+                        } else {
+                            state.selected.min(remaining - 1)
+                        };
+                        changed = true;
+                    }
+                }
+            }
+            CustomizePrompt::Reset => {
+                if let Some(ok) = confirm_dialog(
+                    ui.ctx(),
+                    id,
+                    "Reset Toolbars",
+                    "The toolbars go back to how they were installed and your own toolbars are deleted.",
+                    "Reset",
+                ) {
+                    done = true;
+                    if ok {
+                        layout.reset();
+                        state.selected = state
+                            .selected
+                            .min(layout.toolbars().len().saturating_sub(1));
+                        changed = true;
+                    }
+                }
+            }
+        }
+        if !done {
+            state.prompt = Some(prompt);
+        }
     }
     changed
 }

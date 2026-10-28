@@ -14,6 +14,7 @@ use modeler::chrome::{self, MenuState};
 use modeler::components_panel::{
     ComponentAction, ComponentsPanel, components_panel, read_component_source,
 };
+use modeler::dialog;
 use modeler::dock::{
     self, DockLayout, PanelEvent, PanelId, Side as DockSide, StackRow, apply_drop,
     drop_destination, panel_header,
@@ -132,6 +133,8 @@ pub struct App {
     save_dialog: Option<SaveDialog>,
     /// A destructive action waiting for the Save/Discard/Cancel question.
     confirm: Option<PendingAction>,
+    /// An app-level destructive action waiting for confirmation (`docs/specs/m6-confirm.md`).
+    app_confirm: Option<AppConfirm>,
     /// What to do after a save that was started from the unsaved-changes question.
     after_save: Option<PendingAction>,
     /// Let the close request through after the question has been answered.
@@ -218,6 +221,7 @@ impl App {
             dialog: None,
             save_dialog: None,
             confirm: None,
+            app_confirm: None,
             after_save: None,
             allow_close: false,
             viewport_pt: (1.0, 1.0),
@@ -713,9 +717,7 @@ impl App {
             Effect::ToggleShadows => self.reveal_panel(PanelId::Shadows, ctx),
             Effect::TogglePanel(id) => self.reveal_panel(id, ctx),
             Effect::ResetPanels => {
-                self.dock.reset();
-                self.shadows_preview = None;
-                self.save_panels();
+                self.app_confirm = Some(AppConfirm::ResetPanels);
             }
             Effect::OpenRecent(index) => {
                 let Some(path) = self.recent.paths().get(index).cloned() else {
@@ -2271,6 +2273,7 @@ impl eframe::App for App {
         let mut menu_action = None;
         let mut toolbars_changed = false;
         let mut customize_toolbars = false;
+        let mut reset_toolbars = false;
         {
             let mut toolbars = std::mem::take(&mut self.toolbars);
             egui::Panel::top("menu").show(ui, |ui| {
@@ -2278,6 +2281,7 @@ impl eframe::App for App {
                 menu_action = outcome.action;
                 toolbars_changed = outcome.toolbars_changed;
                 customize_toolbars = outcome.customize_toolbars;
+                reset_toolbars = outcome.reset_toolbars;
             });
             self.toolbars = toolbars;
         }
@@ -2286,6 +2290,9 @@ impl eframe::App for App {
         }
         if customize_toolbars {
             self.customize_open = true;
+        }
+        if reset_toolbars {
+            self.app_confirm = Some(AppConfirm::ResetToolbars);
         }
         if let Some(action) = menu_action {
             self.apply(action, &ctx, frame);
@@ -2315,6 +2322,7 @@ impl eframe::App for App {
         let dialog_open = self.dialog.is_some()
             || self.save_dialog.is_some()
             || self.confirm.is_some()
+            || self.app_confirm.is_some()
             || self.name_prompt.is_some()
             || self.materials.confirming();
         if !dialog_open {
@@ -2372,6 +2380,38 @@ impl eframe::App for App {
             self.customize_open = open;
             if changed {
                 self.save_toolbars();
+            }
+        }
+        if let Some(confirm) = self.app_confirm {
+            let (title, message, action) = match confirm {
+                AppConfirm::ResetToolbars => (
+                    "Reset Toolbars",
+                    "The toolbars go back to how they were installed and your own toolbars are deleted.",
+                    "Reset",
+                ),
+                AppConfirm::ResetPanels => (
+                    "Reset Panels",
+                    "Every panel goes back to its default place and size.",
+                    "Reset",
+                ),
+            };
+            if let Some(ok) =
+                dialog::confirm_dialog(&ctx, egui::Id::new("app-confirm"), title, message, action)
+            {
+                self.app_confirm = None;
+                if ok {
+                    match confirm {
+                        AppConfirm::ResetToolbars => {
+                            self.toolbars.reset();
+                            self.save_toolbars();
+                        }
+                        AppConfirm::ResetPanels => {
+                            self.dock.reset();
+                            self.shadows_preview = None;
+                            self.save_panels();
+                        }
+                    }
+                }
             }
         }
         if let Some(model) = &self.model {
@@ -2503,6 +2543,13 @@ enum PendingAction {
     New,
     Open(Option<PathBuf>),
     Close,
+}
+
+/// A destructive app-level action waiting for confirmation (`docs/specs/m6-confirm.md`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum AppConfirm {
+    ResetToolbars,
+    ResetPanels,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
