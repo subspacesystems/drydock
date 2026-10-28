@@ -279,8 +279,8 @@ fn new_opens_the_form_with_defaults() {
     h.get_by_label("Color:");
     h.get_by_label("Opacity:");
     h.get_by_label("Texture image:");
-    h.get_by_label("Width (m):");
-    h.get_by_label("Height (m):");
+    h.get_by_label("Width (in):");
+    h.get_by_label("Height (in):");
     h.get_by_label("OK");
     h.get_by_label("Cancel");
 }

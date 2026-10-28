@@ -16,6 +16,12 @@ use modeler_kernel::units::LengthFormat;
 use std::cell::RefCell;
 use std::rc::Rc;
 
+/// Sizes in meters to 3 places, as the window wrote them before m6-units-ui.
+const METERS: LengthFormat = LengthFormat::Decimal {
+    unit: modeler_kernel::units::Unit::Meter,
+    decimals: 3,
+};
+
 fn stats() -> Stats {
     Stats {
         triangles: 120,
@@ -30,12 +36,12 @@ fn stats() -> Stats {
 #[test]
 fn lines_without_a_kernel_model_list_the_scene_numbers() {
     assert_eq!(
-        model_info_lines(&stats(), false, LengthFormat::default()),
+        model_info_lines(&stats(), false, METERS),
         vec![
             "Triangles: 120".to_owned(),
             "Lines: 7".to_owned(),
             "Materials: 3".to_owned(),
-            "Size: 4.115 x 6.706 x 2.438 m".to_owned(),
+            "Size: 4.115m x 6.706m x 2.438m".to_owned(),
         ]
     );
 }
@@ -43,12 +49,12 @@ fn lines_without_a_kernel_model_list_the_scene_numbers() {
 #[test]
 fn lines_with_a_kernel_model_add_faces_and_edges() {
     assert_eq!(
-        model_info_lines(&stats(), true, LengthFormat::default()),
+        model_info_lines(&stats(), true, METERS),
         vec![
             "Triangles: 120".to_owned(),
             "Lines: 7".to_owned(),
             "Materials: 3".to_owned(),
-            "Size: 4.115 x 6.706 x 2.438 m".to_owned(),
+            "Size: 4.115m x 6.706m x 2.438m".to_owned(),
             "Faces: 40".to_owned(),
             "Edges: 95".to_owned(),
         ]
@@ -59,7 +65,7 @@ fn lines_with_a_kernel_model_add_faces_and_edges() {
 fn window_shows_every_line_and_close_clears_open() {
     let open = Rc::new(RefCell::new(true));
     let flag = open.clone();
-    let lines = model_info_lines(&stats(), true, LengthFormat::default());
+    let lines = model_info_lines(&stats(), true, METERS);
     let shown = lines.clone();
     let mut h = Harness::new_ui(move |ui| {
         let mut value = *flag.borrow();
@@ -78,7 +84,7 @@ fn window_shows_every_line_and_close_clears_open() {
 
 #[test]
 fn window_draws_nothing_while_closed() {
-    let lines = model_info_lines(&stats(), true, LengthFormat::default());
+    let lines = model_info_lines(&stats(), true, METERS);
     let mut h = Harness::new_ui(move |ui| {
         let mut open = false;
         model_info_window(ui.ctx(), &mut open, &lines);
