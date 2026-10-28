@@ -12,7 +12,9 @@ use eframe::egui;
 use glam::DVec2;
 use modeler_kernel::units::Unit;
 
+use crate::dialog::field_label;
 use crate::editor::TextureOp;
+use crate::units_ui::{length_drag, unit_abbrev};
 
 /// The values typed into the panel. Each is a change relative to the texture as it lies now.
 #[derive(Clone, Debug)]
@@ -94,21 +96,22 @@ fn controls(
     available: bool,
     unit: Unit,
 ) -> Option<TextureOp> {
-    // m6-units-ui: show and type Move X and Move Y in `unit`.
-    let _ = unit;
     if !available {
         ui.label("Select a face with a texture");
     }
 
     let mut op = None;
     ui.add_enabled_ui(available, |ui| {
+        let unit_name = unit_abbrev(unit);
         ui.horizontal(|ui| {
-            ui.label("Move X (m)");
-            ui.add(egui::DragValue::new(&mut form.shift[0]).clamp_existing_to_range(false));
+            let label = ui.label(field_label(&format!("Move X ({unit_name})")));
+            ui.add(length_drag(&mut form.shift[0], unit).clamp_existing_to_range(false))
+                .labelled_by(label.id);
         });
         ui.horizontal(|ui| {
-            ui.label("Move Y (m)");
-            ui.add(egui::DragValue::new(&mut form.shift[1]).clamp_existing_to_range(false));
+            let label = ui.label(field_label(&format!("Move Y ({unit_name})")));
+            ui.add(length_drag(&mut form.shift[1], unit).clamp_existing_to_range(false))
+                .labelled_by(label.id);
         });
         let move_valid = form.shift[0].is_finite() && form.shift[1].is_finite();
         if ui
@@ -120,7 +123,7 @@ fn controls(
         }
 
         ui.horizontal(|ui| {
-            ui.label("Turn (deg)");
+            ui.label(field_label("Turn (deg)"));
             ui.add(egui::DragValue::new(&mut form.turn).clamp_existing_to_range(false));
         });
         if op.is_none()
@@ -136,11 +139,11 @@ fn controls(
         }
 
         ui.horizontal(|ui| {
-            ui.label("Scale X");
+            ui.label(field_label("Scale X"));
             ui.add(egui::DragValue::new(&mut form.scale[0]).clamp_existing_to_range(false));
         });
         ui.horizontal(|ui| {
-            ui.label("Scale Y");
+            ui.label(field_label("Scale Y"));
             ui.add(egui::DragValue::new(&mut form.scale[1]).clamp_existing_to_range(false));
         });
         let scale_valid = form.scale[0].is_finite()

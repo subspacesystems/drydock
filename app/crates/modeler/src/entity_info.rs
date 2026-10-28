@@ -340,8 +340,7 @@ pub fn entity_info_panel(
     body: BodyId,
     selection: &[Entity],
 ) -> Option<InfoAction> {
-    // m6-units-ui: write lengths with `format_with` and areas with `format_area_with`.
-    let unit = model.length_format().input_unit();
+    let format = model.length_format();
     let info = panel.cache.get(model, body, selection).clone();
     let mut action = None;
 
@@ -368,12 +367,16 @@ pub fn entity_info_panel(
         value_row(
             ui,
             "Length",
-            &modeler_kernel::units::format_length(info.length.unwrap_or(0.0), unit, 2),
+            &modeler_kernel::units::format_with(info.length.unwrap_or(0.0), format),
         );
     }
 
     if info.kind == InfoKind::Faces {
-        value_row(ui, "Area", &format_area(info.area.unwrap_or(0.0), unit));
+        value_row(
+            ui,
+            "Area",
+            &modeler_kernel::units::format_area_with(info.area.unwrap_or(0.0), format),
+        );
         value_row(
             ui,
             "Front",
@@ -410,17 +413,17 @@ pub fn entity_info_panel(
         value_row(
             ui,
             "Width",
-            &modeler_kernel::units::format_length(size.x, unit, 2),
+            &modeler_kernel::units::format_with(size.x, format),
         );
         value_row(
             ui,
             "Depth",
-            &modeler_kernel::units::format_length(size.y, unit, 2),
+            &modeler_kernel::units::format_with(size.y, format),
         );
         value_row(
             ui,
             "Height",
-            &modeler_kernel::units::format_length(size.z, unit, 2),
+            &modeler_kernel::units::format_with(size.z, format),
         );
     }
 

@@ -16,6 +16,7 @@ use modeler_kernel::paint;
 use crate::dialog::{DialogButton, button_row, field_label};
 use crate::icons::{self, Icon};
 use crate::swatches::Swatches;
+use crate::units_ui::{length_drag, unit_abbrev};
 
 /// What the user asked for in the panel this frame.
 #[derive(Clone, Debug, PartialEq)]
@@ -163,6 +164,7 @@ pub fn materials_panel(
         panel.form = None;
     }
 
+    let unit = model.length_format().input_unit();
     let mut action = None;
     let mut new_form = false;
     let mut edit_form = None;
@@ -292,13 +294,16 @@ pub fn materials_panel(
                 ui.label(field_label("Texture image"));
                 ui.add(egui::TextEdit::singleline(&mut form.texture).desired_width(f32::INFINITY));
 
+                let unit_name = unit_abbrev(unit);
                 ui.horizontal(|ui| {
-                    ui.label(field_label("Width (m)"));
-                    ui.add(egui::DragValue::new(&mut form.size[0]));
+                    let label = ui.label(field_label(&format!("Width ({unit_name})")));
+                    ui.add(length_drag(&mut form.size[0], unit))
+                        .labelled_by(label.id);
                 });
                 ui.horizontal(|ui| {
-                    ui.label(field_label("Height (m)"));
-                    ui.add(egui::DragValue::new(&mut form.size[1]));
+                    let label = ui.label(field_label(&format!("Height ({unit_name})")));
+                    ui.add(length_drag(&mut form.size[1], unit))
+                        .labelled_by(label.id);
                 });
 
                 let material = form.material();

@@ -9,7 +9,7 @@
 
 use crate::dialog::{DialogButton, button_row, field_label};
 use crate::dock::PanelId;
-use crate::document::{Stats, format_size};
+use crate::document::Stats;
 use crate::icons::Icon;
 use crate::input::{Action, EditKey, Tool};
 use crate::toolbars::{self, ToolbarLayout, ToolbarsMenuEvent};
@@ -17,7 +17,7 @@ use eframe::egui::{
     Align2, InnerResponse, Label, Rect, Response, RichText, Sense, Shape, Stroke, TextStyle, Ui,
     WidgetInfo, WidgetType, pos2, vec2,
 };
-use modeler_kernel::units::LengthFormat;
+use modeler_kernel::units::{LengthFormat, format_with};
 use modeler_view::StandardView;
 use std::path::PathBuf;
 
@@ -341,13 +341,16 @@ pub fn about_window(ctx: &eframe::egui::Context, open: &mut bool) {
 /// The Model Info window's lines, top to bottom (`docs/specs/m4-ui-status.md`); the size in
 /// `format` (`docs/specs/m6-units-ui.md`).
 pub fn model_info_lines(stats: &Stats, kernel: bool, format: LengthFormat) -> Vec<String> {
-    // m6-units-ui: write the size in `format`.
-    let _ = format;
     let mut lines = vec![
         format!("Triangles: {}", stats.triangles),
         format!("Lines: {}", stats.lines),
         format!("Materials: {}", stats.materials),
-        format!("Size: {}", format_size(stats.size_m)),
+        format!(
+            "Size: {} x {} x {}",
+            format_with(stats.size_m[0], format),
+            format_with(stats.size_m[1], format),
+            format_with(stats.size_m[2], format)
+        ),
     ];
     if kernel {
         lines.push(format!("Faces: {}", stats.faces));

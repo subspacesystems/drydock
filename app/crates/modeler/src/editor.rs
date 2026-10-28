@@ -2201,8 +2201,20 @@ impl Editor {
     /// changes). True when accepted; false with a message when refused.
     /// Behaviour: `docs/specs/m6-units-ui.md`.
     pub fn set_length_format(&mut self, model: &mut Model, format: LengthFormat) -> bool {
-        let _ = (model, format);
-        unimplemented!("m6-units-ui")
+        let mut log = ModelEdit::new();
+        match model.set_length_format(format, &mut log) {
+            Ok(()) => {
+                if !log.records.is_empty() {
+                    self.undo.push("Set Units", log);
+                }
+                self.message = None;
+                true
+            }
+            Err(_) => {
+                self.message = Some("Can't use those units".to_string());
+                false
+            }
+        }
     }
 
     /// Position the texture on `side` of `face` in the open body: apply `op` to the map in

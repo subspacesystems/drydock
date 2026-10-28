@@ -35,6 +35,7 @@ use modeler::sun_windows::SunWindows;
 use modeler::texture_handles;
 use modeler::texture_panel::{TextureForm, texture_position_section};
 use modeler::toolbars::{self, CustomizeState, Edge, Placement, ToolbarEvent, ToolbarLayout};
+use modeler::units_ui;
 use modeler::viewstate::{Effect, ViewState, scene_bounds, zoom_pivot_at};
 use modeler_dae::{FlatScene, RestView};
 use modeler_kernel::editpath::EditPath;
@@ -2418,13 +2419,16 @@ impl eframe::App for App {
                 }
             }
         }
+        let mut picked_unit = None;
+        let mut geolocation = false;
         if let Some(model) = &self.model {
+            let kernel = model.kernel.is_some();
             let format = model
                 .kernel
                 .as_ref()
                 .map(Model::length_format)
                 .unwrap_or_default();
-            let mut lines = chrome::model_info_lines(&model.stats, model.kernel.is_some(), format);
+            let mut lines = chrome::model_info_lines(&model.stats, kernel, format);
             if let Some(state) = frame.wgpu_render_state() {
                 let info = state.adapter.get_info();
                 lines.push(chrome::adapter_line(
@@ -2433,8 +2437,12 @@ impl eframe::App for App {
                     device_type_label(info.device_type),
                 ));
             }
-            let mut geolocation = false;
             chrome::model_info_window_with(&ctx, &mut self.model_info_open, &lines, |ui| {
+                if kernel {
+                    ui.separator();
+                    picked_unit = units_ui::units_section(ui, format);
+                    ui.separator();
+                }
                 if ui
                     .add(
                         egui::Button::new("Geolocation...")
@@ -2445,12 +2453,23 @@ impl eframe::App for App {
                     geolocation = true;
                 }
             });
-            if geolocation {
-                self.sun_windows.geo_open = true;
-            }
         } else {
             self.model_info_open = false;
             self.sun_windows.close();
+        }
+        if let Some(format) = picked_unit {
+            let mut changed = false;
+            if let (Some(editor), Some(document)) = (&mut self.editor, &mut self.model)
+                && let Some(model) = document.kernel.as_mut()
+            {
+                changed = editor.set_length_format(model, format);
+            }
+            if changed {
+                self.refresh_document(&ctx, frame);
+            }
+        }
+        if geolocation {
+            self.sun_windows.geo_open = true;
         }
         if let Some(prompt) = &mut self.name_prompt {
             match chrome::name_prompt(&ctx, prompt) {
