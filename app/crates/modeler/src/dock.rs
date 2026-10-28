@@ -522,6 +522,12 @@ pub enum PanelEvent {
     Dropped { id: PanelId, pos: Pos2 },
 }
 
+/// The fill behind a panel's title bar: egui's fill for an active window's title bar, so
+/// panel and dialog title bars look alike and stand out from the panel body.
+pub fn header_fill(visuals: &eframe::egui::Visuals) -> eframe::egui::Color32 {
+    visuals.widgets.open.weak_bg_fill
+}
+
 /// Draw the title row of panel `id`: the title (`title(id)`) as a drag handle, then, when
 /// `docked`, a collapse button, then a close button. `collapsed` only changes the
 /// collapse button's label.
@@ -540,6 +546,10 @@ pub fn panel_header(
     // A fixed-height row: `with_layout` alone would take all the remaining height and
     // centre the header in it.
     let row = eframe::egui::vec2(ui.available_width(), HEADER_HEIGHT);
+    // The title bar band, the same fill as an active dialog's title bar.
+    let band = eframe::egui::Rect::from_min_size(ui.cursor().min, row);
+    ui.painter()
+        .rect_filled(band, 0.0, header_fill(ui.visuals()));
     ui.allocate_ui_with_layout(row, Layout::left_to_right(Align::Center), |ui| {
         ui.spacing_mut().item_spacing.x = 2.0;
         let buttons = if docked { 2 } else { 1 };
@@ -553,7 +563,7 @@ pub fn panel_header(
         let handle_label = format!("Move {name} panel");
         title_response
             .widget_info(|| WidgetInfo::labeled(WidgetType::Button, enabled, &handle_label));
-        let text_color = ui.visuals().text_color();
+        let text_color = ui.visuals().strong_text_color();
         ui.painter().text(
             title_rect.left_center() + eframe::egui::vec2(4.0, 0.0),
             Align2::LEFT_CENTER,
