@@ -25,15 +25,18 @@ pub struct DialogButton<'a> {
 /// `label` with trailing whitespace removed and a ":" at the end (unchanged if it already
 /// ends with one).
 pub fn field_label(label: &str) -> String {
-    let _ = label;
-    unimplemented!("m6-dialogs")
+    let label = label.trim_end();
+    if label.ends_with(':') {
+        label.to_owned()
+    } else {
+        format!("{label}:")
+    }
 }
 
 /// The fill of the default button under `visuals`: the selection colour, which differs from
 /// an ordinary button's resting fill.
 pub fn default_fill(visuals: &egui::Visuals) -> Color32 {
-    let _ = visuals;
-    unimplemented!("m6-dialogs")
+    visuals.selection.bg_fill
 }
 
 /// Draw `buttons` on one line at the right edge of `ui`, left to right in the order given,
@@ -42,6 +45,37 @@ pub fn default_fill(visuals: &egui::Visuals) -> Color32 {
 /// clicked this frame, or of the default one when Enter is pressed and it is enabled.
 /// Escape is the caller's.
 pub fn button_row(ui: &mut egui::Ui, buttons: &[DialogButton<'_>]) -> Option<usize> {
-    let _ = (ui, buttons);
-    unimplemented!("m6-dialogs")
+    ui.add_space(ROW_GAP);
+    let count = buttons.len() as f32;
+    let spacing = ui.spacing().item_spacing.x;
+    let available = ui.available_width();
+    let needed = count * BUTTON_MIN_SIZE.x + (count - 1.0).max(0.0) * spacing;
+    let width = if needed <= available || count == 0.0 {
+        BUTTON_MIN_SIZE.x
+    } else {
+        ((available - (count - 1.0) * spacing) / count - 0.5).max(1.0)
+    };
+    let min_size = egui::vec2(width, BUTTON_MIN_SIZE.y);
+    let mut clicked = None;
+    ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
+        for (index, button) in buttons.iter().enumerate().rev() {
+            let mut widget = egui::Button::new(button.label).min_size(min_size);
+            if button.default {
+                widget = widget.fill(default_fill(ui.visuals()));
+            }
+            if ui.add_enabled(button.enabled, widget).clicked() {
+                clicked = Some(index);
+            }
+        }
+    });
+    if clicked.is_some() {
+        return clicked;
+    }
+    if ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+        buttons
+            .iter()
+            .position(|button| button.default && button.enabled)
+    } else {
+        None
+    }
 }

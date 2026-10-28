@@ -74,10 +74,12 @@ pub fn style(theme: Theme) -> Style {
     }
     style.visuals.menu_corner_radius = CornerRadius::same(2);
     style.visuals.window_corner_radius = CornerRadius::same(2);
+    let border = style.visuals.widgets.noninteractive.bg_stroke.color;
+    style.visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, border);
 
     style.spacing.item_spacing.y = 6.0;
     style.spacing.interact_size.y = 24.0;
-    style.spacing.button_padding.x = 8.0;
+    style.spacing.button_padding = egui::vec2(8.0, 4.0);
     style.spacing.menu_margin = Margin::symmetric(2, 4);
     style
 }

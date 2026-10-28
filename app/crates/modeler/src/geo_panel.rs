@@ -63,41 +63,24 @@ fn parse_field(name: &str, text: &str, low: f64, high: f64) -> Result<f64, Strin
 /// Draw the section into `ui`. `Some` on the frame the user applies a valid form (the Apply
 /// button, or Enter in a field).
 pub fn geo_panel(ui: &mut egui::Ui, form: &mut GeoForm) -> Option<Geolocation> {
-    ui.heading("Geolocation");
-
-    let mut submitted = field_row(ui, "Latitude (deg)", &mut form.latitude);
-    submitted |= field_row(ui, "Longitude (deg)", &mut form.longitude);
-    submitted |= field_row(ui, "North angle (deg)", &mut form.north_angle);
-    submitted |= field_row(ui, "UTC offset (h)", &mut form.utc_offset);
-
-    let parsed = parse_geolocation(form);
-    if let Err(message) = &parsed {
-        ui.colored_label(egui::Color32::RED, message);
-    }
-
-    let apply = ui
-        .add_enabled(parsed.is_ok(), egui::Button::new("Apply"))
-        .clicked();
-
-    if parsed.is_ok() && (submitted || apply) {
-        parsed.ok()
-    } else {
-        None
-    }
+    let submitted = geo_fields(ui, form);
+    apply_row(ui, form, submitted)
 }
 
 /// The four labelled fields and the error line of [`geo_panel`], without the Apply button
 /// (the window's button row has it). True when Enter was pressed in a field.
 pub fn geo_fields(ui: &mut egui::Ui, form: &mut GeoForm) -> bool {
-    let _ = (ui, form);
-    unimplemented!("m6-dialogs")
+    ui.heading("Geolocation");
+    geo_inputs(ui, form)
 }
 
 /// The globe above [`geo_fields`] (the globe part of [`geo_panel_with_globe`]). True when
 /// Enter was pressed in a field.
 pub fn geo_fields_with_globe(ui: &mut egui::Ui, form: &mut GeoForm, view: &mut GlobeView) -> bool {
-    let _ = (ui, form, view);
-    unimplemented!("m6-dialogs")
+    ui.heading("Geolocation");
+    show_globe(ui, form, view);
+    ui.label("Drag to turn, click to pick. UTC offset is estimated from longitude.");
+    geo_inputs(ui, form)
 }
 
 /// The globe above [`geo_panel`]: clicking it fills the latitude, longitude and an estimated
@@ -108,6 +91,25 @@ pub fn geo_panel_with_globe(
     form: &mut GeoForm,
     view: &mut GlobeView,
 ) -> Option<Geolocation> {
+    let submitted = geo_fields_with_globe(ui, form, view);
+    apply_row(ui, form, submitted)
+}
+
+/// The four fields and the error line, without the heading.
+fn geo_inputs(ui: &mut egui::Ui, form: &mut GeoForm) -> bool {
+    let mut submitted = field_row(ui, "Latitude (deg)", &mut form.latitude);
+    submitted |= field_row(ui, "Longitude (deg)", &mut form.longitude);
+    submitted |= field_row(ui, "North angle (deg)", &mut form.north_angle);
+    submitted |= field_row(ui, "UTC offset (h)", &mut form.utc_offset);
+
+    if let Err(message) = parse_geolocation(form) {
+        ui.colored_label(egui::Color32::RED, message);
+    }
+    submitted
+}
+
+/// The globe and the form's marker, filling in a picked place.
+fn show_globe(ui: &mut egui::Ui, form: &mut GeoForm, view: &mut GlobeView) {
     let marker = parse_geolocation(form)
         .ok()
         .map(|geolocation| (geolocation.latitude, geolocation.longitude));
@@ -116,8 +118,24 @@ pub fn geo_panel_with_globe(
         form.longitude = format!("{}", round_to_4(longitude));
         form.utc_offset = format!("{}", crate::globe::utc_offset_estimate(longitude));
     }
-    ui.label("Drag to turn, click to pick. UTC offset is estimated from longitude.");
-    geo_panel(ui, form)
+}
+
+/// The Apply button row of [`geo_panel`]. `submitted` is Enter in a field.
+fn apply_row(ui: &mut egui::Ui, form: &mut GeoForm, submitted: bool) -> Option<Geolocation> {
+    let parsed = parse_geolocation(form);
+    let apply = crate::dialog::button_row(
+        ui,
+        &[crate::dialog::DialogButton {
+            label: "Apply",
+            default: true,
+            enabled: parsed.is_ok(),
+        }],
+    );
+    if parsed.is_ok() && (submitted || apply == Some(0)) {
+        parsed.ok()
+    } else {
+        None
+    }
 }
 
 fn round_to_4(value: f64) -> f64 {
@@ -128,7 +146,7 @@ fn round_to_4(value: f64) -> f64 {
 /// One label and its text field, returning whether Enter was pressed in the field.
 fn field_row(ui: &mut egui::Ui, label: &str, text: &mut String) -> bool {
     ui.horizontal(|ui| {
-        let label = ui.label(label);
+        let label = ui.label(crate::dialog::field_label(label));
         let response = ui
             .add(egui::TextEdit::singleline(text))
             .labelled_by(label.id);

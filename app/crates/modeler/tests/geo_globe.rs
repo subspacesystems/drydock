@@ -119,7 +119,7 @@ fn the_globe_shows_above_the_fields() {
         (globe.width() - globe.height()).abs() <= 2.0,
         "not square: {globe:?}"
     );
-    let latitude = h.get_by_label("Latitude (deg)").rect();
+    let latitude = h.get_by_label("Latitude (deg):").rect();
     assert!(
         globe.bottom() <= latitude.top() + 1.0,
         "globe {globe:?}, field {latitude:?}"
@@ -142,7 +142,7 @@ fn clicking_the_middle_picks_the_place_faced() {
     assert_eq!(f.north_angle, "15", "north angle is left alone");
     assert!(h.state().applied.is_empty(), "a click only fills the form");
     assert_eq!(
-        h.get_by_label("Latitude (deg)").value().as_deref(),
+        h.get_by_label("Latitude (deg):").value().as_deref(),
         Some(f.latitude.as_str())
     );
 }
@@ -274,11 +274,14 @@ fn the_geolocation_window_has_a_globe_facing_the_models_place() {
     let mut h = app_harness(g);
     app_click_middle(&mut h);
     assert_picked(
-        h.get_by_label("Latitude (deg)").value().as_deref().unwrap(),
+        h.get_by_label("Latitude (deg):")
+            .value()
+            .as_deref()
+            .unwrap(),
         51.5,
     );
     assert_picked(
-        h.get_by_label("Longitude (deg)")
+        h.get_by_label("Longitude (deg):")
             .value()
             .as_deref()
             .unwrap(),
@@ -333,11 +336,14 @@ fn reopening_the_window_faces_the_current_place_again() {
     h.run();
     app_click_middle(&mut h);
     assert_picked(
-        h.get_by_label("Latitude (deg)").value().as_deref().unwrap(),
+        h.get_by_label("Latitude (deg):")
+            .value()
+            .as_deref()
+            .unwrap(),
         35.0,
     );
     assert_picked(
-        h.get_by_label("Longitude (deg)")
+        h.get_by_label("Longitude (deg):")
             .value()
             .as_deref()
             .unwrap(),

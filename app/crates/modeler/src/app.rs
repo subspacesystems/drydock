@@ -2382,7 +2382,13 @@ impl eframe::App for App {
             }
             let mut geolocation = false;
             chrome::model_info_window_with(&ctx, &mut self.model_info_open, &lines, |ui| {
-                if ui.button("Geolocation...").clicked() {
+                if ui
+                    .add(
+                        egui::Button::new("Geolocation...")
+                            .min_size(modeler::dialog::BUTTON_MIN_SIZE),
+                    )
+                    .clicked()
+                {
                     geolocation = true;
                 }
             });

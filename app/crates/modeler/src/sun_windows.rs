@@ -12,6 +12,7 @@ use modeler_kernel::model::Model;
 use modeler_kernel::sun::ShadowSettings;
 use modeler_render::SunLight;
 
+use crate::dialog::{DialogButton, button_row};
 use crate::editor::Editor;
 use crate::geo_panel::{self, GeoForm};
 use crate::globe::GlobeView;
@@ -90,7 +91,15 @@ impl SunWindows {
                 .open(&mut open)
                 .show(ctx, |ui| {
                     event = shadows_panel::shadows_panel(ui, &mut settings);
-                    if ui.button("Close").clicked() {
+                    if button_row(
+                        ui,
+                        &[DialogButton {
+                            label: "Close",
+                            default: false,
+                            enabled: true,
+                        }],
+                    ) == Some(0)
+                    {
                         close = true;
                     }
                 });
@@ -120,10 +129,29 @@ impl SunWindows {
                 .open(&mut open)
                 .show(ctx, |ui| {
                     if let (Some(form), Some(globe)) = (&mut self.form, &mut self.globe) {
-                        applied = geo_panel::geo_panel_with_globe(ui, form, globe);
-                    }
-                    if ui.button("Close").clicked() {
-                        close = true;
+                        let submitted = geo_panel::geo_fields_with_globe(ui, form, globe);
+                        let parsed = geo_panel::parse_geolocation(form);
+                        let clicked = button_row(
+                            ui,
+                            &[
+                                DialogButton {
+                                    label: "Apply",
+                                    default: true,
+                                    enabled: parsed.is_ok(),
+                                },
+                                DialogButton {
+                                    label: "Close",
+                                    default: false,
+                                    enabled: true,
+                                },
+                            ],
+                        );
+                        if parsed.is_ok() && (submitted || clicked == Some(0)) {
+                            applied = parsed.ok();
+                        }
+                        if clicked == Some(1) {
+                            close = true;
+                        }
                     }
                 });
             if !open || close {
