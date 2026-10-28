@@ -198,6 +198,12 @@ Tyrel's UI items deferred from M4, inserted after M5 at his request.
 | `m6-toolbar-customize-2` | Feedback: Customize window as two lists (on the toolbar / available) with icons; drag between them and to reorder | `m6-icons-2`, `m6-toolbar-drag`, `m6-rename-extrude` |
 | `m6-eyedropper` | Feedback: Materials panel eyedropper; click a face and its material becomes current | `m6-panel-stack` |
 | `m6-native-look` | Feedback: style pass toward a desktop look (system UI font, theme from the OS, spacing, menu highlight) | `m6-menus`, `m6-panel-stack` |
+| `m6-eyedropper-2` | Round 3: sampling keeps the tool (a double-click painted), button stays pushed in and cancels, pipette icon and cursor, current tile boxed and scrolled into view | `m6-eyedropper` |
+| `m6-menus-2` | Round 3: menus as wide as their content, icon column on every row, check marks for show/hide items, View regrouped, "..." on About and Model Info | `m6-menus` |
+| `m6-panel-collapse` | Round 3: collapsing a docked panel keeps the other title bars in place (free space opens at the bottom of the column) | `m6-panel-stack` |
+| `m6-toolbar-side-width` | Round 3: a toolbar docked left or right is as narrow as the toolbar, no resize handle | `m6-toolbar-drag` |
+| `m6-toolbar-customize-3` | Round 3: Customize window drops the old per-tool buttons; rename a toolbar | `m6-menus-2` (toolbars.rs) |
+| `m6-dialogs` | Round 3: dialogs after the Windows guidelines: text box labels end with ":", buttons at the bottom right on one line with a gap above, a highlighted default button that Enter presses, larger, bordered buttons | `m6-menus-2`, `m6-eyedropper-2` |
 
 - Icon toolbars by tool group (own icons), toolbars that can be shown, hidden and rearranged.
 - Dockable side panels (Materials, Shadows, Entity Info, Components) instead of floating windows.
