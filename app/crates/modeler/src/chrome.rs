@@ -887,6 +887,10 @@ fn menu_bar_inner(
                 chosen = Some(Action::ToggleAxes);
                 ui.close();
             }
+            if menu_check_item(ui, "Overhangs", state.overhangs).clicked() {
+                chosen = Some(Action::ToggleOverhangs);
+                ui.close();
+            }
             ui.separator();
             for (open, label, action) in [
                 (

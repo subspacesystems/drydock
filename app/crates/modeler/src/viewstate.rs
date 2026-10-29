@@ -298,7 +298,10 @@ impl ViewState {
             Action::Explode => return Effect::Explode,
             Action::ToggleHideRest => return Effect::ToggleHideRest,
             Action::ToggleAxes => self.axes = !self.axes,
-            Action::ToggleOverhangs => unimplemented!("m7-overhang"),
+            Action::ToggleOverhangs => {
+                self.overhangs = !self.overhangs;
+                return Effect::ReuploadScene;
+            }
             Action::OpenRecent(index) => return Effect::OpenRecent(index),
             Action::Exit => return Effect::Exit,
         }
