@@ -37,7 +37,7 @@ use modeler::texture_panel::{TextureForm, texture_position_section};
 use modeler::toolbars::{self, CustomizeState, Edge, Placement, ToolbarEvent, ToolbarLayout};
 use modeler::units_ui;
 use modeler::viewstate::{Effect, ViewState, scene_bounds, zoom_pivot_at};
-use modeler_dae::{FlatScene, RestView};
+use modeler_dae::{FlatScene, RestView, tint_overhangs};
 use modeler_kernel::editpath::EditPath;
 use modeler_kernel::model::{BodyId, Material, Model};
 use modeler_kernel::paint::Side;
@@ -317,6 +317,13 @@ impl App {
 
     /// Make `scene` the scene on screen and keep its texture warnings.
     fn upload_scene(&mut self, frame: &eframe::Frame, scene: &FlatScene) {
+        let tinted;
+        let scene = if self.view.overhangs {
+            tinted = tint_overhangs(scene, self.view.overhang_degrees);
+            &tinted
+        } else {
+            scene
+        };
         if let (Some(gpu), Some(state)) = (&mut self.gpu, frame.wgpu_render_state()) {
             gpu.scene = gpu.renderer.upload(&state.device, &state.queue, scene);
             self.warnings = gpu.scene.warnings.clone();
@@ -352,10 +359,15 @@ impl App {
         // Zoom Extents frames what is drawn, not the whole model.
         self.view.bounds = scene_bounds(&document.scene);
         let title = document.title();
+        let tinted;
+        let scene = if self.view.overhangs {
+            tinted = tint_overhangs(&document.scene, self.view.overhang_degrees);
+            &tinted
+        } else {
+            &document.scene
+        };
         if let (Some(gpu), Some(state)) = (&mut self.gpu, frame.wgpu_render_state()) {
-            gpu.scene = gpu
-                .renderer
-                .upload(&state.device, &state.queue, &document.scene);
+            gpu.scene = gpu.renderer.upload(&state.device, &state.queue, scene);
             self.warnings = gpu.scene.warnings.clone();
         }
         ctx.send_viewport_cmd(egui::ViewportCommand::Title(title));
@@ -392,10 +404,15 @@ impl App {
         self.shown_path = path;
         // Zoom Extents frames what is drawn, not the whole model.
         self.view.bounds = scene_bounds(&document.scene);
+        let tinted;
+        let scene = if self.view.overhangs {
+            tinted = tint_overhangs(&document.scene, self.view.overhang_degrees);
+            &tinted
+        } else {
+            &document.scene
+        };
         if let (Some(gpu), Some(state)) = (&mut self.gpu, frame.wgpu_render_state()) {
-            gpu.scene = gpu
-                .renderer
-                .upload(&state.device, &state.queue, &document.scene);
+            gpu.scene = gpu.renderer.upload(&state.device, &state.queue, scene);
             self.warnings = gpu.scene.warnings.clone();
         }
         self.dirty = true;
@@ -742,7 +759,13 @@ impl App {
                 }
                 self.show_editor_path(frame);
             }
-            Effect::ReuploadScene => unimplemented!("m7-overhang"),
+            Effect::ReuploadScene => {
+                let scene = self.model.as_ref().map(|document| document.scene.clone());
+                if let Some(scene) = scene {
+                    self.upload_scene(frame, &scene);
+                    self.dirty = true;
+                }
+            }
             Effect::MakeComponent { group } => {
                 self.name_prompt = Some(chrome::NamePrompt::new(group));
             }
