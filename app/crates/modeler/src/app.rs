@@ -760,6 +760,8 @@ impl App {
                 }
                 self.show_editor_path(frame);
             }
+            // m7-clearance-ui: run, clear or recompute the fit check.
+            Effect::FitCheck | Effect::RecomputeFit => {}
             Effect::ReuploadScene => {
                 let scene = self.model.as_ref().map(|document| document.scene.clone());
                 if let Some(scene) = scene {
@@ -1568,6 +1570,8 @@ impl App {
                 .is_some_and(|editor| editor.hide_rest()),
             axes: self.view.axes,
             overhangs: self.view.overhangs,
+            fit_check: false,
+            can_fit_check: false,
             shadows: self.dock.is_open(PanelId::Shadows),
             entity_info: self.dock.is_open(PanelId::EntityInfo),
             materials: self.dock.is_open(PanelId::Materials),

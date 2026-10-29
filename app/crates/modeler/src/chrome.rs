@@ -44,6 +44,11 @@ pub struct MenuState<'a> {
     /// Overhanging faces are tinted (the View menu's Overhangs item is checked;
     /// `docs/specs/m7-overhang.md`).
     pub overhangs: bool,
+    /// A fit check is showing (the Tools menu's Fit Check item is checked;
+    /// `docs/specs/m7-clearance-ui.md`).
+    pub fit_check: bool,
+    /// Exactly two groups or components are selected (Fit Check needs it).
+    pub can_fit_check: bool,
     /// The Shadows window is showing (the View menu's Shadows item is checked;
     /// `docs/specs/m5-app-shadows-ui.md`).
     pub shadows: bool,
@@ -87,6 +92,19 @@ pub enum PromptOutcome {
     Ok(String),
     /// Cancel, Escape or the window's close button.
     Cancel,
+}
+
+/// The clearance field: "Clearance", a one-line text box holding `text` (millimeters), "mm".
+/// When the box loses focus or Enter is pressed: a `text` that `fit_check::parse_clearance_mm`
+/// accepts is rewritten with `format_mm` and returned (meters); any other text is replaced
+/// by `format_mm(current_m)` and `None` is returned. Otherwise `None`.
+/// Behaviour: `docs/specs/m7-clearance-ui.md`.
+pub fn clearance_field(
+    _ui: &mut eframe::egui::Ui,
+    _text: &mut String,
+    _current_m: f64,
+) -> Option<f64> {
+    unimplemented!("m7-clearance-ui")
 }
 
 /// The name prompt window; `Some` on the frame it is answered.

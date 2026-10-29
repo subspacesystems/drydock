@@ -28,6 +28,8 @@ pub struct ViewState {
     pub overhangs: bool,
     /// The overhang angle in degrees from vertical.
     pub overhang_degrees: f64,
+    /// The fit check's clearance in meters (`docs/specs/m7-clearance-ui.md`).
+    pub clearance_m: f64,
     /// Ctrl+wheel notches not yet turned into a step through a surface (a fraction of a
     /// notch from a smooth wheel or touchpad). `docs/specs/m4-zoom-through.md`.
     pub through_carry: f64,
@@ -79,6 +81,10 @@ pub enum Effect {
     ToggleHideRest,
     /// The overhang tint changed: upload the scene again (`docs/specs/m7-overhang.md`).
     ReuploadScene,
+    /// Run the fit check on the selection, or clear it (`docs/specs/m7-clearance-ui.md`).
+    FitCheck,
+    /// The clearance changed: compute the fit check again if one is showing.
+    RecomputeFit,
     /// Open the recent file at this index (`docs/specs/m4-ui-menus.md`).
     OpenRecent(usize),
     /// Quit the app (asking first when the document is modified).
@@ -153,8 +159,26 @@ impl ViewState {
             axes: true,
             overhangs: false,
             overhang_degrees: modeler_dae::DEFAULT_OVERHANG_DEGREES,
+            clearance_m: modeler_dae::DEFAULT_CLEARANCE_M,
             through_carry: 0.0,
         }
+    }
+
+    /// Set the fit check's clearance from the field's value in millimeters. Values outside
+    /// `fit_check::MIN_CLEARANCE_MM..=MAX_CLEARANCE_MM` (and NaN) change nothing. A new
+    /// value is stored in meters (`mm / 1000`) and returns `Effect::RecomputeFit`; the
+    /// same value returns `Effect::None`.
+    pub fn set_clearance_mm(&mut self, mm: f64) -> Effect {
+        if !(crate::fit_check::MIN_CLEARANCE_MM..=crate::fit_check::MAX_CLEARANCE_MM).contains(&mm)
+        {
+            return Effect::None;
+        }
+        let meters = mm / 1000.0;
+        if meters == self.clearance_m {
+            return Effect::None;
+        }
+        self.clearance_m = meters;
+        Effect::RecomputeFit
     }
 
     /// A model was opened: remember its bounds and frame it (zoom extents, keeping the
@@ -305,6 +329,7 @@ impl ViewState {
                 self.overhangs = !self.overhangs;
                 return Effect::ReuploadScene;
             }
+            Action::FitCheck => return Effect::FitCheck,
             Action::OpenRecent(index) => return Effect::OpenRecent(index),
             Action::Exit => return Effect::Exit,
         }

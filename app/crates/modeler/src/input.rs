@@ -131,6 +131,9 @@ pub enum Action {
     ToggleAxes,
     /// Tint overhanging faces or stop (View menu; `docs/specs/m7-overhang.md`).
     ToggleOverhangs,
+    /// Check the fit of the two selected parts, or clear the check (Tools menu;
+    /// `docs/specs/m7-clearance-ui.md`).
+    FitCheck,
     /// Show or hide the Shadows window (View menu; `docs/specs/m5-app-shadows-ui.md`).
     ToggleShadows,
     /// Show or hide one of the docking panels (View menu; `docs/specs/m6-dock-ui.md`).
