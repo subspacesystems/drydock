@@ -580,28 +580,34 @@ fn loop_edge_inside_face(ctx: &Context, from: &Face, into: &Face) -> bool {
         .any(|u| edge_midpoint(ctx, u.edge).is_some_and(|p| point_inside_face(ctx, into, p)))
 }
 
+/// True when two distinct faces are coplanar and their interiors overlap (the test
+/// `face_overlaps` applies to each pair).
+pub(crate) fn faces_overlap(ctx: &Context, a: FaceId, b: FaceId) -> bool {
+    if a == b {
+        return false;
+    }
+    let (Some(fa), Some(fb)) = (ctx.face(a), ctx.face(b)) else {
+        return false;
+    };
+    let (Some(pa), Some(pb)) = (face_plane_of(ctx, fa), face_plane_of(ctx, fb)) else {
+        return false;
+    };
+    if !same_plane(&pa, &pb) {
+        return false;
+    }
+    outer_edges(fa) == outer_edges(fb)
+        || loop_edge_inside_face(ctx, fa, fb)
+        || loop_edge_inside_face(ctx, fb, fa)
+}
+
 /// Pairs of coplanar faces whose interiors overlap.
 pub(crate) fn face_overlaps(ctx: &Context) -> Vec<(FaceId, FaceId)> {
     let ids: Vec<FaceId> = ctx.faces().map(|(id, _)| id).collect();
     let mut out = Vec::new();
     for i in 0..ids.len() {
         for j in i + 1..ids.len() {
-            let (a, b) = (ids[i], ids[j]);
-            let (Some(fa), Some(fb)) = (ctx.face(a), ctx.face(b)) else {
-                continue;
-            };
-            let (Some(pa), Some(pb)) = (face_plane_of(ctx, fa), face_plane_of(ctx, fb)) else {
-                continue;
-            };
-            if !same_plane(&pa, &pb) {
-                continue;
-            }
-            let same_outline = outer_edges(fa) == outer_edges(fb);
-            if same_outline
-                || loop_edge_inside_face(ctx, fa, fb)
-                || loop_edge_inside_face(ctx, fb, fa)
-            {
-                out.push((a, b));
+            if faces_overlap(ctx, ids[i], ids[j]) {
+                out.push((ids[i], ids[j]));
             }
         }
     }

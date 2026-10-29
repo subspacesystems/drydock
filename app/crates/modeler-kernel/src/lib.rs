@@ -17,7 +17,7 @@
 //! (editing inside an instance), `docs/specs/m4-texture-model.md` (texture size and placement),
 //! `docs/specs/m4-copy.md` (copy, clipboard and paste), `docs/specs/m5-solar.md` (sun position),
 //! `docs/specs/m5-geo-model.md` (geolocation and shadow settings), `docs/specs/m7-solid-check.md`
-//! (solid check).
+//! (solid check), `docs/specs/m7-solid-repair.md` (solid repair).
 
 pub mod click;
 pub mod component;
@@ -33,6 +33,7 @@ pub mod model;
 pub mod movemerge;
 pub mod paint;
 pub mod pushpull;
+pub mod repair;
 pub mod select;
 pub mod shapes;
 pub mod solid;
