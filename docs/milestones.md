@@ -262,3 +262,4 @@ Moved up by Tyrel (2026-10-28) so beta testers can try the app after 3D printing
 Ideas parked (woodworking, drawings, CNC export, plugin API, design library and more). Nothing there is planned until Tyrel opens its own issue or asks for it to be scheduled.
 
 - Auto-update for the Windows build (Tyrel: wanted eventually; M8 ships a plain installer first).
+- Tool cursors (Tyrel 2026-10-29: "for some time later"): every tool gets its own drawn cursor, arrow only for Select; drawing tools a pencil with its tip on the drawn point; the rest their toolbar icon with a hotspot on the working point (Paint Bucket: the bottom of the pouring paint); the bucket mirrored left-to-right everywhere it appears. Schedule with Tyrel after M7; stays open as its source.
