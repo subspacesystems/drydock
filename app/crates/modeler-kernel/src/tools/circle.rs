@@ -12,7 +12,7 @@ use crate::sticky::StickyError;
 use crate::units::{ParseError, parse_length};
 
 use super::plane::DrawPlane;
-use super::{Input, Target, ToolError, draw_segments};
+use super::{Input, Target, ToolError, draw_curve};
 
 #[derive(Clone, Debug)]
 pub struct CircleTool {
@@ -133,9 +133,7 @@ impl CircleTool {
 
     fn place(&mut self, c: DVec3, x: DVec3, r: f64, target: &mut Target) -> Result<(), ToolError> {
         let pts = circle(c, self.plane.normal(), x, r, self.segments);
-        let n = pts.len();
-        let segs: Vec<_> = (0..n).map(|i| (pts[i], pts[(i + 1) % n])).collect();
-        draw_segments(target, &segs, "Circle")?;
+        draw_curve(target, &pts, true, "Circle")?;
         self.center = None;
         self.cursor = None;
         Ok(())

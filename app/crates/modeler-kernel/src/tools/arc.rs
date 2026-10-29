@@ -14,7 +14,7 @@ use crate::units::{ParseError, parse_length};
 
 use super::circle::segment_count;
 use super::plane::DrawPlane;
-use super::{Input, Target, ToolError, draw_segments};
+use super::{Input, Target, ToolError, draw_curve};
 
 #[derive(Clone, Debug)]
 enum Stage {
@@ -223,8 +223,7 @@ impl ArcTool {
             sweep,
             self.segments,
         );
-        let segs: Vec<_> = pts.windows(2).map(|w| (w[0], w[1])).collect();
-        draw_segments(target, &segs, "Arc")?;
+        draw_curve(target, &pts, false, "Arc")?;
         self.stage = Stage::Idle;
         self.cursor = None;
         Ok(())

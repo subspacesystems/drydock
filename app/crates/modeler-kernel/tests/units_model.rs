@@ -292,8 +292,9 @@ fn an_invalid_format_is_refused() {
 // ---- the native file ----
 
 #[test]
-fn the_version_is_five() {
-    assert_eq!(FORMAT_VERSION, 5);
+fn the_version_holds_units() {
+    // version 5 added units; m7-curves made it 6 (tests/curves_format.rs)
+    const { assert!(FORMAT_VERSION >= 5) };
 }
 
 #[test]
