@@ -41,6 +41,9 @@ pub struct MenuState<'a> {
     pub hide_rest: bool,
     /// The axes are shown (the View menu's Axes item is checked; `docs/specs/m4-ui-axes.md`).
     pub axes: bool,
+    /// Overhanging faces are tinted (the View menu's Overhangs item is checked;
+    /// `docs/specs/m7-overhang.md`).
+    pub overhangs: bool,
     /// The Shadows window is showing (the View menu's Shadows item is checked;
     /// `docs/specs/m5-app-shadows-ui.md`).
     pub shadows: bool,

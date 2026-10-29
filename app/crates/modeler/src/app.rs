@@ -742,6 +742,7 @@ impl App {
                 }
                 self.show_editor_path(frame);
             }
+            Effect::ReuploadScene => unimplemented!("m7-overhang"),
             Effect::MakeComponent { group } => {
                 self.name_prompt = Some(chrome::NamePrompt::new(group));
             }
@@ -1542,6 +1543,7 @@ impl App {
                 .as_ref()
                 .is_some_and(|editor| editor.hide_rest()),
             axes: self.view.axes,
+            overhangs: self.view.overhangs,
             shadows: self.dock.is_open(PanelId::Shadows),
             entity_info: self.dock.is_open(PanelId::EntityInfo),
             materials: self.dock.is_open(PanelId::Materials),
