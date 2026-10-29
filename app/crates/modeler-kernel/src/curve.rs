@@ -18,7 +18,7 @@
 use std::collections::BTreeSet;
 use std::f64::consts::{PI, TAU};
 
-use glam::{DMat4, DVec3};
+use glam::{DMat3, DMat4, DVec3};
 
 use crate::geom::LINEAR_TOL;
 use crate::topology::{Context, CurveId, EdgeId, Edit, Record, VertexId};
@@ -131,8 +131,48 @@ impl Curve {
     /// translation): `point_at(a)` of the result is `m` applied to `point_at(a)`, for every
     /// angle. `vertices` are kept as they are. `None` for any other matrix, or when a number
     /// isn't finite (spec m7-curves-carry: "Moving a curve").
-    pub fn transformed(&self, _m: DMat4) -> Option<Curve> {
-        unimplemented!("m7-curves-carry")
+    pub fn transformed(&self, m: DMat4) -> Option<Curve> {
+        let linear = DMat3::from_mat4(m);
+        let det = linear.determinant();
+        if !det.is_finite() || det == 0.0 {
+            return None;
+        }
+        let gram = linear.transpose() * linear;
+        let s2 = (gram.x_axis.x + gram.y_axis.y + gram.z_axis.z) / 3.0;
+        if !s2.is_finite() || s2 <= 0.0 {
+            return None;
+        }
+        let tolerance = 1e-9 * s2;
+        let expected = DMat3::IDENTITY * s2;
+        for (a, b) in gram
+            .to_cols_array()
+            .iter()
+            .zip(expected.to_cols_array().iter())
+        {
+            let difference = (a - b).abs();
+            if !difference.is_finite() || difference > tolerance {
+                return None;
+            }
+        }
+
+        let sign = if det < 0.0 { -1.0 } else { 1.0 };
+        let center = m.transform_point3(self.center);
+        let x_axis = (linear * self.x_axis).normalize();
+        let normal = sign * (linear * self.normal).normalize();
+        let radius = self.radius * s2.sqrt();
+        if !center.is_finite() || !x_axis.is_finite() || !normal.is_finite() || !radius.is_finite()
+        {
+            return None;
+        }
+        Some(Curve {
+            center,
+            normal,
+            x_axis,
+            radius,
+            start: self.start,
+            end: self.end,
+            vertices: self.vertices.clone(),
+        })
     }
 }
 
@@ -464,13 +504,78 @@ pub fn curve_of_edge(ctx: &Context, edge: EdgeId) -> Option<CurveId> {
 /// vertex of `ctx` that each chain vertex became. One result per curve, in order: the new id,
 /// or `None` when that curve couldn't be carried (spec m7-curves-carry: "Carrying curves").
 pub fn carry(
-    _ctx: &mut Context,
-    _curves: &[Curve],
-    _m: DMat4,
-    _map: impl FnMut(&Context, VertexId) -> Option<VertexId>,
-    _log: &mut Edit,
+    ctx: &mut Context,
+    curves: &[Curve],
+    m: DMat4,
+    mut map: impl FnMut(&Context, VertexId) -> Option<VertexId>,
+    log: &mut Edit,
 ) -> Vec<Option<CurveId>> {
-    unimplemented!("m7-curves-carry")
+    let mut used: BTreeSet<EdgeId> = BTreeSet::new();
+    for (id, _) in ctx.curves() {
+        used.extend(curve_edges(ctx, id));
+    }
+
+    let mut results = Vec::with_capacity(curves.len());
+    for curve in curves {
+        let distinct = if curve.is_closed() {
+            curve.vertices.len() - 1
+        } else {
+            curve.vertices.len()
+        };
+        let mut mapped = Vec::with_capacity(curve.vertices.len());
+        let mut failed = false;
+        for &vertex in &curve.vertices[..distinct] {
+            match map(ctx, vertex) {
+                Some(new) => mapped.push(new),
+                None => {
+                    failed = true;
+                    break;
+                }
+            }
+        }
+        if failed {
+            results.push(None);
+            continue;
+        }
+        if curve.is_closed() {
+            let first = mapped[0];
+            mapped.push(first);
+        }
+
+        let mut candidate = curve.transformed(m);
+        if let Some(curve) = &mut candidate {
+            curve.vertices = mapped.clone();
+        }
+        let chosen = match candidate {
+            Some(candidate) if fits(ctx, &candidate) => candidate,
+            _ => match fit(ctx, &mapped, curve.start) {
+                Some(candidate) => candidate,
+                None => {
+                    results.push(None);
+                    continue;
+                }
+            },
+        };
+
+        let mut edges = Vec::new();
+        let mut broken = false;
+        for pair in chosen.vertices.windows(2) {
+            match step_edges(ctx, pair[0], pair[1]) {
+                Some(mut step) => edges.append(&mut step),
+                None => {
+                    broken = true;
+                    break;
+                }
+            }
+        }
+        if broken || edges.iter().any(|edge| used.contains(edge)) {
+            results.push(None);
+            continue;
+        }
+        used.extend(edges);
+        results.push(Some(ctx.insert_curve(chosen, log)));
+    }
+    results
 }
 
 fn add_with_id(ctx: &mut Context, id: CurveId, curve: Curve, log: &mut Edit) {
