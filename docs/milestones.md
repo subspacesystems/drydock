@@ -240,6 +240,7 @@ Tyrel's request: print-ready solids without plugins. Placed right after M6; orde
 | `m7-print-setup` | Print Setup panel: bed presets and custom size, bed outline in the viewport, fits-the-bed check, Drop to Bed, overhang angle field | `m7-print-mesh`, `m7-overhang` |
 | `m7-overhang` | View > Overhangs: faces leaning past the overhang angle (45° until Print Setup offers it) tinted in the viewport; faces on the bed excluded | |
 | `m7-clearance` | Fit check: pick two parts, highlight where the gap between them is under the clearance (default 0.2 mm) (Tyrel chose fit check first) | `m7-solid-check` |
+| `m7-clearance-ui` | Tools > Fit Check: pick two groups or components, clearance field in mm (default 0.2), flagged faces tinted in the viewport, report in the status bar | `m7-clearance`, `m7-overhang` |
 | `m7-clearance-offset` | Grow/Shrink by clearance: move every face of a flat-faced solid in or out by the clearance, one undo step; report parts it can't handle | `m7-clearance`, `m7-solid-repair` |
 | `m7-text-3d` | 3D text from the app's font outlines, embossed on or engraved into a face | |
 
