@@ -32,6 +32,7 @@ exceptions = [
     { crate = "modeler", allow = ["GPL-3.0-or-later"] },
     { crate = "modeler-dae", allow = ["GPL-3.0-or-later"] },
     { crate = "modeler-kernel", allow = ["GPL-3.0-or-later"] },
+    { crate = "modeler-mesh", allow = ["GPL-3.0-or-later"] },
     { crate = "modeler-render", allow = ["GPL-3.0-or-later"] },
     { crate = "modeler-view", allow = ["GPL-3.0-or-later"] },
 ]
