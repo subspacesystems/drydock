@@ -980,12 +980,12 @@ impl App {
             )
         });
         let tool = self.editor.as_ref().map(Editor::tool);
-        if response.contains_pointer()
-            && self
-                .editor
-                .as_ref()
-                .is_some_and(|editor| editor.eyedropper_armed())
-        {
+        let armed = self
+            .editor
+            .as_ref()
+            .is_some_and(|editor| editor.eyedropper_armed());
+        let left_tool = tool.and_then(|tool| input::left_button_tool(tool, armed));
+        if response.contains_pointer() && armed {
             ui.ctx().set_cursor_icon(egui::CursorIcon::None);
         }
         if response.contains_pointer()
@@ -1024,7 +1024,7 @@ impl App {
                 }
                 let orbits = match button {
                     Button::Middle => !mods.shift,
-                    Button::Left => self.view.tool == Tool::Orbit && !mods.shift,
+                    Button::Left => left_tool == Some(Tool::Orbit) && !mods.shift,
                     Button::Right => false,
                 };
                 if orbits && !grabbed_texture {
@@ -1041,8 +1041,8 @@ impl App {
                 }
                 if egui_button == PointerButton::Primary && !grabbed_texture {
                     // Only a Select drag is a box; an Orbit drag must not leave a start behind.
-                    self.drag_start_px = (tool == Some(Tool::Select)).then(|| local(origin));
-                    if tool == Some(Tool::Zoom) {
+                    self.drag_start_px = (left_tool == Some(Tool::Select)).then(|| local(origin));
+                    if left_tool == Some(Tool::Zoom) {
                         let size = (f64::from(rect.width()), f64::from(rect.height()));
                         self.view.zoom_pivot = zoom_pivot_at(
                             &self.view.camera,
@@ -1051,7 +1051,7 @@ impl App {
                             local(origin),
                         );
                     }
-                    if tool == Some(Tool::Scale) {
+                    if left_tool == Some(Tool::Scale) {
                         let view = EditorViewport {
                             camera: self.view.camera,
                             size_px: (f64::from(rect.width()), f64::from(rect.height())),
@@ -1065,7 +1065,8 @@ impl App {
             if response.dragged_by(egui_button) {
                 let texture_drag =
                     egui_button == PointerButton::Primary && self.texture_grip_held();
-                if !texture_drag {
+                let sampling = button == Button::Left && armed;
+                if !texture_drag && !sampling {
                     let delta = response.drag_delta();
                     let delta = DVec2::new(f64::from(delta.x), f64::from(delta.y));
                     if let Some(action) =
@@ -1140,7 +1141,7 @@ impl App {
                 | Tool::Erase
                 | Tool::Paint
         );
-        if !drawing {
+        if !drawing && !armed {
             return;
         }
         let view = EditorViewport {
@@ -1161,14 +1162,14 @@ impl App {
                     self.refresh_document(ctx, frame);
                 }
                 self.drag_start_px = None;
-            } else if tool == Tool::Select {
+            } else if left_tool == Some(Tool::Select) {
                 if let (Some(start), Some(end)) = (
                     self.drag_start_px.take(),
                     response.interact_pointer_pos().map(local),
                 ) {
                     self.editor_box_select(&view, start, end, mods);
                 }
-            } else if tool == Tool::Scale {
+            } else if left_tool == Some(Tool::Scale) {
                 if let Some(end) = cursor
                     && self.editor_click(&view, local(end), mods, 1)
                 {
@@ -1640,7 +1641,9 @@ impl App {
                         ui.separator();
                     }
                 }
+                let armed = self.editor.as_ref().is_some_and(Editor::eyedropper_armed);
                 ui.label(match self.view.tool {
+                    _ if armed => "Eyedropper",
                     Tool::Orbit => "Orbit",
                     Tool::Pan => "Pan",
                     Tool::Zoom => "Zoom",

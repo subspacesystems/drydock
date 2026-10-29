@@ -204,6 +204,13 @@ pub fn drag(
     }
 }
 
+/// The tool that gets the viewport's left button: none while the Materials eyedropper is
+/// armed, else `tool`. The armed eyedropper is a one-shot tool of its own: its click goes
+/// to the editor and a left drag does nothing, whatever tool was active.
+pub fn left_button_tool(tool: Tool, eyedropper_armed: bool) -> Option<Tool> {
+    (!eyedropper_armed).then_some(tool)
+}
+
 /// A scroll of `lines` notches (positive = away from the user) with the cursor at
 /// `cursor_ndc`.
 pub fn scroll(lines: f64, cursor_ndc: DVec2) -> Action {

@@ -641,6 +641,12 @@ impl Editor {
         mods: Modifiers,
     ) {
         self.refresh_path(model);
+        if self.eyedropper_armed {
+            // The armed eyedropper is a tool of its own: no inference or preview of the
+            // tool underneath.
+            self.hint = None;
+            return;
+        }
         if self.texture_handles.is_some() {
             if self
                 .texture_handles
