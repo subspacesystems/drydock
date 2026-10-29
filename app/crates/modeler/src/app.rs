@@ -27,6 +27,7 @@ use modeler::icons::{self, Icon};
 use modeler::input::{self, Button, Modifiers, Tool};
 use modeler::look;
 use modeler::materials_panel::{MaterialAction, MaterialsPanel, materials_panel};
+use modeler::mesh_import::{self, MeshUnit, UnitsOutcome};
 use modeler::overlay::{self, Primitive};
 use modeler::recent::{RecentFiles, recent_file};
 use modeler::shading;
@@ -131,6 +132,10 @@ pub struct App {
     saved: Option<String>,
     warnings: Vec<String>,
     dialog: Option<OpenDialog>,
+    /// The units choice shown before opening or importing an STL.
+    units_prompt: Option<UnitsPrompt>,
+    /// The unit last picked for a mesh file this session.
+    mesh_unit: MeshUnit,
     save_dialog: Option<SaveDialog>,
     /// A destructive action waiting for the Save/Discard/Cancel question.
     confirm: Option<PendingAction>,
@@ -220,6 +225,8 @@ impl App {
             saved: None,
             warnings: Vec::new(),
             dialog: None,
+            units_prompt: None,
+            mesh_unit: MeshUnit::default(),
             save_dialog: None,
             confirm: None,
             app_confirm: None,
@@ -256,6 +263,25 @@ impl App {
         let thread_path = path.clone();
         std::thread::spawn(move || {
             let result = Document::open(&thread_path);
+            // The receiver is gone if another file was opened meanwhile.
+            let _ = sender.send(result);
+            ctx.request_repaint();
+        });
+        self.error = None;
+        self.saved = None;
+        self.loading = Some(Loading {
+            path,
+            result: receiver,
+        });
+    }
+
+    /// Open the STL file at `path` with `unit` on a background thread, as `start_loading`.
+    fn start_loading_mesh(&mut self, ctx: &egui::Context, path: PathBuf, unit: MeshUnit) {
+        let (sender, receiver) = mpsc::channel();
+        let ctx = ctx.clone();
+        let thread_path = path.clone();
+        std::thread::spawn(move || {
+            let result = Document::open_mesh(&thread_path, unit);
             // The receiver is gone if another file was opened meanwhile.
             let _ = sender.send(result);
             ctx.request_repaint();
@@ -446,6 +472,10 @@ impl App {
         self.dialog = Some(OpenDialog::import(self.open_folder()));
     }
 
+    fn open_models_dialog(&mut self) {
+        self.dialog = Some(OpenDialog::models(self.open_folder()));
+    }
+
     fn open_folder(&self) -> PathBuf {
         self.model
             .as_ref()
@@ -477,6 +507,41 @@ impl App {
         };
         match result {
             Ok(_) => {
+                self.error = None;
+                self.refresh_document(ctx, frame);
+            }
+            Err(message) => self.error = Some(message),
+        }
+    }
+
+    /// Read the mesh file at `path` with `unit`, add its groups to the open model and redraw.
+    fn import_mesh_file(
+        &mut self,
+        ctx: &egui::Context,
+        frame: &eframe::Frame,
+        path: &Path,
+        unit: MeshUnit,
+    ) {
+        let source = match mesh_import::read_mesh(path, unit) {
+            Ok(source) => source,
+            Err(message) => {
+                self.error = Some(message);
+                return;
+            }
+        };
+        let result = if let (Some(editor), Some(document)) = (&mut self.editor, &mut self.model) {
+            match document.kernel.as_mut() {
+                Some(model) => editor.import_groups(model, &source).map(|_| ()),
+                None => Err(document
+                    .kernel_error
+                    .clone()
+                    .unwrap_or_else(|| format!("{}: no model", file_name(path)))),
+            }
+        } else {
+            Err(format!("{}: no open model", file_name(path)))
+        };
+        match result {
+            Ok(()) => {
                 self.error = None;
                 self.refresh_document(ctx, frame);
             }
@@ -561,7 +626,17 @@ impl App {
         match action {
             PendingAction::New => self.new_document(ctx, frame),
             PendingAction::Open(None) => self.open_dialog(),
-            PendingAction::Open(Some(path)) => self.start_loading(ctx, path),
+            PendingAction::Open(Some(path)) => {
+                if mesh_import::needs_units(&path) {
+                    self.units_prompt = Some(UnitsPrompt {
+                        path,
+                        purpose: UnitsPurpose::Open,
+                        unit: self.mesh_unit,
+                    });
+                } else {
+                    self.start_loading(ctx, path);
+                }
+            }
             PendingAction::Close => {
                 self.allow_close = true;
                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
@@ -727,7 +802,11 @@ impl App {
             Effect::None => self.dirty = true,
             Effect::New => self.request(PendingAction::New, ctx, frame),
             Effect::OpenDialog => self.request(PendingAction::Open(None), ctx, frame),
-            Effect::ImportDialog => unimplemented!("m7-import-ui"),
+            Effect::ImportDialog => {
+                if self.model.is_some() {
+                    self.open_models_dialog();
+                }
+            }
             Effect::Save => self.save(ctx, frame),
             Effect::SaveAsDialog => self.open_save_dialog(),
             Effect::Edit(key) => self.edit(key, ctx, frame),
@@ -2354,6 +2433,7 @@ impl eframe::App for App {
         self.draw_panels(ui, &ctx, frame);
 
         let dialog_open = self.dialog.is_some()
+            || self.units_prompt.is_some()
             || self.save_dialog.is_some()
             || self.confirm.is_some()
             || self.app_confirm.is_some()
@@ -2530,16 +2610,56 @@ impl eframe::App for App {
         if let Some(dialog) = &mut self.dialog {
             match dialog.show(&ctx) {
                 DialogOutcome::Open(path) => {
-                    let import = dialog.import;
+                    let mode = dialog.mode;
                     self.dialog = None;
-                    if import {
-                        self.import_component_file(&ctx, frame, &path);
-                    } else {
-                        self.start_loading(&ctx, path);
+                    match mode {
+                        OpenMode::Component => self.import_component_file(&ctx, frame, &path),
+                        OpenMode::Models => {
+                            if mesh_import::needs_units(&path) {
+                                self.units_prompt = Some(UnitsPrompt {
+                                    path,
+                                    purpose: UnitsPurpose::Import,
+                                    unit: self.mesh_unit,
+                                });
+                            } else {
+                                self.import_mesh_file(&ctx, frame, &path, MeshUnit::default());
+                            }
+                        }
+                        OpenMode::Open => {
+                            self.request(PendingAction::Open(Some(path)), &ctx, frame)
+                        }
                     }
                 }
                 DialogOutcome::Cancel => self.dialog = None,
                 DialogOutcome::Pending => {}
+            }
+        }
+        if let Some(prompt) = &mut self.units_prompt {
+            let mut outcome = None;
+            let file = file_name(&prompt.path);
+            let response = egui::Modal::new(egui::Id::new("mesh-units")).show(&ctx, |ui| {
+                ui.set_width(320.0);
+                ui.heading("Mesh units");
+                outcome = mesh_import::units_choice(ui, &file, &mut prompt.unit);
+            });
+            if outcome.is_none() && response.should_close() {
+                outcome = Some(UnitsOutcome::Cancel);
+            }
+            match outcome {
+                Some(UnitsOutcome::Ok) => {
+                    let prompt = self.units_prompt.take().unwrap();
+                    self.mesh_unit = prompt.unit;
+                    match prompt.purpose {
+                        UnitsPurpose::Open => {
+                            self.start_loading_mesh(&ctx, prompt.path, prompt.unit)
+                        }
+                        UnitsPurpose::Import => {
+                            self.import_mesh_file(&ctx, frame, &prompt.path, prompt.unit)
+                        }
+                    }
+                }
+                Some(UnitsOutcome::Cancel) => self.units_prompt = None,
+                None => {}
             }
         }
         if let Some(dialog) = &mut self.save_dialog {
@@ -2592,6 +2712,19 @@ impl eframe::App for App {
             }
         }
     }
+}
+
+/// The units choice waiting for an STL file.
+struct UnitsPrompt {
+    path: PathBuf,
+    purpose: UnitsPurpose,
+    unit: MeshUnit,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum UnitsPurpose {
+    Open,
+    Import,
 }
 
 /// What the user asked for that may need the document saved first.
@@ -2812,34 +2945,48 @@ enum DialogOutcome {
     Cancel,
 }
 
-/// A minimal open-file dialog in plain egui: browse folders, pick a `.dae` file, or type
+/// What an `OpenDialog` is picking a file for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum OpenMode {
+    /// Replace the open document.
+    Open,
+    /// Add the file as a component source.
+    Component,
+    /// Add the file's groups to the open model.
+    Models,
+}
+
+/// A minimal open-file dialog in plain egui: browse folders, pick a model file, or type
 /// a path.
 struct OpenDialog {
     dir: PathBuf,
-    /// Subfolders and `.dae` files of `dir`, folders first, each sorted by name.
+    /// Subfolders and model files of `dir`, folders first, each sorted by name.
     entries: Vec<(String, PathBuf, bool)>,
     path_text: String,
     error: Option<String>,
-    /// Pick a component source instead of opening a document.
-    import: bool,
+    mode: OpenMode,
 }
 
 impl OpenDialog {
     fn new(dir: PathBuf) -> OpenDialog {
-        OpenDialog::with_mode(dir, false)
+        OpenDialog::with_mode(dir, OpenMode::Open)
     }
 
     fn import(dir: PathBuf) -> OpenDialog {
-        OpenDialog::with_mode(dir, true)
+        OpenDialog::with_mode(dir, OpenMode::Component)
     }
 
-    fn with_mode(dir: PathBuf, import: bool) -> OpenDialog {
+    fn models(dir: PathBuf) -> OpenDialog {
+        OpenDialog::with_mode(dir, OpenMode::Models)
+    }
+
+    fn with_mode(dir: PathBuf, mode: OpenMode) -> OpenDialog {
         let mut dialog = OpenDialog {
             dir: PathBuf::new(),
             entries: Vec::new(),
             path_text: String::new(),
             error: None,
-            import,
+            mode,
         };
         dialog.enter(dir);
         dialog
@@ -2855,7 +3002,9 @@ impl OpenDialog {
                     let name = entry.file_name().to_string_lossy().into_owned();
                     let is_dir = path.is_dir();
                     let is_model = path.extension().is_some_and(|ext| {
-                        ext.eq_ignore_ascii_case("dae") || ext.eq_ignore_ascii_case("modeler")
+                        ["dae", "modeler", "stl", "3mf"]
+                            .iter()
+                            .any(|known| ext.eq_ignore_ascii_case(known))
                     });
                     if (is_dir && !name.starts_with('.')) || (!is_dir && is_model) {
                         self.entries.push((name, path, is_dir));
@@ -2877,10 +3026,10 @@ impl OpenDialog {
         let mut enter = None;
         let response = egui::Modal::new(egui::Id::new("open-dialog")).show(ctx, |ui| {
             ui.set_width(520.0);
-            ui.heading(if self.import {
-                "Import component"
-            } else {
-                "Open model"
+            ui.heading(match self.mode {
+                OpenMode::Open => "Open model",
+                OpenMode::Component => "Import component",
+                OpenMode::Models => "Import into model",
             });
             ui.label(self.dir.display().to_string());
             ui.separator();
@@ -2912,14 +3061,17 @@ impl OpenDialog {
             let typed = ui.add(
                 egui::TextEdit::singleline(&mut self.path_text)
                     .desired_width(f32::INFINITY)
-                    .hint_text("Path to a .dae or .modeler file, or a folder"),
+                    .hint_text("Path to a .dae, .modeler, .stl or .3mf file, or a folder"),
             );
             let submitted = typed.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
             if let Some(error) = &self.error {
                 ui.colored_label(ERROR_COLOR, error);
             }
             ui.horizontal(|ui| {
-                let choose = if self.import { "Import" } else { "Open" };
+                let choose = match self.mode {
+                    OpenMode::Open => "Open",
+                    OpenMode::Component | OpenMode::Models => "Import",
+                };
                 if ui.button(choose).clicked() || submitted {
                     let path = PathBuf::from(self.path_text.trim());
                     if path.is_dir() {
