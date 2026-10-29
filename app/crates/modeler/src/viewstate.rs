@@ -41,6 +41,8 @@ pub enum Effect {
     New,
     /// Show the open-file dialog.
     OpenDialog,
+    /// Show the import dialog (`docs/specs/m7-import-ui.md`).
+    ImportDialog,
     /// Save the document (`docs/specs/m1-app-native.md`).
     Save,
     /// Show the save dialog.
@@ -280,6 +282,7 @@ impl ViewState {
             Action::SelectTool(tool) => self.tool = tool,
             Action::New => return Effect::New,
             Action::Open => return Effect::OpenDialog,
+            Action::Import => unimplemented!("m7-import-ui"),
             Action::Save => return Effect::Save,
             Action::SaveAs => return Effect::SaveAsDialog,
             Action::Edit(key) => return Effect::Edit(key),

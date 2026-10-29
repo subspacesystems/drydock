@@ -96,6 +96,8 @@ pub enum Action {
     /// Start a new empty document.
     New,
     Open,
+    /// File > Import...: add a mesh file's groups to the open model.
+    Import,
     /// Save to the open native file (a DAE document asks for a name instead).
     Save,
     /// Save under a new name.

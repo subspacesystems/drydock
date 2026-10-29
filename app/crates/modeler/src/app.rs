@@ -727,6 +727,7 @@ impl App {
             Effect::None => self.dirty = true,
             Effect::New => self.request(PendingAction::New, ctx, frame),
             Effect::OpenDialog => self.request(PendingAction::Open(None), ctx, frame),
+            Effect::ImportDialog => unimplemented!("m7-import-ui"),
             Effect::Save => self.save(ctx, frame),
             Effect::SaveAsDialog => self.open_save_dialog(),
             Effect::Edit(key) => self.edit(key, ctx, frame),

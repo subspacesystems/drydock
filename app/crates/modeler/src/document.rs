@@ -56,6 +56,9 @@ pub struct Document {
 impl Document {
     /// Open a `.dae` or `.modeler` file. Safe to call from a background thread. The
     /// error is a one-line message for the user that names the file.
+    ///
+    /// `.stl` and `.3mf` files go to [`Document::open_mesh`] with millimeters
+    /// (`docs/specs/m7-import-ui.md`).
     pub fn open(path: &Path) -> Result<Document, String> {
         let is_native = path
             .extension()
@@ -114,6 +117,16 @@ impl Document {
             modified: false,
             saved_state: 0,
         })
+    }
+
+    /// Open the STL or 3MF file at `path` (`mesh_import::read_mesh` with `unit`) as a
+    /// document of kind `FileKind::Dae` (it is saved under a new `.modeler` name), with the
+    /// same fields as an opened DAE file: unmodified, not untitled, scene and stats from the
+    /// kernel model. The error is a one-line message that names the file. Safe to call from
+    /// a background thread. Behaviour: `docs/specs/m7-import-ui.md`.
+    pub fn open_mesh(path: &Path, unit: crate::mesh_import::MeshUnit) -> Result<Document, String> {
+        let _ = (path, unit);
+        unimplemented!("m7-import-ui")
     }
 
     /// A new, empty native model named `untitled.modeler` (not on disk).

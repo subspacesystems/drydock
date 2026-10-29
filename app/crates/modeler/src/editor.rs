@@ -1616,6 +1616,16 @@ impl Editor {
         Ok(id)
     }
 
+    /// Add everything in `source`'s root (the groups of an imported mesh file) to the root of
+    /// `model` where it was, through the editor's undo stack: one step labelled "Import
+    /// Mesh". Returns the number of instances `source`'s root holds. `Err` is a one-line
+    /// message (also kept as the editor's message), "Nothing to import" for an empty source,
+    /// and nothing changed. Behaviour: `docs/specs/m7-import-ui.md`.
+    pub fn import_groups(&mut self, model: &mut Model, source: &Model) -> Result<usize, String> {
+        let _ = (model, source);
+        unimplemented!("m7-import-ui")
+    }
+
     /// The definition waiting for its placing click.
     pub fn placing(&self) -> Option<DefinitionId> {
         self.placing.map(|placing| placing.definition)

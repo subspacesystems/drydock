@@ -1337,6 +1337,7 @@ dependencies = [
  "image",
  "modeler-dae",
  "modeler-kernel",
+ "modeler-mesh",
  "modeler-render",
  "modeler-view",
  "proptest",

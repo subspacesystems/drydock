@@ -10,6 +10,7 @@ publish.workspace = true
 [dependencies]
 modeler-dae.workspace = true
 modeler-kernel.workspace = true
+modeler-mesh.workspace = true
 modeler-view.workspace = true
 modeler-render.workspace = true
 glam.workspace = true
