@@ -16,6 +16,7 @@ use modeler_dae::{
 use modeler_kernel::model as km;
 
 pub mod stl;
+pub mod threemf;
 
 /// One named triangle mesh, in the file's units. Each triangle lists its corners in the
 /// file's order (counter-clockwise seen from outside).
@@ -92,4 +93,12 @@ pub fn import_stl(path: &Path, unit_meters: f64) -> Result<km::Model, String> {
     let objects =
         stl::read(&bytes, &default_name).map_err(|e| format!("{}: {e}", path.display()))?;
     to_kernel(&objects, unit_meters).map_err(|e| format!("{}: {e:?}", path.display()))
+}
+
+/// Reads a 3MF file into a kernel model (`threemf::read`, then `to_kernel` with the file's
+/// own unit). The error is a one-line message that names the file.
+pub fn import_3mf(path: &Path) -> Result<km::Model, String> {
+    let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let file = threemf::read(&bytes).map_err(|e| format!("{}: {e}", path.display()))?;
+    to_kernel(&file.objects, file.unit_meters).map_err(|e| format!("{}: {e:?}", path.display()))
 }

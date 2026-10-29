@@ -11,6 +11,8 @@ publish.workspace = true
 glam.workspace = true
 modeler-dae.workspace = true
 modeler-kernel.workspace = true
+miniz_oxide.workspace = true
+roxmltree.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true
