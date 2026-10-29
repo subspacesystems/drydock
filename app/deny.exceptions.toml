@@ -1,4 +1,0 @@
-# modeler-mesh is our own crate, licensed like the other modeler crates.
-exceptions = [
-    { crate = "modeler-mesh", allow = ["GPL-3.0-or-later"] },
-]
