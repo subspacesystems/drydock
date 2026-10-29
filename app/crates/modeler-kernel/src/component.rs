@@ -107,7 +107,17 @@ pub fn make_component(
         }
     }
 
-    let (faces, edges, vertices, face_data, edge_data, vertex_data, material_data, instance_data) = {
+    let (
+        faces,
+        edges,
+        vertices,
+        face_data,
+        edge_data,
+        vertex_data,
+        material_data,
+        instance_data,
+        curves,
+    ) = {
         let target = model.body(body).expect("body checked above");
         let ctx = target.geometry();
         let mut faces = BTreeSet::new();
@@ -158,6 +168,7 @@ pub fn make_component(
             .iter()
             .filter_map(|&id| target.instance(id).map(|i| (id, i.clone())))
             .collect();
+        let curves: Vec<crate::curve::Curve> = ctx.curves().map(|(_, c)| c.clone()).collect();
         (
             faces,
             edge_ids,
@@ -167,6 +178,7 @@ pub fn make_component(
             vertex_data,
             material_data,
             instance_data,
+            curves,
         )
     };
 
@@ -200,6 +212,13 @@ pub fn make_component(
         for (id, face) in &face_data {
             face_map.insert(*id, ctx.insert_face(copy_face(face, &edge_map), log)?);
         }
+        crate::curve::carry(
+            ctx,
+            &curves,
+            inverse,
+            |_, v| vertex_map.get(&v).copied(),
+            log,
+        );
         Ok::<(), TopoError>(())
     });
     match result {

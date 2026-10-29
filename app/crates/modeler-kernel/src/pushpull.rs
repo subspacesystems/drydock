@@ -7,7 +7,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use glam::DVec3;
+use glam::{DMat4, DVec3};
 
 use crate::geom::{self, LINEAR_TOL};
 use crate::model::{BodyId, FaceMaterials, Model, ModelEdit, ModelError, UndoStack};
@@ -123,6 +123,15 @@ pub fn push_pull(
             edges.insert(u.edge);
         }
     }
+
+    let face_curves: Vec<crate::curve::Curve> = ctx
+        .curves()
+        .filter_map(|(id, curve)| {
+            let steps = crate::curve::curve_edges(ctx, id);
+            (!steps.is_empty() && steps.iter().all(|edge| edges.contains(edge)))
+                .then(|| curve.clone())
+        })
+        .collect();
 
     let isolated = edges
         .iter()
@@ -269,6 +278,14 @@ pub fn push_pull(
                 }
                 cap_loops.push(Loop { uses: cap_uses });
             }
+
+            crate::curve::carry(
+                ctx,
+                &face_curves,
+                DMat4::from_translation(t),
+                |_, v| new_vertex.get(&v).copied(),
+                log,
+            );
 
             let mut cap_loops = cap_loops.into_iter();
             let cap = ctx.insert_face(

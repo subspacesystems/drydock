@@ -254,6 +254,8 @@ pub fn extract(model: &Model, body: BodyId, selection: &[Entity]) -> Result<Clip
             .map_err(CopyError::Model)?;
     }
 
+    let source_curves: Vec<crate::curve::Curve> =
+        source.geometry().curves().map(|(_, c)| c.clone()).collect();
     let mut vertex_map = BTreeMap::new();
     let mut edge_map = BTreeMap::new();
     let mut face_map = BTreeMap::new();
@@ -279,6 +281,13 @@ pub fn extract(model: &Model, body: BodyId, selection: &[Entity]) -> Result<Clip
             let new = ctx.insert_face(copy_face(face, &edge_map), log)?;
             face_map.insert(id, new);
         }
+        crate::curve::carry(
+            ctx,
+            &source_curves,
+            DMat4::IDENTITY,
+            |_, v| vertex_map.get(&v).copied(),
+            log,
+        );
         Ok(())
     }))
     .map_err(CopyError::Model)?;
@@ -341,6 +350,8 @@ fn copy_body_into(
     materials: &BTreeMap<MaterialId, MaterialId>,
     edit: &mut ModelEdit,
 ) -> Result<(), ModelError> {
+    let source_curves: Vec<crate::curve::Curve> =
+        source.geometry().curves().map(|(_, c)| c.clone()).collect();
     let mut vertex_map = BTreeMap::new();
     let mut edge_map = BTreeMap::new();
     let mut face_map = BTreeMap::new();
@@ -357,6 +368,13 @@ fn copy_body_into(
             let new = ctx.insert_face(copy_face(face, &edge_map), log)?;
             face_map.insert(id, new);
         }
+        crate::curve::carry(
+            ctx,
+            &source_curves,
+            DMat4::IDENTITY,
+            |_, v| vertex_map.get(&v).copied(),
+            log,
+        );
         Ok(())
     }))?;
 
