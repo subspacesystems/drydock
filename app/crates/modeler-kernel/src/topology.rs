@@ -6,12 +6,14 @@
 //! Behaviour: `docs/specs/m1-topology.md`. The `insert_*`, `delete_*` and
 //! `set_vertex_position` primitives only keep references consistent; `validate` checks the
 //! geometric invariants of ADR-004. Every mutation is a `Record` appended to an `Edit`, and
-//! `Edit::inverse` undoes it.
+//! `Edit::inverse` undoes it. Curves (arcs and circles kept as such through edits) are stored
+//! here too; their rules are in `crate::curve` (`docs/specs/m7-curves.md`).
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use glam::DVec3;
 
+use crate::curve::Curve;
 use crate::geom::{self, Containment, Plane, SegmentHit};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -22,6 +24,9 @@ pub struct EdgeId(pub u64);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct FaceId(pub u64);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct CurveId(pub u64);
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Vertex {
@@ -85,6 +90,8 @@ pub enum Record {
         from: DVec3,
         to: DVec3,
     },
+    AddCurve(CurveId, Curve),
+    RemoveCurve(CurveId, Curve),
 }
 
 impl Record {
@@ -102,6 +109,8 @@ impl Record {
                 from: *to,
                 to: *from,
             },
+            Record::AddCurve(id, c) => Record::RemoveCurve(*id, c.clone()),
+            Record::RemoveCurve(id, c) => Record::AddCurve(*id, c.clone()),
         }
     }
 }
@@ -137,6 +146,7 @@ pub enum TopoError {
     MissingVertex(VertexId),
     MissingEdge(EdgeId),
     MissingFace(FaceId),
+    MissingCurve(CurveId),
     /// An edge from a vertex to itself.
     SameVertex(VertexId),
     /// The vertex still has edges.
@@ -172,26 +182,33 @@ pub enum Violation {
     HoleWinding(FaceId),
     /// Two faces whose outer loops use the same set of edges.
     DuplicateFace(FaceId, FaceId),
+    /// A curve that doesn't pass `curve::fits` (`docs/specs/m7-curves.md`).
+    BadCurve(CurveId),
 }
 
 /// The geometry of one context (the model root, or the inside of a group or component).
 ///
-/// Equality compares vertices, edges and faces only, not the id counters.
+/// Equality compares vertices, edges, faces and curves only, not the id counters.
 #[derive(Clone, Debug, Default)]
 pub struct Context {
     vertices: BTreeMap<VertexId, Vertex>,
     edges: BTreeMap<EdgeId, Edge>,
     faces: BTreeMap<FaceId, Face>,
+    curves: BTreeMap<CurveId, Curve>,
     next_vertex: u64,
     next_edge: u64,
     next_face: u64,
+    next_curve: u64,
     vertex_edges: BTreeMap<VertexId, BTreeSet<EdgeId>>,
     edge_faces: BTreeMap<EdgeId, BTreeSet<FaceId>>,
 }
 
 impl PartialEq for Context {
     fn eq(&self, other: &Self) -> bool {
-        self.vertices == other.vertices && self.edges == other.edges && self.faces == other.faces
+        self.vertices == other.vertices
+            && self.edges == other.edges
+            && self.faces == other.faces
+            && self.curves == other.curves
     }
 }
 
@@ -239,6 +256,19 @@ impl Context {
 
     pub fn face_count(&self) -> usize {
         self.faces.len()
+    }
+
+    pub fn curve(&self, id: CurveId) -> Option<&Curve> {
+        self.curves.get(&id)
+    }
+
+    /// All curves in ascending id order.
+    pub fn curves(&self) -> impl Iterator<Item = (CurveId, &Curve)> {
+        self.curves.iter().map(|(id, c)| (*id, c))
+    }
+
+    pub fn curve_count(&self) -> usize {
+        self.curves.len()
     }
 
     /// Edges using the vertex, ascending. Empty for an unknown id.
@@ -500,6 +530,13 @@ impl Context {
             out.push(Violation::DuplicateFace(a, b));
         }
 
+        // 7. Curves.
+        for (id, curve) in &self.curves {
+            if !crate::curve::fits(self, curve) {
+                out.push(Violation::BadCurve(*id));
+            }
+        }
+
         out
     }
 
@@ -673,6 +710,29 @@ impl Context {
         Ok(())
     }
 
+    /// Store `curve` under a fresh id. The curve isn't checked: callers use
+    /// `curve::add_curve`, which is.
+    pub fn insert_curve(&mut self, curve: Curve, log: &mut Edit) -> CurveId {
+        let id = CurveId(self.next_curve);
+        let record = Record::AddCurve(id, curve);
+        if self.apply(&record).is_ok() {
+            log.records.push(record);
+        }
+        id
+    }
+
+    pub fn delete_curve(&mut self, id: CurveId, log: &mut Edit) -> Result<(), TopoError> {
+        let data = self
+            .curves
+            .get(&id)
+            .cloned()
+            .ok_or(TopoError::MissingCurve(id))?;
+        let record = Record::RemoveCurve(id, data);
+        self.apply(&record)?;
+        log.records.push(record);
+        Ok(())
+    }
+
     pub fn set_vertex_position(
         &mut self,
         v: VertexId,
@@ -696,7 +756,9 @@ impl Context {
 
     // -- records ------------------------------------------------------------------------
 
-    /// Apply one record (checks references and `Mismatch`, not geometry).
+    /// Apply one record (checks references and `Mismatch`, not geometry). Curve records check
+    /// only their id: within one edit a curve may name vertices that are gone or not yet back
+    /// (undo re-adds a curve before its vertices); `curve::reconcile` settles that.
     pub fn apply(&mut self, record: &Record) -> Result<(), TopoError> {
         match record {
             Record::AddVertex(id, data) => {
@@ -812,6 +874,24 @@ impl Context {
                 if let Some(v) = self.vertices.get_mut(id) {
                     v.position = *to;
                 }
+                Ok(())
+            }
+            Record::AddCurve(id, curve) => {
+                if self.curves.contains_key(id) {
+                    return Err(TopoError::IdInUse);
+                }
+                self.curves.insert(*id, curve.clone());
+                self.next_curve = self.next_curve.max(id.0.saturating_add(1));
+                Ok(())
+            }
+            Record::RemoveCurve(id, curve) => {
+                let Some(stored) = self.curves.get(id) else {
+                    return Err(TopoError::MissingCurve(*id));
+                };
+                if stored != curve {
+                    return Err(TopoError::Mismatch);
+                }
+                self.curves.remove(id);
                 Ok(())
             }
         }

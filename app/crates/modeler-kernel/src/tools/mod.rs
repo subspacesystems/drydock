@@ -11,6 +11,7 @@ use glam::DVec3;
 
 use crate::model::{BodyId, FaceMaterials, Model, ModelEdit, ModelError, UndoStack};
 use crate::sticky::{EdgeChain, StickyError};
+use crate::topology::CurveId;
 use crate::units::{ParseError, Unit};
 
 pub mod arc;
@@ -120,4 +121,18 @@ pub fn draw_segments(
 
     target.undo.push(label, edit);
     Ok(chains)
+}
+
+/// Draw the polyline through `points` (closing back to the first point when `closed`) like
+/// `draw_segments`, and in the same undo step make it a curve with `curve::add_curve`. The
+/// curve id is `None` when the points don't make one; the edges are drawn anyway.
+/// Behaviour: `docs/specs/m7-curves.md`.
+pub fn draw_curve(
+    target: &mut Target,
+    points: &[DVec3],
+    closed: bool,
+    label: &str,
+) -> Result<(Vec<EdgeChain>, Option<CurveId>), ToolError> {
+    let _ = (target, points, closed, label);
+    unimplemented!()
 }

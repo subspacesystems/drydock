@@ -1,7 +1,8 @@
-# Native model file, version 5
+# Native model file, version 6
 
 The native file stores a whole `Model` (`modeler-kernel`, `src/model.rs`): materials,
-definitions, and for the root and every definition its geometry (vertices, edges, faces),
+definitions, and for the root and every definition its geometry (vertices, edges, faces,
+curves),
 face materials, instances and guides, plus the model's geolocation, shadow settings and length format. Code: `modeler_kernel::format`. Owner: orchestrator.
 
 Design goals: exact round trip (ids and every number come back bit for bit), readable and
@@ -39,6 +40,7 @@ Then, one per line:
 | `vertex <id> <x> <y> <z>` | a vertex |
 | `edge <id> <v1> <v2>` | an edge from `v1` to `v2` (order kept) |
 | `face <id> <loop> [\| <loop>]...` | the first loop is the outer loop, each one after a `\|` token is a hole; a loop is a list of edge uses `+<edge id>` (forward) or `-<edge id>` (reversed), possibly empty |
+| `curve <id> <cx> <cy> <cz> <nx> <ny> <nz> <xx> <xy> <xz> <radius> <start> <end> <v0> <v1> ...` | (version 6) an arc or circle kept as such (`modeler_kernel::curve::Curve`, `docs/specs/m7-curves.md`): center, unit plane normal, unit x axis, radius, start and end angles in radians, then the vertex ids of its chain in order (at least 3; a circle ends with its first id again) |
 | `paint <face id> <front> <back>` | the face's materials, each a material id or `-` |
 | `texmap <face id> <side> <u.x> <u.y> <u.z> <u.w> <v.x> <v.y> <v.z> <v.w>` | (version 3) the texture map of one side of the face in the current body; `side` is `front` or `back`; the face must exist |
 | `instance <id> <definition> <material> <m0> ... <m15> <name>` | a placed definition; `material` is an id or `-`; the 16 numbers are the transform in column-major order (`DMat4::to_cols_array`); `name` is a string |
@@ -54,7 +56,11 @@ Every record is applied as soon as it is read, so everything it names must alrea
 vertices of an edge, the edges of a face, the face of a paint or texmap). Ids keep their
 values. A `guide` record in a version 1 file is an unknown record; a `texmap` record in a
 version 1 or 2 file is too, a `geolocation` or `sun` record in a version 1 to 3 file, and a
-`units` record in a version 1 to 4 file.
+`units` record in a version 1 to 4 file, and a `curve` record in a version 1 to 5 file.
+A `curve` record needs at least 17 tokens, finite numbers and `u64` ids; its vertices must
+exist in the current body (else it is rejected with the first missing one), and the curve
+must fit them (`curve::fits`: vertices on the circle in order from `start` to `end`, each
+step joined by an edge or a straight run of edges), else it is a bad field.
 A second `geolocation`, `sun` or `units` record is a bad field; so is a `units` record with
 the wrong token count, an unknown kind or unit, or a number that isn't an unsigned integer.
 Values the model refuses (out of range, an invalid date, 7 decimals, a 1/3 fraction) are
@@ -67,8 +73,8 @@ model refuses (non-finite or not positive) is rejected.
 
 ## What writers produce
 Exactly this order, one space between tokens, every line ending in `\n`:
-1. the header, with the lowest version that holds the model: `5` when the length format
-   differs from its default (inches, 2 places); else `4` when the geolocation or
+1. the header, with the lowest version that holds the model: `6` when a body has a curve;
+   else `5` when the length format differs from its default (inches, 2 places); else `4` when the geolocation or
    the shadow settings differ from their defaults; else `3` when a material's texture
    size isn't exactly `1` by `1`, or an existing face has a stored texture map; else `2`
    when a body has guides; else `1`;
@@ -77,8 +83,8 @@ Exactly this order, one space between tokens, every line ending in `\n`:
    height;
 4. `definition` records, ascending id;
 5. `body root`, then `body <id>` for every definition in ascending id (written even when
-   the body is empty); inside each body: `vertex` records, then `edge`, `face`, `paint`,
-   `texmap`, `instance` and `guide` records, each in ascending id; `texmap` is written for
+   the body is empty); inside each body: `vertex` records, then `edge`, `face`, `curve`,
+   `paint`, `texmap`, `instance` and `guide` records, each in ascending id; `texmap` is written for
    each existing face with a stored map, `front` before `back`;
 6. `end`.
 
@@ -97,5 +103,6 @@ the target. If anything fails, the temporary file is removed and the target is u
 - 3 (M4): adds texture sizes to `material` records and `texmap` records.
 - 4 (M5): adds `geolocation` and `sun` records.
 - 5 (M6): adds the `units` record.
+- 6 (M7): adds `curve` records.
 
 A later version may add records; a reader for version N reads every version up to N.

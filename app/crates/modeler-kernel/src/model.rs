@@ -810,6 +810,11 @@ impl Model {
             self.apply(&record)?;
             log.records.push(record);
         }
+        for (id, curve) in source.geometry.curves() {
+            let record = ModelRecord::Geometry(target, Record::AddCurve(id, curve.clone()));
+            self.apply(&record)?;
+            log.records.push(record);
+        }
         for (face, materials) in &source.face_materials {
             let record = ModelRecord::SetFaceMaterials {
                 body: target,
@@ -1004,8 +1009,9 @@ impl Model {
         Ok(guides)
     }
 
-    /// Run `f` on the body's geometry with a fresh topology `Edit`, then append each of its
-    /// records to `log` as `ModelRecord::Geometry(body, record)`.
+    /// Run `f` on the body's geometry with a fresh topology `Edit`, bring the body's curves
+    /// in line with the result (`curve::reconcile`), then append each record to `log` as
+    /// `ModelRecord::Geometry(body, record)`.
     pub fn edit_geometry<R>(
         &mut self,
         body: BodyId,
@@ -1015,6 +1021,9 @@ impl Model {
         let b = self.body_mut(body).ok_or(ModelError::MissingBody(body))?;
         let mut edit = Edit::new();
         let result = f(&mut b.geometry, &mut edit);
+        if b.geometry.curve_count() > 0 {
+            crate::curve::reconcile(&mut b.geometry, &mut edit);
+        }
         self.revision = self.revision.wrapping_add(1);
         log.records.extend(
             edit.records

@@ -227,7 +227,8 @@ Tyrel's request: print-ready solids without plugins. Placed right after M6; orde
 | `m7-solid-check` | Kernel: per group or component, a solid report: open, loose and shared edges, reversed and internal faces, shells, cavities; volume when solid (kernel, orchestrator) | |
 | `m7-solid-repair` | Kernel: reverse flipped faces, remove internal and stray faces, fill a hole whose border is one flat loop; one undo step; report what it couldn't fix (kernel, orchestrator) | `m7-solid-check` |
 | `m7-curves` | Kernel: arcs and circles keep their center, radius and angles through edits and save (native format v6), so export can re-segment them by chord tolerance (kernel, orchestrator) | |
-| `m7-print-mesh` | Export mesh: each solid group or component (whole model or selection) as world-space triangles in mm, with name and material color; curves at the chosen tolerance | `m7-solid-check`, `m7-curves` |
+| `m7-curves-carry` | Kernel: curves carried into and out of groups and components (make group/component, explode, copy/paste, import) and onto push/pull's new cap, so a pulled circle is a cylinder with a curve at each end (kernel, orchestrator) | `m7-curves` |
+| `m7-print-mesh` | Export mesh: each solid group or component (whole model or selection) as world-space triangles in mm, with name and material color; curves at the chosen tolerance | `m7-solid-check`, `m7-curves`, `m7-curves-carry` |
 | `m7-export-stl` | Binary STL writer: one file per object, or all in one | `m7-print-mesh` |
 | `m7-export-3mf` | 3MF writer: units, one object per solid, names, colors from materials | `m7-print-mesh` |
 | `m7-import-stl` | STL (binary and ASCII) reader; each solid a group, triangles welded and merged into faces by the DAE import's merge (`modeler-mesh`) | |

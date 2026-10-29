@@ -17,11 +17,13 @@
 //! (editing inside an instance), `docs/specs/m4-texture-model.md` (texture size and placement),
 //! `docs/specs/m4-copy.md` (copy, clipboard and paste), `docs/specs/m5-solar.md` (sun position),
 //! `docs/specs/m5-geo-model.md` (geolocation and shadow settings), `docs/specs/m7-solid-check.md`
-//! (solid check), `docs/specs/m7-solid-repair.md` (solid repair).
+//! (solid check), `docs/specs/m7-solid-repair.md` (solid repair), `docs/specs/m7-curves.md`
+//! (arcs and circles kept as curves).
 
 pub mod click;
 pub mod component;
 pub mod copy;
+pub mod curve;
 pub mod editpath;
 pub mod erase;
 pub mod explode;
