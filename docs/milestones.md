@@ -236,8 +236,8 @@ Tyrel's request: print-ready solids without plugins. Placed right after M6; orde
 | `m7-roundtrip` | Acceptance: closed corpus solids exported to 3MF and STL and re-imported keep volume and bounding box; deliberately broken models found by the check and fixed by repair; own mesh validator in the oracle | `m7-export-stl`, `m7-export-3mf`, `m7-import-stl`, `m7-import-3mf`, `m7-solid-repair` |
 | `m7-solid-ui` | Solid status and volume in Entity Info, problem edges and faces highlighted in the viewport, Repair button | `m7-solid-repair` |
 | `m7-export-ui` | File > Export 3MF... and Export STL...: selection or whole model, units (mm default), curve tolerance | `m7-export-stl`, `m7-export-3mf` |
-| `m7-print-setup` | Print Setup panel: bed presets and custom size, bed outline in the viewport, fits-the-bed check, Drop to Bed | `m7-print-mesh` |
-| `m7-overhang` | Faces steeper than a chosen overhang angle tinted in the viewport | |
+| `m7-print-setup` | Print Setup panel: bed presets and custom size, bed outline in the viewport, fits-the-bed check, Drop to Bed, overhang angle field | `m7-print-mesh`, `m7-overhang` |
+| `m7-overhang` | View > Overhangs: faces leaning past the overhang angle (45° until Print Setup offers it) tinted in the viewport; faces on the bed excluded | |
 | `m7-clearance` | Fit check: pick two parts, highlight where the gap between them is under the clearance (default 0.2 mm) (Tyrel chose fit check first) | `m7-solid-check` |
 | `m7-clearance-offset` | Grow/Shrink by clearance: move every face of a flat-faced solid in or out by the clearance, one undo step; report parts it can't handle | `m7-clearance`, `m7-solid-repair` |
 | `m7-text-3d` | 3D text from the app's font outlines, embossed on or engraved into a face | |
