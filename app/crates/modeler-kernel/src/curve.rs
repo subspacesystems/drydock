@@ -10,11 +10,15 @@
 //! `Record::AddCurve` / `RemoveCurve`); `Model::edit_geometry` runs `reconcile` after every
 //! geometry edit, so moves, rotations, scales, sticky splits and erasing keep each curve
 //! consistent with its vertices, or turn it back into plain edges.
+//!
+//! Operations that rebuild geometry under new vertex ids (make group/component, explode,
+//! copy/paste, import, push/pull's cap) bring the curves along with `carry`
+//! (`docs/specs/m7-curves-carry.md`).
 
 use std::collections::BTreeSet;
 use std::f64::consts::{PI, TAU};
 
-use glam::DVec3;
+use glam::{DMat4, DVec3};
 
 use crate::geom::LINEAR_TOL;
 use crate::topology::{Context, CurveId, EdgeId, Edit, Record, VertexId};
@@ -121,6 +125,14 @@ impl Curve {
             points[n] = self.point_at(self.end);
         }
         points
+    }
+
+    /// The curve moved by `m` when `m` is a similarity (rotation, uniform scale, mirror and
+    /// translation): `point_at(a)` of the result is `m` applied to `point_at(a)`, for every
+    /// angle. `vertices` are kept as they are. `None` for any other matrix, or when a number
+    /// isn't finite (spec m7-curves-carry: "Moving a curve").
+    pub fn transformed(&self, _m: DMat4) -> Option<Curve> {
+        unimplemented!("m7-curves-carry")
     }
 }
 
@@ -446,6 +458,19 @@ pub fn curve_of_edge(ctx: &Context, edge: EdgeId) -> Option<CurveId> {
     ctx.curves()
         .find(|(id, _)| curve_edges(ctx, *id).contains(&edge))
         .map(|(id, _)| id)
+}
+
+/// Copy `curves` into `ctx`, whose geometry is a copy of theirs moved by `m`: `map` gives the
+/// vertex of `ctx` that each chain vertex became. One result per curve, in order: the new id,
+/// or `None` when that curve couldn't be carried (spec m7-curves-carry: "Carrying curves").
+pub fn carry(
+    _ctx: &mut Context,
+    _curves: &[Curve],
+    _m: DMat4,
+    _map: impl FnMut(&Context, VertexId) -> Option<VertexId>,
+    _log: &mut Edit,
+) -> Vec<Option<CurveId>> {
+    unimplemented!("m7-curves-carry")
 }
 
 fn add_with_id(ctx: &mut Context, id: CurveId, curve: Curve, log: &mut Edit) {
