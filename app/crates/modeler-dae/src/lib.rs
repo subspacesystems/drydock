@@ -17,11 +17,13 @@ use glam::DMat4;
 
 mod flat;
 mod kernel;
+pub mod overhang;
 mod reader;
 mod scene;
 
 pub use flat::{Aabb, Batch, FlatScene, LineBatch, flatten};
 pub use kernel::{ConvertError, to_kernel};
+pub use overhang::{DEFAULT_OVERHANG_DEGREES, OVERHANG_COLOR, is_overhang, tint_overhangs};
 pub use scene::{RestView, kernel_scene, kernel_scene_editing};
 
 /// Why an import failed. Messages name the element or file involved.

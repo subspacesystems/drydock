@@ -127,6 +127,8 @@ pub enum Action {
     ToggleHideRest,
     /// Show or hide the axes at the origin (View menu; `docs/specs/m4-ui-axes.md`).
     ToggleAxes,
+    /// Tint overhanging faces or stop (View menu; `docs/specs/m7-overhang.md`).
+    ToggleOverhangs,
     /// Show or hide the Shadows window (View menu; `docs/specs/m5-app-shadows-ui.md`).
     ToggleShadows,
     /// Show or hide one of the docking panels (View menu; `docs/specs/m6-dock-ui.md`).

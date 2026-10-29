@@ -24,6 +24,10 @@ pub struct ViewState {
     pub zoom_pivot: Option<DVec3>,
     /// The red, green and blue axes are drawn (View > Axes; `docs/specs/m4-ui-axes.md`).
     pub axes: bool,
+    /// Overhanging faces are tinted (View > Overhangs; `docs/specs/m7-overhang.md`).
+    pub overhangs: bool,
+    /// The overhang angle in degrees from vertical.
+    pub overhang_degrees: f64,
     /// Ctrl+wheel notches not yet turned into a step through a surface (a fraction of a
     /// notch from a smooth wheel or touchpad). `docs/specs/m4-zoom-through.md`.
     pub through_carry: f64,
@@ -71,6 +75,8 @@ pub enum Effect {
     Explode,
     /// Flip the editor's hide-the-rest option.
     ToggleHideRest,
+    /// The overhang tint changed: upload the scene again (`docs/specs/m7-overhang.md`).
+    ReuploadScene,
     /// Open the recent file at this index (`docs/specs/m4-ui-menus.md`).
     OpenRecent(usize),
     /// Quit the app (asking first when the document is modified).
@@ -143,6 +149,8 @@ impl ViewState {
             pivot: None,
             zoom_pivot: None,
             axes: true,
+            overhangs: false,
+            overhang_degrees: modeler_dae::DEFAULT_OVERHANG_DEGREES,
             through_carry: 0.0,
         }
     }
@@ -290,6 +298,7 @@ impl ViewState {
             Action::Explode => return Effect::Explode,
             Action::ToggleHideRest => return Effect::ToggleHideRest,
             Action::ToggleAxes => self.axes = !self.axes,
+            Action::ToggleOverhangs => unimplemented!("m7-overhang"),
             Action::OpenRecent(index) => return Effect::OpenRecent(index),
             Action::Exit => return Effect::Exit,
         }
