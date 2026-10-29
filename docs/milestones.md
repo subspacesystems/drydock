@@ -11,10 +11,10 @@ In build order. Each milestone ends when every listed task is merged and Tyrel's
 | M4 | Components and materials | Components, materials | M3 |
 | M5 | Sun | Geolocation and shadows | M4 |
 | M6 | UI | Tyrel's deferred UI items: icon toolbars, docking panels, Entity Info, Components | M5 |
-| M7 | 3D printing (proposed) | Solid check and repair, 3MF/STL export and import, print setup, print helpers | M6 |
-| M8 | Medium priority | Follow Me, offset | M3 |
-| M9 | Low priority | Tags, model library hook | M4 |
-| M10 | Windows | Windows build and installer | M4 |
+| M7 | 3D printing | Solid check and repair, 3MF/STL export and import, print setup, print helpers | M6 |
+| M8 | Windows | Windows build and installer | M7 |
+| M9 | Medium priority | Follow Me, offset | M3 |
+| M10 | Low priority | Tags, model library hook | M4 |
 
 MVP = M0 to M5 (all High features).
 
@@ -220,18 +220,20 @@ Done when: tools are icon buttons grouped by kind along the top by default; each
 
 ## M7: 3D printing
 
-Tyrel's request: print-ready solids without plugins. Placed right after M6; order confirmed by Tyrel (2026-10-28): 3D printing, then Windows, then Follow Me/offset, then tags. Not started until the limit reaches M7.
+Tyrel's request: print-ready solids without plugins. Placed right after M6; order confirmed by Tyrel (2026-10-28): 3D printing, then Windows, then Follow Me/offset, then tags. Started 2026-10-29 (Tyrel lifted the limit). Mesh files live in the `modeler-mesh` crate.
 
 | Task | What | Needs |
 | --- | --- | --- |
-| `m7-solid-check` | Kernel: per group or component, a solid report: open edges, edges shared by more than two faces, flipped faces, internal faces, zero-area faces; volume when solid (kernel, orchestrator) | |
+| `m7-solid-check` | Kernel: per group or component, a solid report: open, loose and shared edges, reversed and internal faces, shells, cavities; volume when solid (kernel, orchestrator) | |
 | `m7-solid-repair` | Kernel: reverse flipped faces, remove internal and stray faces, fill a hole whose border is one flat loop; one undo step; report what it couldn't fix (kernel, orchestrator) | `m7-solid-check` |
-| `m7-curves` | Kernel: arcs and circles keep their center, radius and angles through edits and save (native format v5), so export can re-segment them by chord tolerance (kernel, orchestrator) | |
+| `m7-curves` | Kernel: arcs and circles keep their center, radius and angles through edits and save (native format v6), so export can re-segment them by chord tolerance (kernel, orchestrator) | |
 | `m7-print-mesh` | Export mesh: each solid group or component (whole model or selection) as world-space triangles in mm, with name and material color; curves at the chosen tolerance | `m7-solid-check`, `m7-curves` |
 | `m7-export-stl` | Binary STL writer: one file per object, or all in one | `m7-print-mesh` |
 | `m7-export-3mf` | 3MF writer: units, one object per solid, names, colors from materials | `m7-print-mesh` |
-| `m7-import-mesh` | STL (binary and ASCII) and 3MF import: weld vertices, merge coplanar triangles into editable faces with the DAE import's merge; each object a group | |
-| `m7-roundtrip` | Acceptance: closed corpus solids exported to 3MF and STL and re-imported keep volume and bounding box; deliberately broken models found by the check and fixed by repair; own mesh validator in the oracle | `m7-export-stl`, `m7-export-3mf`, `m7-import-mesh`, `m7-solid-repair` |
+| `m7-import-stl` | STL (binary and ASCII) reader; each solid a group, triangles welded and merged into faces by the DAE import's merge (`modeler-mesh`) | |
+| `m7-import-3mf` | 3MF reader: objects, units, names; same path to the kernel as STL | `m7-import-stl` |
+| `m7-import-ui` | File > Open and File > Import... take STL and 3MF (import adds the groups to the open model), units choice (mm default) | `m7-import-stl`, `m7-import-3mf` |
+| `m7-roundtrip` | Acceptance: closed corpus solids exported to 3MF and STL and re-imported keep volume and bounding box; deliberately broken models found by the check and fixed by repair; own mesh validator in the oracle | `m7-export-stl`, `m7-export-3mf`, `m7-import-stl`, `m7-import-3mf`, `m7-solid-repair` |
 | `m7-solid-ui` | Solid status and volume in Entity Info, problem edges and faces highlighted in the viewport, Repair button | `m7-solid-repair` |
 | `m7-export-ui` | File > Export 3MF... and Export STL...: selection or whole model, units (mm default), curve tolerance | `m7-export-stl`, `m7-export-3mf` |
 | `m7-print-setup` | Print Setup panel: bed presets and custom size, bed outline in the viewport, fits-the-bed check, Drop to Bed | `m7-print-mesh` |
@@ -239,6 +241,8 @@ Tyrel's request: print-ready solids without plugins. Placed right after M6; orde
 | `m7-clearance` | Fit check: pick two parts, highlight where the gap between them is under the clearance (default 0.2 mm) (Tyrel chose fit check first) | `m7-solid-check` |
 | `m7-clearance-offset` | Grow/Shrink by clearance: move every face of a flat-faced solid in or out by the clearance, one undo step; report parts it can't handle | `m7-clearance`, `m7-solid-repair` |
 | `m7-text-3d` | 3D text from the app's font outlines, embossed on or engraved into a face | |
+
+Done when: Entity Info says whether a group or component is a solid, with its volume, and the viewport marks what keeps it from being one; Repair fixes reversed and internal faces and simple flat holes in one undo step; File > Export 3MF... and Export STL... write files at the right size (mm) that re-import with the same volume and bounding box; STL and 3MF files open or import as editable groups; the print bed outline and fits-the-bed check, Drop to Bed, overhang tint, fit check between two parts, grow/shrink by clearance and 3D text work. Checked in the real window before Tyrel tries it.
 
 ## M8: Windows
 
