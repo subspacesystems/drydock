@@ -1622,8 +1622,43 @@ impl Editor {
     /// message (also kept as the editor's message), "Nothing to import" for an empty source,
     /// and nothing changed. Behaviour: `docs/specs/m7-import-ui.md`.
     pub fn import_groups(&mut self, model: &mut Model, source: &Model) -> Result<usize, String> {
-        let _ = (model, source);
-        unimplemented!("m7-import-ui")
+        let selection: Vec<Entity> = source
+            .root()
+            .instances()
+            .map(|(id, _)| Entity::Instance(id))
+            .collect();
+        let count = selection.len();
+        let clipboard = match copy::extract(source, BodyId::Root, &selection) {
+            Ok(clipboard) => clipboard,
+            Err(copy::CopyError::Empty) => {
+                let message = "Nothing to import".to_string();
+                self.message = Some(message.clone());
+                return Err(message);
+            }
+            Err(_) => {
+                let message = "Import failed".to_string();
+                self.message = Some(message.clone());
+                return Err(message);
+            }
+        };
+        match copy::insert(
+            model,
+            BodyId::Root,
+            &clipboard,
+            DMat4::IDENTITY,
+            &mut self.undo,
+            "Import Mesh",
+        ) {
+            Ok(_) => {
+                self.message = None;
+                Ok(count)
+            }
+            Err(_) => {
+                let message = "Import failed".to_string();
+                self.message = Some(message.clone());
+                Err(message)
+            }
+        }
     }
 
     /// The definition waiting for its placing click.
