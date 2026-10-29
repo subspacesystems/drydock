@@ -67,13 +67,23 @@ pub fn draw_segments(
     segments: &[(DVec3, DVec3)],
     label: &str,
 ) -> Result<Vec<EdgeChain>, ToolError> {
+    draw_impl(target, segments, None, label).map(|(chains, _)| chains)
+}
+
+fn draw_impl(
+    target: &mut Target,
+    segments: &[(DVec3, DVec3)],
+    curve: Option<(&[DVec3], bool)>,
+    label: &str,
+) -> Result<(Vec<EdgeChain>, Option<CurveId>), ToolError> {
     if segments.is_empty() {
-        return Ok(Vec::new());
+        return Ok((Vec::new(), None));
     }
 
     let mut edit = ModelEdit::new();
     let mut chains = Vec::with_capacity(segments.len());
     let mut failure = None;
+    let mut curve_id = None;
     let result = target
         .model
         .edit_geometry(target.body, &mut edit, |ctx, log| {
@@ -85,6 +95,11 @@ pub fn draw_segments(
                         break;
                     }
                 }
+            }
+            if failure.is_none()
+                && let Some((points, closed)) = curve
+            {
+                curve_id = crate::curve::add_curve(ctx, points, closed, log);
             }
         });
     if let Err(error) = result {
@@ -120,7 +135,7 @@ pub fn draw_segments(
     }
 
     target.undo.push(label, edit);
-    Ok(chains)
+    Ok((chains, curve_id))
 }
 
 /// Draw the polyline through `points` (closing back to the first point when `closed`) like
@@ -133,6 +148,9 @@ pub fn draw_curve(
     closed: bool,
     label: &str,
 ) -> Result<(Vec<EdgeChain>, Option<CurveId>), ToolError> {
-    let _ = (target, points, closed, label);
-    unimplemented!()
+    let mut segments: Vec<(DVec3, DVec3)> = points.windows(2).map(|w| (w[0], w[1])).collect();
+    if closed && points.len() > 2 {
+        segments.push((points[points.len() - 1], points[0]));
+    }
+    draw_impl(target, &segments, Some((points, closed)), label)
 }

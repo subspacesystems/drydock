@@ -15,7 +15,7 @@ use crate::units::parse_length;
 
 use super::circle::segment_count;
 use super::plane::DrawPlane;
-use super::{Input, Target, ToolError, draw_segments};
+use super::{Input, Target, ToolError, draw_curve};
 
 const TAU: f64 = std::f64::consts::TAU;
 
@@ -316,8 +316,7 @@ impl Arc3Tool {
     }
 
     fn place(&mut self, points: &[DVec3], target: &mut Target) -> Result<(), ToolError> {
-        let segments: Vec<_> = points.windows(2).map(|w| (w[0], w[1])).collect();
-        draw_segments(target, &segments, "Arc")?;
+        draw_curve(target, points, false, "Arc")?;
         self.stage = Stage::Idle;
         self.cursor = None;
         Ok(())

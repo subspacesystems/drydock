@@ -13,6 +13,7 @@ use std::path::Path;
 
 use glam::{DMat4, DVec2};
 
+use crate::curve::Curve;
 use crate::model::{
     Body, BodyId, DefinitionId, DefinitionInfo, FaceMaterials, Instance, InstanceId, Material,
     MaterialId, Model, ModelError, ModelRecord, Texture,
@@ -21,12 +22,12 @@ use crate::paint::Side;
 use crate::sun::{Geolocation, LocalTime, ShadowSettings};
 use crate::tape::{Guide, GuideId};
 use crate::topology::{
-    Edge, EdgeId, EdgeUse, Face, FaceId, Loop, Record, TopoError, Vertex, VertexId,
+    CurveId, Edge, EdgeId, EdgeUse, Face, FaceId, Loop, Record, TopoError, Vertex, VertexId,
 };
 use crate::units::{LengthFormat, Unit};
 
 /// The version this code writes, and the newest it reads.
-pub const FORMAT_VERSION: u32 = 5;
+pub const FORMAT_VERSION: u32 = 6;
 
 /// Why a model can't be written. Nothing was written.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -154,6 +155,46 @@ fn write_body(out: &mut String, id: BodyId, body: &Body) -> Result<(), WriteErro
         out.push('\n');
     }
 
+    for (cid, curve) in body.geometry().curves() {
+        for value in [
+            curve.center.x,
+            curve.center.y,
+            curve.center.z,
+            curve.normal.x,
+            curve.normal.y,
+            curve.normal.z,
+            curve.x_axis.x,
+            curve.x_axis.y,
+            curve.x_axis.z,
+            curve.radius,
+            curve.start,
+            curve.end,
+        ] {
+            check_finite(value)?;
+        }
+        out.push_str(&format!(
+            "curve {} {} {} {} {} {} {} {} {} {} {} {} {}",
+            cid.0,
+            curve.center.x,
+            curve.center.y,
+            curve.center.z,
+            curve.normal.x,
+            curve.normal.y,
+            curve.normal.z,
+            curve.x_axis.x,
+            curve.x_axis.y,
+            curve.x_axis.z,
+            curve.radius,
+            curve.start,
+            curve.end
+        ));
+        for vertex in &curve.vertices {
+            out.push(' ');
+            out.push_str(&vertex.0.to_string());
+        }
+        out.push('\n');
+    }
+
     for (fid, materials) in body.face_material_entries() {
         if body.geometry().face(fid).is_none() {
             continue;
@@ -256,7 +297,10 @@ pub fn to_text(model: &Model) -> Result<String, WriteError> {
     let has_settings = model.geolocation() != Geolocation::default()
         || model.shadow_settings() != ShadowSettings::default();
     let has_units = model.length_format() != LengthFormat::default();
-    let version = if has_units {
+    let has_curves = bodies().any(|body| body.geometry().curve_count() > 0);
+    let version = if has_curves {
+        6
+    } else if has_units {
         5
     } else if has_settings {
         4
@@ -713,6 +757,60 @@ fn apply_line(
                     body,
                     Record::AddFace(id, Face { outer, inner }),
                 ))
+                .map_err(rejected)?;
+            Ok(false)
+        }
+        "curve" => {
+            if version < 6 {
+                return Err(ReadErrorKind::UnknownRecord);
+            }
+            if tokens.len() < 17 {
+                return Err(ReadErrorKind::BadField);
+            }
+            let body = current.ok_or(ReadErrorKind::NoBody)?;
+            let id = CurveId(parse_u64(&tokens[1])?);
+            let curve = Curve {
+                center: glam::DVec3::new(
+                    parse_f64(&tokens[2])?,
+                    parse_f64(&tokens[3])?,
+                    parse_f64(&tokens[4])?,
+                ),
+                normal: glam::DVec3::new(
+                    parse_f64(&tokens[5])?,
+                    parse_f64(&tokens[6])?,
+                    parse_f64(&tokens[7])?,
+                ),
+                x_axis: glam::DVec3::new(
+                    parse_f64(&tokens[8])?,
+                    parse_f64(&tokens[9])?,
+                    parse_f64(&tokens[10])?,
+                ),
+                radius: parse_f64(&tokens[11])?,
+                start: parse_f64(&tokens[12])?,
+                end: parse_f64(&tokens[13])?,
+                vertices: tokens[14..]
+                    .iter()
+                    .map(|token| parse_u64(token).map(VertexId))
+                    .collect::<Result<_, _>>()?,
+            };
+            let geometry = model
+                .body(body)
+                .ok_or(rejected(ModelError::MissingBody(body)))?
+                .geometry();
+            if let Some(vertex) = curve
+                .vertices
+                .iter()
+                .find(|vertex| geometry.vertex(**vertex).is_none())
+            {
+                return Err(rejected(ModelError::Topo(TopoError::MissingVertex(
+                    *vertex,
+                ))));
+            }
+            if !crate::curve::fits(geometry, &curve) {
+                return Err(ReadErrorKind::BadField);
+            }
+            model
+                .apply(&ModelRecord::Geometry(body, Record::AddCurve(id, curve)))
                 .map_err(rejected)?;
             Ok(false)
         }
