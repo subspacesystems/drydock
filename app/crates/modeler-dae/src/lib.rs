@@ -15,12 +15,17 @@ use std::path::{Path, PathBuf};
 
 use glam::DMat4;
 
+pub mod clearance;
 mod flat;
 mod kernel;
 pub mod overhang;
 mod reader;
 mod scene;
 
+pub use clearance::{
+    DEFAULT_CLEARANCE_M, FIT_COLOR, FitReport, MATCH_TOLERANCE_M, Triangle, close_triangles,
+    instance_triangles, tint_fit, triangle_distance,
+};
 pub use flat::{Aabb, Batch, FlatScene, LineBatch, flatten};
 pub use kernel::{ConvertError, to_kernel};
 pub use overhang::{DEFAULT_OVERHANG_DEGREES, OVERHANG_COLOR, is_overhang, tint_overhangs};
