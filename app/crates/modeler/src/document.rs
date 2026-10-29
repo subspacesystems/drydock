@@ -60,6 +60,9 @@ impl Document {
     /// `.stl` and `.3mf` files go to [`Document::open_mesh`] with millimeters
     /// (`docs/specs/m7-import-ui.md`).
     pub fn open(path: &Path) -> Result<Document, String> {
+        if crate::mesh_import::mesh_format(path).is_some() {
+            return Document::open_mesh(path, crate::mesh_import::MeshUnit::default());
+        }
         let is_native = path
             .extension()
             .is_some_and(|ext| ext.eq_ignore_ascii_case("modeler"));
@@ -125,8 +128,20 @@ impl Document {
     /// kernel model. The error is a one-line message that names the file. Safe to call from
     /// a background thread. Behaviour: `docs/specs/m7-import-ui.md`.
     pub fn open_mesh(path: &Path, unit: crate::mesh_import::MeshUnit) -> Result<Document, String> {
-        let _ = (path, unit);
-        unimplemented!("m7-import-ui")
+        let kernel = crate::mesh_import::read_mesh(path, unit)?;
+        let scene = kernel_scene(&kernel);
+        let stats = stats_from_scene(&scene, Some(&kernel));
+        Ok(Document {
+            path: path.to_path_buf(),
+            kind: FileKind::Dae,
+            kernel: Some(kernel),
+            kernel_error: None,
+            scene,
+            stats,
+            untitled: false,
+            modified: false,
+            saved_state: 0,
+        })
     }
 
     /// A new, empty native model named `untitled.modeler` (not on disk).

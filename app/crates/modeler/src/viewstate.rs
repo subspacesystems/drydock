@@ -306,7 +306,7 @@ impl ViewState {
             Action::SelectTool(tool) => self.tool = tool,
             Action::New => return Effect::New,
             Action::Open => return Effect::OpenDialog,
-            Action::Import => unimplemented!("m7-import-ui"),
+            Action::Import => return Effect::ImportDialog,
             Action::Save => return Effect::Save,
             Action::SaveAs => return Effect::SaveAsDialog,
             Action::Edit(key) => return Effect::Edit(key),
