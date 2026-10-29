@@ -15,6 +15,7 @@ modeler-dae = { path = "crates/modeler-dae" }
 modeler-view = { path = "crates/modeler-view" }
 modeler-render = { path = "crates/modeler-render" }
 modeler-kernel = { path = "crates/modeler-kernel" }
+modeler-mesh = { path = "crates/modeler-mesh" }
 glam = "0.34"
 roxmltree = "0.21"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
