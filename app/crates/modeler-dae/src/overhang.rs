@@ -19,7 +19,11 @@ pub const OVERHANG_COLOR: [f32; 4] = [0.9, 0.2, 0.15, 1.0];
 /// Whether a surface with front normal `normal` (any length) leans past `max_degrees` from
 /// vertical while facing down.
 pub fn is_overhang(normal: DVec3, max_degrees: f64) -> bool {
-    if !normal.is_finite() || normal.length_squared() == 0.0 {
+    if !normal.is_finite() {
+        return false;
+    }
+    let scale = normal.x.abs().max(normal.y.abs()).max(normal.z.abs());
+    if scale == 0.0 {
         return false;
     }
     let max_degrees = if max_degrees.is_nan() {
@@ -27,7 +31,9 @@ pub fn is_overhang(normal: DVec3, max_degrees: f64) -> bool {
     } else {
         max_degrees.clamp(0.0, 90.0)
     };
-    let n = normal.normalize();
+    // Scale before normalizing so that very large or very small finite lengths neither
+    // overflow nor underflow.
+    let n = (normal / scale).normalize();
     -n.z > max_degrees.to_radians().sin() + 1e-9
 }
 
