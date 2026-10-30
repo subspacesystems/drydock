@@ -49,6 +49,8 @@ pub enum Effect {
     OpenDialog,
     /// Show the import dialog (`docs/specs/m7-import-ui.md`).
     ImportDialog,
+    /// Show the export dialog for this format (`docs/specs/m7-export-ui.md`).
+    ExportDialog(crate::mesh_export::ExportFormat),
     /// Save the document (`docs/specs/m1-app-native.md`).
     Save,
     /// Show the save dialog.
@@ -327,6 +329,7 @@ impl ViewState {
             Action::New => return Effect::New,
             Action::Open => return Effect::OpenDialog,
             Action::Import => return Effect::ImportDialog,
+            Action::ExportMesh(format) => return Effect::ExportDialog(format),
             Action::Save => return Effect::Save,
             Action::SaveAs => return Effect::SaveAsDialog,
             Action::Edit(key) => return Effect::Edit(key),

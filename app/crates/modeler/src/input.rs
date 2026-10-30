@@ -98,6 +98,8 @@ pub enum Action {
     Open,
     /// File > Import...: add a mesh file's groups to the open model.
     Import,
+    /// File > Export 3MF... / Export STL...: show the export dialog (`docs/specs/m7-export-ui.md`).
+    ExportMesh(crate::mesh_export::ExportFormat),
     /// Save to the open native file (a DAE document asks for a name instead).
     Save,
     /// Save under a new name.
