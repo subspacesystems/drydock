@@ -5,7 +5,7 @@
 //! scene the viewport draws with them tinted. No window needed. See
 //! `docs/specs/m7-clearance-ui.md`.
 
-use modeler_dae::{FlatScene, Triangle};
+use modeler_dae::{FlatScene, Triangle, tint_fit, tint_overhangs};
 use modeler_kernel::editpath::EditPath;
 use modeler_kernel::model::{InstanceId, Model};
 use modeler_kernel::select::Entity;
@@ -94,9 +94,17 @@ impl FitCheck {
 /// (`tint_overhangs`), then the fit tint when `fit` is `Some` (`tint_fit` with its flagged
 /// triangles), so a face that is both shows the fit color. Neither: `scene` itself, not a copy.
 pub fn display_scene<'a>(
-    _scene: &'a FlatScene,
-    _overhang_degrees: Option<f64>,
-    _fit: Option<&FitCheck>,
+    scene: &'a FlatScene,
+    overhang_degrees: Option<f64>,
+    fit: Option<&FitCheck>,
 ) -> Cow<'a, FlatScene> {
-    unimplemented!("m7-clearance-ui")
+    if overhang_degrees.is_none() && fit.is_none() {
+        return Cow::Borrowed(scene);
+    }
+    let overhangs = overhang_degrees.map(|degrees| tint_overhangs(scene, degrees));
+    let tinted = overhangs.as_ref().unwrap_or(scene);
+    match fit {
+        Some(fit) => Cow::Owned(tint_fit(tinted, &fit.flagged)),
+        None => Cow::Owned(tinted.clone()),
+    }
 }
