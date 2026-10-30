@@ -40,7 +40,7 @@ use modeler::print_setup::{
 use modeler::recent::{RecentFiles, recent_file};
 use modeler::shading;
 use modeler::shadows_panel::{self, ShadowsEvent};
-use modeler::solid_ui::{MarkTracker, marked_scene, repair_message};
+use modeler::solid_ui::{MarkTracker, mark_primitives, marked_scene, repair_message};
 use modeler::sun_windows::SunWindows;
 use modeler::text_tool::{self, TextDialog, TextOptions, TextOutcome};
 use modeler::texture_handles;
@@ -1893,6 +1893,10 @@ impl App {
             let primitives =
                 overlay::selection(kernel, open_body, open_transform, editor.selection());
             paint_primitives(painter, &self.view.camera, &primitives, &project);
+            if let Some(marks) = self.solid_marks.marks() {
+                let primitives = mark_primitives(marks);
+                paint_primitives(painter, &self.view.camera, &primitives, &project);
+            }
             if let Some(handles) = editor.texture_handles(kernel) {
                 let primitives = texture_handles::primitives(&handles);
                 let primitives = overlay::transformed(primitives, open_transform);
