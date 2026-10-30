@@ -312,7 +312,10 @@ impl Bvh {
         clearance: f64,
     ) -> bool {
         let node = &self.nodes[node];
-        if !aabb_close(node.bounds, triangle_bounds(query), clearance) {
+        // A little slack keeps rounding in the box test from pruning a pair whose exact
+        // distance is just under the clearance.
+        let reach = clearance + clearance.abs() * 1e-12 + f64::MIN_POSITIVE;
+        if !aabb_close(node.bounds, triangle_bounds(query), reach) {
             return false;
         }
         if node.left == u32::MAX {
