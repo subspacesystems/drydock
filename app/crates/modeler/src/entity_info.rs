@@ -19,6 +19,8 @@ use modeler_kernel::select::Entity;
 use modeler_kernel::tools::scale::bounds;
 use modeler_kernel::units::Unit;
 
+use crate::solid_ui::{can_repair, status_rows};
+
 /// What the selection is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum InfoKind {
@@ -410,6 +412,23 @@ pub fn entity_info_panel(
         );
         if !instance.group {
             value_row(ui, "In model", &instance.copies.to_string());
+        }
+    }
+
+    let solid = panel.solid.get(model, body, selection).map(|status| {
+        (
+            status.instance,
+            status_rows(status, format),
+            can_repair(status),
+        )
+    });
+    if let Some((instance, rows, can_repair)) = solid {
+        for (label, value) in rows {
+            value_row(ui, &label, &value);
+        }
+        let button = ui.add_enabled(can_repair, egui::Button::new("Repair"));
+        if button.clicked() && action.is_none() {
+            action = Some(InfoAction::Repair(instance));
         }
     }
 

@@ -33,6 +33,7 @@ use modeler::overlay::{self, Primitive};
 use modeler::recent::{RecentFiles, recent_file};
 use modeler::shading;
 use modeler::shadows_panel::{self, ShadowsEvent};
+use modeler::solid_ui::{MarkTracker, marked_scene, repair_message};
 use modeler::sun_windows::SunWindows;
 use modeler::texture_handles;
 use modeler::texture_panel::{TextureForm, texture_position_section};
@@ -160,6 +161,10 @@ pub struct App {
     dirty: bool,
     /// The editor path the uploaded scene was built for.
     shown_path: EditPath,
+    /// The problem marks of the selected group or component.
+    solid_marks: MarkTracker,
+    /// The last repair's note, with the selection and undo state it belongs to.
+    repair_note: Option<(String, Vec<Entity>, u64)>,
     /// The File menu's recent files (`docs/specs/m4-ui-menus.md`).
     recent: RecentFiles,
     /// Where `recent` is kept between runs.
@@ -247,6 +252,8 @@ impl App {
             drag_start_px: None,
             dirty: true,
             shown_path: EditPath::root(),
+            solid_marks: MarkTracker::default(),
+            repair_note: None,
             recent,
             recent_file,
             toolbars,
@@ -326,7 +333,6 @@ impl App {
         let loaded_path = (!document.untitled).then(|| document.path.clone());
         self.fit = None;
         self.fit_note = None;
-        self.show_scene(frame, &document.scene);
         self.view
             .set_bounds(scene_bounds(&document.scene), self.viewport_pt);
         self.editor = Some(Editor::new());
@@ -337,8 +343,11 @@ impl App {
         if let Some(editor) = &mut self.editor {
             editor.set_tool(self.view.tool);
         }
-        ctx.send_viewport_cmd(egui::ViewportCommand::Title(document.title()));
+        let title = document.title();
         self.model = Some(document);
+        self.solid_marks.clear();
+        self.show_scene(frame);
+        ctx.send_viewport_cmd(egui::ViewportCommand::Title(title));
         if let Some(path) = loaded_path {
             self.remember_recent(&path);
         }
@@ -353,8 +362,28 @@ impl App {
         }
     }
 
-    /// Make `scene` the scene on screen, with the current tints, and keep its texture warnings.
-    fn show_scene(&mut self, frame: &eframe::Frame, scene: &FlatScene) {
+    /// Bring the problem marks up to date with the open model, edit path, selection and
+    /// undo state; true when the marks changed and the scene must be uploaded again.
+    fn sync_solid_marks(&mut self) -> bool {
+        let undo_state = self.undo_state();
+        let Some(editor) = self.editor.as_ref() else {
+            return false;
+        };
+        let Some(model) = self
+            .model
+            .as_ref()
+            .and_then(|document| document.kernel.as_ref())
+        else {
+            return false;
+        };
+        self.solid_marks
+            .update(model, editor.path(), editor.selection(), undo_state)
+    }
+
+    /// Upload the current model's scene with the overhang, fit and problem tints, and keep
+    /// its texture warnings.
+    fn show_scene(&mut self, frame: &eframe::Frame) {
+        self.sync_solid_marks();
         let stale = self.fit.as_ref().is_some_and(|fit| {
             let Some(editor) = &self.editor else {
                 return true;
@@ -364,20 +393,21 @@ impl App {
         if stale {
             self.fit = None;
         }
+        let Some(scene) = self.model.as_ref().map(|document| &document.scene) else {
+            return;
+        };
         let overhang = self.view.overhangs.then_some(self.view.overhang_degrees);
-        let shown = fit_check::display_scene(scene, overhang, self.fit.as_ref());
+        let display = fit_check::display_scene(scene, overhang, self.fit.as_ref());
+        let scene = marked_scene(&display, self.solid_marks.marks());
         if let (Some(gpu), Some(state)) = (&mut self.gpu, frame.wgpu_render_state()) {
-            let (device, queue) = (&state.device, &state.queue);
-            gpu.scene = gpu.renderer.upload(device, queue, shown.as_ref());
+            gpu.scene = gpu.renderer.upload(&state.device, &state.queue, &scene);
             self.warnings = gpu.scene.warnings.clone();
         }
     }
 
+    /// Upload the model's current scene again.
     fn show_current_scene(&mut self, frame: &eframe::Frame) {
-        let Some(scene) = self.model.as_ref().map(|document| document.scene.clone()) else {
-            return;
-        };
-        self.show_scene(frame, &scene);
+        self.show_scene(frame);
     }
 
     fn undo_state(&self) -> u64 {
@@ -400,17 +430,18 @@ impl App {
                 (editor.path().clone(), rest)
             },
         );
-        let Some(document) = &mut self.model else {
-            return;
+        let title = {
+            let Some(document) = &mut self.model else {
+                return;
+            };
+            document.refresh_editing(&path, rest);
+            document.sync_modified(state);
+            self.shown_path = path;
+            // Zoom Extents frames what is drawn, not the whole model.
+            self.view.bounds = scene_bounds(&document.scene);
+            document.title()
         };
-        document.refresh_editing(&path, rest);
-        document.sync_modified(state);
-        self.shown_path = path;
-        // Zoom Extents frames what is drawn, not the whole model.
-        self.view.bounds = scene_bounds(&document.scene);
-        let title = document.title();
-        let scene = document.scene.clone();
-        self.show_scene(frame, &scene);
+        self.show_scene(frame);
         ctx.send_viewport_cmd(egui::ViewportCommand::Title(title));
         self.dirty = true;
     }
@@ -456,17 +487,16 @@ impl App {
         self.shown_path = path;
         // Zoom Extents frames what is drawn, not the whole model.
         self.view.bounds = scene_bounds(&document.scene);
-        let scene = document.scene.clone();
-        self.show_scene(frame, &scene);
+        self.show_scene(frame);
         self.dirty = true;
     }
 
     /// Replace the document with a new, empty one and a default view.
     fn new_document(&mut self, ctx: &egui::Context, frame: &eframe::Frame) {
         let document = Document::new_empty();
+        let title = document.title();
         self.fit = None;
         self.fit_note = None;
-        self.show_scene(frame, &document.scene);
         self.view = ViewState::new();
         self.editor = Some(Editor::new());
         self.materials = MaterialsPanel::default();
@@ -478,8 +508,10 @@ impl App {
         self.saved = None;
         self.confirm = None;
         self.after_save = None;
-        ctx.send_viewport_cmd(egui::ViewportCommand::Title(document.title()));
         self.model = Some(document);
+        self.solid_marks.clear();
+        self.show_scene(frame);
+        ctx.send_viewport_cmd(egui::ViewportCommand::Title(title));
         self.dirty = true;
     }
 
@@ -1753,6 +1785,16 @@ impl App {
                 if let Some(message) = self.editor.as_ref().and_then(Editor::message) {
                     ui.colored_label(ERROR_COLOR, message);
                 }
+                if let Some((note, selection, undo_state)) = &self.repair_note
+                    && self
+                        .editor
+                        .as_ref()
+                        .is_some_and(|editor| editor.selection() == selection.as_slice())
+                    && self.undo_state() == *undo_state
+                {
+                    ui.separator();
+                    ui.label(note);
+                }
                 if let Some(error) = &model.kernel_error {
                     ui.separator();
                     ui.colored_label(ERROR_COLOR, error);
@@ -2396,30 +2438,45 @@ impl App {
         actions
     }
 
-    /// Apply a rename from the Entity Info panel.
+    /// Apply a rename or repair from the Entity Info panel.
     fn apply_info_action(
         &mut self,
         action: InfoAction,
         ctx: &egui::Context,
         frame: &eframe::Frame,
     ) {
-        let changed = if let (Some(editor), Some(document)) = (&mut self.editor, &mut self.model) {
-            match document.kernel.as_mut() {
-                Some(model) => match action {
-                    InfoAction::RenameDefinition(id, name) => {
-                        editor.rename_definition(model, id, &name)
+        let mut changed = false;
+        let mut note = None;
+        let mut failed = false;
+        if let (Some(editor), Some(document)) = (&mut self.editor, &mut self.model)
+            && let Some(model) = document.kernel.as_mut()
+        {
+            match action {
+                InfoAction::RenameDefinition(id, name) => {
+                    changed = editor.rename_definition(model, id, &name);
+                }
+                InfoAction::RenameInstance(id, name) => {
+                    changed = editor.rename_instance(model, id, &name);
+                }
+                InfoAction::Repair(id) => match editor.repair_instance(model, id) {
+                    Ok(report) => {
+                        note = Some((
+                            repair_message(&report),
+                            editor.selection().to_vec(),
+                            editor.undo_stack().state(),
+                        ));
+                        changed = report.changed();
                     }
-                    InfoAction::RenameInstance(id, name) => {
-                        editor.rename_instance(model, id, &name)
-                    }
-                    // m7-solid-ui: Editor::repair_instance
-                    InfoAction::Repair(_) => false,
+                    Err(_) => failed = true,
                 },
-                None => false,
             }
-        } else {
-            false
-        };
+        }
+        if failed {
+            self.repair_note = None;
+        }
+        if let Some(note) = note {
+            self.repair_note = Some(note);
+        }
         if changed {
             self.refresh_document(ctx, frame);
         }
@@ -2543,6 +2600,9 @@ impl eframe::App for App {
         if !dialog_open {
             self.global_input(&ctx, frame);
             self.sync_editor_path(&ctx, frame);
+            if self.sync_solid_marks() {
+                self.show_current_scene(frame);
+            }
         }
         let mut sun_changed = false;
         if let (Some(editor), Some(document)) = (&mut self.editor, &mut self.model)
@@ -2577,6 +2637,9 @@ impl eframe::App for App {
             if !dialog_open {
                 self.viewport_input(&ctx, frame, ui, rect, &response);
                 self.sync_editor_path(&ctx, frame);
+                if self.sync_solid_marks() {
+                    self.show_current_scene(frame);
+                }
             }
             self.paint_viewport(ui, frame, rect);
             self.paint_overlays(ui, rect);

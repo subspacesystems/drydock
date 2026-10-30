@@ -1670,10 +1670,39 @@ impl Editor {
     /// nothing. Behaviour: `docs/specs/m7-solid-ui.md`.
     pub fn repair_instance(
         &mut self,
-        _model: &mut Model,
-        _instance: InstanceId,
+        model: &mut Model,
+        instance: InstanceId,
     ) -> Result<modeler_kernel::repair::RepairReport, String> {
-        unimplemented!("m7-solid-ui")
+        let Some(body) = self.path.body(model) else {
+            let message = "Select a group or component to repair".to_string();
+            self.message = Some(message.clone());
+            return Err(message);
+        };
+        let Some(definition) = model
+            .body(body)
+            .and_then(|body| body.instance(instance))
+            .map(|instance| instance.definition)
+        else {
+            let message = "Select a group or component to repair".to_string();
+            self.message = Some(message.clone());
+            return Err(message);
+        };
+        match modeler_kernel::repair::repair_body(
+            model,
+            BodyId::Definition(definition),
+            &mut self.undo,
+            "Repair Solid",
+        ) {
+            Ok(report) => {
+                self.message = None;
+                Ok(report)
+            }
+            Err(_) => {
+                let message = "Repair failed".to_string();
+                self.message = Some(message.clone());
+                Err(message)
+            }
+        }
     }
 
     /// The definition waiting for its placing click.
