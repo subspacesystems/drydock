@@ -29,6 +29,7 @@ use modeler_kernel::pushpull::push_pull;
 use modeler_kernel::select::{self, BoxMode, Entity};
 use modeler_kernel::sun::{Geolocation, ShadowSettings};
 use modeler_kernel::tape::Guide;
+use modeler_kernel::text3d;
 use modeler_kernel::texture::{self, TextureMap};
 use modeler_kernel::tools::arc::ArcTool;
 use modeler_kernel::tools::arc3::Arc3Tool;
@@ -49,6 +50,7 @@ use modeler_kernel::units::{self, LengthFormat, Unit};
 use modeler_view::{Camera, Projection};
 
 use crate::input::{EditKey, Modifiers, Tool};
+use crate::look;
 use crate::texture_handles::{
     GRIP_PX, Grip, TextureHandles, plane_point_at, snap_corner, snap_point, snap_turn,
     tile_corners, turn_grip_point,
@@ -613,6 +615,7 @@ impl Editor {
         self.tool = tool;
         self.paste = None;
         self.placing = None;
+        self.text = None;
         self.line = LineTool::new();
         self.idle_shapes();
         self.typed.clear();
@@ -689,6 +692,18 @@ impl Editor {
                     paste.point = Some(inf.point);
                 }
             }
+            return;
+        }
+        if self.text.is_some() {
+            let (origin, dir) = self.body_ray(view, cursor);
+            let hover = model
+                .body(self.body(model))
+                .and_then(|body| infer::ray_face(body.geometry(), origin, dir))
+                .map(|(face, t)| (face, origin + dir * t));
+            if let Some(state) = self.text.as_mut() {
+                state.hover = hover;
+            }
+            self.hint = None;
             return;
         }
         if self.placing.is_some() {
@@ -777,6 +792,9 @@ impl Editor {
         }
         if self.paste.is_some() {
             return self.click_paste(model, view, cursor);
+        }
+        if self.text.is_some() {
+            return self.click_text(model);
         }
         if self.placing.is_some() {
             return self.click_place(model, view, cursor);
@@ -969,6 +987,10 @@ impl Editor {
         match key {
             EditKey::Cancel => {
                 if self.paste.take().is_some() {
+                    self.hint = None;
+                    return false;
+                }
+                if self.text.take().is_some() {
                     self.hint = None;
                     return false;
                 }
@@ -1837,20 +1859,112 @@ impl Editor {
     /// over the faces of the open body until a click places it. False, with a message and no
     /// change, when the open body can't be resolved. Behaviour: `docs/specs/m7-text-3d-ui.md`.
     pub fn begin_text(&mut self, model: &Model, options: crate::text_tool::TextOptions) -> bool {
-        let _ = (model, options);
-        unimplemented!("m7-text-3d-ui")
+        if self.path.body(model).is_none() {
+            self.message = Some("Can't change parts here".to_string());
+            return false;
+        }
+        self.set_tool(Tool::Select);
+        self.text = Some(TextState {
+            options,
+            hover: None,
+        });
+        self.message = None;
+        true
     }
 
     /// The options of the text waiting for its click.
     pub fn text_pending(&self) -> Option<&crate::text_tool::TextOptions> {
-        unimplemented!("m7-text-3d-ui")
+        self.text.as_ref().map(|state| &state.options)
     }
 
     /// The text's outlines as the next click would draw them (world coordinates, each loop
     /// closed); empty when no text is pending or the cursor is not over a face.
     pub fn text_preview(&self, model: &Model) -> Vec<(DVec3, DVec3)> {
-        let _ = model;
-        unimplemented!("m7-text-3d-ui")
+        let Some(state) = self.text.as_ref() else {
+            return Vec::new();
+        };
+        let Some((face, center)) = state.hover else {
+            return Vec::new();
+        };
+        let Some(scale) = crate::clearance_offset::uniform_scale(&self.world()) else {
+            return Vec::new();
+        };
+        let Some(body) = model.body(self.body(model)) else {
+            return Vec::new();
+        };
+        let size = state.options.size_m / scale;
+        let Ok(outline) =
+            modeler_dae::text_outline(look::ROBOTO, &state.options.text, size, size / 200.0)
+        else {
+            return Vec::new();
+        };
+        let Some(frame) = crate::text_tool::text_frame(body.geometry(), face) else {
+            return Vec::new();
+        };
+        let loops = crate::text_tool::place_loops(&outline, &frame, center);
+        let mut segments = Vec::new();
+        for loop_ in loops {
+            if loop_.is_empty() {
+                continue;
+            }
+            for i in 0..loop_.len() {
+                let a = loop_[i];
+                let b = loop_[(i + 1) % loop_.len()];
+                segments.push((self.to_world(a), self.to_world(b)));
+            }
+        }
+        segments
+    }
+
+    fn click_text(&mut self, model: &mut Model) -> bool {
+        let Some(state) = self.text.as_ref() else {
+            return false;
+        };
+        let Some((face, center)) = state.hover else {
+            self.message = Some("Click a face of the part being edited".to_string());
+            return false;
+        };
+        let Some(scale) = crate::clearance_offset::uniform_scale(&self.world()) else {
+            self.message = Some("Can't place text: the part is stretched unevenly".to_string());
+            return false;
+        };
+        let options = state.options.clone();
+        let body = self.body(model);
+        let Some(geometry) = model.body(body).map(|body| body.geometry()) else {
+            return false;
+        };
+        let size = options.size_m / scale;
+        let height = options.height_m / scale;
+        let Ok(outline) =
+            modeler_dae::text_outline(look::ROBOTO, &options.text, size, size / 200.0)
+        else {
+            return false;
+        };
+        let Some(frame) = crate::text_tool::text_frame(geometry, face) else {
+            return false;
+        };
+        let loops = crate::text_tool::place_loops(&outline, &frame, center);
+        match text3d::text_3d(
+            model,
+            body,
+            face,
+            &loops,
+            options.mode,
+            height,
+            &mut self.undo,
+            "3D Text",
+        ) {
+            Ok(_) => {
+                self.text = None;
+                self.hint = None;
+                self.message = None;
+                true
+            }
+            Err(error) => {
+                self.message = Some(crate::text_tool::refusal(&error));
+                false
+            }
+        }
     }
 
     /// The definition waiting for its placing click.
@@ -1990,12 +2104,14 @@ impl Editor {
                 self.undo.push("Place Component", edit);
                 self.selection = vec![Entity::Instance(id)];
                 self.placing = None;
+                self.text = None;
                 self.message = None;
                 true
             }
             Err(_) => {
                 self.message = Some("Can't place that".to_string());
                 self.placing = None;
+                self.text = None;
                 false
             }
         }
@@ -2133,6 +2249,7 @@ impl Editor {
         self.end_texture_handles();
         self.paste = None;
         self.placing = None;
+        self.text = None;
         self.line = LineTool::new();
         self.idle_shapes();
         self.idle_rotate();
@@ -2198,6 +2315,7 @@ impl Editor {
         self.end_texture_handles();
         self.paste = None;
         self.placing = None;
+        self.text = None;
         self.path = path;
         self.recompute_transforms(model);
         self.selection.clear();
@@ -2212,6 +2330,7 @@ impl Editor {
         }
         self.paste = None;
         self.placing = None;
+        self.text = None;
         self.path = self.path.close();
         self.transforms.pop();
         self.selection.clear();
@@ -2235,6 +2354,7 @@ impl Editor {
         self.end_texture_handles();
         self.paste = None;
         self.placing = None;
+        self.text = None;
         self.line = LineTool::new();
         self.idle_shapes();
         self.idle_rotate();
@@ -2374,6 +2494,7 @@ impl Editor {
         self.end_texture_handles();
         self.paste = None;
         self.placing = None;
+        self.text = None;
         self.line = LineTool::new();
         self.idle_shapes();
         self.idle_rotate();
@@ -3038,6 +3159,7 @@ impl Editor {
         self.eyedropper_armed = true;
         self.paste = None;
         self.placing = None;
+        self.text = None;
     }
 
     /// Disarm the eyedropper with no other effect (`docs/specs/m6-eyedropper-2.md`).
