@@ -914,6 +914,8 @@ impl App {
                     self.open_models_dialog();
                 }
             }
+            // m7-export-ui: opens the export dialog (`docs/specs/m7-export-ui.md`).
+            Effect::ExportDialog(_format) => {}
             Effect::Save => self.save(ctx, frame),
             Effect::SaveAsDialog => self.open_save_dialog(),
             Effect::Edit(key) => self.edit(key, ctx, frame),
@@ -1784,6 +1786,7 @@ impl App {
                 .editor
                 .as_ref()
                 .is_some_and(|editor| !selected_instances(editor.selection()).is_empty()),
+            can_export: false,
             shadows: self.dock.is_open(PanelId::Shadows),
             entity_info: self.dock.is_open(PanelId::EntityInfo),
             materials: self.dock.is_open(PanelId::Materials),
