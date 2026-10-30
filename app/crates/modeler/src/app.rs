@@ -2317,6 +2317,8 @@ impl App {
                     InfoAction::RenameInstance(id, name) => {
                         editor.rename_instance(model, id, &name)
                     }
+                    // m7-solid-ui: Editor::repair_instance
+                    InfoAction::Repair(_) => false,
                 },
                 None => false,
             }

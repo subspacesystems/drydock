@@ -1661,6 +1661,21 @@ impl Editor {
         }
     }
 
+    /// Repair the solid problems of `instance`'s definition (`repair_body`; every copy of a
+    /// component changes with it) in one undo step labelled "Repair Solid" and return the
+    /// report (the editor's message is cleared; the app shows `solid_ui::repair_message`).
+    /// `instance` must be an instance of the open body. Errors, as a one-line message (also
+    /// the editor's message) with nothing changed: "Select a group or component to repair" when it isn't, and
+    /// "Repair failed" when the model refuses. Pushes no undo step when the repair changes
+    /// nothing. Behaviour: `docs/specs/m7-solid-ui.md`.
+    pub fn repair_instance(
+        &mut self,
+        _model: &mut Model,
+        _instance: InstanceId,
+    ) -> Result<modeler_kernel::repair::RepairReport, String> {
+        unimplemented!("m7-solid-ui")
+    }
+
     /// The definition waiting for its placing click.
     pub fn placing(&self) -> Option<DefinitionId> {
         self.placing.map(|placing| placing.definition)
