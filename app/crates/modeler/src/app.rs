@@ -42,6 +42,7 @@ use modeler::shading;
 use modeler::shadows_panel::{self, ShadowsEvent};
 use modeler::solid_ui::{MarkTracker, marked_scene, repair_message};
 use modeler::sun_windows::SunWindows;
+use modeler::text_tool::{self, TextDialog, TextOptions, TextOutcome};
 use modeler::texture_handles;
 use modeler::texture_panel::{TextureForm, texture_position_section};
 use modeler::toolbars::{self, CustomizeState, Edge, Placement, ToolbarEvent, ToolbarLayout};
@@ -163,6 +164,10 @@ pub struct App {
     mesh_unit: MeshUnit,
     /// The export dialog showing, if any.
     export_dialog: Option<ExportPrompt>,
+    /// The 3D Text dialog showing, if any.
+    text_dialog: Option<TextPrompt>,
+    /// The 3D Text options last used this session.
+    text_options: Option<TextOptions>,
     /// The options last used for each export format this session.
     export_options: Vec<ExportOptions>,
     /// The last export's status line, until the next action.
@@ -278,6 +283,8 @@ impl App {
             units_prompt: None,
             mesh_unit: MeshUnit::default(),
             export_dialog: None,
+            text_dialog: None,
+            text_options: None,
             export_options: Vec::new(),
             export_note: None,
             save_dialog: None,
@@ -1189,7 +1196,17 @@ impl App {
             }
             Effect::FitCheck | Effect::RecomputeFit => self.fit_effect(effect, frame),
             Effect::PrintSetup => self.print_setup_open = true,
-            Effect::Text3dDialog => {}
+            Effect::Text3dDialog => {
+                if self.model.is_some() {
+                    let dialog = self
+                        .text_options
+                        .as_ref()
+                        .map(TextDialog::from_options)
+                        .unwrap_or_default();
+                    self.text_dialog = Some(TextPrompt { dialog });
+                    self.dirty = true;
+                }
+            }
             Effect::OffsetByClearance(direction) => {
                 let mut note = None;
                 let mut changed = 0;
@@ -1867,6 +1884,11 @@ impl App {
                     painter.line_segment([a, b], egui::Stroke::new(1.5, preview_color));
                 }
             }
+            for (a, b) in editor.text_preview(model) {
+                if let (Some(a), Some(b)) = (project(a), project(b)) {
+                    painter.line_segment([a, b], egui::Stroke::new(1.5, preview_color));
+                }
+            }
         }
         if let Some(kernel) = &document.kernel {
             let open_body = editor.path().body(kernel).unwrap_or(BodyId::Root);
@@ -2031,7 +2053,10 @@ impl App {
                 .editor
                 .as_ref()
                 .is_some_and(|editor| !selected_instances(editor.selection()).is_empty()),
-            can_text: false,
+            can_text: self
+                .model
+                .as_ref()
+                .is_some_and(|document| document.kernel.is_some()),
             can_export: false,
             shadows: self.dock.is_open(PanelId::Shadows),
             entity_info: self.dock.is_open(PanelId::EntityInfo),
@@ -2878,6 +2903,7 @@ impl eframe::App for App {
         let dialog_open = self.dialog.is_some()
             || self.units_prompt.is_some()
             || self.export_dialog.is_some()
+            || self.text_dialog.is_some()
             || self.save_dialog.is_some()
             || self.confirm.is_some()
             || self.app_confirm.is_some()
@@ -3119,6 +3145,33 @@ impl eframe::App for App {
                 .iter()
                 .any(|entity| matches!(entity, Entity::Instance(_)))
         });
+        if let Some(prompt) = &mut self.text_dialog {
+            let mut outcome = None;
+            let response = egui::Modal::new(egui::Id::new("text-dialog")).show(&ctx, |ui| {
+                ui.set_width(360.0);
+                ui.heading("3D Text");
+                outcome = text_tool::text_dialog(ui, &mut prompt.dialog);
+            });
+            if outcome.is_none() && response.should_close() {
+                outcome = Some(TextOutcome::Cancel);
+            }
+            match outcome {
+                Some(TextOutcome::Ok) => {
+                    let prompt = self.text_dialog.take().unwrap();
+                    if let Some(options) = prompt.dialog.options() {
+                        self.text_options = Some(options.clone());
+                        if let (Some(editor), Some(document)) = (&mut self.editor, &self.model)
+                            && let Some(model) = document.kernel.as_ref()
+                        {
+                            editor.begin_text(model, options);
+                        }
+                        self.dirty = true;
+                    }
+                }
+                Some(TextOutcome::Cancel) => self.text_dialog = None,
+                None => {}
+            }
+        }
         if let Some(prompt) = &mut self.export_dialog {
             let mut outcome = None;
             let response = egui::Modal::new(egui::Id::new("export-dialog")).show(&ctx, |ui| {
@@ -3212,6 +3265,11 @@ impl eframe::App for App {
 /// The export dialog waiting for its options.
 struct ExportPrompt {
     dialog: ExportDialog,
+}
+
+/// The 3D Text dialog waiting for its options.
+struct TextPrompt {
+    dialog: TextDialog,
 }
 
 /// The units choice waiting for an STL file.
