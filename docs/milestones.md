@@ -235,7 +235,7 @@ Tyrel's request: print-ready solids without plugins. Placed right after M6; orde
 | `m7-import-3mf` | 3MF reader: objects, units, names; same path to the kernel as STL | `m7-import-stl` |
 | `m7-import-ui` | File > Open and File > Import... take STL and 3MF (import adds the groups to the open model), units choice (mm default) | `m7-import-stl`, `m7-import-3mf` |
 | `m7-roundtrip` | Acceptance: closed corpus solids exported to 3MF and STL and re-imported keep volume and bounding box; deliberately broken models found by the check and fixed by repair; own mesh validator in the oracle | `m7-export-stl`, `m7-export-3mf`, `m7-import-stl`, `m7-import-3mf`, `m7-solid-repair` |
-| `m7-solid-ui` | Solid status and volume in Entity Info, problem edges and faces highlighted in the viewport, Repair button | `m7-solid-repair` |
+| `m7-solid-ui` | Solid status and volume in Entity Info, problem edges and faces highlighted in the viewport, Repair button | `m7-solid-repair`, `m7-clearance-ui` |
 | `m7-export-ui` | File > Export 3MF... and Export STL...: selection or whole model, units (mm default), curve tolerance | `m7-export-stl`, `m7-export-3mf` |
 | `m7-print-setup` | Print Setup panel: bed presets and custom size, bed outline in the viewport, fits-the-bed check, Drop to Bed, overhang angle field | `m7-print-mesh`, `m7-overhang` |
 | `m7-overhang` | View > Overhangs: faces leaning past the overhang angle (45° until Print Setup offers it) tinted in the viewport; faces on the bed excluded | |
