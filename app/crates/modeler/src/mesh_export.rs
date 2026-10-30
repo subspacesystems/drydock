@@ -94,6 +94,26 @@ pub struct ExportReport {
     pub skipped: Vec<Skipped>,
 }
 
+/// Whether the open model has anything to export: its root body holds at least one group
+/// or component instance (loose geometry alone does not count).
+pub fn can_export(model: &Model) -> bool {
+    let _ = model;
+    unimplemented!("m7-fix-export-fit")
+}
+
+/// The save dialog's suggested name for an export of the document at `document_path`: the
+/// file name with its last extension removed (`two.stl` -> `two`, `a.modeler` -> `a`),
+/// `untitled` when the path has no file name, then `.stl` or `.3mf`. STL one file per
+/// object (`StlLayout::OneFilePerObject`, a folder) gets the bare stem.
+pub fn default_export_name(
+    document_path: &Path,
+    format: ExportFormat,
+    layout: StlLayout,
+) -> String {
+    let _ = (document_path, format, layout);
+    unimplemented!("m7-fix-export-fit")
+}
+
 /// The tolerance field's text as millimeters: a number with an optional trailing `mm`
 /// (spaces around either are fine), finite and within `MIN_TOLERANCE_MM..=MAX_TOLERANCE_MM`.
 /// `None` for anything else.
