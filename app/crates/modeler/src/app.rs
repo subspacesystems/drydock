@@ -11,6 +11,7 @@ use eframe::egui;
 use egui::{Color32, Event, MouseWheelUnit, PointerButton, Pos2, Rect, Sense, pos2};
 use glam::{DMat4, DVec2, DVec3};
 use modeler::chrome::{self, MenuState};
+use modeler::clearance_offset::selected_instances;
 use modeler::components_panel::{
     ComponentAction, ComponentsPanel, components_panel, read_component_source,
 };
@@ -1111,8 +1112,26 @@ impl App {
             }
             Effect::FitCheck | Effect::RecomputeFit => self.fit_effect(effect, frame),
             Effect::PrintSetup => self.print_setup_open = true,
-            // Wired by `m7-clearance-offset-ui`.
-            Effect::OffsetByClearance(_) => {}
+            Effect::OffsetByClearance(direction) => {
+                let mut note = None;
+                let mut changed = 0;
+                if let (Some(editor), Some(document)) = (&mut self.editor, &mut self.model)
+                    && let Some(model) = document.kernel.as_mut()
+                    && let Ok(outcome) =
+                        editor.offset_instances(model, direction, self.view.clearance_m)
+                {
+                    changed = outcome.changed;
+                    note = Some((
+                        outcome.message(),
+                        editor.selection().to_vec(),
+                        editor.undo_stack().state(),
+                    ));
+                }
+                self.repair_note = note;
+                if changed > 0 {
+                    self.refresh_document(ctx, frame);
+                }
+            }
             Effect::ReuploadScene => {
                 self.show_current_scene(frame);
                 self.dirty = true;
@@ -1930,7 +1949,10 @@ impl App {
                 .as_ref()
                 .and_then(|editor| selected_pair(editor.selection()))
                 .is_some(),
-            can_offset: false,
+            can_offset: self
+                .editor
+                .as_ref()
+                .is_some_and(|editor| !selected_instances(editor.selection()).is_empty()),
             can_export: false,
             shadows: self.dock.is_open(PanelId::Shadows),
             entity_info: self.dock.is_open(PanelId::EntityInfo),

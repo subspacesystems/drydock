@@ -1047,6 +1047,22 @@ fn menu_bar_inner(
                 chosen = Some(Action::FitCheck);
                 ui.close();
             }
+            let (grow, shrink) = ui
+                .add_enabled_ui(state.can_offset, |ui| {
+                    (
+                        menu_item(ui, None, "Grow by Clearance", "", false),
+                        menu_item(ui, None, "Shrink by Clearance", "", false),
+                    )
+                })
+                .inner;
+            if grow.clicked() {
+                chosen = Some(Action::GrowByClearance);
+                ui.close();
+            }
+            if shrink.clicked() {
+                chosen = Some(Action::ShrinkByClearance);
+                ui.close();
+            }
             if menu_item(ui, None, "Print Setup...", "", false).clicked() {
                 chosen = Some(Action::PrintSetup);
                 ui.close();
