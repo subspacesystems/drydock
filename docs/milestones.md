@@ -235,13 +235,14 @@ Tyrel's request: print-ready solids without plugins. Placed right after M6; orde
 | `m7-import-3mf` | 3MF reader: objects, units, names; same path to the kernel as STL | `m7-import-stl` |
 | `m7-import-ui` | File > Open and File > Import... take STL and 3MF (import adds the groups to the open model), units choice (mm default) | `m7-import-stl`, `m7-import-3mf` |
 | `m7-roundtrip` | Acceptance: closed corpus solids exported to 3MF and STL and re-imported keep volume and bounding box; deliberately broken models found by the check and fixed by repair; own mesh validator in the oracle | `m7-export-stl`, `m7-export-3mf`, `m7-import-stl`, `m7-import-3mf`, `m7-solid-repair` |
-| `m7-solid-ui` | Solid status and volume in Entity Info, problem edges and faces highlighted in the viewport, Repair button | `m7-solid-repair` |
+| `m7-solid-ui` | Solid status and volume in Entity Info, problem edges and faces highlighted in the viewport, Repair button | `m7-solid-repair`, `m7-clearance-ui` |
 | `m7-export-ui` | File > Export 3MF... and Export STL...: selection or whole model, units (mm default), curve tolerance | `m7-export-stl`, `m7-export-3mf` |
 | `m7-print-setup` | Print Setup panel: bed presets and custom size, bed outline in the viewport, fits-the-bed check, Drop to Bed, overhang angle field | `m7-print-mesh`, `m7-overhang` |
 | `m7-overhang` | View > Overhangs: faces leaning past the overhang angle (45° until Print Setup offers it) tinted in the viewport; faces on the bed excluded | |
 | `m7-clearance` | Fit check: pick two parts, highlight where the gap between them is under the clearance (default 0.2 mm) (Tyrel chose fit check first) | `m7-solid-check` |
 | `m7-clearance-ui` | Tools > Fit Check: pick two groups or components, clearance field in mm (default 0.2), flagged faces tinted in the viewport, report in the status bar | `m7-clearance`, `m7-overhang` |
-| `m7-clearance-offset` | Grow/Shrink by clearance: move every face of a flat-faced solid in or out by the clearance, one undo step; report parts it can't handle | `m7-clearance`, `m7-solid-repair` |
+| `m7-clearance-offset` | Kernel: grow/shrink a flat-faced solid: every face moves in or out by a distance, vertices where the moved planes meet; refuses curved parts, collapses and self-overlap; one undo step for several parts (kernel, orchestrator) | `m7-clearance`, `m7-solid-repair` |
+| `m7-clearance-offset-ui` | Tools > Grow by Clearance and Shrink by Clearance on the selected groups and components, using the fit check's clearance field; status bar says what changed and why a part was refused | `m7-clearance-offset`, `m7-clearance-ui` |
 | `m7-text-3d` | 3D text from the app's font outlines, embossed on or engraved into a face | |
 
 Done when: Entity Info says whether a group or component is a solid, with its volume, and the viewport marks what keeps it from being one; Repair fixes reversed and internal faces and simple flat holes in one undo step; File > Export 3MF... and Export STL... write files at the right size (mm) that re-import with the same volume and bounding box; STL and 3MF files open or import as editable groups; the print bed outline and fits-the-bed check, Drop to Bed, overhang tint, fit check between two parts, grow/shrink by clearance and 3D text work. Checked in the real window before Tyrel tries it.

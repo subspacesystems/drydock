@@ -22,7 +22,7 @@ use modeler::dock::{
 use modeler::document::{Document, FileKind, native_path, resolve_texture_path};
 use modeler::editor::{Editor, TextureOp, Viewport as EditorViewport};
 use modeler::entity_info::{EntityInfoPanel, InfoAction, entity_info_panel};
-use modeler::fit_check;
+use modeler::fit_check::{self, FitCheck, selected_pair};
 use modeler::hints::hint_label;
 use modeler::icons::{self, Icon};
 use modeler::input::{self, Button, Modifiers, Tool};
@@ -128,6 +128,12 @@ pub struct App {
     model: Option<Document>,
     /// One editor per open document; `None` before a document exists.
     editor: Option<Editor>,
+    /// The fit check showing, if any.
+    fit: Option<FitCheck>,
+    /// Why the last Fit Check request was refused, and the selection it was made with.
+    fit_note: Option<(String, Vec<Entity>)>,
+    /// The clearance field's text, in millimeters.
+    clearance_text: String,
     loading: Option<Loading>,
     error: Option<String>,
     /// "Saved <file name>" until the next open or save.
@@ -226,6 +232,9 @@ impl App {
             gpu,
             model: None,
             editor: None,
+            fit: None,
+            fit_note: None,
+            clearance_text: fit_check::format_mm(modeler_dae::DEFAULT_CLEARANCE_M),
             loading: None,
             error: None,
             saved: None,
@@ -322,6 +331,8 @@ impl App {
 
     fn show_document(&mut self, ctx: &egui::Context, frame: &eframe::Frame, document: Document) {
         let loaded_path = (!document.untitled).then(|| document.path.clone());
+        self.fit = None;
+        self.fit_note = None;
         self.view
             .set_bounds(scene_bounds(&document.scene), self.viewport_pt);
         self.editor = Some(Editor::new());
@@ -369,15 +380,24 @@ impl App {
             .update(model, editor.path(), editor.selection(), undo_state)
     }
 
-    /// Upload the current model's scene with the overhang and problem tints, and keep its
-    /// texture warnings.
+    /// Upload the current model's scene with the overhang, fit and problem tints, and keep
+    /// its texture warnings.
     fn show_scene(&mut self, frame: &eframe::Frame) {
         self.sync_solid_marks();
+        let stale = self.fit.as_ref().is_some_and(|fit| {
+            let Some(editor) = &self.editor else {
+                return true;
+            };
+            !fit.is_current(editor.path(), editor.selection(), self.undo_state())
+        });
+        if stale {
+            self.fit = None;
+        }
         let Some(scene) = self.model.as_ref().map(|document| &document.scene) else {
             return;
         };
         let overhang = self.view.overhangs.then_some(self.view.overhang_degrees);
-        let display = fit_check::display_scene(scene, overhang, None);
+        let display = fit_check::display_scene(scene, overhang, self.fit.as_ref());
         let scene = marked_scene(&display, self.solid_marks.marks());
         if let (Some(gpu), Some(state)) = (&mut self.gpu, frame.wgpu_render_state()) {
             gpu.scene = gpu.renderer.upload(&state.device, &state.queue, &scene);
@@ -428,10 +448,21 @@ impl App {
 
     /// Rebuild the scene when the editor's open path changed without a model edit.
     fn sync_editor_path(&mut self, _ctx: &egui::Context, frame: &eframe::Frame) {
-        let Some(path) = self.editor.as_ref().map(|editor| editor.path().clone()) else {
+        let Some((path, selection)) = self
+            .editor
+            .as_ref()
+            .map(|editor| (editor.path().clone(), editor.selection().to_vec()))
+        else {
             return;
         };
-        if path != self.shown_path {
+        let stale = self
+            .fit
+            .as_ref()
+            .is_some_and(|fit| !fit.is_current(&path, &selection, self.undo_state()));
+        if stale {
+            self.fit = None;
+        }
+        if stale || path != self.shown_path {
             self.show_editor_path(frame);
         }
     }
@@ -464,6 +495,8 @@ impl App {
     fn new_document(&mut self, ctx: &egui::Context, frame: &eframe::Frame) {
         let document = Document::new_empty();
         let title = document.title();
+        self.fit = None;
+        self.fit_note = None;
         self.view = ViewState::new();
         self.editor = Some(Editor::new());
         self.materials = MaterialsPanel::default();
@@ -807,6 +840,61 @@ impl App {
         }
     }
 
+    fn fit_effect(&mut self, effect: Effect, frame: &eframe::Frame) {
+        match effect {
+            Effect::FitCheck => {
+                if self.fit.is_some() {
+                    self.fit = None;
+                    self.fit_note = None;
+                    self.show_current_scene(frame);
+                    return;
+                }
+                let selection = self
+                    .editor
+                    .as_ref()
+                    .map(|editor| editor.selection().to_vec())
+                    .unwrap_or_default();
+                let result = if let (Some(editor), Some(document)) = (&self.editor, &self.model) {
+                    document.kernel.as_ref().map(|model| {
+                        FitCheck::run(
+                            model,
+                            editor.path(),
+                            editor.selection(),
+                            self.undo_state(),
+                            self.view.clearance_m,
+                        )
+                    })
+                } else {
+                    None
+                };
+                match result {
+                    Some(Ok(fit)) => {
+                        self.fit = Some(fit);
+                        self.fit_note = None;
+                        self.show_current_scene(frame);
+                    }
+                    Some(Err(message)) => self.fit_note = Some((message, selection)),
+                    None => {}
+                }
+            }
+            Effect::RecomputeFit => {
+                let recomputed = if let (Some(fit), Some(document)) = (&self.fit, &self.model) {
+                    document
+                        .kernel
+                        .as_ref()
+                        .map(|model| fit.recompute(model, self.view.clearance_m))
+                } else {
+                    None
+                };
+                if let Some(fit) = recomputed {
+                    self.fit = Some(fit);
+                    self.show_current_scene(frame);
+                }
+            }
+            _ => {}
+        }
+    }
+
     fn apply(&mut self, action: input::Action, ctx: &egui::Context, frame: &eframe::Frame) {
         let selects_tool = matches!(action, input::Action::SelectTool(_));
         let effect = self.view.apply(action, self.viewport_pt);
@@ -857,8 +945,7 @@ impl App {
                 }
                 self.show_editor_path(frame);
             }
-            // m7-clearance-ui: run, clear or recompute the fit check.
-            Effect::FitCheck | Effect::RecomputeFit => {}
+            Effect::FitCheck | Effect::RecomputeFit => self.fit_effect(effect, frame),
             Effect::ReuploadScene => {
                 self.show_current_scene(frame);
                 self.dirty = true;
@@ -1664,8 +1751,12 @@ impl App {
                 .is_some_and(|editor| editor.hide_rest()),
             axes: self.view.axes,
             overhangs: self.view.overhangs,
-            fit_check: false,
-            can_fit_check: false,
+            fit_check: self.fit.is_some(),
+            can_fit_check: self
+                .editor
+                .as_ref()
+                .and_then(|editor| selected_pair(editor.selection()))
+                .is_some(),
             shadows: self.dock.is_open(PanelId::Shadows),
             entity_info: self.dock.is_open(PanelId::EntityInfo),
             materials: self.dock.is_open(PanelId::Materials),
@@ -1676,7 +1767,7 @@ impl App {
         }
     }
 
-    fn status_bar(&self, ui: &mut egui::Ui) {
+    fn status_bar(&mut self, ui: &mut egui::Ui, frame: &eframe::Frame) {
         ui.horizontal(|ui| {
             match (&self.loading, &self.model) {
                 (Some(loading), _) => {
@@ -1708,6 +1799,27 @@ impl App {
                     ui.separator();
                     ui.colored_label(ERROR_COLOR, error);
                 }
+            }
+            if let Some(message) = self.fit.as_ref().map(FitCheck::message) {
+                ui.separator();
+                ui.label(message);
+            }
+            if self.fit.is_some() {
+                let current = self.view.clearance_m;
+                if let Some(meters) = chrome::clearance_field(ui, &mut self.clearance_text, current)
+                {
+                    let effect = self.view.set_clearance_mm(meters * 1000.0);
+                    self.fit_effect(effect, frame);
+                }
+            }
+            if let Some((message, selection)) = &self.fit_note
+                && self
+                    .editor
+                    .as_ref()
+                    .is_some_and(|editor| editor.selection() == selection.as_slice())
+            {
+                ui.separator();
+                ui.label(message);
             }
             if let Some(saved) = &self.saved {
                 ui.separator();
@@ -2517,7 +2629,7 @@ impl eframe::App for App {
         if shading::update_style(&mut self.style, sun) {
             self.dirty = true;
         }
-        egui::Panel::bottom("status").show(ui, |ui| self.status_bar(ui));
+        egui::Panel::bottom("status").show(ui, |ui| self.status_bar(ui, frame));
         egui::CentralPanel::no_frame().show(ui, |ui| {
             let (rect, response) =
                 ui.allocate_exact_size(ui.available_size(), Sense::click_and_drag());

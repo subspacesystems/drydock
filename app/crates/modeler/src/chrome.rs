@@ -100,11 +100,34 @@ pub enum PromptOutcome {
 /// by `format_mm(current_m)` and `None` is returned. Otherwise `None`.
 /// Behaviour: `docs/specs/m7-clearance-ui.md`.
 pub fn clearance_field(
-    _ui: &mut eframe::egui::Ui,
-    _text: &mut String,
-    _current_m: f64,
+    ui: &mut eframe::egui::Ui,
+    text: &mut String,
+    current_m: f64,
 ) -> Option<f64> {
-    unimplemented!("m7-clearance-ui")
+    use eframe::egui;
+
+    let edited_id = ui.make_persistent_id("clearance_field_edited");
+    let mut edited = ui
+        .data(|data| data.get_temp::<bool>(edited_id))
+        .unwrap_or(false);
+    let mut committed = None;
+    ui.horizontal(|ui| {
+        ui.label("Clearance");
+        let response = ui.add(egui::TextEdit::singleline(text).desired_width(48.0));
+        ui.label("mm");
+        edited |= response.changed();
+        if edited && response.lost_focus() {
+            edited = false;
+            if let Some(meters) = crate::fit_check::parse_clearance_mm(text) {
+                *text = crate::fit_check::format_mm(meters);
+                committed = Some(meters);
+            } else {
+                *text = crate::fit_check::format_mm(current_m);
+            }
+        }
+    });
+    ui.data_mut(|data| data.insert_temp(edited_id, edited));
+    committed
 }
 
 /// The name prompt window; `Some` on the frame it is answered.
@@ -993,6 +1016,16 @@ fn menu_bar_inner(
                         ui.close();
                     }
                 }
+            }
+            ui.separator();
+            let fit_check = ui
+                .add_enabled_ui(state.can_fit_check || state.fit_check, |ui| {
+                    menu_check_item(ui, "Fit Check", state.fit_check)
+                })
+                .inner;
+            if fit_check.clicked() {
+                chosen = Some(Action::FitCheck);
+                ui.close();
             }
         });
         ui.menu_button("Help", |ui| {
