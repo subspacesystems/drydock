@@ -338,85 +338,94 @@ fn face_vertices(ctx: &Context, face: &Face) -> BTreeSet<VertexId> {
 
 /// Whether any edge of `ctx` crosses or touches a face it doesn't belong to.
 fn edge_pierces_face(ctx: &Context) -> bool {
+    ctx.edges()
+        .any(|(e, _)| ctx.faces().any(|(f, _)| edge_pierces(ctx, e, f)))
+}
+
+/// Whether edge `e` crosses or touches face `f` (within `LINEAR_TOL`); false when they share a
+/// vertex or either is missing.
+pub(crate) fn edge_pierces(ctx: &Context, e: EdgeId, f: FaceId) -> bool {
     let tol = geom::LINEAR_TOL;
-    for (_, edge) in ctx.edges() {
-        let (Some(a), Some(b)) = (ctx.vertex(edge.ends[0]), ctx.vertex(edge.ends[1])) else {
+    let Some(edge) = ctx.edge(e) else {
+        return false;
+    };
+    let Some(face) = ctx.face(f) else {
+        return false;
+    };
+    let (Some(a), Some(b)) = (ctx.vertex(edge.ends[0]), ctx.vertex(edge.ends[1])) else {
+        return false;
+    };
+    let (a, b) = (a.position, b.position);
+    let edge_lo = a.min(b) - DVec3::splat(tol);
+    let edge_hi = a.max(b) + DVec3::splat(tol);
+
+    let vertices = face_vertices(ctx, face);
+    if vertices.contains(&edge.ends[0]) || vertices.contains(&edge.ends[1]) {
+        return false;
+    }
+    let Some(plane) = ctx.face_plane(f) else {
+        return false;
+    };
+
+    let mut points = Vec::new();
+    for l in std::iter::once(&face.outer).chain(face.inner.iter()) {
+        points.extend(ctx.loop_points(l));
+    }
+    if points.is_empty() {
+        return false;
+    }
+    let mut face_lo = DVec3::splat(f64::INFINITY);
+    let mut face_hi = DVec3::splat(f64::NEG_INFINITY);
+    for p in &points {
+        face_lo = face_lo.min(*p);
+        face_hi = face_hi.max(*p);
+    }
+    face_lo -= DVec3::splat(tol);
+    face_hi += DVec3::splat(tol);
+    if edge_lo.x > face_hi.x
+        || edge_hi.x < face_lo.x
+        || edge_lo.y > face_hi.y
+        || edge_hi.y < face_lo.y
+        || edge_lo.z > face_hi.z
+        || edge_hi.z < face_lo.z
+    {
+        return false;
+    }
+
+    let da = plane.signed_distance(a);
+    let db = plane.signed_distance(b);
+    let mut candidates = Vec::new();
+    if (da > tol && db < -tol) || (da < -tol && db > tol) {
+        let t = da / (da - db);
+        candidates.push(a + (b - a) * t);
+    }
+    if da.abs() <= tol {
+        candidates.push(a);
+    }
+    if db.abs() <= tol {
+        candidates.push(b);
+    }
+    if candidates.is_empty() {
+        return false;
+    }
+
+    let normal = plane.normal;
+    let outer = geom::to_plane_2d(&ctx.loop_points(&face.outer), normal);
+    let holes: Vec<Vec<DVec2>> = face
+        .inner
+        .iter()
+        .map(|l| geom::to_plane_2d(&ctx.loop_points(l), normal))
+        .collect();
+    for candidate in candidates {
+        let p = geom::to_plane_2d(&[candidate], normal)[0];
+        if geom::point_in_polygon_2d(p, &outer, tol) == geom::Containment::Outside {
             continue;
-        };
-        let (a, b) = (a.position, b.position);
-        let edge_lo = a.min(b) - DVec3::splat(tol);
-        let edge_hi = a.max(b) + DVec3::splat(tol);
-
-        for (f, face) in ctx.faces() {
-            let vertices = face_vertices(ctx, face);
-            if vertices.contains(&edge.ends[0]) || vertices.contains(&edge.ends[1]) {
-                continue;
-            }
-            let Some(plane) = ctx.face_plane(f) else {
-                continue;
-            };
-
-            let mut points = Vec::new();
-            for l in std::iter::once(&face.outer).chain(face.inner.iter()) {
-                points.extend(ctx.loop_points(l));
-            }
-            if points.is_empty() {
-                continue;
-            }
-            let mut face_lo = DVec3::splat(f64::INFINITY);
-            let mut face_hi = DVec3::splat(f64::NEG_INFINITY);
-            for p in &points {
-                face_lo = face_lo.min(*p);
-                face_hi = face_hi.max(*p);
-            }
-            face_lo -= DVec3::splat(tol);
-            face_hi += DVec3::splat(tol);
-            if edge_lo.x > face_hi.x
-                || edge_hi.x < face_lo.x
-                || edge_lo.y > face_hi.y
-                || edge_hi.y < face_lo.y
-                || edge_lo.z > face_hi.z
-                || edge_hi.z < face_lo.z
-            {
-                continue;
-            }
-
-            let da = plane.signed_distance(a);
-            let db = plane.signed_distance(b);
-            let mut candidates = Vec::new();
-            if (da > tol && db < -tol) || (da < -tol && db > tol) {
-                let t = da / (da - db);
-                candidates.push(a + (b - a) * t);
-            }
-            if da.abs() <= tol {
-                candidates.push(a);
-            }
-            if db.abs() <= tol {
-                candidates.push(b);
-            }
-            if candidates.is_empty() {
-                continue;
-            }
-
-            let normal = plane.normal;
-            let outer = geom::to_plane_2d(&ctx.loop_points(&face.outer), normal);
-            let holes: Vec<Vec<DVec2>> = face
-                .inner
-                .iter()
-                .map(|l| geom::to_plane_2d(&ctx.loop_points(l), normal))
-                .collect();
-            for candidate in candidates {
-                let p = geom::to_plane_2d(&[candidate], normal)[0];
-                if geom::point_in_polygon_2d(p, &outer, tol) == geom::Containment::Outside {
-                    continue;
-                }
-                let inside_hole = holes
-                    .iter()
-                    .any(|h| geom::point_in_polygon_2d(p, h, tol) == geom::Containment::Inside);
-                if !inside_hole {
-                    return true;
-                }
-            }
+        }
+        let inside_hole = holes
+            .iter()
+            .any(|h| geom::point_in_polygon_2d(p, h, tol) == geom::Containment::Inside);
+        if !inside_hole {
+            return true;
         }
     }
     false

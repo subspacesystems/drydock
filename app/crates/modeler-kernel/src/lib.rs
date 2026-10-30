@@ -45,6 +45,7 @@ pub mod sticky;
 pub mod sun;
 pub mod tape;
 pub mod tess;
+pub mod text3d;
 pub mod texture;
 pub mod tools;
 pub mod topology;

@@ -98,6 +98,21 @@ pub fn push_pull(
     undo: &mut UndoStack,
     label: &str,
 ) -> Result<PushPulled, PushPullError> {
+    let mut edit = ModelEdit::new();
+    let pulled = push_pull_into(model, body, face, distance, &mut edit)?;
+    undo.push(label, edit);
+    Ok(pulled)
+}
+
+/// [`push_pull`] without the undo step: on success the records are appended to `out`; on an
+/// error the model is as it was and `out` is untouched.
+pub(crate) fn push_pull_into(
+    model: &mut Model,
+    body: BodyId,
+    face: FaceId,
+    distance: f64,
+    out: &mut ModelEdit,
+) -> Result<PushPulled, PushPullError> {
     let body_ref = model.body(body).ok_or(PushPullError::MissingBody(body))?;
     let ctx = body_ref.geometry();
     let face_data = ctx
@@ -232,7 +247,7 @@ pub fn push_pull(
             return Err(PushPullError::Overlap(a, b));
         }
 
-        undo.push(label, edit);
+        out.records.extend(edit.records);
         return Ok(PushPulled {
             cap: face,
             sides: Vec::new(),
@@ -474,7 +489,7 @@ pub fn push_pull(
         return Err(PushPullError::Overlap(a, b));
     }
 
-    undo.push(label, edit);
+    out.records.extend(edit.records);
     Ok(PushPulled {
         cap: final_cap,
         sides,
