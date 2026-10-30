@@ -1189,6 +1189,7 @@ impl App {
             }
             Effect::FitCheck | Effect::RecomputeFit => self.fit_effect(effect, frame),
             Effect::PrintSetup => self.print_setup_open = true,
+            Effect::Text3dDialog => {}
             Effect::OffsetByClearance(direction) => {
                 let mut note = None;
                 let mut changed = 0;
@@ -2030,6 +2031,7 @@ impl App {
                 .editor
                 .as_ref()
                 .is_some_and(|editor| !selected_instances(editor.selection()).is_empty()),
+            can_text: false,
             can_export: false,
             shadows: self.dock.is_open(PanelId::Shadows),
             entity_info: self.dock.is_open(PanelId::EntityInfo),

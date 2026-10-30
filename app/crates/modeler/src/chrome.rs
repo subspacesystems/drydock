@@ -53,6 +53,9 @@ pub struct MenuState<'a> {
     /// The selection holds at least one group or component (Grow by Clearance and Shrink by
     /// Clearance need it; `docs/specs/m7-clearance-offset-ui.md`).
     pub can_offset: bool,
+    /// A model is open (the Tools menu's 3D Text... item needs it;
+    /// `docs/specs/m7-text-3d-ui.md`).
+    pub can_text: bool,
     /// The model holds at least one group or component (Export 3MF... and Export STL...
     /// need it; `docs/specs/m7-export-ui.md`).
     pub can_export: bool,
@@ -1061,6 +1064,15 @@ fn menu_bar_inner(
             }
             if shrink.clicked() {
                 chosen = Some(Action::ShrinkByClearance);
+                ui.close();
+            }
+            let text = ui
+                .add_enabled_ui(state.can_text, |ui| {
+                    menu_item(ui, None, "3D Text...", "", false)
+                })
+                .inner;
+            if text.clicked() {
+                chosen = Some(Action::Text3d);
                 ui.close();
             }
             if menu_item(ui, None, "Print Setup...", "", false).clicked() {

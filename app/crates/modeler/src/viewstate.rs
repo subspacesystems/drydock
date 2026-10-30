@@ -87,6 +87,8 @@ pub enum Effect {
     ToggleHideRest,
     /// The overhang tint changed: upload the scene again (`docs/specs/m7-overhang.md`).
     ReuploadScene,
+    /// Open the 3D Text dialog (`docs/specs/m7-text-3d-ui.md`).
+    Text3dDialog,
     /// Show the Print Setup window (`docs/specs/m7-print-setup.md`).
     PrintSetup,
     /// Run the fit check on the selection, or clear it (`docs/specs/m7-clearance-ui.md`).
@@ -369,6 +371,7 @@ impl ViewState {
             Action::ShrinkByClearance => {
                 return Effect::OffsetByClearance(crate::clearance_offset::Direction::Shrink);
             }
+            Action::Text3d => return Effect::Text3dDialog,
             Action::PrintSetup => return Effect::PrintSetup,
             Action::OpenRecent(index) => return Effect::OpenRecent(index),
             Action::Exit => return Effect::Exit,

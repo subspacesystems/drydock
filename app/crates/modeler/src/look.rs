@@ -11,7 +11,7 @@ use std::sync::Arc;
 use eframe::egui::{self, CornerRadius, FontData, FontDefinitions, Margin, Style};
 
 /// Roboto, bundled: the fallback when the OS font can't be read, and for glyphs it lacks.
-const ROBOTO: &[u8] = include_bytes!("../assets/fonts/Roboto-Regular.ttf");
+pub const ROBOTO: &[u8] = include_bytes!("../assets/fonts/Roboto-Regular.ttf");
 
 /// The colour scheme to draw with.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -141,6 +141,9 @@ pub enum Action {
     GrowByClearance,
     /// Shrink the selected groups and components by the clearance (Tools menu).
     ShrinkByClearance,
+    /// Ask for text, a size, a height and a mode, then place it on a face (Tools menu;
+    /// `docs/specs/m7-text-3d-ui.md`).
+    Text3d,
     /// Show the Print Setup window (Tools menu; `docs/specs/m7-print-setup.md`).
     PrintSetup,
     /// Show or hide the Shadows window (View menu; `docs/specs/m5-app-shadows-ui.md`).

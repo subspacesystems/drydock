@@ -253,6 +253,15 @@ struct PasteState {
     point: Option<DVec3>,
 }
 
+/// 3D Text waiting for its click: what to place and the face under the cursor with the point
+/// on it (open body coordinates).
+#[derive(Clone, Debug)]
+#[allow(dead_code)] // read once the 3D Text task lands (`docs/specs/m7-text-3d-ui.md`)
+struct TextState {
+    options: crate::text_tool::TextOptions,
+    hover: Option<(FaceId, DVec3)>,
+}
+
 #[derive(Clone, Copy)]
 struct PlaceState {
     definition: DefinitionId,
@@ -309,6 +318,8 @@ pub struct Editor {
     clipboard: Option<Clipboard>,
     paste: Option<PasteState>,
     placing: Option<PlaceState>,
+    #[allow(dead_code)] // read once the 3D Text task lands
+    text: Option<TextState>,
     texture_handles: Option<TextureHandleState>,
     path: EditPath,
     /// Cumulative world transforms of the path's steps; the last one maps the open body to
@@ -474,6 +485,7 @@ impl Editor {
             clipboard: None,
             paste: None,
             placing: None,
+            text: None,
             texture_handles: None,
             path: EditPath::root(),
             transforms: Vec::new(),
@@ -1819,6 +1831,26 @@ impl Editor {
                 Err(message)
             }
         }
+    }
+
+    /// Start placing 3D text: the Select tool is made current and the text follows the cursor
+    /// over the faces of the open body until a click places it. False, with a message and no
+    /// change, when the open body can't be resolved. Behaviour: `docs/specs/m7-text-3d-ui.md`.
+    pub fn begin_text(&mut self, model: &Model, options: crate::text_tool::TextOptions) -> bool {
+        let _ = (model, options);
+        unimplemented!("m7-text-3d-ui")
+    }
+
+    /// The options of the text waiting for its click.
+    pub fn text_pending(&self) -> Option<&crate::text_tool::TextOptions> {
+        unimplemented!("m7-text-3d-ui")
+    }
+
+    /// The text's outlines as the next click would draw them (world coordinates, each loop
+    /// closed); empty when no text is pending or the cursor is not over a face.
+    pub fn text_preview(&self, model: &Model) -> Vec<(DVec3, DVec3)> {
+        let _ = model;
+        unimplemented!("m7-text-3d-ui")
     }
 
     /// The definition waiting for its placing click.
