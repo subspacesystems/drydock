@@ -20,6 +20,7 @@ pub mod stl;
 pub mod stl_write;
 pub mod threemf;
 pub mod threemf_write;
+pub mod validate;
 
 pub use stl_write::{StlWriteError, write_combined, write_separate};
 
