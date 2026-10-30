@@ -946,6 +946,8 @@ impl App {
                 self.show_editor_path(frame);
             }
             Effect::FitCheck | Effect::RecomputeFit => self.fit_effect(effect, frame),
+            // The Print Setup window is wired by `m7-print-setup`.
+            Effect::PrintSetup => {}
             Effect::ReuploadScene => {
                 self.show_current_scene(frame);
                 self.dirty = true;

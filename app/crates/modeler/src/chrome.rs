@@ -1027,6 +1027,10 @@ fn menu_bar_inner(
                 chosen = Some(Action::FitCheck);
                 ui.close();
             }
+            if menu_item(ui, None, "Print Setup...", "", false).clicked() {
+                chosen = Some(Action::PrintSetup);
+                ui.close();
+            }
         });
         ui.menu_button("Help", |ui| {
             if menu_item(ui, None, "About modeler...", "", false).clicked() {

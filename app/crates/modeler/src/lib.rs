@@ -24,6 +24,7 @@ pub mod look;
 pub mod materials_panel;
 pub mod mesh_import;
 pub mod overlay;
+pub mod print_setup;
 pub mod recent;
 pub mod shading;
 pub mod shadows_panel;

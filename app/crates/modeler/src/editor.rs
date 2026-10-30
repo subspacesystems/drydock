@@ -627,6 +627,11 @@ impl Editor {
         &self.selection
     }
 
+    /// Make `entities` the selection (no checks; the caller names things in the open body).
+    pub fn select(&mut self, entities: Vec<Entity>) {
+        self.selection = entities;
+    }
+
     pub fn undo_stack(&self) -> &UndoStack {
         &self.undo
     }
@@ -1920,6 +1925,14 @@ impl Editor {
                 false
             }
         }
+    }
+
+    /// Drop to Bed: move the selected groups and components straight up or down, together,
+    /// so the lowest point of any of them sits at world z = 0. One undo step "Drop to Bed".
+    /// True when the model changed. Behaviour: `docs/specs/m7-print-setup.md`.
+    pub fn drop_to_bed(&mut self, model: &mut Model) -> bool {
+        let _ = model;
+        unimplemented!("m7-print-setup")
     }
 
     /// Erase the selection (one undo step "Erase"). True when the model changed.

@@ -28,6 +28,10 @@ pub struct ViewState {
     pub overhangs: bool,
     /// The overhang angle in degrees from vertical.
     pub overhang_degrees: f64,
+    /// The print bed (`docs/specs/m7-print-setup.md`).
+    pub bed: crate::print_setup::Bed,
+    /// The bed outline is drawn in the viewport.
+    pub bed_visible: bool,
     /// The fit check's clearance in meters (`docs/specs/m7-clearance-ui.md`).
     pub clearance_m: f64,
     /// Ctrl+wheel notches not yet turned into a step through a surface (a fraction of a
@@ -81,6 +85,8 @@ pub enum Effect {
     ToggleHideRest,
     /// The overhang tint changed: upload the scene again (`docs/specs/m7-overhang.md`).
     ReuploadScene,
+    /// Show the Print Setup window (`docs/specs/m7-print-setup.md`).
+    PrintSetup,
     /// Run the fit check on the selection, or clear it (`docs/specs/m7-clearance-ui.md`).
     FitCheck,
     /// The clearance changed: compute the fit check again if one is showing.
@@ -159,9 +165,21 @@ impl ViewState {
             axes: true,
             overhangs: false,
             overhang_degrees: modeler_dae::DEFAULT_OVERHANG_DEGREES,
+            bed: crate::print_setup::Bed::default(),
+            bed_visible: false,
             clearance_m: modeler_dae::DEFAULT_CLEARANCE_M,
             through_carry: 0.0,
         }
+    }
+
+    /// Set the overhang angle in degrees from vertical. A value outside
+    /// `print_setup::MIN_OVERHANG_DEGREES..=MAX_OVERHANG_DEGREES` (or NaN) or equal to the
+    /// current one changes nothing and returns `Effect::None`. A new value is stored and
+    /// returns `Effect::ReuploadScene` when `overhangs` is on, else `Effect::None`.
+    /// Behaviour: `docs/specs/m7-print-setup.md`.
+    pub fn set_overhang_degrees(&mut self, degrees: f64) -> Effect {
+        let _ = degrees;
+        unimplemented!("m7-print-setup")
     }
 
     /// Set the fit check's clearance from the field's value in millimeters. Values outside
@@ -330,6 +348,7 @@ impl ViewState {
                 return Effect::ReuploadScene;
             }
             Action::FitCheck => return Effect::FitCheck,
+            Action::PrintSetup => return Effect::PrintSetup,
             Action::OpenRecent(index) => return Effect::OpenRecent(index),
             Action::Exit => return Effect::Exit,
         }
