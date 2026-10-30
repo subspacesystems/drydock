@@ -29,6 +29,9 @@ use modeler::icons::{self, Icon};
 use modeler::input::{self, Button, Modifiers, Tool};
 use modeler::look;
 use modeler::materials_panel::{MaterialAction, MaterialsPanel, materials_panel};
+use modeler::mesh_export::{
+    self, ExportDialog, ExportFormat, ExportOptions, ExportOutcome, StlLayout,
+};
 use modeler::mesh_import::{self, MeshUnit, UnitsOutcome};
 use modeler::overlay::{self, Primitive};
 use modeler::print_setup::{
@@ -158,6 +161,12 @@ pub struct App {
     units_prompt: Option<UnitsPrompt>,
     /// The unit last picked for a mesh file this session.
     mesh_unit: MeshUnit,
+    /// The export dialog showing, if any.
+    export_dialog: Option<ExportPrompt>,
+    /// The options last used for each export format this session.
+    export_options: Vec<ExportOptions>,
+    /// The last export's status line, until the next action.
+    export_note: Option<String>,
     save_dialog: Option<SaveDialog>,
     /// A destructive action waiting for the Save/Discard/Cancel question.
     confirm: Option<PendingAction>,
@@ -268,6 +277,9 @@ impl App {
             dialog: None,
             units_prompt: None,
             mesh_unit: MeshUnit::default(),
+            export_dialog: None,
+            export_options: Vec::new(),
+            export_note: None,
             save_dialog: None,
             confirm: None,
             app_confirm: None,
@@ -650,6 +662,59 @@ impl App {
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_else(|| "model.modeler".to_owned());
         self.save_dialog = Some(SaveDialog::new(dir, name));
+    }
+
+    /// Open the save dialog for an export, with a name from the document and the format.
+    fn open_export_save_dialog(&mut self, options: ExportOptions) {
+        let Some(document) = &self.model else {
+            return;
+        };
+        let dir = document
+            .path
+            .parent()
+            .map(Path::to_path_buf)
+            .filter(|dir| dir.is_dir())
+            .or_else(|| std::env::current_dir().ok())
+            .unwrap_or_else(|| PathBuf::from("."));
+        let stem = native_path(&document.path)
+            .file_stem()
+            .map(|stem| stem.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "model".to_owned());
+        let name = format!("{stem}.{}", options.format.extension());
+        let mode = if options.format == ExportFormat::Stl
+            && options.layout == StlLayout::OneFilePerObject
+        {
+            SaveMode::ExportFolder(options)
+        } else {
+            SaveMode::Export(options)
+        };
+        self.save_dialog = Some(SaveDialog::with_mode(dir, name, mode));
+    }
+
+    /// Write an export with the open document's kernel and the editor's selection.
+    fn export_to(&mut self, path: &Path, options: ExportOptions) {
+        let Some(document) = &self.model else {
+            return;
+        };
+        let Some(model) = document.kernel.as_ref() else {
+            self.error = Some(format!("{}: no model", file_name(&document.path)));
+            return;
+        };
+        let selection = self
+            .editor
+            .as_ref()
+            .map(|editor| editor.selection().to_vec())
+            .unwrap_or_default();
+        match mesh_export::export(model, &selection, &options, path) {
+            Ok(report) => {
+                self.error = None;
+                self.export_note = Some(mesh_export::status_message(&report, &options));
+            }
+            Err(message) => {
+                self.export_note = None;
+                self.error = Some(message);
+            }
+        }
     }
 
     /// Save the open document, asking for a file name when it has none (or is a DAE).
@@ -1059,6 +1124,7 @@ impl App {
     }
 
     fn apply(&mut self, action: input::Action, ctx: &egui::Context, frame: &eframe::Frame) {
+        self.export_note = None;
         let selects_tool = matches!(action, input::Action::SelectTool(_));
         let effect = self.view.apply(action, self.viewport_pt);
         if selects_tool {
@@ -1076,8 +1142,19 @@ impl App {
                     self.open_models_dialog();
                 }
             }
-            // m7-export-ui: opens the export dialog (`docs/specs/m7-export-ui.md`).
-            Effect::ExportDialog(_format) => {}
+            Effect::ExportDialog(format) => {
+                if self.model.is_some() {
+                    let options = self
+                        .export_options
+                        .iter()
+                        .find(|options| options.format == format)
+                        .copied()
+                        .unwrap_or_else(|| ExportOptions::new(format));
+                    self.export_dialog = Some(ExportPrompt {
+                        dialog: ExportDialog::new(options),
+                    });
+                }
+            }
             Effect::Save => self.save(ctx, frame),
             Effect::SaveAsDialog => self.open_save_dialog(),
             Effect::Edit(key) => self.edit(key, ctx, frame),
@@ -2018,6 +2095,10 @@ impl App {
                 ui.separator();
                 ui.label(message);
             }
+            if let Some(note) = &self.export_note {
+                ui.separator();
+                ui.label(note);
+            }
             if let Some(report) = self.current_print_report() {
                 ui.separator();
                 ui.label(&report.message);
@@ -2794,6 +2875,7 @@ impl eframe::App for App {
 
         let dialog_open = self.dialog.is_some()
             || self.units_prompt.is_some()
+            || self.export_dialog.is_some()
             || self.save_dialog.is_some()
             || self.confirm.is_some()
             || self.app_confirm.is_some()
@@ -3029,27 +3111,71 @@ impl eframe::App for App {
                 None => {}
             }
         }
+        let has_selection = self.editor.as_ref().is_some_and(|editor| {
+            editor
+                .selection()
+                .iter()
+                .any(|entity| matches!(entity, Entity::Instance(_)))
+        });
+        if let Some(prompt) = &mut self.export_dialog {
+            let mut outcome = None;
+            let response = egui::Modal::new(egui::Id::new("export-dialog")).show(&ctx, |ui| {
+                ui.set_width(360.0);
+                ui.heading(format!("Export {}", prompt.dialog.options.format.label()));
+                outcome = mesh_export::export_dialog(ui, &mut prompt.dialog, has_selection);
+            });
+            if outcome.is_none() && response.should_close() {
+                outcome = Some(ExportOutcome::Cancel);
+            }
+            match outcome {
+                Some(ExportOutcome::Ok) => {
+                    let prompt = self.export_dialog.take().unwrap();
+                    let options = prompt.dialog.options;
+                    if let Some(remembered) = self
+                        .export_options
+                        .iter_mut()
+                        .find(|remembered| remembered.format == options.format)
+                    {
+                        *remembered = options;
+                    } else {
+                        self.export_options.push(options);
+                    }
+                    self.open_export_save_dialog(options);
+                }
+                Some(ExportOutcome::Cancel) => self.export_dialog = None,
+                None => {}
+            }
+        }
         if let Some(dialog) = &mut self.save_dialog {
             match dialog.show(&ctx) {
                 SaveOutcome::Save(path) => {
+                    let mode = dialog.mode;
                     self.save_dialog = None;
-                    let state = self.undo_state();
-                    let result = self.model.as_mut().map(|document| document.save_as(&path));
-                    match result {
-                        Some(Ok(written)) => {
-                            if let Some(document) = &mut self.model {
-                                document.mark_saved_at(state);
+                    match mode {
+                        SaveMode::Model => {
+                            let state = self.undo_state();
+                            let result =
+                                self.model.as_mut().map(|document| document.save_as(&path));
+                            match result {
+                                Some(Ok(written)) => {
+                                    if let Some(document) = &mut self.model {
+                                        document.mark_saved_at(state);
+                                    }
+                                    self.error = None;
+                                    self.saved = Some(file_name(&written));
+                                    self.remember_recent(&written);
+                                    self.saved_now(&ctx, frame);
+                                }
+                                Some(Err(message)) => {
+                                    self.error = Some(message);
+                                    self.after_save = None;
+                                }
+                                None => {}
                             }
-                            self.error = None;
-                            self.saved = Some(file_name(&written));
-                            self.remember_recent(&written);
-                            self.saved_now(&ctx, frame);
                         }
-                        Some(Err(message)) => {
-                            self.error = Some(message);
-                            self.after_save = None;
+                        SaveMode::Export(options) | SaveMode::ExportFolder(options) => {
+                            self.export_to(&path, options);
                         }
-                        None => {}
                     }
                 }
                 SaveOutcome::Cancel => {
@@ -3079,6 +3205,11 @@ impl eframe::App for App {
             }
         }
     }
+}
+
+/// The export dialog waiting for its options.
+struct ExportPrompt {
+    dialog: ExportDialog,
 }
 
 /// The units choice waiting for an STL file.
@@ -3470,8 +3601,19 @@ enum SaveOutcome {
     Cancel,
 }
 
-/// A minimal save-file dialog in plain egui: browse folders, list `.modeler` files,
-/// and choose a file name.
+/// What a save dialog is choosing a name for.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum SaveMode {
+    /// The open document (a `.modeler` file).
+    Model,
+    /// An export to one file.
+    Export(ExportOptions),
+    /// An export to a folder, one file per object.
+    ExportFolder(ExportOptions),
+}
+
+/// A minimal save-file dialog in plain egui: browse folders, list matching files,
+/// and choose a file or folder name.
 struct SaveDialog {
     dir: PathBuf,
     /// Subfolders and `.modeler` files of `dir`, folders first, each sorted by name.
@@ -3480,16 +3622,23 @@ struct SaveDialog {
     error: Option<String>,
     /// A target that already exists and awaits confirmation.
     replacing: Option<PathBuf>,
+    /// What the name is for.
+    mode: SaveMode,
 }
 
 impl SaveDialog {
     fn new(dir: PathBuf, name: String) -> SaveDialog {
+        SaveDialog::with_mode(dir, name, SaveMode::Model)
+    }
+
+    fn with_mode(dir: PathBuf, name: String, mode: SaveMode) -> SaveDialog {
         let mut dialog = SaveDialog {
             dir: PathBuf::new(),
             entries: Vec::new(),
             name_text: name,
             error: None,
             replacing: None,
+            mode,
         };
         dialog.enter(dir);
         dialog
@@ -3505,9 +3654,15 @@ impl SaveDialog {
                     let path = entry.path();
                     let name = entry.file_name().to_string_lossy().into_owned();
                     let is_dir = path.is_dir();
-                    let is_model = path
-                        .extension()
-                        .is_some_and(|ext| ext.eq_ignore_ascii_case("modeler"));
+                    let extension = match self.mode {
+                        SaveMode::Model => Some("modeler"),
+                        SaveMode::Export(options) => Some(options.format.extension()),
+                        SaveMode::ExportFolder(_) => None,
+                    };
+                    let is_model = extension.is_some_and(|extension| {
+                        path.extension()
+                            .is_some_and(|ext| ext.eq_ignore_ascii_case(extension))
+                    });
                     if (is_dir && !name.starts_with('.')) || (!is_dir && is_model) {
                         self.entries.push((name, path, is_dir));
                     }
@@ -3524,7 +3679,15 @@ impl SaveDialog {
 
     fn target(&self) -> Option<PathBuf> {
         let name = self.name_text.trim();
-        (!name.is_empty()).then(|| native_path(&self.dir.join(name)))
+        if name.is_empty() {
+            return None;
+        }
+        let path = self.dir.join(name);
+        Some(match self.mode {
+            SaveMode::Model => native_path(&path),
+            SaveMode::Export(_) => path,
+            SaveMode::ExportFolder(_) => path.with_extension(""),
+        })
     }
 
     fn show(&mut self, ctx: &egui::Context) -> SaveOutcome {
@@ -3534,7 +3697,15 @@ impl SaveDialog {
         let mut back = false;
         let response = egui::Modal::new(egui::Id::new("save-dialog")).show(ctx, |ui| {
             ui.set_width(520.0);
-            ui.heading("Save model");
+            ui.heading(match self.mode {
+                SaveMode::Model => "Save model".to_string(),
+                SaveMode::Export(options) => {
+                    format!("Export {}", options.format.label())
+                }
+                SaveMode::ExportFolder(options) => {
+                    format!("Export {} to folder", options.format.label())
+                }
+            });
             ui.label(self.dir.display().to_string());
             ui.separator();
             egui::ScrollArea::vertical()
@@ -3574,17 +3745,25 @@ impl SaveDialog {
                     }
                 });
             } else {
+                let hint = match self.mode {
+                    SaveMode::ExportFolder(_) => "Folder name",
+                    SaveMode::Model | SaveMode::Export(_) => "File name",
+                };
                 let name = ui.add(
                     egui::TextEdit::singleline(&mut self.name_text)
                         .desired_width(f32::INFINITY)
-                        .hint_text("File name"),
+                        .hint_text(hint),
                 );
                 let submitted = name.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
                 if let Some(error) = &self.error {
                     ui.colored_label(ERROR_COLOR, error);
                 }
+                let choose = match self.mode {
+                    SaveMode::Model => "Save",
+                    SaveMode::Export(_) | SaveMode::ExportFolder(_) => "Export",
+                };
                 ui.horizontal(|ui| {
-                    if (ui.button("Save").clicked() || submitted)
+                    if (ui.button(choose).clicked() || submitted)
                         && let Some(target) = self.target()
                     {
                         if target.exists() {
