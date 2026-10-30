@@ -49,6 +49,8 @@ pub enum Effect {
     OpenDialog,
     /// Show the import dialog (`docs/specs/m7-import-ui.md`).
     ImportDialog,
+    /// Show the export dialog for this format (`docs/specs/m7-export-ui.md`).
+    ExportDialog(crate::mesh_export::ExportFormat),
     /// Save the document (`docs/specs/m1-app-native.md`).
     Save,
     /// Show the save dialog.
@@ -89,6 +91,8 @@ pub enum Effect {
     PrintSetup,
     /// Run the fit check on the selection, or clear it (`docs/specs/m7-clearance-ui.md`).
     FitCheck,
+    /// Grow or shrink the selected parts by the clearance (`docs/specs/m7-clearance-offset-ui.md`).
+    OffsetByClearance(crate::clearance_offset::Direction),
     /// The clearance changed: compute the fit check again if one is showing.
     RecomputeFit,
     /// Open the recent file at this index (`docs/specs/m4-ui-menus.md`).
@@ -335,6 +339,7 @@ impl ViewState {
             Action::New => return Effect::New,
             Action::Open => return Effect::OpenDialog,
             Action::Import => return Effect::ImportDialog,
+            Action::ExportMesh(format) => return Effect::ExportDialog(format),
             Action::Save => return Effect::Save,
             Action::SaveAs => return Effect::SaveAsDialog,
             Action::Edit(key) => return Effect::Edit(key),
@@ -358,6 +363,12 @@ impl ViewState {
                 return Effect::ReuploadScene;
             }
             Action::FitCheck => return Effect::FitCheck,
+            Action::GrowByClearance => {
+                return Effect::OffsetByClearance(crate::clearance_offset::Direction::Grow);
+            }
+            Action::ShrinkByClearance => {
+                return Effect::OffsetByClearance(crate::clearance_offset::Direction::Shrink);
+            }
             Action::PrintSetup => return Effect::PrintSetup,
             Action::OpenRecent(index) => return Effect::OpenRecent(index),
             Action::Exit => return Effect::Exit,

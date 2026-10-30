@@ -1075,6 +1075,8 @@ impl App {
                     self.open_models_dialog();
                 }
             }
+            // m7-export-ui: opens the export dialog (`docs/specs/m7-export-ui.md`).
+            Effect::ExportDialog(_format) => {}
             Effect::Save => self.save(ctx, frame),
             Effect::SaveAsDialog => self.open_save_dialog(),
             Effect::Edit(key) => self.edit(key, ctx, frame),
@@ -1109,6 +1111,8 @@ impl App {
             }
             Effect::FitCheck | Effect::RecomputeFit => self.fit_effect(effect, frame),
             Effect::PrintSetup => self.print_setup_open = true,
+            // Wired by `m7-clearance-offset-ui`.
+            Effect::OffsetByClearance(_) => {}
             Effect::ReuploadScene => {
                 self.show_current_scene(frame);
                 self.dirty = true;
@@ -1926,6 +1930,8 @@ impl App {
                 .as_ref()
                 .and_then(|editor| selected_pair(editor.selection()))
                 .is_some(),
+            can_offset: false,
+            can_export: false,
             shadows: self.dock.is_open(PanelId::Shadows),
             entity_info: self.dock.is_open(PanelId::EntityInfo),
             materials: self.dock.is_open(PanelId::Materials),

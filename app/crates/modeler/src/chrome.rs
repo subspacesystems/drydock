@@ -12,6 +12,7 @@ use crate::dock::PanelId;
 use crate::document::Stats;
 use crate::icons::Icon;
 use crate::input::{Action, EditKey, Tool};
+use crate::mesh_export::ExportFormat;
 use crate::toolbars::{self, ToolbarLayout, ToolbarsMenuEvent};
 use eframe::egui::{
     Align2, InnerResponse, Label, Rect, Response, RichText, Sense, Shape, Stroke, TextStyle, Ui,
@@ -49,6 +50,12 @@ pub struct MenuState<'a> {
     pub fit_check: bool,
     /// Exactly two groups or components are selected (Fit Check needs it).
     pub can_fit_check: bool,
+    /// The selection holds at least one group or component (Grow by Clearance and Shrink by
+    /// Clearance need it; `docs/specs/m7-clearance-offset-ui.md`).
+    pub can_offset: bool,
+    /// The model holds at least one group or component (Export 3MF... and Export STL...
+    /// need it; `docs/specs/m7-export-ui.md`).
+    pub can_export: bool,
     /// The Shadows window is showing (the View menu's Shadows item is checked;
     /// `docs/specs/m5-app-shadows-ui.md`).
     pub shadows: bool,
@@ -745,6 +752,19 @@ fn menu_bar_inner(
             if menu_item(ui, None, "Import...", "", false).clicked() {
                 chosen = Some(Action::Import);
                 ui.close();
+            }
+            ui.separator();
+            for format in [ExportFormat::ThreeMf, ExportFormat::Stl] {
+                let label = format!("Export {}...", format.label());
+                let item = ui
+                    .add_enabled_ui(state.can_export, |ui| {
+                        menu_item(ui, None, &label, "", false)
+                    })
+                    .inner;
+                if item.clicked() {
+                    chosen = Some(Action::ExportMesh(format));
+                    ui.close();
+                }
             }
             ui.separator();
             if menu_item(ui, None, "Save", "Ctrl+S", false).clicked() {

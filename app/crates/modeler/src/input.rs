@@ -98,6 +98,8 @@ pub enum Action {
     Open,
     /// File > Import...: add a mesh file's groups to the open model.
     Import,
+    /// File > Export 3MF... / Export STL...: show the export dialog (`docs/specs/m7-export-ui.md`).
+    ExportMesh(crate::mesh_export::ExportFormat),
     /// Save to the open native file (a DAE document asks for a name instead).
     Save,
     /// Save under a new name.
@@ -134,6 +136,11 @@ pub enum Action {
     /// Check the fit of the two selected parts, or clear the check (Tools menu;
     /// `docs/specs/m7-clearance-ui.md`).
     FitCheck,
+    /// Grow the selected groups and components by the clearance (Tools menu;
+    /// `docs/specs/m7-clearance-offset-ui.md`).
+    GrowByClearance,
+    /// Shrink the selected groups and components by the clearance (Tools menu).
+    ShrinkByClearance,
     /// Show the Print Setup window (Tools menu; `docs/specs/m7-print-setup.md`).
     PrintSetup,
     /// Show or hide the Shadows window (View menu; `docs/specs/m5-app-shadows-ui.md`).

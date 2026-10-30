@@ -8,6 +8,7 @@
 //! hold the logic that tests exercise without a display.
 
 pub mod chrome;
+pub mod clearance_offset;
 pub mod components_panel;
 pub mod dialog;
 pub mod dock;
@@ -22,6 +23,7 @@ pub mod icons;
 pub mod input;
 pub mod look;
 pub mod materials_panel;
+pub mod mesh_export;
 pub mod mesh_import;
 pub mod overlay;
 pub mod print_setup;
