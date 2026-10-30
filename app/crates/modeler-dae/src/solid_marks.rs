@@ -229,7 +229,7 @@ pub fn tint_problems(scene: &FlatScene, marks: &SolidMarks) -> FlatScene {
     let mut any_segment = false;
     for line in &scene.lines {
         let mut flags = Vec::with_capacity(line.positions.len() / 2);
-        for ends in line.positions.chunks_exact(2) {
+        for ends in line.positions.as_chunks::<2>().0 {
             let ends = [scene_point(&ends[0]), scene_point(&ends[1])];
             let mut flag = false;
             'candidates: for cell in neighbour_cells(ends[0]) {
@@ -309,7 +309,7 @@ pub fn tint_problems(scene: &FlatScene, marks: &SolidMarks) -> FlatScene {
             material: line.material,
             positions: Vec::new(),
         };
-        for (segment, marked) in line.positions.chunks_exact(2).zip(flags) {
+        for (segment, marked) in line.positions.as_chunks::<2>().0.iter().zip(flags) {
             if marked {
                 problem_line.positions.extend_from_slice(segment);
             } else {
