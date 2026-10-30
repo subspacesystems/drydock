@@ -948,6 +948,8 @@ impl App {
             Effect::FitCheck | Effect::RecomputeFit => self.fit_effect(effect, frame),
             // The Print Setup window is wired by `m7-print-setup`.
             Effect::PrintSetup => {}
+            // Wired by `m7-clearance-offset-ui`.
+            Effect::OffsetByClearance(_) => {}
             Effect::ReuploadScene => {
                 self.show_current_scene(frame);
                 self.dirty = true;
@@ -1759,6 +1761,7 @@ impl App {
                 .as_ref()
                 .and_then(|editor| selected_pair(editor.selection()))
                 .is_some(),
+            can_offset: false,
             shadows: self.dock.is_open(PanelId::Shadows),
             entity_info: self.dock.is_open(PanelId::EntityInfo),
             materials: self.dock.is_open(PanelId::Materials),

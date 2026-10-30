@@ -89,6 +89,8 @@ pub enum Effect {
     PrintSetup,
     /// Run the fit check on the selection, or clear it (`docs/specs/m7-clearance-ui.md`).
     FitCheck,
+    /// Grow or shrink the selected parts by the clearance (`docs/specs/m7-clearance-offset-ui.md`).
+    OffsetByClearance(crate::clearance_offset::Direction),
     /// The clearance changed: compute the fit check again if one is showing.
     RecomputeFit,
     /// Open the recent file at this index (`docs/specs/m4-ui-menus.md`).
@@ -348,6 +350,12 @@ impl ViewState {
                 return Effect::ReuploadScene;
             }
             Action::FitCheck => return Effect::FitCheck,
+            Action::GrowByClearance => {
+                return Effect::OffsetByClearance(crate::clearance_offset::Direction::Grow);
+            }
+            Action::ShrinkByClearance => {
+                return Effect::OffsetByClearance(crate::clearance_offset::Direction::Shrink);
+            }
             Action::PrintSetup => return Effect::PrintSetup,
             Action::OpenRecent(index) => return Effect::OpenRecent(index),
             Action::Exit => return Effect::Exit,

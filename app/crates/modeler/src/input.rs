@@ -134,6 +134,11 @@ pub enum Action {
     /// Check the fit of the two selected parts, or clear the check (Tools menu;
     /// `docs/specs/m7-clearance-ui.md`).
     FitCheck,
+    /// Grow the selected groups and components by the clearance (Tools menu;
+    /// `docs/specs/m7-clearance-offset-ui.md`).
+    GrowByClearance,
+    /// Shrink the selected groups and components by the clearance (Tools menu).
+    ShrinkByClearance,
     /// Show the Print Setup window (Tools menu; `docs/specs/m7-print-setup.md`).
     PrintSetup,
     /// Show or hide the Shadows window (View menu; `docs/specs/m5-app-shadows-ui.md`).

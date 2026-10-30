@@ -1666,6 +1666,26 @@ impl Editor {
         }
     }
 
+    /// Grow or shrink the selected groups and components of the open body by `clearance_m`
+    /// (meters, in the world; `docs/specs/m7-clearance-offset-ui.md`). Each distinct
+    /// definition once, in selection order, by `clearance_m / s` in its own coordinates where
+    /// `s` is `uniform_scale` of the first selected instance's world transform (the open
+    /// path's `transform` times the instance's); an instance that is not a similarity is
+    /// refused (`UNEVEN_SCALE`) and not passed to the kernel. The rest go to `offset_bodies`
+    /// with the direction's label: one undo step, none when nothing changed. Errors, as the
+    /// message (also the editor's message) with nothing changed: "Select a group or component
+    /// first" when the selection holds no instance of the open body, "Can't change parts here"
+    /// when the path doesn't resolve, "The clearance is not usable" when `clearance_m` is not
+    /// finite and positive. On `Ok` the editor's message is cleared.
+    pub fn offset_instances(
+        &mut self,
+        _model: &mut Model,
+        _direction: crate::clearance_offset::Direction,
+        _clearance_m: f64,
+    ) -> Result<crate::clearance_offset::OffsetOutcome, String> {
+        unimplemented!("m7-clearance-offset-ui")
+    }
+
     /// Repair the solid problems of `instance`'s definition (`repair_body`; every copy of a
     /// component changes with it) in one undo step labelled "Repair Solid" and return the
     /// report (the editor's message is cleared; the app shows `solid_ui::repair_message`).

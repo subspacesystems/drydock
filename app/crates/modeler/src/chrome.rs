@@ -49,6 +49,9 @@ pub struct MenuState<'a> {
     pub fit_check: bool,
     /// Exactly two groups or components are selected (Fit Check needs it).
     pub can_fit_check: bool,
+    /// The selection holds at least one group or component (Grow by Clearance and Shrink by
+    /// Clearance need it; `docs/specs/m7-clearance-offset-ui.md`).
+    pub can_offset: bool,
     /// The Shadows window is showing (the View menu's Shadows item is checked;
     /// `docs/specs/m5-app-shadows-ui.md`).
     pub shadows: bool,
