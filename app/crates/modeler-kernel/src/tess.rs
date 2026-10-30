@@ -329,9 +329,7 @@ fn ear_clip(polygon: Vec<usize>, points: &[DVec2], area_eps: f64) -> Vec<[usize;
     if ring.len() == 3 {
         let (a, b, c) = (ring[0], ring[1], ring[2]);
         let cross = orientation(points[a], points[b], points[c]);
-        if cross.abs() > area_eps {
-            triangles.push(if cross >= 0.0 { [a, b, c] } else { [a, c, b] });
-        }
+        triangles.push(if cross >= 0.0 { [a, b, c] } else { [a, c, b] });
     }
 
     triangles
