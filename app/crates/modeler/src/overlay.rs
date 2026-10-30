@@ -47,9 +47,17 @@ pub enum Style {
     Selected,
     /// One triangle of a selected face: filled as a tint, no outline.
     SelectedFace,
+    /// An open, loose or shared edge of the selected part (`docs/specs/m7-fix-marks.md`).
+    Problem,
     /// Half of an axis line from the origin: `axis` 0 red, 1 green, 2 blue; the positive
     /// half is drawn solid, the negative half dashed (`docs/specs/m4-ui-axes.md`).
     Axis { axis: usize, positive: bool },
+}
+
+/// Stroke of [`Style::Problem`]: `modeler_dae::PROBLEM_COLOR` as sRGB bytes (each channel
+/// times 255, rounded) and the width in points (4.0, wider than `Style::Selected`).
+pub fn problem_stroke() -> ([u8; 4], f32) {
+    unimplemented!("m7-fix-marks")
 }
 
 /// One thing to draw, in world coordinates.

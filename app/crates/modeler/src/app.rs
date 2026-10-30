@@ -3348,6 +3348,10 @@ fn overlay_style(style: overlay::Style) -> (Color32, f32) {
         overlay::Style::Guide => (Color32::from_rgb(160, 160, 160), 1.0),
         overlay::Style::GuidePoint => (Color32::from_rgb(220, 220, 220), 1.0),
         overlay::Style::Selected | overlay::Style::SelectedFace => (ACCENT_COLOR, 3.0),
+        overlay::Style::Problem => {
+            let ([r, g, b, a], width) = overlay::problem_stroke();
+            (Color32::from_rgba_unmultiplied(r, g, b, a), width)
+        }
         overlay::Style::Axis { axis, .. } => (
             match axis {
                 0 => Color32::from_rgb(200, 40, 40),
