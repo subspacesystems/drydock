@@ -182,8 +182,18 @@ impl ViewState {
     /// returns `Effect::ReuploadScene` when `overhangs` is on, else `Effect::None`.
     /// Behaviour: `docs/specs/m7-print-setup.md`.
     pub fn set_overhang_degrees(&mut self, degrees: f64) -> Effect {
-        let _ = degrees;
-        unimplemented!("m7-print-setup")
+        if !(crate::print_setup::MIN_OVERHANG_DEGREES..=crate::print_setup::MAX_OVERHANG_DEGREES)
+            .contains(&degrees)
+            || degrees == self.overhang_degrees
+        {
+            return Effect::None;
+        }
+        self.overhang_degrees = degrees;
+        if self.overhangs {
+            Effect::ReuploadScene
+        } else {
+            Effect::None
+        }
     }
 
     /// Set the fit check's clearance from the field's value in millimeters. Values outside

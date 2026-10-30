@@ -1679,11 +1679,102 @@ impl Editor {
     /// finite and positive. On `Ok` the editor's message is cleared.
     pub fn offset_instances(
         &mut self,
-        _model: &mut Model,
-        _direction: crate::clearance_offset::Direction,
-        _clearance_m: f64,
+        model: &mut Model,
+        direction: crate::clearance_offset::Direction,
+        clearance_m: f64,
     ) -> Result<crate::clearance_offset::OffsetOutcome, String> {
-        unimplemented!("m7-clearance-offset-ui")
+        use crate::clearance_offset::{
+            OffsetOutcome, Refused, UNEVEN_SCALE, reason, selected_instances, uniform_scale,
+        };
+
+        let Some(body) = self.path.body(model) else {
+            let message = "Can't change parts here".to_string();
+            self.message = Some(message.clone());
+            return Err(message);
+        };
+        let Some(outer) = self.path.transform(model) else {
+            let message = "Can't change parts here".to_string();
+            self.message = Some(message.clone());
+            return Err(message);
+        };
+        let ids: Vec<InstanceId> = selected_instances(self.selection())
+            .into_iter()
+            .filter(|&id| {
+                model
+                    .body(body)
+                    .and_then(|body| body.instance(id))
+                    .is_some()
+            })
+            .collect();
+        if ids.is_empty() {
+            let message = "Select a group or component first".to_string();
+            self.message = Some(message.clone());
+            return Err(message);
+        }
+        if !clearance_m.is_finite() || clearance_m <= 0.0 {
+            let message = "The clearance is not usable".to_string();
+            self.message = Some(message.clone());
+            return Err(message);
+        }
+
+        let mut seen = std::collections::BTreeSet::new();
+        let mut refused = Vec::new();
+        let mut queued = Vec::new();
+        for id in ids {
+            let Some(instance) = model.body(body).and_then(|body| body.instance(id)) else {
+                continue;
+            };
+            if !seen.insert(instance.definition) {
+                continue;
+            }
+            let name = if !instance.name.is_empty() {
+                instance.name.clone()
+            } else {
+                model
+                    .definition(instance.definition)
+                    .filter(|definition| !definition.name.is_empty())
+                    .map(|definition| definition.name.clone())
+                    .unwrap_or_else(|| "part".to_string())
+            };
+            match uniform_scale(&(outer * instance.transform)) {
+                Some(scale) => queued.push((instance.definition, scale, name)),
+                None => refused.push(Refused {
+                    name,
+                    reason: UNEVEN_SCALE.to_string(),
+                }),
+            }
+        }
+
+        let sign = match direction {
+            crate::clearance_offset::Direction::Grow => 1.0,
+            crate::clearance_offset::Direction::Shrink => -1.0,
+        };
+        let mut edit = ModelEdit::new();
+        let mut changed = 0;
+        for (definition, scale, name) in queued {
+            match modeler_kernel::offset::offset_body(
+                model,
+                BodyId::Definition(definition),
+                sign * clearance_m / scale,
+                &mut edit,
+            ) {
+                Ok(_) => changed += 1,
+                Err(error) => refused.push(Refused {
+                    name,
+                    reason: reason(&error, direction),
+                }),
+            }
+        }
+        if changed > 0 {
+            self.undo.push(direction.label(), edit);
+        }
+        self.message = None;
+        Ok(OffsetOutcome {
+            direction,
+            clearance_m,
+            changed,
+            refused,
+        })
     }
 
     /// Repair the solid problems of `instance`'s definition (`repair_body`; every copy of a
@@ -1951,8 +2042,57 @@ impl Editor {
     /// so the lowest point of any of them sits at world z = 0. One undo step "Drop to Bed".
     /// True when the model changed. Behaviour: `docs/specs/m7-print-setup.md`.
     pub fn drop_to_bed(&mut self, model: &mut Model) -> bool {
-        let _ = model;
-        unimplemented!("m7-print-setup")
+        let instances: Vec<Entity> = self
+            .selection
+            .iter()
+            .copied()
+            .filter(|entity| matches!(entity, Entity::Instance(_)))
+            .collect();
+        if instances.is_empty() {
+            self.message = Some("Select groups or components to drop to the bed".to_string());
+            return false;
+        }
+        let body = self.body(model);
+        let world = self.world();
+        let mut lowest = f64::INFINITY;
+        for entity in &instances {
+            let Entity::Instance(id) = *entity else {
+                continue;
+            };
+            for triangle in modeler_dae::instance_triangles(model, body, id, world) {
+                for point in triangle {
+                    lowest = lowest.min(point.z);
+                }
+            }
+        }
+        if !lowest.is_finite() {
+            self.message = Some("Can't drop that".to_string());
+            return false;
+        }
+        if lowest.abs() < 1e-9 {
+            self.message = None;
+            return false;
+        }
+        let matrix =
+            world.inverse() * DMat4::from_translation(DVec3::new(0.0, 0.0, -lowest)) * world;
+        match transform::transform(
+            model,
+            body,
+            &instances,
+            matrix,
+            &mut self.undo,
+            "Drop to Bed",
+        ) {
+            Ok(()) => {
+                self.message = None;
+                self.prune(model);
+                true
+            }
+            Err(_) => {
+                self.message = Some("Can't drop that".to_string());
+                false
+            }
+        }
     }
 
     /// Erase the selection (one undo step "Erase"). True when the model changed.
