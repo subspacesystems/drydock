@@ -282,20 +282,28 @@ fn ear_clip(polygon: Vec<usize>, points: &[DVec2], area_eps: f64) -> Vec<[usize;
         current = next[current];
         misses += 1;
         if misses >= remaining {
-            // Degenerate or invalid input: make progress by clipping a vertex anyway.
+            // Degenerate or invalid input: make progress by clipping a vertex anyway,
+            // preferring one that leaves a real triangle so flat ears don't hide the rest.
             let mut chosen = None;
+            let mut flat = None;
             for i in 0..n {
                 if active[i] {
                     let p = previous[i];
                     let q = next[i];
                     let (a, b, c) = (polygon[p], polygon[i], polygon[q]);
                     if a != b && b != c && a != c {
-                        chosen = Some((i, p, q, a, b, c));
-                        break;
+                        let cross = orientation(points[a], points[b], points[c]);
+                        if cross.abs() > area_eps {
+                            chosen = Some((i, p, q, a, b, c));
+                            break;
+                        }
+                        if flat.is_none() {
+                            flat = Some((i, p, q, a, b, c));
+                        }
                     }
                 }
             }
-            let Some((i, p, q, a, b, c)) = chosen else {
+            let Some((i, p, q, a, b, c)) = chosen.or(flat) else {
                 break;
             };
             let cross = orientation(points[a], points[b], points[c]);
@@ -321,7 +329,9 @@ fn ear_clip(polygon: Vec<usize>, points: &[DVec2], area_eps: f64) -> Vec<[usize;
     if ring.len() == 3 {
         let (a, b, c) = (ring[0], ring[1], ring[2]);
         let cross = orientation(points[a], points[b], points[c]);
-        triangles.push(if cross >= 0.0 { [a, b, c] } else { [a, c, b] });
+        if cross.abs() > area_eps {
+            triangles.push(if cross >= 0.0 { [a, b, c] } else { [a, c, b] });
+        }
     }
 
     triangles
@@ -348,31 +358,29 @@ fn ear_at(
 
     let (pa, pb, pc) = (points[a], points[b], points[c]);
     let cross = orientation(pa, pb, pc);
-    if cross < -area_eps {
+    if cross <= area_eps {
         return None;
     }
-    if cross > area_eps {
-        if contains_point(
-            pa, pb, pc, active, polygon, points, area_eps, a, b, c, previous, next,
-        ) {
-            return None;
+    if contains_point(
+        pa, pb, pc, active, polygon, points, area_eps, a, b, c, previous, next,
+    ) {
+        return None;
+    }
+    // With holes joined by bridges, an ear must not reach across a bridge edge.
+    for (i, &is_active) in active.iter().enumerate() {
+        if !is_active {
+            continue;
         }
-        // With holes joined by bridges, an ear must not reach across a bridge edge.
-        for (i, &is_active) in active.iter().enumerate() {
-            if !is_active {
-                continue;
-            }
-            let j = next[i];
-            if !active[j] || i == p || i == q || j == p || j == q {
-                continue;
-            }
-            if !intersects_only_at_ends(pa, pc, points[polygon[i]], points[polygon[j]], area_eps) {
-                return None;
-            }
+        let j = next[i];
+        if !active[j] || i == p || i == q || j == p || j == q {
+            continue;
+        }
+        if !intersects_only_at_ends(pa, pc, points[polygon[i]], points[polygon[j]], area_eps) {
+            return None;
         }
     }
 
-    Some(if cross >= 0.0 { [a, b, c] } else { [a, c, b] })
+    Some([a, b, c])
 }
 
 #[allow(clippy::too_many_arguments)]

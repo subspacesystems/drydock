@@ -144,6 +144,7 @@ pub fn write_combined(objects: &[PrintObject], path: &Path) -> Result<(), StlWri
     for object in objects {
         triangles.extend_from_slice(&object.triangles);
     }
-    std::fs::write(path, encode(&first.name, &triangles)).map_err(|e| StlWriteError::Io(e.to_string()))?;
+    std::fs::write(path, encode(&first.name, &triangles))
+        .map_err(|e| StlWriteError::Io(e.to_string()))?;
     Ok(())
 }
