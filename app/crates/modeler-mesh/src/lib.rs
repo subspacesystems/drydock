@@ -15,6 +15,7 @@ use modeler_dae::{
 };
 use modeler_kernel::model as km;
 
+pub mod print_mesh;
 pub mod stl;
 pub mod threemf;
 

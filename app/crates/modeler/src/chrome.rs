@@ -742,6 +742,10 @@ fn menu_bar_inner(
                 chosen = Some(Action::Open);
                 ui.close();
             }
+            if menu_item(ui, None, "Import...", "", false).clicked() {
+                chosen = Some(Action::Import);
+                ui.close();
+            }
             ui.separator();
             if menu_item(ui, None, "Save", "Ctrl+S", false).clicked() {
                 chosen = Some(Action::Save);

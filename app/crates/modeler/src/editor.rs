@@ -1622,8 +1622,58 @@ impl Editor {
     /// message (also kept as the editor's message), "Nothing to import" for an empty source,
     /// and nothing changed. Behaviour: `docs/specs/m7-import-ui.md`.
     pub fn import_groups(&mut self, model: &mut Model, source: &Model) -> Result<usize, String> {
-        let _ = (model, source);
-        unimplemented!("m7-import-ui")
+        let selection: Vec<Entity> = source
+            .root()
+            .instances()
+            .map(|(id, _)| Entity::Instance(id))
+            .collect();
+        let count = selection.len();
+        let clipboard = match copy::extract(source, BodyId::Root, &selection) {
+            Ok(clipboard) => clipboard,
+            Err(copy::CopyError::Empty) => {
+                let message = "Nothing to import".to_string();
+                self.message = Some(message.clone());
+                return Err(message);
+            }
+            Err(_) => {
+                let message = "Import failed".to_string();
+                self.message = Some(message.clone());
+                return Err(message);
+            }
+        };
+        match copy::insert(
+            model,
+            BodyId::Root,
+            &clipboard,
+            DMat4::IDENTITY,
+            &mut self.undo,
+            "Import Mesh",
+        ) {
+            Ok(_) => {
+                self.message = None;
+                Ok(count)
+            }
+            Err(_) => {
+                let message = "Import failed".to_string();
+                self.message = Some(message.clone());
+                Err(message)
+            }
+        }
+    }
+
+    /// Repair the solid problems of `instance`'s definition (`repair_body`; every copy of a
+    /// component changes with it) in one undo step labelled "Repair Solid" and return the
+    /// report (the editor's message is cleared; the app shows `solid_ui::repair_message`).
+    /// `instance` must be an instance of the open body. Errors, as a one-line message (also
+    /// the editor's message) with nothing changed: "Select a group or component to repair" when it isn't, and
+    /// "Repair failed" when the model refuses. Pushes no undo step when the repair changes
+    /// nothing. Behaviour: `docs/specs/m7-solid-ui.md`.
+    pub fn repair_instance(
+        &mut self,
+        _model: &mut Model,
+        _instance: InstanceId,
+    ) -> Result<modeler_kernel::repair::RepairReport, String> {
+        unimplemented!("m7-solid-ui")
     }
 
     /// The definition waiting for its placing click.

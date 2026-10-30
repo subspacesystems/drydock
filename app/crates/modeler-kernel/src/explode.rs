@@ -258,6 +258,7 @@ pub(crate) fn explode_inner(
         copied_faces,
         copied_segments,
         copied_box,
+        source_curves,
     ) = {
         let Some(source) = model.body(BodyId::Definition(definition)) else {
             return Err(ExplodeError::Model(ModelError::MissingDefinition(
@@ -329,6 +330,8 @@ pub(crate) fn explode_inner(
             copied.push(RefFace::new(*materials, outer, inner));
         }
 
+        let curves: Vec<crate::curve::Curve> =
+            src.curves().map(|(_, curve)| curve.clone()).collect();
         let instances: Vec<Instance> = source
             .instances()
             .map(|(_, instance)| Instance {
@@ -378,6 +381,7 @@ pub(crate) fn explode_inner(
             copied,
             segments,
             copied_box,
+            curves,
         )
     };
 
@@ -388,6 +392,10 @@ pub(crate) fn explode_inner(
         copied_box.is_some_and(|box_| face_box_meets(ctx, id, box_))
     };
 
+    let source_positions: BTreeMap<VertexId, DVec3> = source_vertices
+        .iter()
+        .map(|(id, position)| (*id, *position))
+        .collect();
     let mut vertex_map: BTreeMap<VertexId, VertexId> = BTreeMap::new();
     let mut edge_map: BTreeMap<EdgeId, EdgeId> = BTreeMap::new();
     topo(model.edit_geometry(body, edit, |ctx, log| {
@@ -430,6 +438,21 @@ pub(crate) fn explode_inner(
         .map_err(ExplodeError::Model)?;
 
     restick(model, body, &copied_vertices, edit).map_err(ExplodeError::Model)?;
+
+    topo(model.edit_geometry(body, edit, |ctx, log| {
+        crate::curve::carry(
+            ctx,
+            &source_curves,
+            data.transform,
+            |ctx, v| {
+                source_positions
+                    .get(&v)
+                    .and_then(|position| ctx.find_vertex(*position, LINEAR_TOL))
+            },
+            log,
+        );
+        Ok(())
+    }))?;
 
     // Drop the faces sticking made that don't cover an old or copied face.
     let unwanted: Vec<FaceId> = {

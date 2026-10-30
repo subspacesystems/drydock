@@ -288,6 +288,8 @@ pub fn material_label(model: &Model, material: Shared<Option<MaterialId>>) -> St
 pub enum InfoAction {
     RenameDefinition(DefinitionId, String),
     RenameInstance(InstanceId, String),
+    /// The Repair button for this group or component (`docs/specs/m7-solid-ui.md`).
+    Repair(InstanceId),
 }
 
 /// The panel's state between frames: the name fields' text.
@@ -299,6 +301,8 @@ pub struct EntityInfoPanel {
     pub shown: Option<(InstanceId, String, String)>,
     /// The last description, so a frame doesn't redo it (`docs/specs/m6-panel-speed.md`).
     pub cache: DescribeCache,
+    /// The last solid check, so a frame doesn't redo it (`docs/specs/m7-solid-ui.md`).
+    pub solid: crate::solid_ui::SolidCache,
 }
 
 /// The last `describe` result, reused while the model (`Model::cache_key`), the body and
