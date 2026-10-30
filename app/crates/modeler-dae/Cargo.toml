@@ -10,6 +10,7 @@ publish.workspace = true
 [dependencies]
 glam.workspace = true
 roxmltree.workspace = true
+skrifa.workspace = true
 modeler-kernel.workspace = true
 
 [dev-dependencies]
