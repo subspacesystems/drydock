@@ -246,6 +246,9 @@ Tyrel's request: print-ready solids without plugins. Placed right after M6; orde
 | `m7-text-outline` | Font outlines to flat loops (outer CCW, holes CW) at a chosen size (`modeler-dae/text.rs`, skrifa) | |
 | `m7-text-3d` | Kernel: text loops on a face drawn and pushed out (emboss) or in (engrave) with push/pull, the part kept a solid; refuses text too big for the face, over its border, or deeper than the part; one undo step (kernel, orchestrator) | `m7-solid-repair` |
 | `m7-text-3d-ui` | Tools > 3D Text: text, font size, height, emboss/engrave, click a face to place | `m7-text-outline`, `m7-text-3d` |
+| `m7-fix-export-fit` | Sign-off fixes: Export 3MF/STL enabled when the model has a group or component; export file name from the model's name without its extension; viewport redraws after the Fit Check tint changes | |
+| `m7-fix-marks` | Sign-off fix: open, loose and shared edges drawn in the problem color over the selection outline, so a selected part shows what keeps it from being a solid | |
+| `m7-fix-dialogs` | Sign-off polish: Enter presses OK in the Export, Mesh units and 3D Text dialogs; Print Setup opens below the menu bar | |
 
 Done when: Entity Info says whether a group or component is a solid, with its volume, and the viewport marks what keeps it from being one; Repair fixes reversed and internal faces and simple flat holes in one undo step; File > Export 3MF... and Export STL... write files at the right size (mm) that re-import with the same volume and bounding box; STL and 3MF files open or import as editable groups; the print bed outline and fits-the-bed check, Drop to Bed, overhang tint, fit check between two parts, grow/shrink by clearance and 3D text work. Checked in the real window before Tyrel tries it.
 
