@@ -275,8 +275,16 @@ impl MarkTracker {
 
 /// One `Primitive::Line` in `Style::Problem` per entry of `marks.segments`, same order, ends
 /// as given (already world space). Empty marks give an empty list.
-pub fn mark_primitives(_marks: &SolidMarks) -> Vec<crate::overlay::Primitive> {
-    unimplemented!("m7-fix-marks")
+pub fn mark_primitives(marks: &SolidMarks) -> Vec<crate::overlay::Primitive> {
+    marks
+        .segments
+        .iter()
+        .map(|&[a, b]| crate::overlay::Primitive::Line {
+            a,
+            b,
+            style: crate::overlay::Style::Problem,
+        })
+        .collect()
 }
 
 /// `scene` with the problem tint when `marks` is `Some` (`tint_problems`); else `scene` itself,

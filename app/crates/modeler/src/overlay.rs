@@ -57,7 +57,9 @@ pub enum Style {
 /// Stroke of [`Style::Problem`]: `modeler_dae::PROBLEM_COLOR` as sRGB bytes (each channel
 /// times 255, rounded) and the width in points (4.0, wider than `Style::Selected`).
 pub fn problem_stroke() -> ([u8; 4], f32) {
-    unimplemented!("m7-fix-marks")
+    let [r, g, b, a] = modeler_dae::PROBLEM_COLOR;
+    let byte = |c: f32| (c * 255.0).round() as u8;
+    ([byte(r), byte(g), byte(b), byte(a)], 4.0)
 }
 
 /// One thing to draw, in world coordinates.
