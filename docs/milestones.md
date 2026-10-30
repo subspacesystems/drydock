@@ -243,7 +243,9 @@ Tyrel's request: print-ready solids without plugins. Placed right after M6; orde
 | `m7-clearance-ui` | Tools > Fit Check: pick two groups or components, clearance field in mm (default 0.2), flagged faces tinted in the viewport, report in the status bar | `m7-clearance`, `m7-overhang` |
 | `m7-clearance-offset` | Kernel: grow/shrink a flat-faced solid: every face moves in or out by a distance, vertices where the moved planes meet; refuses curved parts, collapses and self-overlap; one undo step for several parts (kernel, orchestrator) | `m7-clearance`, `m7-solid-repair` |
 | `m7-clearance-offset-ui` | Tools > Grow by Clearance and Shrink by Clearance on the selected groups and components, using the fit check's clearance field; status bar says what changed and why a part was refused | `m7-clearance-offset`, `m7-clearance-ui` |
-| `m7-text-3d` | 3D text from the app's font outlines, embossed on or engraved into a face | |
+| `m7-text-outline` | Font outlines to flat loops (outer CCW, holes CW) at a chosen size (`modeler-dae/text.rs`, skrifa) | |
+| `m7-text-3d` | Kernel: text loops on a face drawn and pushed out (emboss) or in (engrave) with push/pull, the part kept a solid; refuses text too big for the face, over its border, or deeper than the part; one undo step (kernel, orchestrator) | `m7-solid-repair` |
+| `m7-text-3d-ui` | Tools > 3D Text: text, font size, height, emboss/engrave, click a face to place | `m7-text-outline`, `m7-text-3d` |
 
 Done when: Entity Info says whether a group or component is a solid, with its volume, and the viewport marks what keeps it from being one; Repair fixes reversed and internal faces and simple flat holes in one undo step; File > Export 3MF... and Export STL... write files at the right size (mm) that re-import with the same volume and bounding box; STL and 3MF files open or import as editable groups; the print bed outline and fits-the-bed check, Drop to Bed, overhang tint, fit check between two parts, grow/shrink by clearance and 3D text work. Checked in the real window before Tyrel tries it.
 
