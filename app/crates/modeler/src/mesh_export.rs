@@ -97,8 +97,7 @@ pub struct ExportReport {
 /// Whether the open model has anything to export: its root body holds at least one group
 /// or component instance (loose geometry alone does not count).
 pub fn can_export(model: &Model) -> bool {
-    let _ = model;
-    unimplemented!("m7-fix-export-fit")
+    model.root().instances().next().is_some()
 }
 
 /// The save dialog's suggested name for an export of the document at `document_path`: the
@@ -110,8 +109,16 @@ pub fn default_export_name(
     format: ExportFormat,
     layout: StlLayout,
 ) -> String {
-    let _ = (document_path, format, layout);
-    unimplemented!("m7-fix-export-fit")
+    let stem = document_path
+        .file_stem()
+        .map(|stem| stem.to_string_lossy().into_owned())
+        .filter(|stem| !stem.is_empty())
+        .unwrap_or_else(|| "untitled".to_owned());
+    if format == ExportFormat::Stl && layout == StlLayout::OneFilePerObject {
+        stem
+    } else {
+        format!("{stem}.{}", format.extension())
+    }
 }
 
 /// The tolerance field's text as millimeters: a number with an optional trailing `mm`
