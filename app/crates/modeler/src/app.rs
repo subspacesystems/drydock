@@ -443,6 +443,7 @@ impl App {
             self.fit = None;
         }
         let Some(scene) = self.model.as_ref().map(|document| &document.scene) else {
+            self.dirty = true;
             return;
         };
         let overhang = self.view.overhangs.then_some(self.view.overhang_degrees);
@@ -452,6 +453,7 @@ impl App {
             gpu.scene = gpu.renderer.upload(&state.device, &state.queue, &scene);
             self.warnings = gpu.scene.warnings.clone();
         }
+        self.dirty = true;
     }
 
     /// Upload the model's current scene again.
@@ -683,11 +685,7 @@ impl App {
             .filter(|dir| dir.is_dir())
             .or_else(|| std::env::current_dir().ok())
             .unwrap_or_else(|| PathBuf::from("."));
-        let stem = native_path(&document.path)
-            .file_stem()
-            .map(|stem| stem.to_string_lossy().into_owned())
-            .unwrap_or_else(|| "model".to_owned());
-        let name = format!("{stem}.{}", options.format.extension());
+        let name = mesh_export::default_export_name(&document.path, options.format, options.layout);
         let mode = if options.format == ExportFormat::Stl
             && options.layout == StlLayout::OneFilePerObject
         {
@@ -2057,7 +2055,11 @@ impl App {
                 .model
                 .as_ref()
                 .is_some_and(|document| document.kernel.is_some()),
-            can_export: false,
+            can_export: self
+                .model
+                .as_ref()
+                .and_then(|d| d.kernel.as_ref())
+                .is_some_and(mesh_export::can_export),
             shadows: self.dock.is_open(PanelId::Shadows),
             entity_info: self.dock.is_open(PanelId::EntityInfo),
             materials: self.dock.is_open(PanelId::Materials),
@@ -3826,7 +3828,9 @@ impl SaveDialog {
                     if (ui.button(choose).clicked() || submitted)
                         && let Some(target) = self.target()
                     {
-                        if target.exists() {
+                        if matches!(self.mode, SaveMode::ExportFolder(_)) && target.is_dir() {
+                            outcome = SaveOutcome::Save(target);
+                        } else if target.exists() {
                             self.replacing = Some(target);
                         } else {
                             outcome = SaveOutcome::Save(target);
