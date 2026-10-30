@@ -1352,6 +1352,7 @@ dependencies = [
  "modeler-kernel",
  "proptest",
  "roxmltree",
+ "skrifa",
 ]
 
 [[package]]

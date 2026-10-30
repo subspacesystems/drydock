@@ -35,49 +35,49 @@ impl std::error::Error for StlWriteError {}
 /// normal from the winding, three corners as f32, attribute 0). Values are written as
 /// given (the print mesh is already in mm). A degenerate triangle gets a zero normal.
 pub fn encode(name: &str, triangles: &[Triangle]) -> Vec<u8> {
-    let mut header = [0u8; 80];
-    let prefix = b"modeler STL: ";
-    let mut end = prefix.len();
-    for c in name.chars() {
-        let mut buf = [0u8; 4];
-        let cb = c.encode_utf8(&mut buf);
-        if end + cb.len() > 80 {
+    let mut header = b"modeler STL: ".to_vec();
+    for ch in name.chars() {
+        if header.len() + ch.len_utf8() > 80 {
             break;
         }
-        header[end..end + cb.len()].copy_from_slice(cb.as_bytes());
-        end += cb.len();
+        header.extend_from_slice(ch.encode_utf8(&mut [0u8; 4]).as_bytes());
     }
-    let mut bytes = Vec::with_capacity(84 + 50 * triangles.len());
-    bytes.extend_from_slice(&header);
+    while header.len() < 80 {
+        header.push(0);
+    }
+
+    let mut bytes = header;
     bytes.extend_from_slice(&(triangles.len() as u32).to_le_bytes());
-    for t in triangles {
-        let normal = (t[1] - t[0]).cross(t[2] - t[0]);
-        let normal = if normal.length_squared() == 0.0 {
-            DVec3::ZERO
-        } else {
-            normal / normal.length()
-        };
-        let mut push = |v: f64| {
-            bytes.extend_from_slice(&(v as f32).to_le_bytes());
-        };
-        for v in [normal.x, normal.y, normal.z] {
-            push(v);
+    for [a, b, c] in triangles {
+        for component in triangle_normal(*a, *b, *c) {
+            bytes.extend_from_slice(&component.to_le_bytes());
         }
-        for c in t.iter() {
-            for v in [c.x, c.y, c.z] {
-                push(v);
-            }
+        for p in [*a, *b, *c] {
+            bytes.extend_from_slice(&(p.x as f32).to_le_bytes());
+            bytes.extend_from_slice(&(p.y as f32).to_le_bytes());
+            bytes.extend_from_slice(&(p.z as f32).to_le_bytes());
         }
         bytes.extend_from_slice(&0u16.to_le_bytes());
     }
     bytes
 }
 
+/// `(b - a) x (c - a)` normalized, or zero for a degenerate triangle, as f32.
+fn triangle_normal(a: DVec3, b: DVec3, c: DVec3) -> [f32; 3] {
+    let cross = (b - a).cross(c - a);
+    let length = cross.length();
+    if length <= 0.0 {
+        return [0.0, 0.0, 0.0];
+    }
+    let n = cross / length;
+    [n.x as f32, n.y as f32, n.z as f32]
+}
+
 /// A file stem made safe for any file system: letters, digits, `-`, `_` and spaces are
 /// kept, everything else becomes `_`; leading and trailing spaces are trimmed; at most
 /// 100 characters; an empty result is `"part"`.
 pub fn sanitize_name(name: &str) -> String {
-    let kept: String = name
+    let mut out: String = name
         .chars()
         .map(|c| {
             if c.is_alphanumeric() || c == '-' || c == '_' || c == ' ' {
@@ -86,18 +86,13 @@ pub fn sanitize_name(name: &str) -> String {
                 '_'
             }
         })
-        .collect();
-    let kept = kept
-        .trim()
-        .chars()
         .take(100)
-        .collect::<String>()
-        .trim()
-        .to_owned();
-    if kept.is_empty() {
-        "part".to_owned()
+        .collect();
+    out = out.trim_matches(' ').to_string();
+    if out.is_empty() {
+        "part".to_string()
     } else {
-        kept
+        out
     }
 }
 
@@ -106,25 +101,18 @@ pub fn sanitize_name(name: &str) -> String {
 /// `-2`, `-3`, ... and the result never repeats a stem. Returns the paths in object order.
 /// Objects without triangles are skipped. `NothingToWrite` (and no file) when none has any.
 pub fn write_separate(objects: &[PrintObject], dir: &Path) -> Result<Vec<PathBuf>, StlWriteError> {
-    let any = objects.iter().any(|o| !o.triangles.is_empty());
-    if !any {
+    if !objects.iter().any(|o| !o.triangles.is_empty()) {
         return Err(StlWriteError::NothingToWrite);
     }
     std::fs::create_dir_all(dir).map_err(|e| StlWriteError::Io(e.to_string()))?;
-    let mut used: Vec<String> = Vec::new();
+
+    let mut used = Vec::new();
     let mut paths = Vec::new();
     for object in objects {
         if object.triangles.is_empty() {
             continue;
         }
-        let base = sanitize_name(&object.name);
-        let mut stem = base.clone();
-        let mut n = 2;
-        while used.iter().any(|u| u.eq_ignore_ascii_case(&stem)) {
-            stem = format!("{base}-{n}");
-            n += 1;
-        }
-        used.push(stem.clone());
+        let stem = unique_stem(sanitize_name(&object.name), &mut used);
         let path = dir.join(format!("{stem}.stl"));
         std::fs::write(&path, encode(&object.name, &object.triangles))
             .map_err(|e| StlWriteError::Io(e.to_string()))?;
@@ -133,18 +121,33 @@ pub fn write_separate(objects: &[PrintObject], dir: &Path) -> Result<Vec<PathBuf
     Ok(paths)
 }
 
+/// Appends `-2`, `-3`, ... until the stem is taken by no earlier object, ignoring case.
+fn unique_stem(base: String, used: &mut Vec<String>) -> String {
+    if !used.iter().any(|u| u.eq_ignore_ascii_case(&base)) {
+        used.push(base.clone());
+        return base;
+    }
+    let mut n = 2;
+    loop {
+        let candidate = format!("{base}-{n}");
+        if !used.iter().any(|u| u.eq_ignore_ascii_case(&candidate)) {
+            used.push(candidate.clone());
+            return candidate;
+        }
+        n += 1;
+    }
+}
+
 /// All objects' triangles in one binary STL at `path`, in object order; the header names
 /// the first object that has triangles. `NothingToWrite` (and no file) when none has any.
 pub fn write_combined(objects: &[PrintObject], path: &Path) -> Result<(), StlWriteError> {
-    let first = objects.iter().find(|o| !o.triangles.is_empty());
-    let Some(first) = first else {
-        return Err(StlWriteError::NothingToWrite);
+    let name = match objects.iter().find(|o| !o.triangles.is_empty()) {
+        Some(o) => o.name.clone(),
+        None => return Err(StlWriteError::NothingToWrite),
     };
-    let mut triangles = Vec::new();
-    for object in objects {
-        triangles.extend_from_slice(&object.triangles);
-    }
-    std::fs::write(path, encode(&first.name, &triangles))
-        .map_err(|e| StlWriteError::Io(e.to_string()))?;
-    Ok(())
+    let triangles: Vec<Triangle> = objects
+        .iter()
+        .flat_map(|o| o.triangles.iter().copied())
+        .collect();
+    std::fs::write(path, encode(&name, &triangles)).map_err(|e| StlWriteError::Io(e.to_string()))
 }

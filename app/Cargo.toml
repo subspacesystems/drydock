@@ -19,6 +19,8 @@ modeler-mesh = { path = "crates/modeler-mesh" }
 glam = "0.34"
 roxmltree = "0.21"
 miniz_oxide = "0.9"
+# Glyph outlines (MIT OR Apache-2.0); already in the lock through egui's font stack.
+skrifa = { version = "0.44", default-features = false, features = ["std"] }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 # No "default_fonts": egui's bundled fonts are OFL/Ubuntu-licensed; the app ships Roboto.
 eframe = { version = "0.36", default-features = false, features = ["wgpu", "wayland", "x11"] }

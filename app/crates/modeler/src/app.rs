@@ -11,6 +11,7 @@ use eframe::egui;
 use egui::{Color32, Event, MouseWheelUnit, PointerButton, Pos2, Rect, Sense, pos2};
 use glam::{DMat4, DVec2, DVec3};
 use modeler::chrome::{self, MenuState};
+use modeler::clearance_offset::selected_instances;
 use modeler::components_panel::{
     ComponentAction, ComponentsPanel, components_panel, read_component_source,
 };
@@ -30,6 +31,9 @@ use modeler::look;
 use modeler::materials_panel::{MaterialAction, MaterialsPanel, materials_panel};
 use modeler::mesh_import::{self, MeshUnit, UnitsOutcome};
 use modeler::overlay::{self, Primitive};
+use modeler::print_setup::{
+    self, FitReport, PrintSettings, PrintSetupEvent, PrintSetupTexts, PrintSetupView,
+};
 use modeler::recent::{RecentFiles, recent_file};
 use modeler::shading;
 use modeler::shadows_panel::{self, ShadowsEvent};
@@ -103,6 +107,16 @@ pub struct App {
     about_open: bool,
     /// The View > Model Info window is showing.
     model_info_open: bool,
+    /// The Tools > Print Setup window is showing.
+    print_setup_open: bool,
+    /// The print bed, outline and overhang angle kept between runs.
+    print_settings: PrintSettings,
+    /// Where `print_settings` is kept.
+    print_setup_file: Option<PathBuf>,
+    /// The Print Setup boxes' text.
+    print_setup_texts: PrintSetupTexts,
+    /// The last fits-the-bed result, with the selection and undo state it belongs to.
+    print_report: Option<(FitReport, Vec<Entity>, u64)>,
     /// The Shadows and Geolocation windows.
     sun_windows: SunWindows,
     /// The Make Component / Make Group name prompt is showing.
@@ -214,10 +228,22 @@ impl App {
             .as_deref()
             .map(DockLayout::load)
             .unwrap_or_default();
+        let print_setup_file = print_setup::settings_file(|name| std::env::var_os(name));
+        let print_settings = print_setup_file
+            .as_deref()
+            .map(PrintSettings::load)
+            .unwrap_or_default();
+        let print_setup_texts =
+            PrintSetupTexts::for_view(&print_settings.bed, print_settings.overhang_degrees);
         let mut app = App {
             view: ViewState::new(),
             about_open: false,
             model_info_open: false,
+            print_setup_open: false,
+            print_settings,
+            print_setup_file,
+            print_setup_texts,
+            print_report: None,
             sun_windows: SunWindows::new(),
             name_prompt: None,
             materials: MaterialsPanel::default(),
@@ -264,6 +290,9 @@ impl App {
             ctrl_down: false,
             ctrl_lone: false,
         };
+        app.view.bed = app.print_settings.bed;
+        app.view.bed_visible = app.print_settings.show_bed;
+        app.view.overhang_degrees = app.print_settings.overhang_degrees;
         if app.gpu.is_none() {
             app.error = Some("No wgpu render state: cannot draw the viewport".to_owned());
         }
@@ -333,6 +362,7 @@ impl App {
         let loaded_path = (!document.untitled).then(|| document.path.clone());
         self.fit = None;
         self.fit_note = None;
+        self.print_report = None;
         self.view
             .set_bounds(scene_bounds(&document.scene), self.viewport_pt);
         self.editor = Some(Editor::new());
@@ -497,7 +527,11 @@ impl App {
         let title = document.title();
         self.fit = None;
         self.fit_note = None;
+        self.print_report = None;
         self.view = ViewState::new();
+        self.view.bed = self.print_settings.bed;
+        self.view.bed_visible = self.print_settings.show_bed;
+        self.view.overhang_degrees = self.print_settings.overhang_degrees;
         self.editor = Some(Editor::new());
         self.materials = MaterialsPanel::default();
         self.texture = TextureForm::default();
@@ -895,6 +929,135 @@ impl App {
         }
     }
 
+    fn save_print_settings(&self) {
+        if let Some(file) = &self.print_setup_file {
+            let _ = self.print_settings.save(file);
+        }
+    }
+
+    fn current_print_report(&self) -> Option<&FitReport> {
+        let (report, selection, undo_state) = self.print_report.as_ref()?;
+        let current = self
+            .editor
+            .as_ref()
+            .map_or(&[][..], |editor| editor.selection());
+        (current == selection.as_slice() && self.undo_state() == *undo_state).then_some(report)
+    }
+
+    fn sync_print_report(&mut self) {
+        if self.current_print_report().is_none() {
+            self.print_report = None;
+        }
+    }
+
+    fn run_print_fit(&self) -> Option<FitReport> {
+        let editor = self.editor.as_ref()?;
+        let model = self.model.as_ref()?.kernel.as_ref()?;
+        let instances: Option<Vec<_>> = if editor.path().is_root() {
+            let ids: Vec<_> = editor
+                .selection()
+                .iter()
+                .filter_map(|entity| match *entity {
+                    Entity::Instance(id) => Some(id),
+                    _ => None,
+                })
+                .collect();
+            (!ids.is_empty()).then_some(ids)
+        } else {
+            None
+        };
+        Some(print_setup::fit_report(
+            model,
+            instances.as_deref(),
+            &self.view.bed,
+        ))
+    }
+
+    fn print_setup_window(&mut self, ctx: &egui::Context, frame: &eframe::Frame) {
+        if !self.print_setup_open {
+            return;
+        }
+        self.sync_print_report();
+        let mut texts = std::mem::take(&mut self.print_setup_texts);
+        let mut open = self.print_setup_open;
+        let mut event = PrintSetupEvent::None;
+        {
+            let view = PrintSetupView {
+                bed: self.view.bed,
+                show_bed: self.view.bed_visible,
+                overhang_degrees: self.view.overhang_degrees,
+                can_drop: self.editor.as_ref().is_some_and(|editor| {
+                    editor
+                        .selection()
+                        .iter()
+                        .any(|entity| matches!(entity, Entity::Instance(_)))
+                }),
+                report: self.current_print_report(),
+            };
+            egui::Window::new("Print Setup")
+                .id(egui::Id::new("print_setup"))
+                .open(&mut open)
+                .show(ctx, |ui| {
+                    event = print_setup::print_setup_ui(ui, &mut texts, &view);
+                });
+        }
+        self.print_setup_texts = texts;
+        self.print_setup_open = open;
+        match event {
+            PrintSetupEvent::None => {}
+            PrintSetupEvent::SetBed(bed) => {
+                self.view.bed = bed;
+                self.print_settings.bed = bed;
+                self.print_setup_texts =
+                    PrintSetupTexts::for_view(&self.view.bed, self.view.overhang_degrees);
+                self.save_print_settings();
+                self.print_report = None;
+                self.dirty = true;
+            }
+            PrintSetupEvent::ShowBed(on) => {
+                self.view.bed_visible = on;
+                self.print_settings.show_bed = on;
+                self.save_print_settings();
+                self.dirty = true;
+            }
+            PrintSetupEvent::SetOverhang(degrees) => {
+                let effect = self.view.set_overhang_degrees(degrees);
+                self.print_settings.overhang_degrees = self.view.overhang_degrees;
+                self.save_print_settings();
+                if effect == Effect::ReuploadScene {
+                    self.show_current_scene(frame);
+                    self.dirty = true;
+                }
+            }
+            PrintSetupEvent::CheckFit => {
+                if let Some(report) = self.run_print_fit() {
+                    let selection = self
+                        .editor
+                        .as_ref()
+                        .map(|editor| editor.selection().to_vec())
+                        .unwrap_or_default();
+                    let undo_state = self.undo_state();
+                    self.print_report = Some((report, selection, undo_state));
+                }
+            }
+            PrintSetupEvent::DropToBed => {
+                let changed =
+                    if let (Some(editor), Some(document)) = (&mut self.editor, &mut self.model) {
+                        match document.kernel.as_mut() {
+                            Some(model) => editor.drop_to_bed(model),
+                            None => false,
+                        }
+                    } else {
+                        false
+                    };
+                if changed {
+                    self.refresh_document(ctx, frame);
+                }
+                self.print_report = None;
+            }
+        }
+    }
+
     fn apply(&mut self, action: input::Action, ctx: &egui::Context, frame: &eframe::Frame) {
         let selects_tool = matches!(action, input::Action::SelectTool(_));
         let effect = self.view.apply(action, self.viewport_pt);
@@ -948,10 +1111,27 @@ impl App {
                 self.show_editor_path(frame);
             }
             Effect::FitCheck | Effect::RecomputeFit => self.fit_effect(effect, frame),
-            // The Print Setup window is wired by `m7-print-setup`.
-            Effect::PrintSetup => {}
-            // Wired by `m7-clearance-offset-ui`.
-            Effect::OffsetByClearance(_) => {}
+            Effect::PrintSetup => self.print_setup_open = true,
+            Effect::OffsetByClearance(direction) => {
+                let mut note = None;
+                let mut changed = 0;
+                if let (Some(editor), Some(document)) = (&mut self.editor, &mut self.model)
+                    && let Some(model) = document.kernel.as_mut()
+                    && let Ok(outcome) =
+                        editor.offset_instances(model, direction, self.view.clearance_m)
+                {
+                    changed = outcome.changed;
+                    note = Some((
+                        outcome.message(),
+                        editor.selection().to_vec(),
+                        editor.undo_stack().state(),
+                    ));
+                }
+                self.repair_note = note;
+                if changed > 0 {
+                    self.refresh_document(ctx, frame);
+                }
+            }
             Effect::ReuploadScene => {
                 self.show_current_scene(frame);
                 self.dirty = true;
@@ -1476,7 +1656,7 @@ impl App {
 
     /// Make the offscreen target match the panel, re-render if needed, and paint it.
     fn paint_viewport(&mut self, ui: &egui::Ui, frame: &eframe::Frame, rect: Rect) {
-        let extra = if self.view.axes {
+        let mut extra = if self.view.axes {
             overlay::axis_lines(
                 self.open_transform(),
                 self.view.camera.distance * 100.0,
@@ -1485,6 +1665,12 @@ impl App {
         } else {
             Vec::new()
         };
+        if self.view.bed_visible {
+            extra.extend(print_setup::bed_outline(
+                &self.view.bed,
+                ui.ctx().pixels_per_point(),
+            ));
+        }
         let (Some(gpu), Some(state)) = (&mut self.gpu, frame.wgpu_render_state()) else {
             return;
         };
@@ -1763,7 +1949,10 @@ impl App {
                 .as_ref()
                 .and_then(|editor| selected_pair(editor.selection()))
                 .is_some(),
-            can_offset: false,
+            can_offset: self
+                .editor
+                .as_ref()
+                .is_some_and(|editor| !selected_instances(editor.selection()).is_empty()),
             can_export: false,
             shadows: self.dock.is_open(PanelId::Shadows),
             entity_info: self.dock.is_open(PanelId::EntityInfo),
@@ -1828,6 +2017,10 @@ impl App {
             {
                 ui.separator();
                 ui.label(message);
+            }
+            if let Some(report) = self.current_print_report() {
+                ui.separator();
+                ui.label(&report.message);
             }
             if let Some(saved) = &self.saved {
                 ui.separator();
@@ -2548,6 +2741,7 @@ impl eframe::App for App {
             }
         }
         self.poll_loading(&ctx, frame);
+        self.sync_print_report();
 
         let mut menu_action = None;
         let mut toolbars_changed = false;
@@ -2652,6 +2846,7 @@ impl eframe::App for App {
             self.paint_viewport(ui, frame, rect);
             self.paint_overlays(ui, rect);
         });
+        self.print_setup_window(&ctx, frame);
         chrome::about_window(&ctx, &mut self.about_open);
         if self.customize_open {
             let mut open = true;

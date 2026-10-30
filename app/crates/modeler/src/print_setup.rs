@@ -6,7 +6,9 @@
 //! No window needed except `print_setup_ui`. Behaviour: `docs/specs/m7-print-setup.md`.
 
 use eframe::egui;
+use glam::DVec3;
 use modeler_kernel::model::{InstanceId, Model};
+use modeler_mesh::print_mesh::{self, PrintOptions, PrintScope};
 use modeler_render::ExtraLine;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -85,30 +87,54 @@ pub const BED_PRESETS: [BedPreset; 5] = [
 
 /// `bed` with the sides of `preset`; the height limit is kept.
 pub fn with_preset(bed: Bed, preset: &BedPreset) -> Bed {
-    let _ = (bed, preset);
-    unimplemented!("m7-print-setup")
+    Bed {
+        x_mm: preset.x_mm,
+        y_mm: preset.y_mm,
+        z_mm: bed.z_mm,
+    }
 }
 
 /// A bed side from a text field: `text` trimmed, a plain decimal number in millimeters (`.`
 /// as the separator) with an optional `mm` suffix, within `MIN_BED_MM..=MAX_BED_MM`; else
 /// `None`.
 pub fn parse_side_mm(text: &str) -> Option<f64> {
-    let _ = text;
-    unimplemented!("m7-print-setup")
+    let text = text.trim();
+    let number = text.strip_suffix("mm").map(str::trim_end).unwrap_or(text);
+    if number.is_empty()
+        || number.starts_with('+')
+        || number.starts_with('-')
+        || number.contains('e')
+        || number.contains('E')
+        || number.chars().filter(|&c| c == '.').count() > 1
+        || !number.chars().all(|c| c.is_ascii_digit() || c == '.')
+        || !number.chars().any(|c| c.is_ascii_digit())
+    {
+        return None;
+    }
+    let mm = number.parse::<f64>().ok()?;
+    (MIN_BED_MM..=MAX_BED_MM).contains(&mm).then_some(mm)
 }
 
 /// The height field: blank (after trimming) is `Some(None)`, no limit; text that
 /// `parse_side_mm` accepts is `Some(Some(mm))`; anything else is `None`.
 pub fn parse_height_mm(text: &str) -> Option<Option<f64>> {
-    let _ = text;
-    unimplemented!("m7-print-setup")
+    if text.trim().is_empty() {
+        Some(None)
+    } else {
+        parse_side_mm(text).map(Some)
+    }
 }
 
 /// `mm` for a field or message: up to 2 decimals, no trailing zeros or point
 /// (`220.0` -> `"220"`, `0.25` -> `"0.25"`, `12.346` -> `"12.35"`).
 pub fn format_mm(mm: f64) -> String {
-    let _ = mm;
-    unimplemented!("m7-print-setup")
+    let text = format!("{mm:.2}");
+    let text = text.trim_end_matches('0').trim_end_matches('.');
+    if text == "-0" {
+        "0".to_string()
+    } else {
+        text.to_string()
+    }
 }
 
 /// The outline of `bed` as GPU lines in world meters: the four sides of the rectangle
@@ -117,8 +143,29 @@ pub fn format_mm(mm: f64) -> String {
 /// `BED_WIDTH_PT * pixels_per_point` (a non-finite or non-positive `pixels_per_point` counts
 /// as 1). The height limit is not drawn.
 pub fn bed_outline(bed: &Bed, pixels_per_point: f32) -> Vec<ExtraLine> {
-    let _ = (bed, pixels_per_point);
-    unimplemented!("m7-print-setup")
+    let ppp = if pixels_per_point.is_finite() && pixels_per_point > 0.0 {
+        pixels_per_point
+    } else {
+        1.0
+    };
+    let width_px = BED_WIDTH_PT * ppp;
+    let x = bed.x_mm / 2000.0;
+    let y = bed.y_mm / 2000.0;
+    let corners = [
+        DVec3::new(-x, -y, 0.0),
+        DVec3::new(x, -y, 0.0),
+        DVec3::new(x, y, 0.0),
+        DVec3::new(-x, y, 0.0),
+    ];
+    (0..4)
+        .map(|i| ExtraLine {
+            a: corners[i],
+            b: corners[(i + 1) % 4],
+            color: BED_COLOR,
+            width_px,
+            dash_px: None,
+        })
+        .collect()
 }
 
 /// The result of the fits-the-bed check.
@@ -151,8 +198,65 @@ pub struct FitReport {
 ///
 /// When `skipped > 0` the message ends with `" ({n} not solid, left out)"`.
 pub fn fit_report(model: &Model, instances: Option<&[InstanceId]>, bed: &Bed) -> FitReport {
-    let _ = (model, instances, bed);
-    unimplemented!("m7-print-setup")
+    let scope = instances.map_or(PrintScope::Model, PrintScope::Instances);
+    let mesh = print_mesh::print_mesh(model, scope, &PrintOptions::default());
+    let skipped = mesh.skipped.len();
+    let mut lo = DVec3::splat(f64::INFINITY);
+    let mut hi = DVec3::splat(f64::NEG_INFINITY);
+    for object in &mesh.objects {
+        for triangle in &object.triangles {
+            for &corner in triangle {
+                lo = lo.min(corner);
+                hi = hi.max(corner);
+            }
+        }
+    }
+    let suffix = if skipped > 0 {
+        format!(" ({skipped} not solid, left out)")
+    } else {
+        String::new()
+    };
+    if !lo.is_finite() || !hi.is_finite() {
+        return FitReport {
+            fits: false,
+            size_mm: None,
+            message: format!("Nothing to check: no solid groups or components{suffix}"),
+            skipped,
+        };
+    }
+    let size = hi - lo;
+    let size_mm = [size.x, size.y, size.z];
+    let mut bed_text = format!("{} x {}", format_mm(bed.x_mm), format_mm(bed.y_mm));
+    if let Some(z) = bed.z_mm {
+        bed_text.push_str(&format!(" x {}", format_mm(z)));
+    }
+    let size_text = size_mm.map(format_mm).join(" x ");
+    let mut over = Vec::new();
+    let limits = [Some(bed.x_mm), Some(bed.y_mm), bed.z_mm];
+    let names = ["X", "Y", "Z"];
+    for (axis, limit) in limits.into_iter().enumerate() {
+        if let Some(limit) = limit {
+            let amount = size_mm[axis] - limit;
+            if amount > 1e-6 {
+                over.push(format!("{} over by {} mm", names[axis], format_mm(amount)));
+            }
+        }
+    }
+    let fits = over.is_empty();
+    let message = if fits {
+        format!("Fits the bed: {size_text} mm on {bed_text} mm{suffix}")
+    } else {
+        format!(
+            "Too big for the bed: {size_text} mm on {bed_text} mm ({}){suffix}",
+            over.join(", ")
+        )
+    };
+    FitReport {
+        fits,
+        size_mm: Some(size_mm),
+        message,
+        skipped,
+    }
 }
 
 /// What is kept between runs, in the file `print-setup` of the config folder.
@@ -181,28 +285,93 @@ impl PrintSettings {
     /// MAX_OVERHANG_DEGREES`. A line that is unknown or has a bad value is ignored (that
     /// setting keeps its default); a setting repeated takes its last good line.
     pub fn parse(text: &str) -> PrintSettings {
-        let _ = text;
-        unimplemented!("m7-print-setup")
+        let mut settings = PrintSettings::default();
+        for line in text.lines() {
+            let line = line.trim();
+            if line.is_empty() {
+                continue;
+            }
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            match parts.as_slice() {
+                ["bed", x, y] => {
+                    if let (Some(x), Some(y)) = (parse_side_mm(x), parse_side_mm(y)) {
+                        settings.bed = Bed {
+                            x_mm: x,
+                            y_mm: y,
+                            z_mm: None,
+                        };
+                    }
+                }
+                ["bed", x, y, z] => {
+                    if let (Some(x), Some(y), Some(z)) =
+                        (parse_side_mm(x), parse_side_mm(y), parse_side_mm(z))
+                    {
+                        settings.bed = Bed {
+                            x_mm: x,
+                            y_mm: y,
+                            z_mm: Some(z),
+                        };
+                    }
+                }
+                ["show-bed", value] => match *value {
+                    "yes" => settings.show_bed = true,
+                    "no" => settings.show_bed = false,
+                    _ => {}
+                },
+                ["overhang", value] => {
+                    if let Ok(degrees) = value.parse::<f64>()
+                        && (MIN_OVERHANG_DEGREES..=MAX_OVERHANG_DEGREES).contains(&degrees)
+                    {
+                        settings.overhang_degrees = degrees;
+                    }
+                }
+                _ => {}
+            }
+        }
+        settings
     }
 
     /// The file's text: `bed` (with the height only when set), `show-bed` and `overhang`
     /// lines in that order, numbers through `format_mm`, each line ending in `\n`.
     /// `parse(to_text())` gives the settings back (up to 2 decimals).
     pub fn to_text(&self) -> String {
-        unimplemented!("m7-print-setup")
+        let mut text = format!(
+            "bed {} {}",
+            format_mm(self.bed.x_mm),
+            format_mm(self.bed.y_mm)
+        );
+        if let Some(z) = self.bed.z_mm {
+            text.push_str(&format!(" {}", format_mm(z)));
+        }
+        text.push('\n');
+        text.push_str(if self.show_bed {
+            "show-bed yes\n"
+        } else {
+            "show-bed no\n"
+        });
+        text.push_str(&format!("overhang {}\n", format_mm(self.overhang_degrees)));
+        text
     }
 
     /// Read `file`; a missing or unreadable file gives the defaults.
     pub fn load(file: &Path) -> PrintSettings {
-        let _ = file;
-        unimplemented!("m7-print-setup")
+        std::fs::read_to_string(file)
+            .map(|text| PrintSettings::parse(&text))
+            .unwrap_or_default()
     }
 
     /// Write `file` (creating its folder), through a temporary file and a rename as
     /// `RecentFiles::save` does.
     pub fn save(&self, file: &Path) -> std::io::Result<()> {
-        let _ = file;
-        unimplemented!("m7-print-setup")
+        let folder = file.parent().unwrap_or_else(|| Path::new("."));
+        std::fs::create_dir_all(folder)?;
+        let name = file
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "print-setup".to_owned());
+        let temp = folder.join(format!(".{name}.tmp"));
+        std::fs::write(&temp, self.to_text())?;
+        std::fs::rename(&temp, file)
     }
 }
 
@@ -239,6 +408,39 @@ pub enum PrintSetupEvent {
     DropToBed,
 }
 
+fn field<T: Copy>(
+    ui: &mut egui::Ui,
+    label: &str,
+    unit: &str,
+    text: &mut String,
+    current: &str,
+    parse: impl Fn(&str) -> Option<T>,
+    format: impl Fn(T) -> String,
+) -> Option<T> {
+    let edited_id = ui.make_persistent_id(("print_setup_field", label));
+    let mut edited = ui
+        .data(|data| data.get_temp::<bool>(edited_id))
+        .unwrap_or(false);
+    let mut committed = None;
+    ui.horizontal(|ui| {
+        ui.label(label);
+        let response = ui.add(egui::TextEdit::singleline(text).desired_width(48.0));
+        ui.label(unit);
+        edited |= response.changed();
+        if edited && response.lost_focus() {
+            edited = false;
+            if let Some(value) = parse(text) {
+                *text = format(value);
+                committed = Some(value);
+            } else {
+                *text = current.to_string();
+            }
+        }
+    });
+    ui.data_mut(|data| data.insert_temp(edited_id, edited));
+    committed
+}
+
 /// Draw the window's contents in `ui` and say what happened. Layout, top to bottom, all
 /// labels exact (tests find them):
 /// - heading `"Printer bed"`, then one button per `BED_PRESETS` entry labelled by its `name`;
@@ -260,8 +462,91 @@ pub fn print_setup_ui(
     texts: &mut PrintSetupTexts,
     view: &PrintSetupView,
 ) -> PrintSetupEvent {
-    let _ = (ui, texts, view);
-    unimplemented!("m7-print-setup")
+    let mut event = PrintSetupEvent::None;
+    ui.heading("Printer bed");
+    for preset in &BED_PRESETS {
+        if ui.button(preset.name).clicked() {
+            event = PrintSetupEvent::SetBed(with_preset(view.bed, preset));
+        }
+    }
+    let mut bed = view.bed;
+    let mut bed_changed = false;
+    let x_current = format_mm(view.bed.x_mm);
+    if let Some(x) = field(
+        ui,
+        "Bed X",
+        "mm",
+        &mut texts.x,
+        &x_current,
+        parse_side_mm,
+        format_mm,
+    ) {
+        bed.x_mm = x;
+        bed_changed = true;
+    }
+    let y_current = format_mm(view.bed.y_mm);
+    if let Some(y) = field(
+        ui,
+        "Bed Y",
+        "mm",
+        &mut texts.y,
+        &y_current,
+        parse_side_mm,
+        format_mm,
+    ) {
+        bed.y_mm = y;
+        bed_changed = true;
+    }
+    let z_current = view.bed.z_mm.map(format_mm).unwrap_or_default();
+    if let Some(z) = field(
+        ui,
+        "Bed Z",
+        "mm",
+        &mut texts.z,
+        &z_current,
+        parse_height_mm,
+        |z| z.map(format_mm).unwrap_or_default(),
+    ) {
+        bed.z_mm = z;
+        bed_changed = true;
+    }
+    if bed_changed {
+        event = PrintSetupEvent::SetBed(bed);
+    }
+    let mut show_bed = view.show_bed;
+    if ui.checkbox(&mut show_bed, "Show bed outline").changed() {
+        event = PrintSetupEvent::ShowBed(show_bed);
+    }
+    if ui.button("Check fit").clicked() {
+        event = PrintSetupEvent::CheckFit;
+    }
+    if let Some(report) = view.report {
+        ui.label(&report.message);
+    }
+    if ui
+        .add_enabled(view.can_drop, egui::Button::new("Drop to Bed"))
+        .clicked()
+    {
+        event = PrintSetupEvent::DropToBed;
+    }
+    let overhang_current = format_mm(view.overhang_degrees);
+    if let Some(degrees) = field(
+        ui,
+        "Overhang angle",
+        "deg",
+        &mut texts.overhang,
+        &overhang_current,
+        |text| {
+            text.trim()
+                .parse::<f64>()
+                .ok()
+                .filter(|d| (MIN_OVERHANG_DEGREES..=MAX_OVERHANG_DEGREES).contains(d))
+        },
+        format_mm,
+    ) {
+        event = PrintSetupEvent::SetOverhang(degrees);
+    }
+    event
 }
 
 /// The strings in the Print Setup boxes.
@@ -276,7 +561,11 @@ pub struct PrintSetupTexts {
 impl PrintSetupTexts {
     /// The boxes' texts for `bed` and `overhang_degrees` (`format_mm`; Z blank when unset).
     pub fn for_view(bed: &Bed, overhang_degrees: f64) -> PrintSetupTexts {
-        let _ = (bed, overhang_degrees);
-        unimplemented!("m7-print-setup")
+        PrintSetupTexts {
+            x: format_mm(bed.x_mm),
+            y: format_mm(bed.y_mm),
+            z: bed.z_mm.map(format_mm).unwrap_or_default(),
+            overhang: format_mm(overhang_degrees),
+        }
     }
 }

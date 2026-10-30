@@ -22,6 +22,7 @@ pub mod overhang;
 mod reader;
 mod scene;
 pub mod solid_marks;
+pub mod text;
 
 pub use clearance::{
     DEFAULT_CLEARANCE_M, FIT_COLOR, FitReport, MATCH_TOLERANCE_M, Triangle, close_triangles,
@@ -32,6 +33,7 @@ pub use kernel::{ConvertError, to_kernel};
 pub use overhang::{DEFAULT_OVERHANG_DEGREES, OVERHANG_COLOR, is_overhang, tint_overhangs};
 pub use scene::{RestView, kernel_scene, kernel_scene_editing};
 pub use solid_marks::{MARK_TOLERANCE_M, PROBLEM_COLOR, SolidMarks, solid_marks, tint_problems};
+pub use text::{TextError, TextLoop, TextOutline, text_outline};
 
 /// Why an import failed. Messages name the element or file involved.
 #[derive(Debug)]
