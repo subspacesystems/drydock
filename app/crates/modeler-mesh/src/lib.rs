@@ -17,7 +17,10 @@ use modeler_kernel::model as km;
 
 pub mod print_mesh;
 pub mod stl;
+pub mod stl_write;
 pub mod threemf;
+
+pub use stl_write::{StlWriteError, write_combined, write_separate};
 
 /// One named triangle mesh, in the file's units. Each triangle lists its corners in the
 /// file's order (counter-clockwise seen from outside).
