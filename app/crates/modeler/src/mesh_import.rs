@@ -9,6 +9,8 @@ use std::path::Path;
 use eframe::egui;
 use modeler_kernel::model::Model;
 
+use crate::dialog::{DialogButton, button_row};
+
 /// A triangle-mesh file format the app reads.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MeshFormat {
@@ -108,14 +110,23 @@ pub fn units_choice(ui: &mut egui::Ui, file: &str, unit: &mut MeshUnit) -> Optio
     for candidate in MeshUnit::ALL {
         ui.radio_value(unit, candidate, candidate.label());
     }
-    let mut outcome = None;
-    ui.horizontal(|ui| {
-        if ui.button("OK").clicked() {
-            outcome = Some(UnitsOutcome::Ok);
-        }
-        if ui.button("Cancel").clicked() {
-            outcome = Some(UnitsOutcome::Cancel);
-        }
-    });
-    outcome
+    match button_row(
+        ui,
+        &[
+            DialogButton {
+                label: "OK",
+                default: true,
+                enabled: true,
+            },
+            DialogButton {
+                label: "Cancel",
+                default: false,
+                enabled: true,
+            },
+        ],
+    ) {
+        Some(0) => Some(UnitsOutcome::Ok),
+        Some(1) => Some(UnitsOutcome::Cancel),
+        _ => None,
+    }
 }
