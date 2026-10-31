@@ -12,6 +12,8 @@ use modeler_dae::TextOutline;
 use modeler_kernel::text3d::TextMode;
 use modeler_kernel::topology::{Context, FaceId};
 
+use crate::dialog::{DialogButton, button_row};
+
 /// Smallest length the size and height fields accept, in millimeters.
 pub const MIN_MM: f64 = 0.01;
 /// Largest length the size and height fields accept, in millimeters.
@@ -185,14 +187,23 @@ pub fn text_dialog(ui: &mut egui::Ui, dialog: &mut TextDialog) -> Option<TextOut
     ui.radio_value(&mut dialog.mode, TextMode::Emboss, "Emboss");
     ui.radio_value(&mut dialog.mode, TextMode::Engrave, "Engrave");
     let valid = dialog.options().is_some();
-    let mut outcome = None;
-    ui.horizontal(|ui| {
-        if ui.add_enabled(valid, egui::Button::new("OK")).clicked() {
-            outcome = Some(TextOutcome::Ok);
-        }
-        if ui.button("Cancel").clicked() {
-            outcome = Some(TextOutcome::Cancel);
-        }
-    });
-    outcome
+    match button_row(
+        ui,
+        &[
+            DialogButton {
+                label: "OK",
+                default: true,
+                enabled: valid,
+            },
+            DialogButton {
+                label: "Cancel",
+                default: false,
+                enabled: true,
+            },
+        ],
+    ) {
+        Some(0) => Some(TextOutcome::Ok),
+        Some(1) => Some(TextOutcome::Cancel),
+        _ => None,
+    }
 }

@@ -13,6 +13,7 @@ use modeler_kernel::select::Entity;
 use modeler_mesh::print_mesh::{self, PrintObject};
 use modeler_mesh::print_mesh::{PrintMesh, PrintOptions, PrintScope, Skipped};
 
+use crate::dialog::{DialogButton, button_row};
 use crate::mesh_import::MeshUnit;
 
 /// Smallest curve tolerance the field accepts, in millimeters.
@@ -365,17 +366,23 @@ pub fn export_dialog(
         ui.text_edit_singleline(&mut dialog.tolerance_text);
     });
 
-    let mut outcome = None;
-    ui.horizontal(|ui| {
-        if ui
-            .add_enabled(parsed.is_some(), egui::Button::new("OK"))
-            .clicked()
-        {
-            outcome = Some(ExportOutcome::Ok);
-        }
-        if ui.button("Cancel").clicked() {
-            outcome = Some(ExportOutcome::Cancel);
-        }
-    });
-    outcome
+    match button_row(
+        ui,
+        &[
+            DialogButton {
+                label: "OK",
+                default: true,
+                enabled: parsed.is_some(),
+            },
+            DialogButton {
+                label: "Cancel",
+                default: false,
+                enabled: true,
+            },
+        ],
+    ) {
+        Some(0) => Some(ExportOutcome::Ok),
+        Some(1) => Some(ExportOutcome::Cancel),
+        _ => None,
+    }
 }

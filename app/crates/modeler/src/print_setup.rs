@@ -387,8 +387,7 @@ pub const WINDOW_MARGIN: f32 = 16.0;
 /// left once the menu bar and toolbars are laid out: the viewport's rect) moved
 /// right and down by `WINDOW_MARGIN`, so the menus stay clickable.
 pub fn window_pos(available: egui::Rect) -> egui::Pos2 {
-    let _ = available;
-    unimplemented!("m7-fix-dialogs")
+    available.min + egui::vec2(WINDOW_MARGIN, WINDOW_MARGIN)
 }
 
 /// What the Print Setup window shows.
