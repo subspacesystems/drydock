@@ -380,6 +380,17 @@ pub fn settings_file(var: impl Fn(&str) -> Option<OsString>) -> Option<PathBuf> 
     crate::recent::config_dir(var).map(|dir| dir.join("print-setup"))
 }
 
+/// Gap in points between the free area's top-left corner and the Print Setup window.
+pub const WINDOW_MARGIN: f32 = 16.0;
+
+/// Where the Print Setup window first opens: the top-left corner of `available` (the area
+/// left once the menu bar and toolbars are laid out: the viewport's rect) moved
+/// right and down by `WINDOW_MARGIN`, so the menus stay clickable.
+pub fn window_pos(available: egui::Rect) -> egui::Pos2 {
+    let _ = available;
+    unimplemented!("m7-fix-dialogs")
+}
+
 /// What the Print Setup window shows.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PrintSetupView<'a> {
