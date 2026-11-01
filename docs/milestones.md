@@ -258,6 +258,14 @@ Moved up by Tyrel (2026-10-28) so beta testers can try the app after 3D printing
 
 - Windows build in CI (cross-compile or a Windows runner), release artifacts.
 - A simple installer that removes older installed versions (upgrade in place) and an uninstaller. Auto-update comes later (Future).
+- The product's public name is Drydock (Subspace Drydock, by Subspace Systems), Tyrel (2026-11-01); `modeler` stays the codename. The installer and packaging use the new name.
+
+| Task | What | Needs |
+| --- | --- | --- |
+| `m8-rename-text` | User-visible name becomes Drydock: window title, About box (Subspace Drydock, by Subspace Systems), version line, menus, status and error messages, STL header, README; a test that no shown text says "modeler" | |
+| `m8-rename-binary` | The shipped executable is `drydock` (`drydock.exe`); crate names stay (tentative, waits on Tyrel's answer) | `m8-rename-text` |
+| `m8-rename-extension` | Native files saved as `.drydock`; `.modeler` files keep opening (tentative, waits on Tyrel's answer) | `m8-rename-text` |
+| `m8-rename-config` | Settings folder named for Drydock, old settings copied over once (tentative, waits on Tyrel's answer) | |
 
 ## M9: Follow Me and offset
 
