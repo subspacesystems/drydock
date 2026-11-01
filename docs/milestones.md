@@ -263,7 +263,7 @@ Moved up by Tyrel (2026-10-28) so beta testers can try the app after 3D printing
 | Task | What | Needs |
 | --- | --- | --- |
 | `m8-rename-text` | User-visible name becomes Drydock: window title, About box (Subspace Drydock, by Subspace Systems), version line, menus, status and error messages, STL header, README; a test that no shown text says "modeler" | |
-| `m8-rename-binary` | The shipped executable is `drydock` (`drydock.exe`); crate names stay (tentative, waits on Tyrel's answer) | `m8-rename-text` |
+| `m8-rename-crates` | Every crate becomes `drydock-*` (the app crate and its program `drydock` / `drydock.exe`), crate folders, Rust paths and the developer environment variables with them (Tyrel, 2026-11-01: "Rename everything") | `m8-rename-text` |
 | `m8-rename-extension` | Native files saved as `.drydock`; `.modeler` files keep opening (tentative, waits on Tyrel's answer) | `m8-rename-text` |
 | `m8-rename-config` | Settings folder named for Drydock, old settings copied over once (tentative, waits on Tyrel's answer) | |
 
