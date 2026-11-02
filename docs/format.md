@@ -1,9 +1,9 @@
 # Native model file, version 6
 
-The native file stores a whole `Model` (`modeler-kernel`, `src/model.rs`): materials,
+The native file stores a whole `Model` (`drydock-kernel`, `src/model.rs`): materials,
 definitions, and for the root and every definition its geometry (vertices, edges, faces,
 curves),
-face materials, instances and guides, plus the model's geolocation, shadow settings and length format. Code: `modeler_kernel::format`. Owner: orchestrator.
+face materials, instances and guides, plus the model's geolocation, shadow settings and length format. Code: `drydock_kernel::format`. Owner: orchestrator.
 
 Design goals: exact round trip (ids and every number come back bit for bit), readable and
 diffable, no dependencies, easy to extend. Lengths are meters.
@@ -40,15 +40,15 @@ Then, one per line:
 | `vertex <id> <x> <y> <z>` | a vertex |
 | `edge <id> <v1> <v2>` | an edge from `v1` to `v2` (order kept) |
 | `face <id> <loop> [\| <loop>]...` | the first loop is the outer loop, each one after a `\|` token is a hole; a loop is a list of edge uses `+<edge id>` (forward) or `-<edge id>` (reversed), possibly empty |
-| `curve <id> <cx> <cy> <cz> <nx> <ny> <nz> <xx> <xy> <xz> <radius> <start> <end> <v0> <v1> ...` | (version 6) an arc or circle kept as such (`modeler_kernel::curve::Curve`, `docs/specs/m7-curves.md`): center, unit plane normal, unit x axis, radius, start and end angles in radians, then the vertex ids of its chain in order (at least 3; a circle ends with its first id again) |
+| `curve <id> <cx> <cy> <cz> <nx> <ny> <nz> <xx> <xy> <xz> <radius> <start> <end> <v0> <v1> ...` | (version 6) an arc or circle kept as such (`drydock_kernel::curve::Curve`, `docs/specs/m7-curves.md`): center, unit plane normal, unit x axis, radius, start and end angles in radians, then the vertex ids of its chain in order (at least 3; a circle ends with its first id again) |
 | `paint <face id> <front> <back>` | the face's materials, each a material id or `-` |
 | `texmap <face id> <side> <u.x> <u.y> <u.z> <u.w> <v.x> <v.y> <v.z> <v.w>` | (version 3) the texture map of one side of the face in the current body; `side` is `front` or `back`; the face must exist |
 | `instance <id> <definition> <material> <m0> ... <m15> <name>` | a placed definition; `material` is an id or `-`; the 16 numbers are the transform in column-major order (`DMat4::to_cols_array`); `name` is a string |
 | `guide <id> line <px> <py> <pz> <dx> <dy> <dz>` | (version 2) an infinite guide line through `p` with unit direction `d` |
 | `guide <id> point <x> <y> <z>` | (version 2) a guide point |
-| `geolocation <latitude> <longitude> <north angle> <utc offset>` | (version 4) where the model is (`modeler_kernel::sun::Geolocation`): degrees north, degrees east, degrees from +Y to true north clockwise seen from above, hours ahead of UTC; at most once, anywhere before `end` |
+| `geolocation <latitude> <longitude> <north angle> <utc offset>` | (version 4) where the model is (`drydock_kernel::sun::Geolocation`): degrees north, degrees east, degrees from +Y to true north clockwise seen from above, hours ahead of UTC; at most once, anywhere before `end` |
 | `sun <year> <month> <day> <hour> <minute> <shadows> <sun shading> <light> <dark> <on ground>` | (version 4) the shadow settings (`ShadowSettings`): local date and time as integers, then `on`/`off`, `on`/`off`, two reals in 0..=1, `on`/`off`; at most once, anywhere before `end` |
-| `units decimal <unit> <decimals>` / `units architectural <denominator>` | (version 5) the model's length format (`modeler_kernel::units::LengthFormat`, `docs/specs/m6-units.md`): `<unit>` one of `mm cm m in ft`, `<decimals>` 0 to 6; or architectural with `<denominator>` one of 1 2 4 8 16 32 64; at most once, anywhere before `end` |
+| `units decimal <unit> <decimals>` / `units architectural <denominator>` | (version 5) the model's length format (`drydock_kernel::units::LengthFormat`, `docs/specs/m6-units.md`): `<unit>` one of `mm cm m in ft`, `<decimals>` 0 to 6; or architectural with `<denominator>` one of 1 2 4 8 16 32 64; at most once, anywhere before `end` |
 | `end` | last record; after it only blank lines may follow |
 
 Every record is applied as soon as it is read, so everything it names must already exist

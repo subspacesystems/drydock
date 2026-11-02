@@ -11,11 +11,11 @@ rust-version = "1.95"
 publish = false
 
 [workspace.dependencies]
-modeler-dae = { path = "crates/modeler-dae" }
-modeler-view = { path = "crates/modeler-view" }
-modeler-render = { path = "crates/modeler-render" }
-modeler-kernel = { path = "crates/modeler-kernel" }
-modeler-mesh = { path = "crates/modeler-mesh" }
+drydock-dae = { path = "crates/drydock-dae" }
+drydock-view = { path = "crates/drydock-view" }
+drydock-render = { path = "crates/drydock-render" }
+drydock-kernel = { path = "crates/drydock-kernel" }
+drydock-mesh = { path = "crates/drydock-mesh" }
 glam = "0.34"
 roxmltree = "0.21"
 miniz_oxide = "0.9"
@@ -28,6 +28,8 @@ egui-wgpu = "0.36"
 # Same major as egui-wgpu 0.36, so the app can hand the renderer egui's device.
 wgpu = { version = "30", default-features = false, features = ["std", "wgsl", "vulkan", "dx12", "metal"] }
 pollster = "1"
+# Embeds the icon and version info in the Windows .exe (MIT); used by the app's build.rs.
+winresource = "0.1"
 bytemuck = { version = "1", features = ["derive"] }
 proptest = "1"
 egui_kittest = "0.36"

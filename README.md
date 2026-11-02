@@ -1,6 +1,6 @@
-# modeler
+# Drydock
 
-A desktop 3D modeler written in Rust, with its own file format and DAE (COLLADA 1.4) import. `modeler` is a codename.
+Subspace Drydock is a desktop 3D modeler written in Rust, with its own file format and DAE (COLLADA 1.4) import. `modeler` is the internal codename and crate prefix.
 
 - **App:** `app/` (Cargo workspace; `cargo run --release -p modeler` from `app/`).
 
