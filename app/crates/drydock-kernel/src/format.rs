@@ -45,7 +45,7 @@ pub struct ReadError {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ReadErrorKind {
-    /// The first line isn't `modeler-model <version>`.
+    /// The first line isn't `drydock-model <version>` or the older `modeler-model <version>`.
     NotAModelFile,
     /// The header names a version this reader doesn't know.
     UnsupportedVersion(u32),
@@ -312,7 +312,7 @@ pub fn to_text(model: &Model) -> Result<String, WriteError> {
         1
     };
     let mut out = String::new();
-    out.push_str(&format!("modeler-model {version}\n"));
+    out.push_str(&format!("drydock-model {version}\n"));
 
     if model.geolocation() != Geolocation::default() {
         let g = model.geolocation();
@@ -1077,7 +1077,7 @@ pub fn from_text(text: &str) -> Result<Model, ReadError> {
     };
 
     let header_tokens: Vec<&str> = header.split_whitespace().collect();
-    if header_tokens.len() != 2 || header_tokens[0] != "modeler-model" {
+    if header_tokens.len() != 2 || !matches!(header_tokens[0], "drydock-model" | "modeler-model") {
         return Err(ReadError {
             line: 1,
             kind: ReadErrorKind::NotAModelFile,

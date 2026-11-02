@@ -26,8 +26,12 @@ diffable, no dependencies, easy to extend. Lengths are meters.
 - `-` (bare) means "none" where a material or texture may be absent.
 
 ## Records
-The first line is the header `modeler-model 1` (the word, one space, the version). A reader
-refuses a file whose first line is not `modeler-model <u32>`, and a version it doesn't know.
+The first line is the header `drydock-model 1` (the word, one space, the version). A reader
+also accepts the older word `modeler-model` with the same version, and refuses a file whose
+first line is neither `drydock-model <u32>` nor `modeler-model <u32>`, or a version it
+doesn't know. Writers always write `drydock-model`. The rename does not change the version
+number: a model that needed version 4 before still says version 4. Native files are
+`.drydock`; older `.modeler` files still open.
 
 Then, one per line:
 

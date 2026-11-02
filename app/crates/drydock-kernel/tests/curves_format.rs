@@ -85,7 +85,7 @@ fn curves_round_trip_exactly() {
     let model = sample();
     assert_eq!(model.root().geometry().curve_count(), 2);
     let text = to_text(&model).unwrap();
-    assert!(text.starts_with("modeler-model 6\n"));
+    assert!(text.starts_with("drydock-model 6\n"));
     assert_eq!(curve_lines(&text).len(), 2);
     let back = from_text(&text).unwrap();
     assert_eq!(back, model);
@@ -152,7 +152,7 @@ fn a_model_without_curves_keeps_its_older_version() {
     )
     .unwrap();
     let text = to_text(&model).unwrap();
-    assert!(text.starts_with("modeler-model 1\n"), "{text}");
+    assert!(text.starts_with("drydock-model 1\n"), "{text}");
 
     let mut log = ModelEdit::new();
     model
@@ -165,20 +165,20 @@ fn a_model_without_curves_keeps_its_older_version() {
         )
         .unwrap();
     let text = to_text(&model).unwrap();
-    assert!(text.starts_with("modeler-model 5\n"));
+    assert!(text.starts_with("drydock-model 5\n"));
     assert_eq!(from_text(&text).unwrap(), model);
 
     // with units and a curve: 6
     circle(&mut model, BodyId::Root, v(3.0, 0.0, 0.0), 1.0, 8);
     let text = to_text(&model).unwrap();
-    assert!(text.starts_with("modeler-model 6\n"));
+    assert!(text.starts_with("drydock-model 6\n"));
     assert!(text.contains("\nunits decimal mm 1\n"));
     assert_eq!(from_text(&text).unwrap(), model);
 }
 
 #[test]
 fn version_five_files_still_read() {
-    let text = "modeler-model 5\n\
+    let text = "drydock-model 5\n\
                 units decimal cm 2\n\
                 body root\n\
                 vertex 0 0 0 0\n\
@@ -204,7 +204,7 @@ fn version_five_files_still_read() {
 #[test]
 fn a_curve_record_needs_version_six() {
     let text = to_text(&sample()).unwrap();
-    let older = text.replacen("modeler-model 6", "modeler-model 5", 1);
+    let older = text.replacen("drydock-model 6", "drydock-model 5", 1);
     let (index, _) = curve_lines(&older)[0];
     assert_eq!(
         from_text(&older),
@@ -292,7 +292,7 @@ fn a_repeated_curve_id_is_rejected() {
 fn a_curve_outside_a_body_is_refused() {
     let text = to_text(&sample()).unwrap();
     let (_, line) = curve_lines(&text)[0];
-    let bad = format!("modeler-model 6\n{line}\nend\n");
+    let bad = format!("drydock-model 6\n{line}\nend\n");
     assert_eq!(
         from_text(&bad),
         Err(ReadError {
@@ -324,7 +324,7 @@ fn curves_in_definitions_round_trip() {
         2
     );
     let text = to_text(&model).unwrap();
-    assert!(text.starts_with("modeler-model 6\n"));
+    assert!(text.starts_with("drydock-model 6\n"));
     let back = from_text(&text).unwrap();
     assert_eq!(back, model);
     assert!(back.validate().is_empty());
