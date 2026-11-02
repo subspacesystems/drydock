@@ -16,7 +16,10 @@ drydock-view = { path = "crates/drydock-view" }
 drydock-render = { path = "crates/drydock-render" }
 drydock-kernel = { path = "crates/drydock-kernel" }
 drydock-mesh = { path = "crates/drydock-mesh" }
+drydock-guide = { path = "crates/drydock-guide" }
 glam = "0.34"
+# Markdown parser for the user guide generator (MIT); no command-line or HTML-bin features.
+pulldown-cmark = { version = "0.13", default-features = false, features = ["html"] }
 roxmltree = "0.21"
 miniz_oxide = "0.9"
 # Glyph outlines (MIT OR Apache-2.0); already in the lock through egui's font stack.
