@@ -3,6 +3,8 @@
 
 //! modeler: the viewer window, or a headless screenshot with `--screenshot`.
 
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+
 mod app;
 
 use std::path::{Path, PathBuf};

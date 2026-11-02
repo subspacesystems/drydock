@@ -374,7 +374,7 @@ fn load_and_save() {
     assert_eq!(ToolbarLayout::load(&file), layout);
     let _ = std::fs::remove_dir_all(&dir);
 
-    let var = |name: &str| (name == "MODELER_CONFIG_DIR").then(|| OsString::from("/tmp/cfg"));
+    let var = |name: &str| (name == "DRYDOCK_CONFIG_DIR").then(|| OsString::from("/tmp/cfg"));
     assert_eq!(
         toolbars::toolbars_file(var),
         Some(std::path::PathBuf::from("/tmp/cfg/toolbars"))

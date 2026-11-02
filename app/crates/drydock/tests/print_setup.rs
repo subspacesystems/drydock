@@ -313,7 +313,7 @@ fn settings_are_saved_and_loaded_from_a_file() {
 
 #[test]
 fn the_settings_file_lives_in_the_config_folder() {
-    let var = |name: &str| (name == "MODELER_CONFIG_DIR").then(|| OsString::from("/cfg"));
+    let var = |name: &str| (name == "DRYDOCK_CONFIG_DIR").then(|| OsString::from("/cfg"));
     assert_eq!(
         settings_file(var),
         Some(std::path::PathBuf::from("/cfg/print-setup"))

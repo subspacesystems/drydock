@@ -206,7 +206,7 @@ fn save_reports_errors() {
 #[test]
 fn config_dir_override_wins() {
     let var = env(&[
-        ("MODELER_CONFIG_DIR", "/tmp/cfg"),
+        ("DRYDOCK_CONFIG_DIR", "/tmp/cfg"),
         ("XDG_CONFIG_HOME", "/x"),
         ("HOME", "/home/u"),
         ("APPDATA", "C:\\Users\\u\\AppData\\Roaming"),
@@ -216,9 +216,24 @@ fn config_dir_override_wins() {
 
 #[test]
 fn empty_override_is_ignored() {
-    let var = env(&[("MODELER_CONFIG_DIR", ""), ("HOME", "/home/u")]);
+    let var = env(&[("DRYDOCK_CONFIG_DIR", ""), ("HOME", "/home/u")]);
     let dir = config_dir(var).unwrap();
     assert_ne!(dir, PathBuf::from(""));
+}
+
+#[cfg(not(windows))]
+#[test]
+fn the_old_override_is_not_read() {
+    let var = env(&[("MODELER_CONFIG_DIR", "/tmp/old"), ("HOME", "/home/u")]);
+    assert_eq!(
+        config_dir(var),
+        Some(PathBuf::from("/home/u/.config/drydock"))
+    );
+    assert_eq!(config_dir(env(&[("MODELER_CONFIG_DIR", "/tmp/old")])), None);
+    assert_eq!(
+        recent_file(env(&[("MODELER_CONFIG_DIR", "/tmp/old"), ("HOME", "/h")])),
+        Some(PathBuf::from("/h/.config/drydock/recent-files"))
+    );
 }
 
 #[cfg(not(windows))]
@@ -226,20 +241,20 @@ fn empty_override_is_ignored() {
 fn config_dir_uses_xdg_then_home() {
     assert_eq!(
         config_dir(env(&[("XDG_CONFIG_HOME", "/x/cfg"), ("HOME", "/home/u")])),
-        Some(PathBuf::from("/x/cfg/modeler"))
+        Some(PathBuf::from("/x/cfg/drydock"))
     );
     assert_eq!(
         config_dir(env(&[("HOME", "/home/u")])),
-        Some(PathBuf::from("/home/u/.config/modeler"))
+        Some(PathBuf::from("/home/u/.config/drydock"))
     );
     // Empty or relative XDG_CONFIG_HOME falls back to HOME.
     assert_eq!(
         config_dir(env(&[("XDG_CONFIG_HOME", ""), ("HOME", "/home/u")])),
-        Some(PathBuf::from("/home/u/.config/modeler"))
+        Some(PathBuf::from("/home/u/.config/drydock"))
     );
     assert_eq!(
         config_dir(env(&[("XDG_CONFIG_HOME", "rel/cfg"), ("HOME", "/home/u")])),
-        Some(PathBuf::from("/home/u/.config/modeler"))
+        Some(PathBuf::from("/home/u/.config/drydock"))
     );
     assert_eq!(config_dir(env(&[("HOME", "")])), None);
     assert_eq!(config_dir(env(&[])), None);
@@ -252,14 +267,14 @@ fn config_dir_uses_xdg_then_home() {
 fn config_dir_uses_appdata_on_windows() {
     assert_eq!(
         config_dir(env(&[("APPDATA", "C:\\Users\\u\\AppData\\Roaming")])),
-        Some(PathBuf::from("C:\\Users\\u\\AppData\\Roaming").join("modeler"))
+        Some(PathBuf::from("C:\\Users\\u\\AppData\\Roaming").join("Drydock"))
     );
 }
 
 #[test]
 fn recent_file_is_in_the_config_dir() {
     assert_eq!(
-        recent_file(env(&[("MODELER_CONFIG_DIR", "/tmp/cfg")])),
+        recent_file(env(&[("DRYDOCK_CONFIG_DIR", "/tmp/cfg")])),
         Some(PathBuf::from("/tmp/cfg/recent-files"))
     );
     assert_eq!(recent_file(env(&[])), None);
