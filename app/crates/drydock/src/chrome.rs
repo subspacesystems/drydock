@@ -1083,6 +1083,10 @@ fn menu_bar_inner(
             }
         });
         ui.menu_button("Help", |ui| {
+            if menu_item(ui, None, "User Guide", "F1", false).clicked() {
+                chosen = Some(Action::UserGuide);
+                ui.close();
+            }
             if menu_item(ui, None, "About Drydock...", "", false).clicked() {
                 chosen = Some(Action::About);
                 ui.close();

@@ -23,6 +23,7 @@ use drydock::document::{
 use drydock::editor::{Editor, TextureOp, Viewport as EditorViewport};
 use drydock::entity_info::{EntityInfoPanel, InfoAction, entity_info_panel};
 use drydock::fit_check::{self, FitCheck, selected_pair};
+use drydock::guide_help::{self, SystemBrowser};
 use drydock::hints::hint_label;
 use drydock::icons::{self, Icon};
 use drydock::input::{self, Button, Modifiers, Tool};
@@ -582,6 +583,18 @@ impl App {
 
     fn open_models_dialog(&mut self) {
         self.dialog = Some(OpenDialog::models(self.open_folder()));
+    }
+
+    fn open_user_guide(&mut self) {
+        let exe_dir = std::env::current_exe()
+            .ok()
+            .and_then(|exe| exe.parent().map(Path::to_path_buf));
+        let message = guide_help::open_guide(
+            &guide_help::guide_candidates(exe_dir.as_deref()),
+            |path| path.is_file(),
+            &SystemBrowser,
+        );
+        self.export_note = Some(message);
     }
 
     fn open_folder(&self) -> PathBuf {
@@ -1172,7 +1185,7 @@ impl App {
             Effect::SaveAsDialog => self.open_save_dialog(),
             Effect::Edit(key) => self.edit(key, ctx, frame),
             Effect::About => self.about_open = true,
-            Effect::UserGuide => unimplemented!("m8-guide-help"),
+            Effect::UserGuide => self.open_user_guide(),
             Effect::ModelInfo => self.model_info_open = true,
             Effect::ToggleShadows => self.reveal_panel(PanelId::Shadows, ctx),
             Effect::TogglePanel(id) => self.reveal_panel(id, ctx),
