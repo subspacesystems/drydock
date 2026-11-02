@@ -8,6 +8,9 @@
 use std::path::Path;
 use std::process::Command;
 
+#[path = "src/winmeta.rs"]
+mod winmeta;
+
 fn main() {
     println!("cargo:rerun-if-env-changed=DRYDOCK_GIT_HASH");
     let git_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../.git");
@@ -31,4 +34,20 @@ fn main() {
         })
         .unwrap_or_else(|| "unknown".to_owned());
     println!("cargo:rustc-env=DRYDOCK_GIT_HASH={}", hash.trim());
+
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
+        println!("cargo:rerun-if-changed=assets/drydock.ico");
+        let mut resource = winresource::WindowsResource::new();
+        resource.set_icon("assets/drydock.ico");
+        let parts = winmeta::file_version(env!("CARGO_PKG_VERSION")).unwrap_or([0, 0, 0, 0]);
+        let packed = winmeta::packed_version(parts);
+        resource.set_version_info(winresource::VersionInfo::FILEVERSION, packed);
+        resource.set_version_info(winresource::VersionInfo::PRODUCTVERSION, packed);
+        for (key, value) in winmeta::version_strings(env!("CARGO_PKG_VERSION")) {
+            resource.set(key, &value);
+        }
+        if let Err(error) = resource.compile() {
+            panic!("failed to embed Windows resources: {error}");
+        }
+    }
 }

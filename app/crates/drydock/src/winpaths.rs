@@ -14,6 +14,30 @@ use crate::look::Os;
 /// The app's config folder on `os`, from the environment variables read through `var`.
 /// Order and folder names are in the spec; `recent::config_dir` calls this with `Os::current()`.
 pub fn config_dir_on(os: Os, var: impl Fn(&str) -> Option<OsString>) -> Option<PathBuf> {
-    let _ = (os, var);
-    unimplemented!("m8-win-exe")
+    let non_empty = |name: &str| var(name).filter(|value| !value.is_empty());
+    if let Some(dir) = non_empty("DRYDOCK_CONFIG_DIR") {
+        return Some(PathBuf::from(dir));
+    }
+    match os {
+        Os::Windows => {
+            if let Some(dir) = non_empty("APPDATA") {
+                return Some(PathBuf::from(dir).join("Drydock"));
+            }
+            non_empty("USERPROFILE").map(|home| {
+                PathBuf::from(home)
+                    .join("AppData")
+                    .join("Roaming")
+                    .join("Drydock")
+            })
+        }
+        Os::Linux | Os::Mac => {
+            if let Some(dir) = non_empty("XDG_CONFIG_HOME") {
+                let dir = PathBuf::from(dir);
+                if dir.is_absolute() {
+                    return Some(dir.join("drydock"));
+                }
+            }
+            non_empty("HOME").map(|home| PathBuf::from(home).join(".config").join("drydock"))
+        }
+    }
 }
