@@ -12,7 +12,7 @@ If the first click is on an edge, the second click places a guide line parallel 
 
 ## Choosing units
 
-View > Model Info opens Model Info; choose View > Model Info to open it. Its Units section has Unit (Millimeters, Centimeters, Meters, Inches, Feet, Architectural) and Precision (decimal places, or a fraction of an inch for Architectural). The choice is saved with the model, and every length and area in Drydock then uses it, including Entity Info and the measurements box. Changing it is one undo step ("Set Units").
+View > Model Info opens the Model Info panel. Its Units section has Unit (Millimeters, Centimeters, Meters, Inches, Feet, Architectural) and Precision (decimal places, or a fraction of an inch for Architectural). The choice is saved with the model, and every length and area in Drydock then uses it, including Entity Info and the measurements box. Changing it is one undo step ("Set Units").
 
 ## Typing lengths
 
