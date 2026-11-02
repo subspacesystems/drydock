@@ -386,7 +386,7 @@ proptest! {
 
     #[test]
     fn random_lines_never_panic(body in prop::collection::vec("[a-z0-9 +|\"\\\\{}.\\-]{0,40}", 0..8)) {
-        let text = format!("modeler-model 1\n{}\n", body.join("\n"));
+        let text = format!("drydock-model 1\n{}\n", body.join("\n"));
         if let Err(e) = from_text(&text) {
             prop_assert!(e.line >= 1 && e.line <= text.lines().count());
         }

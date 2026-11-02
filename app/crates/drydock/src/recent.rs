@@ -89,24 +89,26 @@ impl RecentFiles {
     }
 }
 
-/// The app's config folder, from environment variables read through `var`.
+/// The app's config folder, from environment variables read through `var`:
+/// `DRYDOCK_CONFIG_DIR`, then `APPDATA` joined with `Drydock` on Windows, then an absolute
+/// `XDG_CONFIG_HOME` joined with `drydock`, then `HOME` joined with `.config` and `drydock`.
 pub fn config_dir(var: impl Fn(&str) -> Option<OsString>) -> Option<PathBuf> {
     let non_empty = |name: &str| var(name).filter(|value| !value.is_empty());
-    if let Some(dir) = non_empty("MODELER_CONFIG_DIR") {
+    if let Some(dir) = non_empty("DRYDOCK_CONFIG_DIR") {
         return Some(PathBuf::from(dir));
     }
     if cfg!(windows)
         && let Some(dir) = non_empty("APPDATA")
     {
-        return Some(PathBuf::from(dir).join("modeler"));
+        return Some(PathBuf::from(dir).join("Drydock"));
     }
     if let Some(dir) = non_empty("XDG_CONFIG_HOME") {
         let dir = PathBuf::from(dir);
         if dir.is_absolute() {
-            return Some(dir.join("modeler"));
+            return Some(dir.join("drydock"));
         }
     }
-    non_empty("HOME").map(|home| PathBuf::from(home).join(".config").join("modeler"))
+    non_empty("HOME").map(|home| PathBuf::from(home).join(".config").join("drydock"))
 }
 
 /// Make `path` absolute, keeping it as given when that fails.

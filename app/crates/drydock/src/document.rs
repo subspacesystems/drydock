@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Subspace Systems
 
-//! An opened model file: a DAE import or a native `.modeler` file.
+//! An opened model file: a DAE import or a native `.drydock` file (the older `.modeler`
+//! extension still opens).
 //!
 //! Behaviour: `docs/specs/m0-document.md`, extended by `docs/specs/m1-app-native.md`.
 
@@ -54,8 +55,8 @@ pub struct Document {
 }
 
 impl Document {
-    /// Open a `.dae` or `.modeler` file. Safe to call from a background thread. The
-    /// error is a one-line message for the user that names the file.
+    /// Open a `.dae`, `.drydock` or `.modeler` file. Safe to call from a background thread.
+    /// The error is a one-line message for the user that names the file.
     ///
     /// `.stl` and `.3mf` files go to [`Document::open_mesh`] with millimeters
     /// (`docs/specs/m7-import-ui.md`).
@@ -63,10 +64,7 @@ impl Document {
         if crate::mesh_import::mesh_format(path).is_some() {
             return Document::open_mesh(path, crate::mesh_import::MeshUnit::default());
         }
-        let is_native = path
-            .extension()
-            .is_some_and(|ext| ext.eq_ignore_ascii_case("modeler"));
-        if is_native {
+        if is_native_file(path) {
             let mut model = format::load(path).map_err(|err| file_format_error(path, err))?;
             let folder = path.parent().unwrap_or(Path::new(""));
             map_texture_paths(&mut model, |texture| resolve_texture_path(texture, folder));
@@ -123,7 +121,7 @@ impl Document {
     }
 
     /// Open the STL or 3MF file at `path` (`mesh_import::read_mesh` with `unit`) as a
-    /// document of kind `FileKind::Dae` (it is saved under a new `.modeler` name), with the
+    /// document of kind `FileKind::Dae` (it is saved under a new `.drydock` name), with the
     /// same fields as an opened DAE file: unmodified, not untitled, scene and stats from the
     /// kernel model. The error is a one-line message that names the file. Safe to call from
     /// a background thread. Behaviour: `docs/specs/m7-import-ui.md`.
@@ -144,10 +142,10 @@ impl Document {
         })
     }
 
-    /// A new, empty native model named `untitled.modeler` (not on disk).
+    /// A new, empty native model named `untitled.drydock` (not on disk).
     pub fn new_empty() -> Document {
         Document {
-            path: PathBuf::from("untitled.modeler"),
+            path: PathBuf::from("untitled.drydock"),
             kind: FileKind::Native,
             kernel: Some(km::Model::new()),
             kernel_error: None,
@@ -344,27 +342,34 @@ pub const OPEN_EXTENSIONS: [&str; 5] = ["dae", "drydock", "modeler", "stl", "3mf
 
 /// True when `path` has a native extension (`drydock` or `modeler`, any case).
 pub fn is_native_file(path: &Path) -> bool {
-    let _ = path;
-    unimplemented!("m8-rename-extension")
+    path.extension().is_some_and(|ext| {
+        ext.eq_ignore_ascii_case("drydock") || ext.eq_ignore_ascii_case("modeler")
+    })
 }
 
 /// True when the Open dialog should list `path`: its extension is one of
 /// [`OPEN_EXTENSIONS`], any case.
 pub fn is_openable_file(path: &Path) -> bool {
-    let _ = path;
-    unimplemented!("m8-rename-extension")
+    path.extension().is_some_and(|ext| {
+        OPEN_EXTENSIONS
+            .iter()
+            .any(|known| ext.eq_ignore_ascii_case(known))
+    })
 }
 
-/// The native file name for a save target: `.modeler` kept, `.dae` replaced, anything
-/// else gets `.modeler` appended.
+/// The native file name for a save target: a native extension (either) kept, `.dae` replaced
+/// by `.drydock`, anything else gets `.drydock` appended.
 pub fn native_path(path: &Path) -> PathBuf {
     match path.extension() {
-        Some(ext) if ext.eq_ignore_ascii_case("modeler") => path.to_path_buf(),
-        Some(ext) if ext.eq_ignore_ascii_case("dae") => path.with_extension("modeler"),
+        Some(ext) if ext.eq_ignore_ascii_case("drydock") || ext.eq_ignore_ascii_case("modeler") => {
+            path.to_path_buf()
+        }
+        Some(ext) if ext.eq_ignore_ascii_case("dae") => path.with_extension(NATIVE_EXTENSION),
         _ => match path.file_name() {
             Some(name) => {
                 let mut name = name.to_os_string();
-                name.push(".modeler");
+                name.push(".");
+                name.push(NATIVE_EXTENSION);
                 path.with_file_name(name)
             }
             None => path.to_path_buf(),

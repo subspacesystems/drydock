@@ -300,7 +300,7 @@ fn the_version_holds_units() {
 #[test]
 fn the_default_format_keeps_older_versions() {
     let text = to_text(&Model::new()).unwrap();
-    assert_eq!(text, "modeler-model 1\nbody root\nend\n");
+    assert_eq!(text, "drydock-model 1\nbody root\nend\n");
 }
 
 #[test]
@@ -320,7 +320,7 @@ fn a_changed_format_is_written_after_the_other_settings() {
         m.set_length_format(format, &mut log).unwrap();
         assert_eq!(
             to_text(&m).unwrap(),
-            format!("modeler-model 5\n{line}\nbody root\nend\n")
+            format!("drydock-model 5\n{line}\nbody root\nend\n")
         );
         let back = from_text(&to_text(&m).unwrap()).unwrap();
         assert_eq!(back.length_format(), format);
@@ -339,13 +339,13 @@ fn a_changed_format_is_written_after_the_other_settings() {
     m.set_length_format(arch(8), &mut log).unwrap();
     assert_eq!(
         to_text(&m).unwrap(),
-        "modeler-model 5\ngeolocation 45 0 90 0\nunits architectural 8\nbody root\nend\n"
+        "drydock-model 5\ngeolocation 45 0 90 0\nunits architectural 8\nbody root\nend\n"
     );
 }
 
 #[test]
 fn a_file_without_units_reads_as_the_default() {
-    let m = from_text("modeler-model 4\ngeolocation 45 0 90 0\nbody root\nend\n").unwrap();
+    let m = from_text("drydock-model 4\ngeolocation 45 0 90 0\nbody root\nend\n").unwrap();
     assert_eq!(m.length_format(), LengthFormat::default());
 }
 
@@ -358,7 +358,7 @@ fn read_err(text: &str) -> ReadError {
 
 #[test]
 fn bad_units_records_are_refused() {
-    let unknown = "modeler-model 4\nunits decimal m 2\nbody root\nend\n";
+    let unknown = "drydock-model 4\nunits decimal m 2\nbody root\nend\n";
     assert_eq!(
         read_err(unknown),
         ReadError {
@@ -377,7 +377,7 @@ fn bad_units_records_are_refused() {
         "units metric 2",
         "units",
     ] {
-        let text = format!("modeler-model 5\n{line}\nbody root\nend\n");
+        let text = format!("drydock-model 5\n{line}\nbody root\nend\n");
         assert_eq!(
             read_err(&text),
             ReadError {
@@ -388,7 +388,7 @@ fn bad_units_records_are_refused() {
         );
     }
     for line in ["units decimal m 7", "units architectural 3"] {
-        let text = format!("modeler-model 5\n{line}\nbody root\nend\n");
+        let text = format!("drydock-model 5\n{line}\nbody root\nend\n");
         assert_eq!(
             read_err(&text),
             ReadError {
@@ -398,7 +398,7 @@ fn bad_units_records_are_refused() {
             "{line}"
         );
     }
-    let twice = "modeler-model 5\nunits decimal m 2\nunits decimal m 2\nbody root\nend\n";
+    let twice = "drydock-model 5\nunits decimal m 2\nunits decimal m 2\nbody root\nend\n";
     assert_eq!(
         read_err(twice),
         ReadError {

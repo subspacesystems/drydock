@@ -104,18 +104,30 @@ fn native_path_keeps_modeler_extension() {
 }
 
 #[test]
+fn native_path_keeps_drydock_extension() {
+    assert_eq!(
+        native_path(Path::new("a/house.drydock")),
+        PathBuf::from("a/house.drydock")
+    );
+    assert_eq!(
+        native_path(Path::new("House.DRYDOCK")),
+        PathBuf::from("House.DRYDOCK")
+    );
+}
+
+#[test]
 fn native_path_replaces_dae() {
     assert_eq!(
         native_path(Path::new("a/house.dae")),
-        PathBuf::from("a/house.modeler")
+        PathBuf::from("a/house.drydock")
     );
     assert_eq!(
         native_path(Path::new("a/house.DAE")),
-        PathBuf::from("a/house.modeler")
+        PathBuf::from("a/house.drydock")
     );
     assert_eq!(
         native_path(Path::new("/m/05-house/model.Dae")),
-        PathBuf::from("/m/05-house/model.modeler")
+        PathBuf::from("/m/05-house/model.drydock")
     );
 }
 
@@ -123,27 +135,27 @@ fn native_path_replaces_dae() {
 fn native_path_appends_otherwise() {
     assert_eq!(
         native_path(Path::new("house")),
-        PathBuf::from("house.modeler")
+        PathBuf::from("house.drydock")
     );
     assert_eq!(
         native_path(Path::new("house.v2")),
-        PathBuf::from("house.v2.modeler")
+        PathBuf::from("house.v2.drydock")
     );
     assert_eq!(
         native_path(Path::new("dir.d/house")),
-        PathBuf::from("dir.d/house.modeler")
+        PathBuf::from("dir.d/house.drydock")
     );
     assert_eq!(
         native_path(Path::new("a/house.dae.bak")),
-        PathBuf::from("a/house.dae.bak.modeler")
+        PathBuf::from("a/house.dae.bak.drydock")
     );
     assert_eq!(
         native_path(Path::new("a/house.modelerx")),
-        PathBuf::from("a/house.modelerx.modeler")
+        PathBuf::from("a/house.modelerx.drydock")
     );
     assert_eq!(
         native_path(Path::new(".hidden")),
-        PathBuf::from(".hidden.modeler")
+        PathBuf::from(".hidden.drydock")
     );
 }
 
@@ -171,18 +183,18 @@ fn dae_document_has_a_kernel_model() {
     // One quad face and its four edges, plus the post.
     assert_eq!((doc.stats.faces, doc.stats.edges), (1, 5));
     assert_eq!(counts(kernel), (1, 5));
-    let fixture_text = std::fs::read_to_string(fixture("slab.modeler")).unwrap();
+    let fixture_text = std::fs::read_to_string(fixture("slab.drydock")).unwrap();
     assert_eq!(text(kernel), fixture_text);
 }
 
 #[test]
 fn native_document_draws_the_kernel_model() {
-    let path = fixture("slab.modeler");
+    let path = fixture("slab.drydock");
     let doc = open(&path);
     assert_eq!(doc.kind, FileKind::Native);
     assert_eq!(doc.path, path);
     assert!(doc.kernel_error.is_none());
-    assert_eq!(doc.title(), "slab.modeler - Drydock");
+    assert_eq!(doc.title(), "slab.drydock - Drydock");
     let kernel = doc.kernel.as_ref().expect("native file has a kernel model");
     assert_eq!(text(kernel), std::fs::read_to_string(&path).unwrap());
 
@@ -318,18 +330,18 @@ fn save_as_from_dae_writes_a_native_file() {
     let before_text = kernel_text(&doc);
 
     let written = doc.save_as(&dir.join("copy.dae")).expect("save_as");
-    let want = dir.join("copy.modeler");
+    let want = dir.join("copy.drydock");
     assert_eq!(written, want);
     assert_eq!(doc.path, want);
     assert_eq!(doc.kind, FileKind::Native);
-    assert_eq!(doc.title(), "copy.modeler - Drydock");
+    assert_eq!(doc.title(), "copy.drydock - Drydock");
     // Nothing else about the document changes.
     assert_eq!(doc.stats, before_stats);
     assert_eq!(kernel_text(&doc), before_text);
     assert_eq!(doc.scene.triangle_count(), 2);
 
     assert_eq!(std::fs::read_to_string(&want).unwrap(), before_text);
-    assert_eq!(files_in(&dir), vec!["copy.modeler".to_string()]);
+    assert_eq!(files_in(&dir), vec!["copy.drydock".to_string()]);
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -338,7 +350,7 @@ fn save_as_appends_the_extension() {
     let dir = temp_dir("append");
     let mut doc = open(&fixture("slab.dae"));
     let written = doc.save_as(&dir.join("plain")).unwrap();
-    assert_eq!(written, dir.join("plain.modeler"));
+    assert_eq!(written, dir.join("plain.drydock"));
     assert!(written.is_file());
     assert_eq!(doc.path, written);
     let _ = std::fs::remove_dir_all(&dir);
@@ -384,7 +396,7 @@ fn save_rewrites_a_native_file() {
     let dir = temp_dir("save");
     let path = dir.join("slab.modeler");
     // Same model, different (but valid) layout: an extra blank line after `end`.
-    let original = std::fs::read_to_string(fixture("slab.modeler")).unwrap();
+    let original = std::fs::read_to_string(fixture("slab.drydock")).unwrap();
     std::fs::write(&path, format!("{original}\n")).unwrap();
     let mut doc = open(&path);
     assert_eq!(doc.save().expect("save"), path);
@@ -430,7 +442,7 @@ fn save_as_failure_leaves_the_document_alone() {
     let err = doc
         .save_as(Path::new("/nonexistent/dir/out.dae"))
         .expect_err("folder doesn't exist");
-    assert_one_line_naming(&err, "out.modeler");
+    assert_one_line_naming(&err, "out.drydock");
     assert_eq!(doc.path, fixture("slab.dae"));
     assert_eq!(doc.kind, FileKind::Dae);
 }
@@ -438,14 +450,14 @@ fn save_as_failure_leaves_the_document_alone() {
 #[test]
 fn save_as_onto_a_folder_fails() {
     let dir = temp_dir("onto-dir");
-    std::fs::create_dir(dir.join("taken.modeler")).unwrap();
+    std::fs::create_dir(dir.join("taken.drydock")).unwrap();
     let mut doc = open(&fixture("slab.dae"));
     let err = doc
         .save_as(&dir.join("taken"))
         .expect_err("a folder is in the way");
-    assert_one_line_naming(&err, "taken.modeler");
+    assert_one_line_naming(&err, "taken.drydock");
     assert_eq!(doc.kind, FileKind::Dae);
-    assert!(dir.join("taken.modeler").is_dir());
+    assert!(dir.join("taken.drydock").is_dir());
     let _ = std::fs::remove_dir_all(&dir);
 }
 
