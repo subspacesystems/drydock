@@ -335,6 +335,26 @@ fn stats_from_scene(scene: &FlatScene, kernel: Option<&km::Model>) -> Stats {
     }
 }
 
+/// The extension of native files Drydock writes (`docs/specs/m8-rename-extension.md`).
+pub const NATIVE_EXTENSION: &str = "drydock";
+
+/// Extensions the Open dialog lists, in this order: the native `drydock`, the older native
+/// `modeler` (still read), then the import formats.
+pub const OPEN_EXTENSIONS: [&str; 5] = ["dae", "drydock", "modeler", "stl", "3mf"];
+
+/// True when `path` has a native extension (`drydock` or `modeler`, any case).
+pub fn is_native_file(path: &Path) -> bool {
+    let _ = path;
+    unimplemented!("m8-rename-extension")
+}
+
+/// True when the Open dialog should list `path`: its extension is one of
+/// [`OPEN_EXTENSIONS`], any case.
+pub fn is_openable_file(path: &Path) -> bool {
+    let _ = path;
+    unimplemented!("m8-rename-extension")
+}
+
 /// The native file name for a save target: `.modeler` kept, `.dae` replaced, anything
 /// else gets `.modeler` appended.
 pub fn native_path(path: &Path) -> PathBuf {
