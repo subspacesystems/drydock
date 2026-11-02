@@ -392,9 +392,9 @@ fn version_is_at_least_four() {
 #[test]
 fn default_settings_keep_the_old_versions() {
     let text = to_text(&Model::new()).unwrap();
-    assert_eq!(text, "modeler-model 1\nbody root\nend\n");
+    assert_eq!(text, "drydock-model 1\nbody root\nend\n");
     let text = to_text(&with_edge()).unwrap();
-    assert!(text.starts_with("modeler-model 1\n"));
+    assert!(text.starts_with("drydock-model 1\n"));
     assert!(!text.contains("geolocation") && !text.contains("sun "));
 }
 
@@ -408,7 +408,7 @@ fn writer_puts_settings_after_the_header() {
     let text = to_text(&m).unwrap();
     assert_eq!(
         text,
-        "modeler-model 4\n\
+        "drydock-model 4\n\
          geolocation 39.742476 -105.1786 12.5 -7\n\
          sun 2003 10 17 18 5 on off 0.7 0.1 off\n\
          material 0 1 0 0 1 \"red\" -\n\
@@ -432,7 +432,7 @@ fn only_changed_settings_are_written() {
     let text = to_text(&m).unwrap();
     assert_eq!(
         text,
-        "modeler-model 4\nsun 2026 9 21 14 0 on off 0.8 0.45 on\nbody root\nend\n"
+        "drydock-model 4\nsun 2026 9 21 14 0 on off 0.8 0.45 on\nbody root\nend\n"
     );
     let mut m = Model::new();
     m.set_geolocation(
@@ -445,7 +445,7 @@ fn only_changed_settings_are_written() {
     .unwrap();
     assert_eq!(
         to_text(&m).unwrap(),
-        "modeler-model 4\ngeolocation 45 0 90 0\nbody root\nend\n"
+        "drydock-model 4\ngeolocation 45 0 90 0\nbody root\nend\n"
     );
 }
 
@@ -483,7 +483,7 @@ fn settings_round_trip_exactly() {
 
 #[test]
 fn reader_accepts_settings_anywhere_before_end() {
-    let text = "modeler-model 4\n\
+    let text = "drydock-model 4\n\
                 material 0 1 1 1 1 \"m\" -\n\
                 body root\n\
                 vertex 0 0 0 0\n\
@@ -509,12 +509,12 @@ fn reader_accepts_settings_anywhere_before_end() {
 #[test]
 fn reader_refuses_settings_in_older_versions() {
     kind_at(
-        "modeler-model 3\ngeolocation 1 2 3 4\nbody root\nend\n",
+        "drydock-model 3\ngeolocation 1 2 3 4\nbody root\nend\n",
         2,
         ReadErrorKind::UnknownRecord,
     );
     kind_at(
-        "modeler-model 1\nsun 2026 1 2 3 4 off on 0.5 0.5 off\nbody root\nend\n",
+        "drydock-model 1\nsun 2026 1 2 3 4 off on 0.5 0.5 off\nbody root\nend\n",
         2,
         ReadErrorKind::UnknownRecord,
     );
@@ -538,7 +538,7 @@ fn reader_refuses_malformed_settings() {
     ];
     for line in bad {
         kind_at(
-            &format!("modeler-model 4\n{line}\nbody root\nend\n"),
+            &format!("drydock-model 4\n{line}\nbody root\nend\n"),
             2,
             ReadErrorKind::BadField,
         );
@@ -548,12 +548,12 @@ fn reader_refuses_malformed_settings() {
 #[test]
 fn reader_refuses_a_second_settings_record() {
     kind_at(
-        "modeler-model 4\ngeolocation 1 2 3 4\ngeolocation 1 2 3 4\nbody root\nend\n",
+        "drydock-model 4\ngeolocation 1 2 3 4\ngeolocation 1 2 3 4\nbody root\nend\n",
         3,
         ReadErrorKind::BadField,
     );
     kind_at(
-        "modeler-model 4\nsun 2026 1 2 3 4 off on 0.5 0.5 off\nbody root\nsun 2026 1 2 3 4 off on 0.5 0.5 off\nend\n",
+        "drydock-model 4\nsun 2026 1 2 3 4 off on 0.5 0.5 off\nbody root\nsun 2026 1 2 3 4 off on 0.5 0.5 off\nend\n",
         4,
         ReadErrorKind::BadField,
     );
@@ -571,7 +571,7 @@ fn reader_rejects_out_of_range_settings() {
     ];
     for line in bad {
         kind_at(
-            &format!("modeler-model 4\n{line}\nbody root\nend\n"),
+            &format!("drydock-model 4\n{line}\nbody root\nend\n"),
             2,
             ReadErrorKind::Rejected(ModelError::BadSettings),
         );

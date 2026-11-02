@@ -66,7 +66,7 @@ fn sample() -> Model {
     m
 }
 
-const SAMPLE: &str = "modeler-model 2
+const SAMPLE: &str = "drydock-model 2
 definition 0 component \"d\"
 body root
 vertex 0 1 2 3
@@ -143,12 +143,12 @@ fn ids_continue_after_load() {
 #[test]
 fn no_guides_writes_version_one() {
     let mut m = Model::new();
-    assert_eq!(to_text(&m).unwrap(), "modeler-model 1\nbody root\nend\n");
+    assert_eq!(to_text(&m).unwrap(), "drydock-model 1\nbody root\nend\n");
     let id = add(&mut m, BodyId::Root, Guide::Point(DVec3::ZERO));
-    assert!(to_text(&m).unwrap().starts_with("modeler-model 2\n"));
+    assert!(to_text(&m).unwrap().starts_with("drydock-model 2\n"));
     let mut log = ModelEdit::new();
     m.remove_guide(BodyId::Root, id, &mut log).unwrap();
-    assert_eq!(to_text(&m).unwrap(), "modeler-model 1\nbody root\nend\n");
+    assert_eq!(to_text(&m).unwrap(), "drydock-model 1\nbody root\nend\n");
 }
 
 #[test]
@@ -163,17 +163,17 @@ fn guide_in_definition_only_writes_version_two() {
         &mut log,
     );
     add(&mut m, BodyId::Definition(d), Guide::Point(DVec3::X));
-    assert!(to_text(&m).unwrap().starts_with("modeler-model 2\n"));
+    assert!(to_text(&m).unwrap().starts_with("drydock-model 2\n"));
 }
 
 #[test]
 fn reads_both_versions() {
-    let v1 = "modeler-model 1\nbody root\nvertex 0 1 2 3\nend\n";
-    let v2 = "modeler-model 2\nbody root\nvertex 0 1 2 3\nend\n";
+    let v1 = "drydock-model 1\nbody root\nvertex 0 1 2 3\nend\n";
+    let v2 = "drydock-model 2\nbody root\nvertex 0 1 2 3\nend\n";
     assert_eq!(from_text(v1).unwrap(), from_text(v2).unwrap());
     for v in [0, 99] {
         kind_at(
-            &format!("modeler-model {v}\nend\n"),
+            &format!("drydock-model {v}\nend\n"),
             1,
             ReadErrorKind::UnsupportedVersion(v),
         );
@@ -183,7 +183,7 @@ fn reads_both_versions() {
 #[test]
 fn guide_in_version_one_is_unknown() {
     kind_at(
-        "modeler-model 1\nbody root\nguide 0 point 0 0 0\nend\n",
+        "drydock-model 1\nbody root\nguide 0 point 0 0 0\nend\n",
         3,
         ReadErrorKind::UnknownRecord,
     );
@@ -192,7 +192,7 @@ fn guide_in_version_one_is_unknown() {
 #[test]
 fn guide_before_body() {
     kind_at(
-        "modeler-model 2\nguide 0 point 0 0 0\nend\n",
+        "drydock-model 2\nguide 0 point 0 0 0\nend\n",
         2,
         ReadErrorKind::NoBody,
     );
@@ -219,7 +219,7 @@ fn bad_guide_fields() {
         "guide 0 line 0 0 0 1 0 1e999",
     ] {
         kind_at(
-            &format!("modeler-model 2\nbody root\n{line}\nend\n"),
+            &format!("drydock-model 2\nbody root\n{line}\nend\n"),
             3,
             ReadErrorKind::BadField,
         );
@@ -229,17 +229,17 @@ fn bad_guide_fields() {
 #[test]
 fn rejected_guides() {
     kind_at(
-        "modeler-model 2\nbody root\nguide 0 line 0 0 0 2 0 0\nend\n",
+        "drydock-model 2\nbody root\nguide 0 line 0 0 0 2 0 0\nend\n",
         3,
         ReadErrorKind::Rejected(ModelError::BadGuide),
     );
     kind_at(
-        "modeler-model 2\nbody root\nguide 0 line 0 0 0 0 0 0\nend\n",
+        "drydock-model 2\nbody root\nguide 0 line 0 0 0 0 0 0\nend\n",
         3,
         ReadErrorKind::Rejected(ModelError::BadGuide),
     );
     kind_at(
-        "modeler-model 2\nbody root\nguide 4 point 0 0 0\nguide 4 point 1 0 0\nend\n",
+        "drydock-model 2\nbody root\nguide 4 point 0 0 0\nguide 4 point 1 0 0\nend\n",
         4,
         ReadErrorKind::Rejected(ModelError::IdInUse),
     );
@@ -247,7 +247,7 @@ fn rejected_guides() {
 
 #[test]
 fn same_id_in_two_bodies_is_fine() {
-    let text = "modeler-model 2\ndefinition 0 component \"d\"\nbody root\nguide 0 point 0 0 0\nbody 0\nguide 0 point 1 0 0\nend\n";
+    let text = "drydock-model 2\ndefinition 0 component \"d\"\nbody root\nguide 0 point 0 0 0\nbody 0\nguide 0 point 1 0 0\nend\n";
     let m = from_text(text).unwrap();
     assert_eq!(to_text(&m).unwrap(), text);
 }

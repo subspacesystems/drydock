@@ -54,12 +54,12 @@ fn convert_writes_a_native_file() {
         s(&fixture("slab.dae")),
     ]);
     assert_eq!(out.status.code(), Some(0), "stderr: {}", stderr(&out));
-    let want = dir.join("slab.modeler");
+    let want = dir.join("slab.drydock");
     assert_eq!(stdout(&out), format!("wrote {}\n", want.display()));
     let written = std::fs::read_to_string(&want).unwrap();
     assert_eq!(
         written,
-        std::fs::read_to_string(fixture("slab.modeler")).unwrap()
+        std::fs::read_to_string(fixture("slab.drydock")).unwrap()
     );
     assert!(format::load(&want).is_ok());
     let _ = std::fs::remove_dir_all(&dir);
@@ -87,11 +87,11 @@ fn convert_native_to_native() {
         s(&fixture("slab.modeler")),
     ]);
     assert_eq!(out.status.code(), Some(0), "stderr: {}", stderr(&out));
-    let want = dir.join("copy.modeler");
+    let want = dir.join("copy.drydock");
     assert_eq!(stdout(&out), format!("wrote {}\n", want.display()));
     assert_eq!(
         std::fs::read(&want).unwrap(),
-        std::fs::read(fixture("slab.modeler")).unwrap()
+        std::fs::read(fixture("slab.drydock")).unwrap()
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -122,7 +122,7 @@ fn convert_into_a_missing_folder_fails() {
     ]);
     assert_eq!(out.status.code(), Some(1));
     let err = stderr(&out);
-    assert!(err.starts_with("Drydock: out.modeler: "), "{err}");
+    assert!(err.starts_with("Drydock: out.drydock: "), "{err}");
     assert!(is_empty_dir(&dir));
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -154,7 +154,7 @@ fn help_mentions_native_files() {
     assert_eq!(out.status.code(), Some(0));
     let help = stdout(&out);
     assert!(help.contains("--convert"), "{help}");
-    assert!(help.contains(".modeler"), "{help}");
+    assert!(help.contains(".drydock"), "{help}");
     assert!(help.contains("--screenshot"), "{help}");
 }
 

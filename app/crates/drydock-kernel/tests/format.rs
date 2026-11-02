@@ -174,7 +174,7 @@ fn sample(stale: bool) -> Model {
     m
 }
 
-const SAMPLE: &str = r#"modeler-model 1
+const SAMPLE: &str = r#"drydock-model 1
 material 0 0.5 0.25 0.125 1 "Brick \"red\"" "tex\\brick.png"
 material 1 0.1 0.2 0.3 0.4 "Glass" -
 definition 0 component "Chair"
@@ -208,7 +208,7 @@ body 1
 end
 "#;
 
-const H: &str = "modeler-model 1\n";
+const H: &str = "drydock-model 1\n";
 
 fn read_err(text: &str) -> ReadError {
     match from_text(text) {
@@ -245,7 +245,7 @@ fn writes_sample_exactly() {
 fn writes_empty_model() {
     assert_eq!(
         to_text(&Model::new()).unwrap(),
-        "modeler-model 1\nbody root\nend\n"
+        "drydock-model 1\nbody root\nend\n"
     );
 }
 
@@ -264,7 +264,7 @@ fn writes_empty_definition_bodies() {
     }
     assert_eq!(
         to_text(&m).unwrap(),
-        "modeler-model 1\ndefinition 0 component \"a\"\ndefinition 1 component \"b\"\nbody root\nbody 0\nbody 1\nend\n"
+        "drydock-model 1\ndefinition 0 component \"a\"\ndefinition 1 component \"b\"\nbody root\nbody 0\nbody 1\nend\n"
     );
 }
 
@@ -409,7 +409,7 @@ fn reading_sets_id_counters() {
 
 #[test]
 fn reads_liberal_layout() {
-    let text = "modeler-model 1\r\n# a comment\r\n\r\n  \t \r\nmaterial 3 1 1 1 1 \"a\" -\r\n\tbody\troot  \r\n  # indented comment\r\nvertex 5 1e0 2.5 -3\r\nend\r\n\r\n   \r\n";
+    let text = "drydock-model 1\r\n# a comment\r\n\r\n  \t \r\nmaterial 3 1 1 1 1 \"a\" -\r\n\tbody\troot  \r\n  # indented comment\r\nvertex 5 1e0 2.5 -3\r\nend\r\n\r\n   \r\n";
     let m = from_text(text).unwrap();
     assert_eq!(m.material(MaterialId(3)).unwrap().name, "a");
     assert_eq!(m.material(MaterialId(3)).unwrap().texture, None);
@@ -598,13 +598,13 @@ fn not_a_model_file() {
         "",
         "\n",
         "hello\n",
-        "modeler-model\n",
-        "modeler-model 1 x\n",
-        "modeler-model x\nend\n",
-        "modeler-model -1\nend\n",
-        "modeler-model 99999999999\nend\n",
-        "\"modeler-model\" 1\nend\n",
-        "# comment\nmodeler-model 1\nend\n",
+        "drydock-model\n",
+        "drydock-model 1 x\n",
+        "drydock-model x\nend\n",
+        "drydock-model -1\nend\n",
+        "drydock-model 99999999999\nend\n",
+        "\"drydock-model\" 1\nend\n",
+        "# comment\ndrydock-model 1\nend\n",
         "Modeler-model 1\nend\n",
     ] {
         kind_at(text, 1, ReadErrorKind::NotAModelFile);
@@ -614,12 +614,12 @@ fn not_a_model_file() {
 #[test]
 fn unsupported_version() {
     kind_at(
-        "modeler-model 99\nend\n",
+        "drydock-model 99\nend\n",
         1,
         ReadErrorKind::UnsupportedVersion(99),
     );
     kind_at(
-        "modeler-model 0\nend\n",
+        "drydock-model 0\nend\n",
         1,
         ReadErrorKind::UnsupportedVersion(0),
     );
@@ -834,7 +834,7 @@ fn paint_checks_the_current_body() {
 #[test]
 fn missing_end() {
     kind_at(&format!("{H}body root\n"), 2, ReadErrorKind::MissingEnd);
-    kind_at("modeler-model 1", 1, ReadErrorKind::MissingEnd);
+    kind_at("drydock-model 1", 1, ReadErrorKind::MissingEnd);
     kind_at(
         &format!("{H}body root\n\n# done?\n"),
         4,
@@ -924,7 +924,7 @@ fn save_replaces_existing_file_and_stale_temp() {
     save(&Model::new(), &path).unwrap();
     assert_eq!(
         std::fs::read_to_string(&path).unwrap(),
-        "modeler-model 1\nbody root\nend\n"
+        "drydock-model 1\nbody root\nend\n"
     );
     assert_eq!(entries(&dir), ["m.mdl"]);
     std::fs::remove_dir_all(&dir).unwrap();
@@ -998,10 +998,10 @@ fn load_errors() {
         other => panic!("{other:?}"),
     }
     let bin = dir.join("bin.mdl");
-    std::fs::write(&bin, b"modeler-model 1\n\xff\xfe\nend\n").unwrap();
+    std::fs::write(&bin, b"drydock-model 1\n\xff\xfe\nend\n").unwrap();
     assert_eq!(load(&bin), Err(FileError::NotUtf8));
     let bad = dir.join("bad.mdl");
-    std::fs::write(&bad, "modeler-model 1\nbody root\n").unwrap();
+    std::fs::write(&bad, "drydock-model 1\nbody root\n").unwrap();
     assert_eq!(
         load(&bad),
         Err(FileError::Read(ReadError {

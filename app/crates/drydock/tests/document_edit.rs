@@ -46,13 +46,13 @@ fn draw_square(doc: &mut Document) {
 #[test]
 fn new_empty_is_an_untitled_native_model() {
     let doc = Document::new_empty();
-    assert_eq!(doc.path, PathBuf::from("untitled.modeler"));
+    assert_eq!(doc.path, PathBuf::from("untitled.drydock"));
     assert_eq!(doc.kind, FileKind::Native);
     assert!(doc.kernel.is_some());
     assert!(doc.kernel_error.is_none());
     assert!(doc.untitled);
     assert!(!doc.modified);
-    assert_eq!(doc.title(), "untitled.modeler - Drydock");
+    assert_eq!(doc.title(), "untitled.drydock - Drydock");
     assert_eq!(doc.stats.triangles, 0);
     assert_eq!(doc.stats.lines, 0);
     assert_eq!(doc.stats.faces, 0);
@@ -136,7 +136,7 @@ fn save_on_untitled_asks_for_save_as() {
     draw_square(&mut doc);
     doc.refresh();
     let err = doc.save().expect_err("untitled has no file");
-    assert!(err.contains("untitled.modeler"), "{err}");
+    assert!(err.contains("untitled.drydock"), "{err}");
     assert!(err.contains("Save As"), "{err}");
     assert!(doc.untitled);
     assert!(doc.modified);
@@ -151,7 +151,7 @@ fn failed_save_leaves_flags() {
     assert!(result.is_err());
     assert!(doc.untitled);
     assert!(doc.modified);
-    assert_eq!(doc.path, PathBuf::from("untitled.modeler"));
+    assert_eq!(doc.path, PathBuf::from("untitled.drydock"));
 }
 
 /// One more edge away from the origin: another undoable edit.
