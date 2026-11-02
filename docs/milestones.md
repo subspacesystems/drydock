@@ -273,6 +273,9 @@ Moved up by Tyrel (2026-10-28) so beta testers can try the app after 3D printing
 | `m8-win-exe` | The program builds for Windows (`drydock.exe`): no console window, icon and version info, Windows settings folder | `m8-rename-config` |
 | `m8-installer` | NSIS installer script with in-place upgrade, `.drydock` file type and uninstaller | |
 | `m8-release` | Release script `packaging/release.sh`: Windows build, installer, optional signing, SHA256SUMS, INSTALL notes (SmartScreen, Smart App Control) | `m8-installer`, `m8-win-exe` |
+| `m8-win-ci` | Build checks compile the Windows target and the installer script (cross toolchain and NSIS in the build image) | `m8-installer-fix` |
+| `m8-installer-fix` | Installer script compiles (64-bit registry view and all-users folders set at start-up, for the uninstaller too) and an upgrade removes the old version, wherever it was installed | |
+| `m8-release-guide` | The release script builds the user guide into the installer when no guide folder is given | |
 
 ## M9: Follow Me and offset
 
