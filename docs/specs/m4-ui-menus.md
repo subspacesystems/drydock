@@ -67,10 +67,10 @@ when there is none). Paths with a unique file name get nothing appended.
 
 `config_dir(var)` reads environment variables only through `var` (tests pass a map):
 
-1. `MODELER_CONFIG_DIR`, when set and not empty: that path as is.
-2. On Windows (`cfg!(windows)`): `APPDATA`, when set and not empty, joined with `modeler`.
-3. Otherwise `XDG_CONFIG_HOME`, when set, not empty and absolute, joined with `modeler`.
-4. Otherwise `HOME`, when set and not empty, joined with `.config/modeler`.
+1. `DRYDOCK_CONFIG_DIR`, when set and not empty: that path as is.
+2. On Windows (`cfg!(windows)`): `APPDATA`, when set and not empty, joined with `Drydock`.
+3. Otherwise `XDG_CONFIG_HOME`, when set, not empty and absolute, joined with `drydock`.
+4. Otherwise `HOME`, when set and not empty, joined with `.config/drydock`.
 5. Otherwise `None`.
 
 `recent_file(var)` is `config_dir(var)` joined with `recent-files` (already on main).
@@ -90,7 +90,7 @@ when there is none). Paths with a unique file name get nothing appended.
 - `Effect::Exit`: the same as the window's close button: when the document is modified
   the unsaved-changes question comes first; otherwise the app closes
   (`ViewportCommand::Close` goes through the existing close handling).
-- Tests that open the real window set `MODELER_CONFIG_DIR` to a temporary folder so they
+- Tests that open the real window set `DRYDOCK_CONFIG_DIR` to a temporary folder so they
   never touch the user's list.
 
 ## Tests
