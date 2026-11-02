@@ -18,6 +18,7 @@ pub mod entity_info;
 pub mod fit_check;
 pub mod geo_panel;
 pub mod globe;
+pub mod guide_help;
 pub mod hints;
 pub mod icons;
 pub mod input;

@@ -119,6 +119,8 @@ pub enum Action {
     Paste,
     /// Show the About window (Help menu).
     About,
+    /// Open the bundled user guide in the browser (Help menu, F1; `docs/specs/m8-guide-help.md`).
+    UserGuide,
     /// Make the selection a component, after asking for its name (Edit menu;
     /// `docs/specs/m4-app-components-ui.md`).
     MakeComponent,

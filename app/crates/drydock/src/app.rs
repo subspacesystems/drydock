@@ -1172,6 +1172,7 @@ impl App {
             Effect::SaveAsDialog => self.open_save_dialog(),
             Effect::Edit(key) => self.edit(key, ctx, frame),
             Effect::About => self.about_open = true,
+            Effect::UserGuide => unimplemented!("m8-guide-help"),
             Effect::ModelInfo => self.model_info_open = true,
             Effect::ToggleShadows => self.reveal_panel(PanelId::Shadows, ctx),
             Effect::TogglePanel(id) => self.reveal_panel(id, ctx),
