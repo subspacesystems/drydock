@@ -25,34 +25,79 @@ pub trait BrowserLauncher {
 pub struct SystemBrowser;
 
 impl BrowserLauncher for SystemBrowser {
-    fn open(&self, _page: &Path) -> Result<(), String> {
-        unimplemented!("m8-guide-help")
+    fn open(&self, page: &Path) -> Result<(), String> {
+        let (program, args) = browser_command(Os::current(), page);
+        let mut command = std::process::Command::new(program);
+        command
+            .args(args)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null());
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            command.creation_flags(0x0800_0000);
+        }
+        command
+            .spawn()
+            .map(|_| ())
+            .map_err(|error| error.to_string())
     }
 }
 
 /// Where the guide's index page may be, best first: installed layout (`guide/index.html`
 /// next to the executable, when `exe_dir` is known), then the dev build folder
 /// `app/target/guide/index.html` (found from this crate's manifest folder).
-pub fn guide_candidates(_exe_dir: Option<&Path>) -> Vec<PathBuf> {
-    unimplemented!("m8-guide-help")
+pub fn guide_candidates(exe_dir: Option<&Path>) -> Vec<PathBuf> {
+    let dev = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/guide")
+        .join(GUIDE_INDEX);
+    match exe_dir {
+        Some(dir) => vec![dir.join("guide").join(GUIDE_INDEX), dev],
+        None => vec![dev],
+    }
 }
 
 /// The first candidate for which `exists` is true.
-pub fn find_guide(_candidates: &[PathBuf], _exists: impl Fn(&Path) -> bool) -> Option<PathBuf> {
-    unimplemented!("m8-guide-help")
+pub fn find_guide(candidates: &[PathBuf], exists: impl Fn(&Path) -> bool) -> Option<PathBuf> {
+    candidates.iter().find(|path| exists(path)).cloned()
 }
 
 /// The program and arguments that open `page` in the default browser on `os`:
 /// `xdg-open PAGE` (Linux), `open PAGE` (Mac), `cmd /C start "" PAGE` (Windows).
-pub fn browser_command(_os: Os, _page: &Path) -> (String, Vec<OsString>) {
-    unimplemented!("m8-guide-help")
+pub fn browser_command(os: Os, page: &Path) -> (String, Vec<OsString>) {
+    let page = page.as_os_str().to_owned();
+    match os {
+        Os::Linux => ("xdg-open".to_owned(), vec![page]),
+        Os::Mac => ("open".to_owned(), vec![page]),
+        Os::Windows => (
+            "cmd".to_owned(),
+            vec![
+                OsString::from("/C"),
+                OsString::from("start"),
+                OsString::from(""),
+                page,
+            ],
+        ),
+    }
 }
 
 /// Finds the guide and opens it; returns the status-bar message for the outcome.
 pub fn open_guide(
-    _candidates: &[PathBuf],
-    _exists: impl Fn(&Path) -> bool,
-    _launcher: &dyn BrowserLauncher,
+    candidates: &[PathBuf],
+    exists: impl Fn(&Path) -> bool,
+    launcher: &dyn BrowserLauncher,
 ) -> String {
-    unimplemented!("m8-guide-help")
+    let Some(page) = find_guide(candidates, exists) else {
+        let looked_in = candidates
+            .iter()
+            .map(|path| path.display().to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+        return format!("The Drydock User Guide was not found. Looked in: {looked_in}");
+    };
+    match launcher.open(&page) {
+        Ok(()) => "Opened the Drydock User Guide in your browser.".to_owned(),
+        Err(reason) => format!("Could not open the Drydock User Guide: {reason}"),
+    }
 }
