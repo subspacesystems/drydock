@@ -1,0 +1,15 @@
+# User Guide
+
+- [Welcome to Drydock](welcome.md)
+- [The Drydock window](window.md)
+- [Moving around](navigation.md)
+- [Selecting](selecting.md)
+- [Drawing](drawing.md)
+- [Push/Pull](push-pull.md)
+- [Moving, rotating and scaling](modify.md)
+- [Measuring and units](measuring.md)
+- [Groups and components](groups.md)
+- [Materials and painting](materials.md)
+- [Files, import and export](files.md)
+- [3D printing](printing.md)
+- [Keyboard shortcuts](shortcuts.md)

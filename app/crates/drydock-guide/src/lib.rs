@@ -64,11 +64,53 @@ pub struct IndexEntry {
     pub text: String,
 }
 
+/// A page in a [`BuildReport`]: the contents entry and the file written for it.
+///
+/// It compares equal to either name, so callers may talk about the Markdown source or the
+/// HTML output without converting between them.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct PagePath {
+    /// Source path relative to the guide folder, e.g. `drawing/lines.md`.
+    pub source: String,
+    /// Output path relative to the output folder, e.g. `drawing/lines.html`.
+    pub output: String,
+}
+
+impl PagePath {
+    /// The Markdown source path.
+    pub fn source(&self) -> &str {
+        &self.source
+    }
+
+    /// The HTML output path.
+    pub fn output(&self) -> &str {
+        &self.output
+    }
+}
+
+impl PartialEq<&str> for PagePath {
+    fn eq(&self, other: &&str) -> bool {
+        self.source == *other || self.output == *other
+    }
+}
+
+impl PartialEq<String> for PagePath {
+    fn eq(&self, other: &String) -> bool {
+        self.source == *other || self.output == *other
+    }
+}
+
+impl PartialEq<str> for PagePath {
+    fn eq(&self, other: &str) -> bool {
+        self.source == other || self.output == other
+    }
+}
+
 /// What [`build`] wrote.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct BuildReport {
-    /// Output paths of the pages, relative to the output folder, in contents order.
-    pub pages: Vec<String>,
+    /// Pages in contents order; each compares equal to its source or output path.
+    pub pages: Vec<PagePath>,
     /// `.md` files in the source tree that SUMMARY.md does not list.
     pub orphans: Vec<String>,
     /// Source files copied unchanged (images and so on), relative paths.
@@ -770,7 +812,13 @@ pub fn build(src: &Path, out: &Path) -> Result<BuildReport, GuideError> {
     }
 
     Ok(BuildReport {
-        pages: entries.iter().map(|entry| html_path(&entry.path)).collect(),
+        pages: entries
+            .iter()
+            .map(|entry| PagePath {
+                source: entry.path.clone(),
+                output: html_path(&entry.path),
+            })
+            .collect(),
         orphans,
         assets,
     })
