@@ -17,7 +17,9 @@ use drydock::dock::{
     self, DockLayout, PanelEvent, PanelId, Side as DockSide, StackRow, apply_drop,
     drop_destination, panel_header,
 };
-use drydock::document::{Document, FileKind, native_path, resolve_texture_path};
+use drydock::document::{
+    Document, FileKind, NATIVE_EXTENSION, is_openable_file, native_path, resolve_texture_path,
+};
 use drydock::editor::{Editor, TextureOp, Viewport as EditorViewport};
 use drydock::entity_info::{EntityInfoPanel, InfoAction, entity_info_panel};
 use drydock::fit_check::{self, FitCheck, selected_pair};
@@ -669,7 +671,7 @@ impl App {
         let name = native_path(&document.path)
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_else(|| "model.modeler".to_owned());
+            .unwrap_or_else(|| "model.drydock".to_owned());
         self.save_dialog = Some(SaveDialog::new(dir, name));
     }
 
@@ -3577,11 +3579,7 @@ impl OpenDialog {
                     let path = entry.path();
                     let name = entry.file_name().to_string_lossy().into_owned();
                     let is_dir = path.is_dir();
-                    let is_model = path.extension().is_some_and(|ext| {
-                        ["dae", "modeler", "stl", "3mf"]
-                            .iter()
-                            .any(|known| ext.eq_ignore_ascii_case(known))
-                    });
+                    let is_model = is_openable_file(&path);
                     if (is_dir && !name.starts_with('.')) || (!is_dir && is_model) {
                         self.entries.push((name, path, is_dir));
                     }
@@ -3733,7 +3731,7 @@ impl SaveDialog {
                     let name = entry.file_name().to_string_lossy().into_owned();
                     let is_dir = path.is_dir();
                     let extension = match self.mode {
-                        SaveMode::Model => Some("modeler"),
+                        SaveMode::Model => Some(NATIVE_EXTENSION),
                         SaveMode::Export(options) => Some(options.format.extension()),
                         SaveMode::ExportFolder(_) => None,
                     };
