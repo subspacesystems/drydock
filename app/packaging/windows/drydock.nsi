@@ -5,7 +5,7 @@
   !error "pass -DVERSION=x.y.z"
 !endif
 !ifndef STAGE
-  !error "pass -DSTAGE=path"
+  !error "pass -DSTAGE=<folder with drydock.exe>"
 !endif
 !ifndef OUTFILE
   !define OUTFILE "drydock-setup-${VERSION}.exe"
@@ -13,6 +13,7 @@
 
 Unicode true
 Name "Subspace Drydock"
+OutFile "${OUTFILE}"
 InstallDir "$PROGRAMFILES64\Subspace Drydock"
 RequestExecutionLevel admin
 SetRegView 64
@@ -24,17 +25,19 @@ Page instfiles
 UninstPage uninstConfirm
 UninstPage instfiles
 
-OutFile "${OUTFILE}"
-
-Section "Install"
+Function RemoveOldVersion
   ReadRegStr $R0 HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\SubspaceDrydock" "UninstallString"
   ReadRegStr $R1 HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\SubspaceDrydock" "InstallLocation"
-  StrCmp $R0 "" old_version_done
-  IfFileExists "$R0" 0 old_version_done
+  StrCmp $R0 "" done
+  IfFileExists "$R0" 0 done
   ExecWait '"$R0" /S _?=$R1'
   Delete "$R1\uninstall.exe"
   RMDir "$R1"
-old_version_done:
+done:
+FunctionEnd
+
+Section "Install"
+  Call RemoveOldVersion
 
   SetOutPath "$INSTDIR"
   File "${STAGE}\drydock.exe"
@@ -47,7 +50,7 @@ old_version_done:
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\SubspaceDrydock" "DisplayName" "Subspace Drydock"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\SubspaceDrydock" "Publisher" "Subspace Systems"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\SubspaceDrydock" "DisplayVersion" "${VERSION}"
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\SubspaceDrydock" "UninstallString" "$\"$INSTDIR\uninstall.exe$\""
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\SubspaceDrydock" "UninstallString" '"$INSTDIR\uninstall.exe"'
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\SubspaceDrydock" "InstallLocation" "$INSTDIR"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\SubspaceDrydock" "DisplayIcon" "$INSTDIR\drydock.exe"
   WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\SubspaceDrydock" "NoModify" 1
@@ -55,8 +58,8 @@ old_version_done:
 
   WriteRegStr HKLM "Software\Classes\.drydock" "" "SubspaceDrydock.Model"
   WriteRegStr HKLM "Software\Classes\SubspaceDrydock.Model" "" "Drydock model"
-  WriteRegStr HKLM "Software\Classes\SubspaceDrydock.Model\DefaultIcon" "" "$INSTDIR\drydock.exe,0"
-  WriteRegStr HKLM "Software\Classes\SubspaceDrydock.Model\shell\open\command" "" "$\"$INSTDIR\drydock.exe$\" $\"%1$\""
+  WriteRegStr HKLM "Software\Classes\SubspaceDrydock.Model\DefaultIcon" "" '"$INSTDIR\drydock.exe",0'
+  WriteRegStr HKLM "Software\Classes\SubspaceDrydock.Model\shell\open\command" "" '"$INSTDIR\drydock.exe" "%1"'
   System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, p 0, p 0)'
 SectionEnd
 
