@@ -268,7 +268,9 @@ Moved up by Tyrel (2026-10-28) so beta testers can try the app after 3D printing
 | `m8-rename-config` | Settings folder becomes `drydock` (Linux) / `Drydock` (Windows) and the override `DRYDOCK_CONFIG_DIR`; the old folder and variable are ignored, settings start fresh (Tyrel, 2026-11-01) | `m8-rename-crates` |
 | `m8-guide-build` | User guide generator `drydock-guide`: Markdown in `docs/guide/` to static HTML with contents sidebar, anchors, link/image checks and an offline search index (Tyrel) | |
 | `m8-guide-text` | The real guide pages, written from the app itself | `m8-guide-build` |
-| `m8-release` | Windows build in CI, release artifacts, installer with in-place upgrade and uninstaller | |
+| `m8-win-exe` | The program builds for Windows (`drydock.exe`): no console window, icon and version info, Windows settings folder | `m8-rename-config` |
+| `m8-installer` | NSIS installer script with in-place upgrade, `.drydock` file type and uninstaller | |
+| `m8-release` | Release script `packaging/release.sh`: Windows build, installer, optional signing, SHA256SUMS, INSTALL notes (SmartScreen, Smart App Control) | `m8-installer`, `m8-win-exe` |
 
 ## M9: Follow Me and offset
 
