@@ -1,0 +1,23 @@
+[package]
+name = "drydock-render"
+description = "wgpu scene renderer, on screen and headless"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+drydock-dae.workspace = true
+drydock-view.workspace = true
+glam.workspace = true
+image.workspace = true
+bytemuck.workspace = true
+pollster.workspace = true
+wgpu.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+
+[lints]
+workspace = true

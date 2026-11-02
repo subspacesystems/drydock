@@ -1,0 +1,27 @@
+[package]
+name = "drydock"
+description = "Subspace Drydock (codename modeler): a 3D modeler for architecture and woodworking"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+drydock-dae.workspace = true
+drydock-kernel.workspace = true
+drydock-mesh.workspace = true
+drydock-view.workspace = true
+drydock-render.workspace = true
+glam.workspace = true
+image.workspace = true
+eframe.workspace = true
+egui-wgpu.workspace = true
+wgpu.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+egui_kittest.workspace = true
+
+[lints]
+workspace = true

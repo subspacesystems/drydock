@@ -3,7 +3,7 @@
 # Copyright (C) 2026 Subspace Systems
 
 """Convert Natural Earth's 1:110m land polygons (public domain, naturalearthdata.com)
-into the globe's outline asset, app/crates/modeler/assets/land_110m.bin.
+into the globe's outline asset, app/crates/drydock/assets/land_110m.bin.
 
 Usage: python3 -I tools/land_data.py ne_110m_land.geojson OUT.bin
 

@@ -29,12 +29,12 @@ exceptions = [
     { crate = "clipboard-win", allow = ["BSL-1.0"] },
     { crate = "error-code", allow = ["BSL-1.0"] },
     # Our own crates: GPLv3 (ADR-007).
-    { crate = "modeler", allow = ["GPL-3.0-or-later"] },
-    { crate = "modeler-dae", allow = ["GPL-3.0-or-later"] },
-    { crate = "modeler-kernel", allow = ["GPL-3.0-or-later"] },
-    { crate = "modeler-mesh", allow = ["GPL-3.0-or-later"] },
-    { crate = "modeler-render", allow = ["GPL-3.0-or-later"] },
-    { crate = "modeler-view", allow = ["GPL-3.0-or-later"] },
+    { crate = "drydock", allow = ["GPL-3.0-or-later"] },
+    { crate = "drydock-dae", allow = ["GPL-3.0-or-later"] },
+    { crate = "drydock-kernel", allow = ["GPL-3.0-or-later"] },
+    { crate = "drydock-mesh", allow = ["GPL-3.0-or-later"] },
+    { crate = "drydock-render", allow = ["GPL-3.0-or-later"] },
+    { crate = "drydock-view", allow = ["GPL-3.0-or-later"] },
 ]
 
 [bans]

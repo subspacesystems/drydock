@@ -1,0 +1,21 @@
+[package]
+name = "drydock-mesh"
+description = "Triangle-mesh files for 3D printing (STL), written from the format descriptions"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+glam.workspace = true
+drydock-dae.workspace = true
+drydock-kernel.workspace = true
+miniz_oxide.workspace = true
+roxmltree.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+
+[lints]
+workspace = true
