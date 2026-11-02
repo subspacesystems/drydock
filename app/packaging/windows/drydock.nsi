@@ -16,8 +16,6 @@ Name "Subspace Drydock"
 OutFile "${OUTFILE}"
 InstallDir "$PROGRAMFILES64\Subspace Drydock"
 RequestExecutionLevel admin
-SetRegView 64
-SetShellVarContext all
 SetCompressor /SOLID lzma
 
 Page directory
@@ -25,12 +23,21 @@ Page instfiles
 UninstPage uninstConfirm
 UninstPage instfiles
 
+Function .onInit
+  SetRegView 64
+  SetShellVarContext all
+FunctionEnd
+
+Function un.onInit
+  SetRegView 64
+  SetShellVarContext all
+FunctionEnd
+
 Function RemoveOldVersion
-  ReadRegStr $R0 HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\SubspaceDrydock" "UninstallString"
   ReadRegStr $R1 HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\SubspaceDrydock" "InstallLocation"
-  StrCmp $R0 "" done
-  IfFileExists "$R0" 0 done
-  ExecWait '"$R0" /S _?=$R1'
+  StrCmp $R1 "" done
+  IfFileExists "$R1\uninstall.exe" 0 done
+  ExecWait '"$R1\uninstall.exe" /S _?=$R1'
   Delete "$R1\uninstall.exe"
   RMDir "$R1"
 done:

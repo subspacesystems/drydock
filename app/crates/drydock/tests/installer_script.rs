@@ -99,15 +99,14 @@ fn names_and_install_dir() {
 
 #[test]
 fn removes_the_old_version_before_installing() {
-    // Reads the old uninstall entry (uninstaller and install folder) ...
-    let read_uninst = must("ReadRegStr", &[UNINSTALL_KEY, "UninstallString"]);
-    must("ReadRegStr", &[UNINSTALL_KEY, "InstallLocation"]);
-    // ... runs the old uninstaller silently, waiting for it, in the old folder ...
-    let run = must("ExecWait", &["/S", "_?="]);
+    // Reads the old install folder ...
+    let read_loc = must("ReadRegStr", &[UNINSTALL_KEY, "InstallLocation"]);
+    // ... runs the old uninstaller from that folder, silently, waiting for it, in place ...
+    let run = must("ExecWait", &["$R1", "uninstall.exe", "/S", "_?="]);
     // ... and does all that before the first file is installed.
     let first_file = must("File", &[]);
     assert!(
-        read_uninst < run,
+        read_loc < run,
         "read the key before running the uninstaller"
     );
     assert!(
@@ -117,6 +116,77 @@ fn removes_the_old_version_before_installing() {
     // After the wait, the leftovers of the old uninstaller are cleaned up.
     let del = find_from(run, "Delete", &["uninstall"]).expect("Delete of the old uninstaller");
     assert!(del < first_file);
+}
+
+#[test]
+fn old_uninstaller_is_found_by_the_install_folder() {
+    // UninstallString is stored in quotes, so `IfFileExists` on it is never true.
+    let ls = lines();
+    let read_loc = must("ReadRegStr", &[UNINSTALL_KEY, "InstallLocation"]);
+    let reg_var = ls[read_loc].split_whitespace().nth(1).unwrap().to_string();
+    for (i, l) in ls.iter().enumerate() {
+        if l.to_lowercase().starts_with("iffileexists") {
+            let target = l.split_whitespace().nth(1).unwrap_or("").trim_matches('"');
+            let quoted_string_var = ls.iter().take(i).any(|r| {
+                r.to_lowercase().starts_with("readregstr")
+                    && r.contains("UninstallString")
+                    && r.split_whitespace().nth(1) == Some(target)
+            });
+            assert!(
+                !quoted_string_var,
+                "IfFileExists on the quoted UninstallString: {l}"
+            );
+        }
+    }
+    // Nothing to remove when the install folder is unknown.
+    let skip =
+        find("StrCmp", &[reg_var.as_str(), "\"\""]).expect("StrCmp on an empty InstallLocation");
+    let exists = must("IfFileExists", &[reg_var.as_str(), "uninstall.exe"]);
+    let run = must("ExecWait", &["/S", "_?="]);
+    assert!(read_loc < skip && skip < exists && exists < run);
+}
+
+/// The block enclosing instruction line `index`: `Some("function .oninit")`, `Some("section
+/// install")`, or `None` at the top level.
+fn enclosing(index: usize) -> Option<String> {
+    let mut open: Option<String> = None;
+    for (i, l) in lines().iter().enumerate() {
+        if i == index {
+            return open;
+        }
+        let low = l.to_lowercase();
+        let first = low.split_whitespace().next().unwrap_or("");
+        match first {
+            "function" | "section" => {
+                let name = low.split_whitespace().skip(1).collect::<Vec<_>>().join(" ");
+                open = Some(format!("{first} {}", name.trim_matches('"')));
+            }
+            "functionend" | "sectionend" => open = None,
+            _ => {}
+        }
+    }
+    None
+}
+
+#[test]
+fn registry_view_and_shell_context_are_set_inside_functions() {
+    // makensis rejects `SetRegView` and `SetShellVarContext` at the top level.
+    for (i, l) in lines().iter().enumerate() {
+        let low = l.to_lowercase();
+        if low.starts_with("setregview") || low.starts_with("setshellvarcontext") {
+            assert!(enclosing(i).is_some(), "outside a Function or Section: {l}");
+        }
+    }
+    // Both are set at start-up of the installer and of the uninstaller.
+    for func in ["function .oninit", "function un.oninit"] {
+        for (word, arg) in [("setregview", "64"), ("setshellvarcontext", "all")] {
+            let found = lines().iter().enumerate().any(|(i, l)| {
+                let low = l.to_lowercase();
+                low.starts_with(word) && low.contains(arg) && enclosing(i).as_deref() == Some(func)
+            });
+            assert!(found, "`{word} {arg}` missing in `{func}`");
+        }
+    }
 }
 
 #[test]
