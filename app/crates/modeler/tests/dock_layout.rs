@@ -352,7 +352,7 @@ fn load_and_save() {
     assert_eq!(DockLayout::load(&file), layout);
     let _ = std::fs::remove_dir_all(&dir);
 
-    let var = |name: &str| (name == "MODELER_CONFIG_DIR").then(|| OsString::from("/tmp/cfg"));
+    let var = |name: &str| (name == "DRYDOCK_CONFIG_DIR").then(|| OsString::from("/tmp/cfg"));
     assert_eq!(
         dock::panels_file(var),
         Some(std::path::PathBuf::from("/tmp/cfg/panels"))
