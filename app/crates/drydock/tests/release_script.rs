@@ -35,6 +35,16 @@ fn workspace_version() -> String {
 
 const CARGO_STUB: &str = r#"#!/usr/bin/env bash
 echo "cargo $*" >> "$LOG"
+case " $* " in
+  *" -p drydock-guide "*)
+    [ "${STUB_GUIDE_FAIL:-}" = 1 ] && exit 1
+    src=${@: -2:1}
+    dst=${@: -1}
+    [ -d "$src" ] && echo "guide_src_exists" >> "$LOG"
+    mkdir -p "$dst"
+    printf 'stub-guide' > "$dst/index.html"
+    exit 0;;
+esac
 [ "${STUB_CARGO_NO_EXE:-}" = 1 ] && exit 0
 d="$CARGO_TARGET_DIR/x86_64-pc-windows-gnu/release"
 mkdir -p "$d"
@@ -54,6 +64,7 @@ done
 [ -f "$stage/drydock.exe" ] && echo "stage_has_exe" >> "$LOG"
 [ -f "$stage/drydock.exe" ] && echo "stage_exe=$(cat "$stage/drydock.exe")" >> "$LOG"
 [ -d "$stage/guide" ] && echo "stage_has_guide" >> "$LOG"
+[ -f "$stage/guide/index.html" ] && echo "stage_guide=$(cat "$stage/guide/index.html")" >> "$LOG"
 printf 'stub-installer %s' "$v" > "$out"
 "#;
 
@@ -225,7 +236,7 @@ fn builds_the_windows_target_with_cargo() {
     let line = rig
         .log_lines()
         .into_iter()
-        .find(|l| l.starts_with("cargo "))
+        .find(|l| l.starts_with("cargo ") && l.contains("x86_64-pc-windows-gnu"))
         .expect("cargo was run");
     for want in [
         "build",
@@ -292,10 +303,6 @@ fn makensis_gets_version_stage_and_outfile() {
         rig.pos("stage_has_exe").is_some(),
         "stage held drydock.exe when makensis ran"
     );
-    assert!(
-        rig.pos("stage_has_guide").is_none(),
-        "no guide folder unless asked"
-    );
 }
 
 #[test]
@@ -330,6 +337,80 @@ fn guide_folder_goes_into_the_stage() {
     );
     ok(&o);
     assert!(rig.pos("stage_has_guide").is_some());
+}
+
+#[test]
+fn guide_folder_given_means_no_guide_build() {
+    let rig = Rig::new("guide-given");
+    let guide = rig.root.join("guide-in");
+    std::fs::create_dir_all(&guide).unwrap();
+    std::fs::write(guide.join("index.html"), "<p>mine</p>").unwrap();
+    let out = rig.out();
+    ok(&rig.run(
+        &[
+            "--version",
+            "1.2.3",
+            "--out",
+            out.to_str().unwrap(),
+            "--guide",
+            guide.to_str().unwrap(),
+        ],
+        &[],
+    ));
+    assert!(
+        !rig.log_lines().iter().any(|l| l.contains("drydock-guide")),
+        "no guide build: {:?}",
+        rig.log_lines()
+    );
+    assert!(rig.pos("stage_guide=<p>mine</p>").is_some());
+}
+
+#[test]
+fn without_guide_folder_the_guide_is_built_into_the_stage() {
+    let rig = Rig::new("guide-built");
+    let out = rig.out();
+    ok(&rig.release("1.2.3"));
+    let lines = rig.log_lines();
+    let line = lines
+        .iter()
+        .find(|l| l.starts_with("cargo ") && l.contains("-p drydock-guide"))
+        .unwrap_or_else(|| panic!("guide build ran: {lines:?}"));
+    for want in ["run", "--release", "--locked"] {
+        assert!(line.contains(want), "{line:?} lacks {want:?}");
+    }
+    assert!(
+        !line.contains("--target"),
+        "the generator runs on the host: {line:?}"
+    );
+    let args: Vec<&str> = line.split(' ').collect();
+    let n = args.len();
+    assert!(
+        args[n - 2].ends_with("docs/guide"),
+        "input is the repo's docs/guide: {line:?}"
+    );
+    let stage_guide = out.join("stage").join("guide");
+    assert_eq!(args[n - 1], stage_guide.to_str().unwrap(), "{line:?}");
+    assert!(rig.pos("guide_src_exists").is_some(), "docs/guide exists");
+    assert!(
+        rig.pos("stage_guide=stub-guide").is_some(),
+        "makensis saw the built guide in the stage: {lines:?}"
+    );
+}
+
+#[test]
+fn guide_build_failure_fails_the_release() {
+    let rig = Rig::new("guide-fail");
+    let out = rig.out();
+    let o = rig.run(
+        &["--version", "1.2.3", "--out", out.to_str().unwrap()],
+        &[("STUB_GUIDE_FAIL", "1")],
+    );
+    assert!(!o.status.success());
+    assert!(
+        rig.pos("makensis").is_none(),
+        "no installer without a guide"
+    );
+    assert!(!out.join("SHA256SUMS").exists());
 }
 
 #[test]
@@ -583,8 +664,35 @@ fn dry_run_prints_the_plan_and_runs_nothing() {
         .position(|l| l.contains("drydock-1.2.3-setup.exe") && l.contains("-DVERSION=1.2.3"))
         .expect("makensis step");
     assert!(cargo < nsis, "build before installer: {stdout}");
+    let guide = plan
+        .iter()
+        .position(|l| l.contains("-p drydock-guide") && l.contains("docs/guide"))
+        .expect("guide step");
+    assert!(guide < nsis, "guide before installer: {stdout}");
     assert!(!rig.log().exists(), "no program was run");
     assert!(!out.join("SHA256SUMS").exists() && !out.join("drydock-1.2.3-setup.exe").exists());
+}
+
+#[test]
+fn dry_run_with_guide_folder_prints_no_guide_build() {
+    let rig = Rig::new("dry-guide");
+    let out = rig.out();
+    let guide = rig.root.join("guide-in");
+    std::fs::create_dir_all(&guide).unwrap();
+    let o = rig.run(
+        &[
+            "--dry-run",
+            "--version",
+            "1.2.3",
+            "--out",
+            out.to_str().unwrap(),
+            "--guide",
+            guide.to_str().unwrap(),
+        ],
+        &[],
+    );
+    ok(&o);
+    assert!(!String::from_utf8_lossy(&o.stdout).contains("drydock-guide"));
 }
 
 #[test]
