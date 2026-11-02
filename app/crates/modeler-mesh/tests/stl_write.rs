@@ -52,7 +52,7 @@ fn encode_layout_is_exact() {
     let other: Triangle = [v(1.5, -2.25, 3.0), v(1.5, -2.25, 4.0), v(1.5, 5.0, 3.0)];
     let bytes = encode("Bracket", &[tri(), other]);
     assert_eq!(bytes.len(), 84 + 2 * 50);
-    assert!(bytes[..13].starts_with(b"modeler STL: "));
+    assert!(bytes[..13].starts_with(b"Drydock STL: "));
     assert_eq!(&bytes[13..20], b"Bracket");
     assert!(bytes[20..80].iter().all(|b| *b == 0));
     assert_eq!(u32::from_le_bytes(bytes[80..84].try_into().unwrap()), 2);

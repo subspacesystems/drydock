@@ -106,7 +106,7 @@ fn convert_of_a_missing_file_fails() {
     ]);
     assert_eq!(out.status.code(), Some(1));
     let err = stderr(&out);
-    assert!(err.starts_with("modeler: lost.dae: "), "{err}");
+    assert!(err.starts_with("Drydock: lost.dae: "), "{err}");
     assert!(stdout(&out).is_empty());
     assert!(is_empty_dir(&dir));
     let _ = std::fs::remove_dir_all(&dir);
@@ -122,7 +122,7 @@ fn convert_into_a_missing_folder_fails() {
     ]);
     assert_eq!(out.status.code(), Some(1));
     let err = stderr(&out);
-    assert!(err.starts_with("modeler: out.modeler: "), "{err}");
+    assert!(err.starts_with("Drydock: out.modeler: "), "{err}");
     assert!(is_empty_dir(&dir));
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -142,7 +142,7 @@ fn convert_usage_errors() {
     ] {
         let out = run(&args);
         assert_eq!(out.status.code(), Some(2), "{args:?}");
-        assert!(stderr(&out).starts_with("modeler: "), "{args:?}");
+        assert!(stderr(&out).starts_with("Drydock: "), "{args:?}");
         assert!(is_empty_dir(&dir), "{args:?} wrote something");
     }
     let _ = std::fs::remove_dir_all(&dir);

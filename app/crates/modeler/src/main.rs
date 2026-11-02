@@ -88,7 +88,7 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Parsed {
 }
 
 fn usage_error(message: &str) -> Parsed {
-    eprintln!("modeler: {message}\n\n{}", usage());
+    eprintln!("Drydock: {message}\n\n{}", usage());
     Parsed::Exit(ExitCode::from(2))
 }
 
@@ -115,7 +115,7 @@ fn screenshot(file: &Path, out: &Path) -> Result<(), String> {
     let (image, warnings) = render_headless(&document.scene, &view.camera, width, height, &style)
         .map_err(|err| err.to_string())?;
     for warning in warnings {
-        eprintln!("modeler: warning: {warning}");
+        eprintln!("Drydock: warning: {warning}");
     }
     image
         .save(out)
@@ -129,7 +129,7 @@ fn main() -> ExitCode {
     };
     if let Some(out) = &args.convert {
         let Some(file) = &args.file else {
-            eprintln!("modeler: --convert needs a FILE\n\n{}", usage());
+            eprintln!("Drydock: --convert needs a FILE\n\n{}", usage());
             return ExitCode::from(2);
         };
         return match convert(file, out) {
@@ -138,41 +138,41 @@ fn main() -> ExitCode {
                 ExitCode::SUCCESS
             }
             Err(message) => {
-                eprintln!("modeler: {message}");
+                eprintln!("Drydock: {message}");
                 ExitCode::FAILURE
             }
         };
     }
     if let Some(out) = &args.screenshot {
         let Some(file) = &args.file else {
-            eprintln!("modeler: --screenshot needs a FILE\n\n{}", usage());
+            eprintln!("Drydock: --screenshot needs a FILE\n\n{}", usage());
             return ExitCode::from(2);
         };
         return match screenshot(file, out) {
             Ok(()) => ExitCode::SUCCESS,
             Err(message) => {
-                eprintln!("modeler: {message}");
+                eprintln!("Drydock: {message}");
                 ExitCode::FAILURE
             }
         };
     }
     let options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
-            .with_title("modeler")
+            .with_title("Drydock")
             .with_inner_size([1280.0, 800.0])
             .with_drag_and_drop(true),
         ..Default::default()
     };
     let file = args.file;
     let result = eframe::run_native(
-        "modeler",
+        "drydock",
         options,
         Box::new(move |cc| Ok(Box::new(app::App::new(cc, file)))),
     );
     match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => {
-            eprintln!("modeler: {err}");
+            eprintln!("Drydock: {err}");
             ExitCode::FAILURE
         }
     }

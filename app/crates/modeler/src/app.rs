@@ -3494,9 +3494,9 @@ fn preview_color(plane: Option<DrawPlane>) -> Color32 {
 /// Short text for the system clipboard after a Copy or Cut, so the next Ctrl+V arrives.
 fn clipboard_text(count: usize, verb: &str) -> String {
     if count == 1 {
-        format!("modeler: 1 item {verb}")
+        format!("Drydock: 1 item {verb}")
     } else {
-        format!("modeler: {count} items {verb}")
+        format!("Drydock: {count} items {verb}")
     }
 }
 

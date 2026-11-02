@@ -42,13 +42,13 @@ pub mod viewstate;
 
 /// One-line product banner.
 pub fn banner() -> String {
-    format!("modeler {}", env!("CARGO_PKG_VERSION"))
+    format!("Drydock {}", env!("CARGO_PKG_VERSION"))
 }
 
 #[cfg(test)]
 mod tests {
     #[test]
-    fn banner_names_the_codename() {
-        assert!(super::banner().starts_with("modeler "));
+    fn banner_names_the_product() {
+        assert!(super::banner().starts_with("Drydock "));
     }
 }

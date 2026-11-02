@@ -52,7 +52,7 @@ fn new_empty_is_an_untitled_native_model() {
     assert!(doc.kernel_error.is_none());
     assert!(doc.untitled);
     assert!(!doc.modified);
-    assert_eq!(doc.title(), "untitled.modeler - modeler");
+    assert_eq!(doc.title(), "untitled.modeler - Drydock");
     assert_eq!(doc.stats.triangles, 0);
     assert_eq!(doc.stats.lines, 0);
     assert_eq!(doc.stats.faces, 0);
