@@ -353,7 +353,7 @@ impl ViewState {
             Action::Cut => return Effect::Cut,
             Action::Paste => return Effect::Paste,
             Action::About => return Effect::About,
-            Action::UserGuide => unimplemented!("m8-guide-help"),
+            Action::UserGuide => return Effect::UserGuide,
             Action::ModelInfo => return Effect::ModelInfo,
             Action::ToggleShadows => return Effect::ToggleShadows,
             Action::TogglePanel(id) => return Effect::TogglePanel(id),

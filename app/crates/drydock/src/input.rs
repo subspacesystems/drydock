@@ -288,6 +288,7 @@ pub fn key(key: &str, mods: Modifiers) -> Option<Action> {
         "F6" if plain => Some(Action::View(StandardView::Back)),
         "F7" if plain => Some(Action::View(StandardView::Left)),
         "F8" if plain => Some(Action::View(StandardView::Bottom)),
+        "F1" if plain => Some(Action::UserGuide),
         _ => None,
     }
 }
