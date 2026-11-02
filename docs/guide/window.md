@@ -8,7 +8,7 @@ The menus along the top hold the commands that are not tied to a single click in
 
 - **File** starts and finishes your work. Choose New (`Ctrl+N`) for a blank design, Open (`Ctrl+O`) to load one you saved, or Import to bring in another file. Export writes your model out for other uses, Save (`Ctrl+S`) stores it, Save As (`Ctrl+Shift+S`) stores it under a new name, and Exit closes the program.
 - **Edit** handles changes: undo and redo, cut, copy and paste, erase, make group or component, and explode. Undo is the one you will use most while learning.
-- **View** changes how you look at the design. It has the projection choice, Zoom Extents, the standard views, toggles for the axes and the panels, and Reset Panels.
+- **View** changes how you look at the design. It has the projection choice, Zoom Extents, the standard views, View > Axes to show or hide the axes, panel items such as View > Shadows and View > Toolbars, and View > Reset Panels.
 - **Tools** lists the drawing and editing tools.
 - **Help** opens the User Guide; you can also press `F1` at any time.
 

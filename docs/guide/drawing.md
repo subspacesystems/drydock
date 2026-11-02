@@ -16,7 +16,7 @@ Press `C` for the Circle tool. Click the center, then click to set the radius. A
 
 ## Arcs
 
-Press `A` to draw an arc from a center, a start point and a sweep. Press `Shift+A` for a three-point arc instead. The number of segments is set the same way as for a circle, by typing a number and `s`, so you can make an arc as smooth or as chunky as you like.
+Press `A` to draw an arc from a center, a start point and a sweep. Press `Shift+A` for a three-point arc instead; its toolbar button is called 3-Point Arc. The number of segments is set the same way as for a circle, by typing a number and `s`, so you can make an arc as smooth or as chunky as you like.
 
 ## Typing values
 

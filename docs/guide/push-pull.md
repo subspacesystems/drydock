@@ -4,7 +4,7 @@ Push/Pull gives a flat face some thickness. It is the step that turns your drawi
 
 ## Pushing a face
 
-Press `P` for the Push/Pull tool. Click a face, then move the cursor along the direction you want to pull it out or push it in. A preview shows the new shape as you move, so you can see the result before you commit. Click again to finish. If you move the cursor over a corner elsewhere in the model, the height snaps to match that corner, which is a simple way to keep two parts level. A distance of zero does nothing, `Esc` abandons the push, and undo takes back a finished one. When you are learning, use the preview freely: nothing changes until the second click.
+Press `P` for the Push/Pull tool. On the toolbar its button is called Extrude. Click a face, then move the cursor along the direction you want to pull it out or push it in. A preview shows the new shape as you move, so you can see the result before you commit. Click again to finish. If you move the cursor over a corner elsewhere in the model, the height snaps to match that corner, which is a simple way to keep two parts level. A distance of zero does nothing, `Esc` abandons the push, and undo takes back a finished one. When you are learning, use the preview freely: nothing changes until the second click.
 
 ## Typing a distance
 

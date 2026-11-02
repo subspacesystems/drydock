@@ -16,6 +16,13 @@ Read the pages below in order when you are new. Each one is short and builds on 
 - Next, read [Moving around](navigation.md) to orbit, pan and zoom with confidence.
 - Then try [Selecting](selecting.md) so you can pick up the right edge or face every time.
 - After that, open [Drawing](drawing.md) to make lines, rectangles, circles and arcs.
-- Finally, read [Push/Pull](push-pull.md) to turn those flat shapes into solid parts.
+- Then read [Push/Pull](push-pull.md) to turn those flat shapes into solid parts.
+- [Moving, rotating and scaling](modify.md) changes the things you have selected.
+- [Measuring and units](measuring.md) covers distances and the model's units.
+- [Groups and components](groups.md) keeps parts together and lets you reuse them.
+- [Materials and painting](materials.md) adds color and texture.
+- [Files, import and export](files.md) saves your work and moves models in and out.
+- [3D printing](printing.md) checks a part and prepares it for a printer.
+- [Keyboard shortcuts](shortcuts.md) lists the keys for every tool.
 
 Take your time, try each step in the program as you read, and do not worry about making mistakes. Undo is always close by, and every master began with a wobbly first rectangle. Have fun building something that is truly yours.
