@@ -1,17 +1,19 @@
 # Selecting
 
+Before you can change an edge or a face, you have to select it. Selecting is a small skill, but it makes everything else in Drydock feel quick and predictable.
+
 ## Clicking
 
-The Select tool is the first button on the toolbar, and its key is `Space`. Click an edge or a face to select it, and click empty space to clear the selection. A plain click replaces whatever was selected before. A double click selects a face or edge together with everything that bounds it. A triple click selects everything connected to it, so you can grab a whole part in one go.
+Press `Space` to choose the Select tool. Click an edge or a face to select it, and click empty space to clear the selection. A plain click replaces whatever was selected before, so you always end up with just the thing you clicked. When something is selected it is highlighted, which confirms that the next command will act on it and nothing else.
 
 ## Adding and removing
 
-Modifier keys change what a click does to the selection. Hold `Shift` to add to the selection. Hold `Ctrl` to toggle: an unselected thing is added, and a selected thing is removed. Hold `Alt` to remove something from the selection. These keys also work while you drag a selection box, so you can build up a selection piece by piece.
+Sometimes you want more than one piece at a time. Hold `Shift` while clicking to add to the selection. Hold `Ctrl` to toggle: it adds a piece that is not selected yet, and removes one that is already selected. Hold `Alt` to remove a piece from the selection. These three keys let you build up a careful set of edges or faces without starting over each time.
 
 ## Selecting with a box
 
-Drag with the left mouse button on empty space to draw a box. Drag from left to right for a window box: only things completely inside the box are selected. Drag from right to left for a crossing box: things inside the box or touching it are selected. The direction of the drag decides which kind of box you get. The same `Shift`, `Ctrl` and `Alt` keys work with boxes.
+Drag in empty space to draw a selection box. Drag from left to right to make a window box: only the things completely inside the box are selected. Drag from right to left to make a crossing box: things inside the box and things that only touch it are selected. The same modifier keys work with boxes, so you can add, toggle or remove while you drag. This is the fastest way to gather a group of edges on a busy model.
 
 ## Selecting connected geometry
 
-A box is a good example. Double click one of its faces and the face is selected along with its bounding edges. Triple click the same face and the whole box is selected, because all of its geometry is connected. Use a double click when you want one face and its border, and a triple click when you want the entire connected piece.
+A double click on a face or an edge selects it together with everything that bounds it. A triple click selects everything connected to it. A box makes a small example. A double click on one face of the box selects that face along with its edges. A triple click on the same face selects the whole box, because all of its faces and edges are connected. Once the whole box is selected you can move it, copy it or delete it as one piece.

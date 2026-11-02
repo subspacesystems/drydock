@@ -1,18 +1,22 @@
 # Welcome to Drydock
 
+Welcome! Drydock is a friendly 3D modeling program for designing parts that you can print. You do not need any special equipment to begin: a mouse, a keyboard and a little patience are enough to make your first useful object.
+
 ## What Drydock is
 
-Drydock is a 3D design program for making parts you can print. A model is built from edges and faces: you draw flat shapes, then pull them into solids. You do not need any previous experience with 3D software to get started. Work through the pages below in order, or jump to the part you need.
+Drydock is a 3D modeling program for designing parts to print. A design is built from simple pieces: edges and faces. An edge is a straight line between two points, and a face is the flat surface that those edges enclose. You start by drawing flat shapes on the ground or on an existing face, and then you pull those shapes into solids. A flat rectangle becomes a box, and a flat circle becomes a cylinder. Because every solid is made from these basic pieces, you can keep changing a design as your idea develops.
 
-You can explore the program at your own pace. A small change such as moving a face is easy to undo, so you are free to try something and take it back. Many tools show what they will do before you finish the action, which makes it safe to practice on a simple shape.
+Working this way feels a lot like sketching on paper, except that your sketch has depth. You can add a little material where you need strength, remove a little where you want to save weight, and check the result from any angle before you print it. The important thing to remember is that you always begin flat and then give the flat shape some thickness. Once you know how to draw a shape and pull it, you already know the heart of the program.
 
 ## Where to start
 
-- [The Drydock window](window.md) shows the menus, toolbars and panels.
-- [Moving around](navigation.md) explains how to orbit, pan and zoom.
-- [Selecting](selecting.md) covers picking things and changing the selection.
-- [Drawing](drawing.md) introduces lines, rectangles, circles and arcs.
-- [Push/Pull](push-pull.md) turns a flat face into a solid.
+Read the pages below in order when you are new. Each one is short and builds on the one before it.
+
+- Start with [The Drydock window](window.md) to learn where the menus, toolbars and panels live.
+- Next, read [Moving around](navigation.md) to orbit, pan and zoom with confidence.
+- Then try [Selecting](selecting.md) so you can pick up the right edge or face every time.
+- After that, open [Drawing](drawing.md) to make lines, rectangles, circles and arcs.
+- Then read [Push/Pull](push-pull.md) to turn those flat shapes into solid parts.
 - [Moving, rotating and scaling](modify.md) changes the things you have selected.
 - [Measuring and units](measuring.md) covers distances and the model's units.
 - [Groups and components](groups.md) keeps parts together and lets you reuse them.
@@ -21,6 +25,4 @@ You can explore the program at your own pace. A small change such as moving a fa
 - [3D printing](printing.md) checks a part and prepares it for a printer.
 - [Keyboard shortcuts](shortcuts.md) lists the keys for every tool.
 
-## How this guide works
-
-The pages are short and each one covers a single idea. Words in `backticks` are keys you can press on the keyboard. Menu items are written as the menu name, an arrow, and the item, such as View > Reset Panels. You can read from the first page to the last, or use the contents list beside the page to move around. If you ever get lost, go back to [The Drydock window](window.md) to see where everything lives.
+Take your time, try each step in the program as you read, and do not worry about making mistakes. Undo is always close by, and every master began with a wobbly first rectangle. Have fun building something that is truly yours.

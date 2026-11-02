@@ -1,6 +1,6 @@
 # User Guide
 
-- [Welcome to Drydock](welcome.md)
+- [Welcome](welcome.md)
 - [The Drydock window](window.md)
 - [Moving around](navigation.md)
 - [Selecting](selecting.md)

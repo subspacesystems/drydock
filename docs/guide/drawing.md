@@ -1,25 +1,27 @@
 # Drawing
 
+Everything in Drydock begins with a flat shape. This page shows the four drawing tools and the small habits that make them accurate.
+
 ## Lines
 
-The Line tool has key `L` and is labelled Line on the toolbar. Click a start point, then click the next point to draw a segment. Each further click continues the chain from the last point, so you can sketch a shape without starting again. Press `Esc` to end the chain or cancel it. The cursor snaps to endpoints, midpoints, centers, points on edges and faces, the ground, and along the red, green and blue axes. A hint beside the cursor names the snap, such as "Endpoint" or "On Red Axis".
+Press `L` for the Line tool. Click a start point, then click the next point, and each click continues the chain so you can draw several connected edges in a row. Press `Esc` to end the chain or to cancel the line you are drawing. As you move, the cursor snaps to useful places: endpoints, midpoints, centers, points on edges and faces, the ground, and along the red, green and blue axes. A hint beside the cursor names the snap, for example "Endpoint" or "On Red Axis", so you can trust what the next click will attach to.
 
 ## Rectangles
 
-The Rectangle tool is `R`. Click one corner and then click the opposite corner. The rectangle lies flat on the face or plane you started on. While drawing, you can type a width and a height separated by a comma and press `Enter`. The measurements box shows what you typed, and Backspace removes the last character.
+Press `R` for the Rectangle tool. Click one corner and then click the opposite corner; Drydock fills in the four edges for you. If you need an exact size, see Typing values below.
 
 ## Circles
 
-The Circle tool is `C`. Click the center and then set the radius. Before you draw, typing a number followed by `s`, for example `12s`, sets the number of segments used for the circle. More segments make a rounder curve. The radius can also be typed as a length while the tool is active.
+Press `C` for the Circle tool. Click the center, then click to set the radius. A circle is drawn from segments, and you can decide how many before you draw: type a number followed by `s`, such as `12s`, and the next circle uses that many segments.
 
 ## Arcs
 
-The Arc tool is `A` and draws an arc from a center, a start and a sweep. The toolbar button for `Shift+A` is called 3-Point Arc; it draws an arc through three points instead. The number of segments can be typed the same way as for circles, so you control how smooth the curve is.
+Press `A` to draw an arc from a center, a start point and a sweep. Press `Shift+A` for a three-point arc instead; its toolbar button is called 3-Point Arc. The number of segments is set the same way as for a circle, by typing a number and `s`, so you can make an arc as smooth or as chunky as you like.
 
 ## Typing values
 
-While drawing, type a number and press `Enter`. You may add a unit such as `10cm` or `1/2"`; without one the model's unit is used. For a rectangle, type width and height separated by a comma. The measurements box shows the value as you type, and Backspace deletes the last character.
+While you are drawing, you can type a number instead of clicking. Add a unit such as `10cm` or `1/2"` if you like; without a unit, the model's unit is used. Press `Enter` to apply the value. A rectangle takes width and height separated by a comma, like `10cm, 5cm`. The measurements box shows what you typed, and `Backspace` deletes the last character if you make a typo.
 
 ## Locking a direction
 
-The arrow keys lock a line to an axis: Right is the red axis, Left is the green axis, and Up or Down is the blue axis. Press the same arrow again to release the lock. Holding `Shift` locks to the direction you are already showing, which keeps a line straight while you move the cursor around.
+The arrow keys lock a line to an axis: `Right` is red, `Left` is green, and `Up` or `Down` is blue. Press the same arrow again to release the lock. If you hold `Shift`, the line locks to the direction you are already showing. Locking keeps a line perfectly straight while you choose its length.

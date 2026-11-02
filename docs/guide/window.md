@@ -1,13 +1,21 @@
 # The Drydock window
 
+When Drydock opens, you see the main drawing area with menus across the top, toolbars nearby and a set of panels that you can show or hide. Everything you need is on this one screen, so you can work without hunting through hidden corners.
+
 ## Menus
 
-The menu bar along the top holds five menus. File has File > New (`Ctrl+N`), File > Open (`Ctrl+O`), File > Import, the export items, File > Save (`Ctrl+S`), File > Save As (`Ctrl+Shift+S`) and File > Exit. Edit has undo and redo, cut, copy and paste, erase, and the commands that make or explode groups and components. View opens the panels and changes the view; it includes View > Axes, View > Shadows, View > Toolbars and View > Reset Panels. Tools holds the extra modeling commands. Help has Help > User Guide (`F1`) and Help > About Drydock. A menu item that is greyed out is not available for the current selection.
+The menus along the top hold the commands that are not tied to a single click in the drawing area.
+
+- **File** starts and finishes your work. Choose New (`Ctrl+N`) for a blank design, Open (`Ctrl+O`) to load one you saved, or Import to bring in another file. Export writes your model out for other uses, Save (`Ctrl+S`) stores it, Save As (`Ctrl+Shift+S`) stores it under a new name, and Exit closes the program.
+- **Edit** handles changes: undo and redo, cut, copy and paste, erase, make group or component, and explode. Undo is the one you will use most while learning.
+- **View** changes how you look at the design. It has the projection choice, Zoom Extents, the standard views, View > Axes to show or hide the axes, panel items such as View > Shadows and View > Toolbars, and View > Reset Panels.
+- **Tools** lists the drawing and editing tools.
+- **Help** opens the User Guide; you can also press `F1` at any time.
 
 ## Toolbars and panels
 
-Toolbars hold the tools you click to draw and change things. Each button has a short label, and the tool's key is shown in the Tools menu. Panels such as Entity Info, Materials, Components and Shadows are opened from the View menu. A panel can be closed when you do not need it, and View > Reset Panels puts the panels back in their usual places. Some panels show facts about the selected part; others let you choose colors, materials or components.
+The toolbars hold the tools you click to draw, select, move and measure. Point at a button and its name appears, so you can explore without fear. Panels are the small windows that show details about your design. They include Entity Info, Materials, Components and Shadows, among others. You open and close them from the View menu. Panels can be moved around, and if your screen ever gets crowded you can choose Reset Panels from the View menu to put them back where they started. Closing a panel never changes your design; it only hides the panel from view.
 
 ## The measurements box
 
-The measurements box sits at the bottom of the window. While you draw or move something it shows the length, radius, angle or number of segments that the operation is using. You can type numbers while a tool is active; they go into this box and take effect when you press `Enter`. When nothing is being changed, the box is a quiet place where the app can show short messages and counts.
+The measurements box is the small field that shows the length, radius, segments or angle of whatever you are drawing. Watch it as you work: it tells you the size of the shape under your cursor. When you want an exact size, you type numbers and they go there rather than onto the drawing itself. You will see this in action on the drawing page, where typing a value and pressing `Enter` sets the shape precisely. The box is a quiet helper, but it quickly becomes the place you glance at to confirm that a part is the size you intended.
