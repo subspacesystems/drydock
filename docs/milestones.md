@@ -267,6 +267,7 @@ Moved up by Tyrel (2026-10-28) so beta testers can try the app after 3D printing
 | `m8-rename-extension` | Native files saved as `.drydock` with first line `drydock-model`; `.modeler` files and the old first line keep opening; the installer registers only `.drydock` (Tyrel, 2026-11-01) | `m8-rename-text` |
 | `m8-rename-config` | Settings folder becomes `drydock` (Linux) / `Drydock` (Windows) and the override `DRYDOCK_CONFIG_DIR`; the old folder and variable are ignored, settings start fresh (Tyrel, 2026-11-01) | `m8-rename-crates` |
 | `m8-guide-build` | User guide generator `drydock-guide`: Markdown in `docs/guide/` to static HTML with contents sidebar, anchors, link/image checks and an offline search index (Tyrel) | |
+| `m8-guide-help` | Help > User Guide (F1) opens the bundled guide in the browser | `m8-guide-build` |
 | `m8-guide-text-start` | Guide pages: welcome, window, navigation, selecting, drawing, push/pull | `m8-guide-build` |
 | `m8-guide-text-more` | Remaining guide pages | `m8-guide-text-start` |
 | `m8-win-exe` | The program builds for Windows (`drydock.exe`): no console window, icon and version info, Windows settings folder | `m8-rename-config` |
