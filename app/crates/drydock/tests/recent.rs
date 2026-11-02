@@ -223,6 +223,21 @@ fn empty_override_is_ignored() {
 
 #[cfg(not(windows))]
 #[test]
+fn the_old_override_is_not_read() {
+    let var = env(&[("MODELER_CONFIG_DIR", "/tmp/old"), ("HOME", "/home/u")]);
+    assert_eq!(
+        config_dir(var),
+        Some(PathBuf::from("/home/u/.config/drydock"))
+    );
+    assert_eq!(config_dir(env(&[("MODELER_CONFIG_DIR", "/tmp/old")])), None);
+    assert_eq!(
+        recent_file(env(&[("MODELER_CONFIG_DIR", "/tmp/old"), ("HOME", "/h")])),
+        Some(PathBuf::from("/h/.config/drydock/recent-files"))
+    );
+}
+
+#[cfg(not(windows))]
+#[test]
 fn config_dir_uses_xdg_then_home() {
     assert_eq!(
         config_dir(env(&[("XDG_CONFIG_HOME", "/x/cfg"), ("HOME", "/home/u")])),

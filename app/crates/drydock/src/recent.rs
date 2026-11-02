@@ -89,7 +89,8 @@ impl RecentFiles {
     }
 }
 
-/// The app's config folder, from environment variables read through `var`.
+/// The app's config folder, from environment variables read through `var`; the order and
+/// folder names are in `winpaths::config_dir_on`.
 pub fn config_dir(var: impl Fn(&str) -> Option<OsString>) -> Option<PathBuf> {
     crate::winpaths::config_dir_on(crate::look::Os::current(), var)
 }
