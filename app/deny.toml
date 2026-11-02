@@ -31,6 +31,7 @@ exceptions = [
     # Our own crates: GPLv3 (ADR-007).
     { crate = "drydock", allow = ["GPL-3.0-or-later"] },
     { crate = "drydock-dae", allow = ["GPL-3.0-or-later"] },
+    { crate = "drydock-guide", allow = ["GPL-3.0-or-later"] },
     { crate = "drydock-kernel", allow = ["GPL-3.0-or-later"] },
     { crate = "drydock-mesh", allow = ["GPL-3.0-or-later"] },
     { crate = "drydock-render", allow = ["GPL-3.0-or-later"] },

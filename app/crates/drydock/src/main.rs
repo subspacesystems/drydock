@@ -21,12 +21,12 @@ fn usage() -> String {
         "{}\n\n\
          Usage: drydock [FILE]\n\
          \x20      drydock --screenshot OUT.png FILE\n\
-         \x20      drydock --convert OUT.modeler FILE\n\n\
-         FILE is a .dae or .modeler file.\n\n\
+         \x20      drydock --convert OUT.drydock FILE\n\n\
+         FILE is a .dae, .drydock or .modeler file.\n\n\
          Options:\n\
          \x20 --screenshot OUT.png  Render FILE once without a window (iso view, zoom\n\
          \x20                       extents, {}x{}), write OUT.png and exit\n\
-         \x20 --convert OUT.modeler Convert FILE to a native .modeler file and exit\n\
+         \x20 --convert OUT.drydock Convert FILE to a native .drydock file and exit\n\
          \x20 -h, --help            Show this help\n\
          \x20 -V, --version         Show the version",
         drydock::banner(),

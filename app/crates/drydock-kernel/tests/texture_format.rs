@@ -31,7 +31,7 @@ fn kind_at(text: &str, line: usize, kind: ReadErrorKind) {
 
 /// A triangle with materials and maps on both sides, a second face with only a back map,
 /// and a definition with a mapped face.
-const V3: &str = r#"modeler-model 3
+const V3: &str = r#"drydock-model 3
 material 0 1 1 1 1 "Brick" "tex/brick.png" 2 0.5
 material 1 0.5 0.5 0.5 1 "Plain" -
 material 2 1 1 1 0.5 "Tile" "tile.png" 1 1
@@ -135,7 +135,7 @@ fn unit_textures_without_maps_stay_version_one() {
     m.add_material(brick, &mut log);
     assert_eq!(
         to_text(&m).unwrap(),
-        "modeler-model 1\nmaterial 0 1 1 1 1 \"Brick\" \"brick.png\"\nbody root\nend\n"
+        "drydock-model 1\nmaterial 0 1 1 1 1 \"Brick\" \"brick.png\"\nbody root\nend\n"
     );
 }
 
@@ -149,7 +149,7 @@ fn a_texture_size_makes_version_three() {
     m.add_material(Material::new("Plain", [0.0, 0.0, 0.0, 1.0]), &mut log);
     assert_eq!(
         to_text(&m).unwrap(),
-        "modeler-model 3\nmaterial 0 1 1 1 1 \"Brick\" \"brick.png\" 1 0.25\n\
+        "drydock-model 3\nmaterial 0 1 1 1 1 \"Brick\" \"brick.png\" 1 0.25\n\
          material 1 0 0 0 1 \"Plain\" -\nbody root\nend\n"
     );
 }
@@ -173,7 +173,7 @@ fn a_map_makes_version_three_and_stale_maps_are_dropped() {
     brick.texture = Some(Texture::from("tex/brick.png"));
     m.set_material(MaterialId(0), brick, &mut log).unwrap();
     let text = to_text(&m).unwrap();
-    assert!(text.starts_with("modeler-model 1\n"), "{text}");
+    assert!(text.starts_with("drydock-model 1\n"), "{text}");
     assert!(!text.contains("texmap"));
     assert!(text.contains("material 0 1 1 1 1 \"Brick\" \"tex/brick.png\"\n"));
     // face 1 has no entry left at all, so no paint line either
@@ -184,20 +184,20 @@ fn a_map_makes_version_three_and_stale_maps_are_dropped() {
     fm.front_map = Some(map([1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]));
     m.set_face_materials(BodyId::Root, FaceId(1), fm, &mut log)
         .unwrap();
-    assert!(to_text(&m).unwrap().starts_with("modeler-model 3\n"));
+    assert!(to_text(&m).unwrap().starts_with("drydock-model 3\n"));
     m.edit_geometry(BodyId::Root, &mut log, |ctx, log| {
         ctx.delete_face(FaceId(1), log)
     })
     .unwrap()
     .unwrap();
     let text = to_text(&m).unwrap();
-    assert!(text.starts_with("modeler-model 1\n"), "{text}");
+    assert!(text.starts_with("drydock-model 1\n"), "{text}");
     assert!(!text.contains("texmap"));
 }
 
 #[test]
 fn guides_and_unit_textures_stay_version_two() {
-    let text = "modeler-model 2\nmaterial 0 1 1 1 1 \"B\" \"b.png\"\nbody root\n\
+    let text = "drydock-model 2\nmaterial 0 1 1 1 1 \"B\" \"b.png\"\nbody root\n\
                 guide 0 point 1 2 3\nend\n";
     let m = from_text(text).unwrap();
     assert_eq!(to_text(&m).unwrap(), text);
@@ -206,7 +206,7 @@ fn guides_and_unit_textures_stay_version_two() {
 #[test]
 fn old_versions_read_textures_as_one_meter() {
     for version in [1, 2] {
-        let text = format!("modeler-model {version}\nmaterial 0 1 1 1 1 \"B\" \"b.png\"\nend\n");
+        let text = format!("drydock-model {version}\nmaterial 0 1 1 1 1 \"B\" \"b.png\"\nend\n");
         let m = from_text(&text).unwrap();
         assert_eq!(
             m.material(MaterialId(0)).unwrap().texture,
@@ -219,13 +219,13 @@ fn old_versions_read_textures_as_one_meter() {
 fn old_versions_refuse_sizes_and_texmaps() {
     for version in [1, 2] {
         kind_at(
-            &format!("modeler-model {version}\nmaterial 0 1 1 1 1 \"B\" \"b.png\" 2 2\nend\n"),
+            &format!("drydock-model {version}\nmaterial 0 1 1 1 1 \"B\" \"b.png\" 2 2\nend\n"),
             2,
             ReadErrorKind::BadField,
         );
         kind_at(
             &format!(
-                "modeler-model {version}\nbody root\nvertex 0 0 0 0\nvertex 1 1 0 0\n\
+                "drydock-model {version}\nbody root\nvertex 0 0 0 0\nvertex 1 1 0 0\n\
                  vertex 2 0 1 0\nedge 0 0 1\nedge 1 1 2\nedge 2 2 0\nface 0 +0 +1 +2\n\
                  texmap 0 front 1 0 0 0 0 1 0 0\nend\n"
             ),
@@ -240,7 +240,7 @@ const TRI: &str = "body root\nvertex 0 0 0 0\nvertex 1 1 0 0\nvertex 2 0 1 0\ned
 
 /// `record` as line 10, after a v3 header and a triangle face 0 in the root.
 fn after_triangle(record: &str) -> String {
-    format!("modeler-model 3\n{TRI}{record}\nend\n")
+    format!("drydock-model 3\n{TRI}{record}\nend\n")
 }
 
 #[test]
@@ -264,7 +264,7 @@ fn texmap_errors() {
         ReadErrorKind::Rejected(ModelError::Topo(TopoError::MissingFace(FaceId(4)))),
     );
     kind_at(
-        "modeler-model 3\ntexmap 0 front 1 0 0 0 0 1 0 0\nend\n",
+        "drydock-model 3\ntexmap 0 front 1 0 0 0 0 1 0 0\nend\n",
         2,
         ReadErrorKind::NoBody,
     );
@@ -273,7 +273,7 @@ fn texmap_errors() {
 #[test]
 fn texmap_keeps_paint_and_the_other_side() {
     let text = format!(
-        "modeler-model 3\nmaterial 0 1 0 0 1 \"R\" -\n{TRI}paint 0 0 -\n\
+        "drydock-model 3\nmaterial 0 1 0 0 1 \"R\" -\n{TRI}paint 0 0 -\n\
          texmap 0 back 0 0 1 0 1 0 0 0\nend\n"
     );
     let m = from_text(&text).unwrap();
@@ -300,14 +300,14 @@ fn v3_material_record_shapes() {
     ];
     for record in bad {
         kind_at(
-            &format!("modeler-model 3\n{record}\nend\n"),
+            &format!("drydock-model 3\n{record}\nend\n"),
             2,
             ReadErrorKind::BadField,
         );
     }
     for size in ["0 1", "1 -2", "-0 1"] {
         kind_at(
-            &format!("modeler-model 3\nmaterial 0 1 1 1 1 \"B\" \"b.png\" {size}\nend\n"),
+            &format!("drydock-model 3\nmaterial 0 1 1 1 1 \"B\" \"b.png\" {size}\nend\n"),
             2,
             ReadErrorKind::Rejected(ModelError::BadTexture),
         );
@@ -338,7 +338,7 @@ proptest! {
             proptest::option::of((1e-6f64..1e4, 1e-6f64..1e4)), 1..4),
         maps in proptest::collection::vec((any_map(), any_map(), 0usize..5, 0usize..5), 2),
     ) {
-        let mut m = from_text(&format!("modeler-model 3\n{TRI}end\n")).unwrap();
+        let mut m = from_text(&format!("drydock-model 3\n{TRI}end\n")).unwrap();
         let mut log = ModelEdit::new();
         let mut ids = Vec::new();
         for (i, size) in sizes.iter().enumerate() {
@@ -361,7 +361,7 @@ proptest! {
         let needs_three = sizes.iter().flatten().any(|&(w, h)| (w, h) != (1.0, 1.0))
             || front_map.is_some()
             || back_map.is_some();
-        prop_assert_eq!(text.starts_with("modeler-model 3\n"), needs_three, "{}", text);
+        prop_assert_eq!(text.starts_with("drydock-model 3\n"), needs_three, "{}", text);
         // bit-exact numbers, including -0
         let got = back_in.root().face_materials(FaceId(0));
         for (a, b) in [(got.front_map, front_map), (got.back_map, back_map)] {
