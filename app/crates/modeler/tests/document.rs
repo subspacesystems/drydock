@@ -76,7 +76,7 @@ fn malformed_file_error_names_the_file() {
 #[test]
 fn title_is_file_name_then_product() {
     let doc = Document::open(&slab()).unwrap();
-    assert_eq!(doc.title(), "slab.dae - modeler");
+    assert_eq!(doc.title(), "slab.dae - Drydock");
 }
 
 #[test]

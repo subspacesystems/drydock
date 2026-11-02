@@ -182,7 +182,7 @@ fn native_document_draws_the_kernel_model() {
     assert_eq!(doc.kind, FileKind::Native);
     assert_eq!(doc.path, path);
     assert!(doc.kernel_error.is_none());
-    assert_eq!(doc.title(), "slab.modeler - modeler");
+    assert_eq!(doc.title(), "slab.modeler - Drydock");
     let kernel = doc.kernel.as_ref().expect("native file has a kernel model");
     assert_eq!(text(kernel), std::fs::read_to_string(&path).unwrap());
 
@@ -322,7 +322,7 @@ fn save_as_from_dae_writes_a_native_file() {
     assert_eq!(written, want);
     assert_eq!(doc.path, want);
     assert_eq!(doc.kind, FileKind::Native);
-    assert_eq!(doc.title(), "copy.modeler - modeler");
+    assert_eq!(doc.title(), "copy.modeler - Drydock");
     // Nothing else about the document changes.
     assert_eq!(doc.stats, before_stats);
     assert_eq!(kernel_text(&doc), before_text);

@@ -446,7 +446,7 @@ fn items_that_open_a_window_end_with_an_ellipsis() {
         ("File", "Open..."),
         ("File", "Save As..."),
         ("View", "Model Info..."),
-        ("Help", "About modeler..."),
+        ("Help", "About Drydock..."),
     ] {
         let mut h = menus(MenuState::default(), &seen);
         open(&mut h, menu);
@@ -462,7 +462,7 @@ fn items_that_open_a_window_end_with_an_ellipsis() {
     open(&mut h, "Edit");
     assert!(has_row(&h, "Make Component..."));
     assert!(has_row(&h, "Make Group..."));
-    for (menu, bare) in [("View", "Model Info"), ("Help", "About modeler")] {
+    for (menu, bare) in [("View", "Model Info"), ("Help", "About Drydock")] {
         let mut h = menus(MenuState::default(), &seen);
         open(&mut h, menu);
         assert!(!has_row(&h, bare), "{menu} > {bare} has no ellipsis");
@@ -473,7 +473,7 @@ fn items_that_open_a_window_end_with_an_ellipsis() {
 fn renamed_items_still_act() {
     for (menu, label, action) in [
         ("View", "Model Info...", Action::ModelInfo),
-        ("Help", "About modeler...", Action::About),
+        ("Help", "About Drydock...", Action::About),
     ] {
         let seen = Seen::default();
         let mut h = menus(MenuState::default(), &seen);

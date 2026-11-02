@@ -259,7 +259,7 @@ fn help_about_returns_the_about_action() {
     let seen = Seen::default();
     let mut h = menu_harness(state(), &seen);
     h.run();
-    choose(&mut h, "Help", "About modeler");
+    choose(&mut h, "Help", "About Drydock");
     assert_eq!(*seen.borrow(), vec![Action::About]);
 }
 
