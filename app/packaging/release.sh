@@ -144,10 +144,6 @@ stage=$out/stage
 exe_name=drydock.exe
 exe=$CARGO_TARGET_DIR/x86_64-pc-windows-gnu/release/$exe_name
 
-if [ -z "$guide" ]; then
-    docs_guide=$(cd "$app_dir/../docs/guide" && pwd)
-fi
-
 print_cmd() {
     printf '+'
     printf ' %q' "$@"
@@ -169,6 +165,7 @@ sign_file() {
 if [ "$dry_run" = 1 ]; then
     print_cmd "$cargo" build --release --locked --target x86_64-pc-windows-gnu -p drydock
     if [ -z "$guide" ]; then
+        docs_guide=$(realpath -m "$app_dir/../docs/guide")
         print_cmd "$cargo" run --release --locked -p drydock-guide -- "$docs_guide" "$stage/guide"
     fi
     if [ -n "$sign_pfx" ]; then
@@ -197,6 +194,7 @@ cp "$exe" "$stage/$exe_name"
 if [ -n "$guide" ]; then
     cp -R "$guide" "$stage/guide"
 else
+    docs_guide=$(cd "$app_dir/../docs/guide" && pwd)
     (
         cd "$app_dir"
         "$cargo" run --release --locked -p drydock-guide -- "$docs_guide" "$stage/guide"
