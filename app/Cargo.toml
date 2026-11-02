@@ -28,6 +28,8 @@ egui-wgpu = "0.36"
 # Same major as egui-wgpu 0.36, so the app can hand the renderer egui's device.
 wgpu = { version = "30", default-features = false, features = ["std", "wgsl", "vulkan", "dx12", "metal"] }
 pollster = "1"
+# Embeds the icon and version info in the Windows .exe (MIT); used by the app's build.rs.
+winresource = "0.1"
 bytemuck = { version = "1", features = ["derive"] }
 proptest = "1"
 egui_kittest = "0.36"

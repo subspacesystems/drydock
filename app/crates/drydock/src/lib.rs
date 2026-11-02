@@ -39,6 +39,8 @@ pub mod texture_panel;
 pub mod toolbars;
 pub mod units_ui;
 pub mod viewstate;
+pub mod winmeta;
+pub mod winpaths;
 
 /// One-line product banner.
 pub fn banner() -> String {

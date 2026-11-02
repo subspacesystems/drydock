@@ -19,6 +19,9 @@ eframe.workspace = true
 egui-wgpu.workspace = true
 wgpu.workspace = true
 
+[build-dependencies]
+winresource.workspace = true
+
 [dev-dependencies]
 proptest.workspace = true
 egui_kittest.workspace = true
