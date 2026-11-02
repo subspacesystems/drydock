@@ -30,12 +30,12 @@ impl fmt::Display for StlWriteError {
 
 impl std::error::Error for StlWriteError {}
 
-/// The bytes of one binary STL: 80-byte header (`"modeler STL: "` plus `name`, cut at 80
+/// The bytes of one binary STL: 80-byte header (`"Drydock STL: "` plus `name`, cut at 80
 /// bytes on a character boundary, zero padded), u32 count, then 50-byte records (unit
 /// normal from the winding, three corners as f32, attribute 0). Values are written as
 /// given (the print mesh is already in mm). A degenerate triangle gets a zero normal.
 pub fn encode(name: &str, triangles: &[Triangle]) -> Vec<u8> {
-    let mut header = b"modeler STL: ".to_vec();
+    let mut header = b"Drydock STL: ".to_vec();
     for ch in name.chars() {
         if header.len() + ch.len_utf8() > 80 {
             break;

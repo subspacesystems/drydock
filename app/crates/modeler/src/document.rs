@@ -219,11 +219,11 @@ impl Document {
         self.modified = state != self.saved_state;
     }
 
-    /// The window title: "<file name> - modeler", with a `*` after the name while
+    /// The window title: "<file name> - Drydock", with a `*` after the name while
     /// the document is modified.
     pub fn title(&self) -> String {
         let star = if self.modified { "*" } else { "" };
-        format!("{}{star} - modeler", file_name(&self.path))
+        format!("{}{star} - Drydock", file_name(&self.path))
     }
 
     /// Write the kernel model to `native_path(path)`; on success the document is that
@@ -473,7 +473,7 @@ fn file_format_error(path: &Path, error: FileError) -> String {
             "line {}: {}",
             read.line,
             match read.kind {
-                ReadErrorKind::NotAModelFile => "not a modeler-model file".to_owned(),
+                ReadErrorKind::NotAModelFile => "not a Drydock model file".to_owned(),
                 ReadErrorKind::UnsupportedVersion(version) => {
                     format!("unsupported format version {version}")
                 }

@@ -337,7 +337,7 @@ pub const GIT_HASH: &str = env!("MODELER_GIT_HASH");
 
 /// One line for the About window: name, version and commit.
 pub fn about_text() -> String {
-    format!("modeler {} ({GIT_HASH})", env!("CARGO_PKG_VERSION"))
+    format!("Drydock {} ({GIT_HASH})", env!("CARGO_PKG_VERSION"))
 }
 
 /// The names in the repository's `CONTRIBUTORS` file.
@@ -346,6 +346,8 @@ pub const CONTRIBUTORS: &str = include_str!("../../../../CONTRIBUTORS");
 /// The About window's lines, top to bottom (`docs/specs/m4-ui-menus.md`).
 pub fn about_lines() -> Vec<String> {
     let mut lines = vec![
+        "Subspace Drydock".to_owned(),
+        "by Subspace Systems".to_owned(),
         about_text(),
         format!("License: {}", env!("CARGO_PKG_LICENSE")),
         "Copyright (c) 2026 Subspace Systems".to_owned(),
@@ -367,7 +369,7 @@ pub fn about_window(ctx: &eframe::egui::Context, open: &mut bool) {
         return;
     }
     let mut close = false;
-    eframe::egui::Window::new("About modeler")
+    eframe::egui::Window::new("About Drydock")
         .collapsible(false)
         .resizable(false)
         .open(open)
@@ -1081,7 +1083,7 @@ fn menu_bar_inner(
             }
         });
         ui.menu_button("Help", |ui| {
-            if menu_item(ui, None, "About modeler...", "", false).clicked() {
+            if menu_item(ui, None, "About Drydock...", "", false).clicked() {
                 chosen = Some(Action::About);
                 ui.close();
             }
