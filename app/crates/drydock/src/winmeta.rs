@@ -14,6 +14,17 @@ pub const COMPANY_NAME: &str = "Subspace Systems";
 /// The program's file name.
 pub const FILE_NAME: &str = "drydock.exe";
 
+/// The version `build.rs` stamps on the program (About, file properties): `requested` (the
+/// `DRYDOCK_VERSION` build variable) when it is set and not blank, else `cargo_version`.
+/// A requested value is trimmed and must pass [`file_version`]; otherwise the error says so
+/// and names the value. `cargo_version` is used as it is.
+// Remove this allow once build.rs calls the function.
+#[allow(dead_code)]
+pub fn build_version(requested: Option<&str>, cargo_version: &str) -> Result<String, String> {
+    let _ = (requested, cargo_version);
+    unimplemented!("m8-version")
+}
+
 /// Four-part Windows file version from a Cargo version: `major.minor.patch` plus an optional
 /// fourth number; a `-pre` or `+build` suffix on the last part is ignored. `None` when there
 /// are fewer than three parts, more than four, or a part is not a number that fits `u16`.

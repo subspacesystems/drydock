@@ -335,9 +335,12 @@ pub fn toolbar(ui: &mut eframe::egui::Ui, current: Tool) -> Option<Action> {
 /// The commit the binary was built from (short hash, or "unknown").
 pub const GIT_HASH: &str = env!("DRYDOCK_GIT_HASH");
 
+/// The release version of this build (`DRYDOCK_VERSION` when the build sets it).
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 /// One line for the About window: name, version and commit.
 pub fn about_text() -> String {
-    format!("Drydock {} ({GIT_HASH})", env!("CARGO_PKG_VERSION"))
+    format!("Drydock {VERSION} ({GIT_HASH})")
 }
 
 /// The names in the repository's `CONTRIBUTORS` file.
