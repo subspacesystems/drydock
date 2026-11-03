@@ -4,7 +4,7 @@ Groups and components keep pieces of geometry together so you can move and chang
 
 ## Making a group or component
 
-Select things, then choose Edit > Make Group or Edit > Make Component. Both ask for a name first. A group is a one-off bundle that belongs only to this model. A component is a named part that you can place again and again.
+Select things, then choose Edit > Make Group or Edit > Make Component. Both ask for a name first. A group is a one-off bundle that belongs only to this model. A component is a named piece that you can place again and again.
 
 ## Editing inside
 

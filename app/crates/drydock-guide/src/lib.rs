@@ -201,6 +201,26 @@ pub fn heading_id(text: &str) -> String {
     }
 }
 
+fn decode_link_text(text: &str) -> String {
+    let bytes = text.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            let high = (bytes[i + 1] as char).to_digit(16);
+            let low = (bytes[i + 2] as char).to_digit(16);
+            if let (Some(high), Some(low)) = (high, low) {
+                out.push((high * 16 + low) as u8);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8(out).unwrap_or_else(|_| text.to_string())
+}
+
 /// Parses `SUMMARY.md` (format in the spec).
 pub fn parse_summary(text: &str) -> Result<Vec<SummaryEntry>, GuideError> {
     let mut entries: Vec<SummaryEntry> = Vec::new();
@@ -252,12 +272,13 @@ pub fn parse_summary(text: &str) -> Result<Vec<SummaryEntry>, GuideError> {
         let close = body
             .find(']')
             .ok_or_else(|| summary_error(number, "expected a title in brackets"))?;
-        let title = &body[1..close];
+        let title = decode_link_text(&body[1..close]);
         let after_title = &body[close + 1..];
         let target = after_title
             .strip_prefix('(')
             .and_then(|tail| tail.strip_suffix(')'))
             .ok_or_else(|| summary_error(number, "expected a link to a .md page"))?;
+        let target = decode_link_text(target);
 
         if target.is_empty() || !target.ends_with(".md") {
             return Err(summary_error(number, "the link must name a .md file"));
@@ -265,19 +286,19 @@ pub fn parse_summary(text: &str) -> Result<Vec<SummaryEntry>, GuideError> {
         if target.starts_with('/') {
             return Err(summary_error(number, "the path must be relative"));
         }
-        if has_scheme(target) {
+        if has_scheme(&target) {
             return Err(summary_error(number, "the path must not have a scheme"));
         }
         if target.split('/').any(|part| part == "..") {
             return Err(summary_error(number, "the path must not contain '..'"));
         }
-        if !seen.insert(target.to_string()) {
+        if !seen.insert(target.clone()) {
             return Err(summary_error(number, "the page is listed twice"));
         }
 
         entries.push(SummaryEntry {
-            title: title.to_string(),
-            path: target.to_string(),
+            title,
+            path: target,
             level,
         });
         previous_level = Some(level);
