@@ -279,7 +279,7 @@ Moved up by Tyrel (2026-10-28) so beta testers can try the app after 3D printing
 | `m8-version` | One version everywhere: Help > About, the .exe's file properties, the installer and Add/Remove Programs all show the release version, and About shows the commit instead of "unknown" (Tyrel, 2026-11-03) | |
 | `m8-installer-notice` | When an older Drydock is installed, the installer says so and that it will replace it before going ahead (Tyrel) | `m8-version` |
 | `m8-guide-search` | The guide's search box finds pages (its script ran before the box existed) | |
-| `m8-guide-wording` | Guide describes Drydock as a general 3D modeler (architecture first, 3D printing one use) and calls the tool Extrude, not Push/Pull | `m8-guide-search` |
+| `m8-guide-wording` | Guide describes Drydock as a general 3D modeler (architecture first, 3D printing one use) and calls the tool Extrude, not Push/Pull | |
 
 ## M9: Follow Me and offset
 
