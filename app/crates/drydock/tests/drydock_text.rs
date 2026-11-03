@@ -3,7 +3,7 @@
 
 //! m8-rename-text: the product's shown name is Drydock. See docs/specs/m8-rename-text.md.
 
-use drydock::chrome::{about_lines, about_text, about_window};
+use drydock::chrome::{VERSION, about_lines, about_text, about_window};
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
 use std::path::{Path, PathBuf};
@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 fn about_text_starts_with_the_product_name() {
     let text = about_text();
     assert!(text.starts_with("Drydock "), "{text}");
-    assert!(text.contains(env!("CARGO_PKG_VERSION")), "{text}");
+    assert!(text.contains(VERSION), "{text}");
 }
 
 #[test]

@@ -265,9 +265,9 @@ fn help_about_returns_the_about_action() {
 
 #[test]
 fn about_text_names_the_version_and_commit() {
-    use drydock::chrome::{GIT_HASH, about_text};
+    use drydock::chrome::{GIT_HASH, VERSION, about_text};
     let text = about_text();
-    assert!(text.contains(env!("CARGO_PKG_VERSION")), "{text}");
+    assert!(text.contains(VERSION), "{text}");
     assert!(!GIT_HASH.is_empty());
     assert!(text.contains(GIT_HASH), "{text}");
 }
