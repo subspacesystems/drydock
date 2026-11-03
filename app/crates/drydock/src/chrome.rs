@@ -336,7 +336,7 @@ pub fn toolbar(ui: &mut eframe::egui::Ui, current: Tool) -> Option<Action> {
 pub const GIT_HASH: &str = env!("DRYDOCK_GIT_HASH");
 
 /// The release version of this build (`DRYDOCK_VERSION` when the build sets it).
-pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+pub const VERSION: &str = env!("DRYDOCK_VERSION");
 
 /// One line for the About window: name, version and commit.
 pub fn about_text() -> String {

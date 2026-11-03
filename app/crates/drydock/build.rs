@@ -13,6 +13,13 @@ mod winmeta;
 
 fn main() {
     println!("cargo:rerun-if-env-changed=DRYDOCK_GIT_HASH");
+    println!("cargo:rerun-if-env-changed=DRYDOCK_VERSION");
+    let version = winmeta::build_version(
+        std::env::var("DRYDOCK_VERSION").ok().as_deref(),
+        env!("CARGO_PKG_VERSION"),
+    )
+    .unwrap_or_else(|error| panic!("{error}"));
+    println!("cargo:rustc-env=DRYDOCK_VERSION={version}");
     let git_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../.git");
     for file in ["HEAD", "logs/HEAD"] {
         let path = git_dir.join(file);
@@ -39,11 +46,11 @@ fn main() {
         println!("cargo:rerun-if-changed=assets/drydock.ico");
         let mut resource = winresource::WindowsResource::new();
         resource.set_icon("assets/drydock.ico");
-        let parts = winmeta::file_version(env!("CARGO_PKG_VERSION")).unwrap_or([0, 0, 0, 0]);
+        let parts = winmeta::file_version(&version).unwrap_or([0, 0, 0, 0]);
         let packed = winmeta::packed_version(parts);
         resource.set_version_info(winresource::VersionInfo::FILEVERSION, packed);
         resource.set_version_info(winresource::VersionInfo::PRODUCTVERSION, packed);
-        for (key, value) in winmeta::version_strings(env!("CARGO_PKG_VERSION")) {
+        for (key, value) in winmeta::version_strings(&version) {
             resource.set(key, &value);
         }
         if let Err(error) = resource.compile() {

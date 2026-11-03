@@ -45,7 +45,7 @@ pub mod winpaths;
 
 /// One-line product banner.
 pub fn banner() -> String {
-    format!("Drydock {}", env!("CARGO_PKG_VERSION"))
+    format!("Drydock {}", crate::chrome::VERSION)
 }
 
 #[cfg(test)]

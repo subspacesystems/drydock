@@ -18,11 +18,12 @@ pub const FILE_NAME: &str = "drydock.exe";
 /// `DRYDOCK_VERSION` build variable) when it is set and not blank, else `cargo_version`.
 /// A requested value is trimmed and must pass [`file_version`]; otherwise the error says so
 /// and names the value. `cargo_version` is used as it is.
-// Remove this allow once build.rs calls the function.
-#[allow(dead_code)]
 pub fn build_version(requested: Option<&str>, cargo_version: &str) -> Result<String, String> {
-    let _ = (requested, cargo_version);
-    unimplemented!("m8-version")
+    match requested.map(str::trim).filter(|value| !value.is_empty()) {
+        Some(value) if file_version(value).is_some() => Ok(value.to_owned()),
+        Some(value) => Err(format!("invalid DRYDOCK_VERSION {value:?}")),
+        None => Ok(cargo_version.to_owned()),
+    }
 }
 
 /// Four-part Windows file version from a Cargo version: `major.minor.patch` plus an optional

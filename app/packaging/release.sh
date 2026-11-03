@@ -96,6 +96,15 @@ if ! [[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
     exit 2
 fi
 
+repo=$(cd "$app_dir/.." && pwd)
+export DRYDOCK_VERSION=$version
+if [ -z "${DRYDOCK_GIT_HASH:-}" ]; then
+    hash=$(git -c safe.directory="$repo" -C "$repo" rev-parse --short HEAD 2>/dev/null || true)
+    if [ -n "$hash" ]; then
+        export DRYDOCK_GIT_HASH=$hash
+    fi
+fi
+
 if [ -n "$guide" ] && [ ! -d "$guide" ]; then
     echo "guide folder not found: $guide" >&2
     exit 1
@@ -163,6 +172,10 @@ sign_file() {
 }
 
 if [ "$dry_run" = 1 ]; then
+    printf 'DRYDOCK_VERSION=%s\n' "$version"
+    if [ -n "${DRYDOCK_GIT_HASH:-}" ]; then
+        printf 'DRYDOCK_GIT_HASH=%s\n' "$DRYDOCK_GIT_HASH"
+    fi
     print_cmd "$cargo" build --release --locked --target x86_64-pc-windows-gnu -p drydock
     if [ -z "$guide" ]; then
         docs_guide=$(realpath -m "$app_dir/../docs/guide")
