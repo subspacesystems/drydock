@@ -45,8 +45,8 @@ fn page_frame_links_assets_relative_to_the_page() {
     assert!(root.contains("<html lang=\"en\">"));
     assert!(root.contains("<title>Welcome to Drydock - Drydock User Guide</title>"));
     assert!(root.contains("<link rel=\"stylesheet\" href=\"style.css\">"));
-    assert!(root.contains("<script src=\"search-index.js\"></script>"));
-    assert!(root.contains("<script src=\"search.js\"></script>"));
+    assert!(root.contains("<script defer src=\"search-index.js\"></script>"));
+    assert!(root.contains("<script defer src=\"search.js\"></script>"));
     assert!(root.contains("<body data-root=\"\">"));
     assert!(root.contains("<input type=\"search\" id=\"search\""));
     assert!(root.contains("<ul id=\"search-results\"></ul>"));
@@ -55,8 +55,8 @@ fn page_frame_links_assets_relative_to_the_page() {
     let deep = g.out_text("drawing/lines.html");
     assert!(deep.contains("<title>Lines - Drydock User Guide</title>"));
     assert!(deep.contains("<link rel=\"stylesheet\" href=\"../style.css\">"));
-    assert!(deep.contains("<script src=\"../search-index.js\"></script>"));
-    assert!(deep.contains("<script src=\"../search.js\"></script>"));
+    assert!(deep.contains("<script defer src=\"../search-index.js\"></script>"));
+    assert!(deep.contains("<script defer src=\"../search.js\"></script>"));
     assert!(deep.contains("<body data-root=\"../\">"));
 }
 

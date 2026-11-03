@@ -731,8 +731,8 @@ pub fn build(src: &Path, out: &Path) -> Result<BuildReport, GuideError> {
 <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n\
 <title>{title} - Drydock User Guide</title>\n\
 <link rel=\"stylesheet\" href=\"{root}style.css\">\n\
-<script src=\"{root}search-index.js\"></script>\n\
-<script src=\"{root}search.js\"></script>\n\
+<script defer src=\"{root}search-index.js\"></script>\n\
+<script defer src=\"{root}search.js\"></script>\n\
 </head>\n\
 <body data-root=\"{root}\">\n\
 <header><input type=\"search\" id=\"search\" placeholder=\"Search the guide\" aria-label=\"Search the guide\"><ul id=\"search-results\"></ul></header>\n\
