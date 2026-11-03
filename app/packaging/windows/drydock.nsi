@@ -26,6 +26,26 @@ UninstPage instfiles
 Function .onInit
   SetRegView 64
   SetShellVarContext all
+
+  ReadRegStr $R1 HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\SubspaceDrydock" "InstallLocation"
+  StrCmp $R1 "" notice_done
+  ReadRegStr $R2 HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\SubspaceDrydock" "DisplayVersion"
+  IfSilent notice_done
+
+  StrCmp $R2 "" notice_unknown
+  StrCmp $R2 "${VERSION}" notice_same
+  MessageBox MB_OKCANCEL|MB_ICONINFORMATION "Subspace Drydock $R2 is installed in $R1.$\nSetup will remove it and install ${VERSION}." IDOK notice_done
+  Abort
+
+notice_same:
+  MessageBox MB_OKCANCEL|MB_ICONINFORMATION "Subspace Drydock ${VERSION} is installed in $R1.$\nSetup will remove it and reinstall it." IDOK notice_done
+  Abort
+
+notice_unknown:
+  MessageBox MB_OKCANCEL|MB_ICONINFORMATION "Subspace Drydock is installed in $R1.$\nSetup will remove it and install ${VERSION}." IDOK notice_done
+  Abort
+
+notice_done:
 FunctionEnd
 
 Function un.onInit
