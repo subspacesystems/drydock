@@ -11,5 +11,5 @@
 - [Groups and components](groups.md)
 - [Materials and painting](materials.md)
 - [Files, import and export](files.md)
-- [3D pri%6Eting](pri%6Eting.md)
+- [3D printing](printing.md)
 - [Keyboard shortcuts](shortcuts.md)

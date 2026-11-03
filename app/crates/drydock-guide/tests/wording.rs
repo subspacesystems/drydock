@@ -67,7 +67,7 @@ fn welcome_intro_is_general_purpose() {
 #[test]
 fn printing_framing_stays_on_its_own_pages() {
     for (name, text) in pages() {
-        if ["printing.md", "files.md", "welcome.md"].contains(&name.as_str()) {
+        if ["printing.md", "files.md", "welcome.md", "SUMMARY.md"].contains(&name.as_str()) {
             continue;
         }
         let low = text.to_lowercase();
