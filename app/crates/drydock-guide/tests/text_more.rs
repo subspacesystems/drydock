@@ -155,7 +155,7 @@ fn contents_lists_the_new_pages_after_the_first_six() {
         "navigation.md",
         "selecting.md",
         "drawing.md",
-        "push-pull.md",
+        "extrude.md",
     ];
     assert_eq!(
         listed[..6],
