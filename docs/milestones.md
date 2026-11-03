@@ -263,7 +263,7 @@ Moved up by Tyrel (2026-10-28) so beta testers can try the app after 3D printing
 | Task | What | Needs |
 | --- | --- | --- |
 | `m8-rename-text` | User-visible name becomes Drydock: window title, About box (Subspace Drydock, by Subspace Systems), version line, menus, status and error messages, STL header, README; a test that no shown text says "modeler" | |
-| `m8-rename-crates` | Every crate becomes `drydock-*` (the app crate and its program `drydock` / `drydock.exe`), crate folders, Rust paths and the developer environment variables with them (Tyrel, 2026-11-01: "Rename everything") | `m8-rename-text` |
+| m8-rename-crates (done directly, no task) | Every crate becomes `drydock-*` (the app crate and its program `drydock` / `drydock.exe`), crate folders, Rust paths and the developer environment variables with them (Tyrel, 2026-11-01: "Rename everything") | `m8-rename-text` |
 | `m8-rename-extension` | Native files saved as `.drydock` with first line `drydock-model`; `.modeler` files and the old first line keep opening; the installer registers only `.drydock` (Tyrel, 2026-11-01) | `m8-rename-text` |
 | `m8-rename-config` | Settings folder becomes `drydock` (Linux) / `Drydock` (Windows) and the override `DRYDOCK_CONFIG_DIR`; the old folder and variable are ignored, settings start fresh (Tyrel, 2026-11-01) | `m8-rename-crates` |
 | `m8-guide-build` | User guide generator `drydock-guide`: Markdown in `docs/guide/` to static HTML with contents sidebar, anchors, link/image checks and an offline search index (Tyrel) | |
@@ -273,7 +273,7 @@ Moved up by Tyrel (2026-10-28) so beta testers can try the app after 3D printing
 | `m8-win-exe` | The program builds for Windows (`drydock.exe`): no console window, icon and version info, Windows settings folder | `m8-rename-config` |
 | `m8-installer` | NSIS installer script with in-place upgrade, `.drydock` file type and uninstaller | |
 | `m8-release` | Release script `packaging/release.sh`: Windows build, installer, optional signing, SHA256SUMS, INSTALL notes (SmartScreen, Smart App Control) | `m8-installer`, `m8-win-exe` |
-| `m8-win-ci` | Build checks compile the Windows target and the installer script (cross toolchain and NSIS in the build image) | `m8-installer-fix` |
+| m8-win-ci (done directly, no task) | Build checks compile the Windows target and the installer script (cross toolchain and NSIS in the build image) | `m8-installer-fix` |
 | `m8-installer-fix` | Installer script compiles (64-bit registry view and all-users folders set at start-up, for the uninstaller too) and an upgrade removes the old version, wherever it was installed | |
 | `m8-release-guide` | The release script builds the user guide into the installer when no guide folder is given | |
 
