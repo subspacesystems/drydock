@@ -5,7 +5,7 @@
 - [Moving around](navigation.md)
 - [Selecting](selecting.md)
 - [Drawing](drawing.md)
-- [Push/Pull](push-pull.md)
+- [Extrude](extrude.md)
 - [Moving, rotating and scaling](modify.md)
 - [Measuring and units](measuring.md)
 - [Groups and components](groups.md)

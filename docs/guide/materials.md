@@ -1,6 +1,6 @@
 # Materials and painting
 
-Materials give faces a color or a texture so the model is easier to read and so a printed part can be planned. The panels and buttons below work on faces, groups and components alike.
+Materials give faces a color or a texture so the model is easier to read and so the design is easier to plan. The panels and buttons below work on faces, groups and components alike.
 
 ## Paint Bucket
 
