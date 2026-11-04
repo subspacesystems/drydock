@@ -188,7 +188,7 @@ fn other_end(edge: &crate::topology::Edge, vertex: VertexId) -> Option<VertexId>
 
 /// The edges of one step `a` to `b`, in order, walking a straight run when the chord has
 /// been split by other geometry. `None` when the step is broken.
-fn step_edges(ctx: &Context, a: VertexId, b: VertexId) -> Option<Vec<EdgeId>> {
+pub(crate) fn step_edges(ctx: &Context, a: VertexId, b: VertexId) -> Option<Vec<EdgeId>> {
     let pa = ctx.vertex(a)?.position;
     let pb = ctx.vertex(b)?.position;
     if !pa.is_finite() || !pb.is_finite() {
