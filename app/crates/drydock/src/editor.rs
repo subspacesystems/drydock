@@ -3666,29 +3666,35 @@ impl Editor {
             }
         };
         let distance = (point - edge_point).dot(outward);
-        let segments = if distance.abs() <= TOL {
-            Vec::new()
+        let previous = self.offset.as_ref().map(|offset| offset.distance);
+        let segments: Option<Vec<(DVec3, DVec3)>> = if distance.abs() <= TOL {
+            Some(Vec::new())
         } else {
-            match model.body(self.body(model)) {
-                Some(body) => match faceoffset::offset_loops(body.geometry(), face, distance) {
-                    Ok(loops) => loops
-                        .iter()
-                        .flat_map(|points| {
-                            let n = points.len();
-                            (0..n).map(move |i| (points[i], points[(i + 1) % n]))
-                        })
-                        .collect(),
-                    Err(_) => Vec::new(),
-                },
-                None => Vec::new(),
-            }
+            model.body(self.body(model)).and_then(|body| {
+                faceoffset::offset_loops(body.geometry(), face, distance)
+                    .ok()
+                    .map(|loops| {
+                        loops
+                            .iter()
+                            .flat_map(|points| {
+                                let n = points.len();
+                                (0..n).map(move |i| (points[i], points[(i + 1) % n]))
+                            })
+                            .collect()
+                    })
+            })
         };
+        let previews = segments.is_some();
+        let segments = segments.unwrap_or_default();
         if let Some(offset) = self.offset.as_mut() {
             offset.distance = distance;
             offset.segments = segments;
         }
         self.hint = Some(Inference { point, snap, axis });
-        self.message = None;
+        let differs = previous.is_none_or(|previous| (distance - previous).abs() > TOL);
+        if differs && (previews || distance.abs() <= TOL) {
+            self.message = None;
+        }
     }
 
     fn click_offset(&mut self, model: &mut Model, view: &Viewport, cursor: DVec2) -> bool {
