@@ -15,6 +15,7 @@ use crate::faces;
 use crate::geom::{self, LINEAR_TOL};
 use crate::model::{BodyId, FaceMaterials, Model, ModelEdit, ModelError, UndoStack};
 use crate::sweep::SweepPath;
+use crate::sweepcurve::CurveCarry;
 use crate::topology::{
     Context, EdgeId, EdgeUse, Face, FaceId, Loop, Record, TopoError, VertexId, Violation,
 };
@@ -81,6 +82,7 @@ struct Plan {
     start_d: DVec3,
     closed: bool,
     dirs: Vec<DVec3>,
+    at: Vec<usize>,
 }
 
 enum CandidateKind {
@@ -278,9 +280,11 @@ fn plan_open(
     let k = path.points.len();
     let mut points = path.points.clone();
     let mut vertices = path.vertices.clone();
+    let mut at: Vec<usize> = (0..k).collect();
     if (points[k - 1] - centroid).length() < (points[0] - centroid).length() - LINEAR_TOL {
         points.reverse();
         vertices.reverse();
+        at.reverse();
     }
     let dirs: Vec<DVec3> = (0..k - 1)
         .map(|i| segment_dir(points[i], points[i + 1]))
@@ -309,6 +313,7 @@ fn plan_open(
         start_d,
         closed: false,
         dirs,
+        at,
     })
 }
 
@@ -409,6 +414,7 @@ fn plan_closed(
                 return Err(SweepError::Twisted);
             }
 
+            let at: Vec<usize> = (0..k).map(|s| (j + s) % k).collect();
             Ok(Plan {
                 sections,
                 loops,
@@ -416,6 +422,7 @@ fn plan_closed(
                 start_d,
                 closed: true,
                 dirs,
+                at,
             })
         }
         CandidateKind::Segment(i) => {
@@ -462,6 +469,7 @@ fn plan_closed(
                 return Err(SweepError::Twisted);
             }
 
+            let at: Vec<usize> = (0..k).map(|s| (far + s) % k).collect();
             Ok(Plan {
                 sections,
                 loops,
@@ -469,6 +477,7 @@ fn plan_closed(
                 start_d,
                 closed: true,
                 dirs,
+                at,
             })
         }
     }
@@ -606,6 +615,7 @@ fn build_open(
     log: &mut crate::topology::Edit,
     plan: &Plan,
     profile: FaceId,
+    carry: &CurveCarry,
 ) -> Result<BuildOut, TopoError> {
     let section_vertices = assign_vertices(ctx, &plan.sections, log);
 
@@ -633,6 +643,7 @@ fn build_open(
         last_d,
         &mut inserted,
     )?;
+    carry.add_curves(ctx, &section_vertices, log);
     let sides = merge_sides(ctx, log, sides, &inserted);
     Ok(BuildOut {
         sides,
@@ -645,9 +656,11 @@ fn build_closed(
     log: &mut crate::topology::Edit,
     plan: &Plan,
     profile: FaceId,
+    carry: &CurveCarry,
 ) -> Result<BuildOut, TopoError> {
     let section_vertices = assign_vertices(ctx, &plan.sections, log);
     let (sides, inserted) = build_sides(ctx, log, plan, &section_vertices)?;
+    carry.add_curves(ctx, &section_vertices, log);
 
     let mut profile_edges = BTreeSet::new();
     let mut profile_vertices = BTreeSet::new();
@@ -716,13 +729,14 @@ pub fn sweep_face(
         let body_ref = model.body(body).ok_or(SweepError::MissingBody(body))?;
         plan_sweep(body_ref.geometry(), profile, path)?
     };
-    let (old_materials, before_violations, before_overlaps) = {
+    let (old_materials, before_violations, before_overlaps, carry) = {
         let body_ref = model.body(body).ok_or(SweepError::MissingBody(body))?;
         let ctx = body_ref.geometry();
         (
             body_ref.face_materials(profile),
             ctx.validate(),
             ctx.face_overlaps(),
+            CurveCarry::new(ctx, profile, path, &plan.at),
         )
     };
 
@@ -735,9 +749,9 @@ pub fn sweep_face(
 
     let built = model.edit_geometry(body, &mut edit, |ctx, log| {
         if plan.closed {
-            build_closed(ctx, log, &plan, profile)
+            build_closed(ctx, log, &plan, profile, &carry)
         } else {
-            build_open(ctx, log, &plan, profile)
+            build_open(ctx, log, &plan, profile, &carry)
         }
     });
     let built = match built {
