@@ -12,6 +12,7 @@
 
 use std::collections::BTreeSet;
 
+use crate::follow_tool::{FollowTool, Under};
 use drydock_kernel::click::{self, ClickMods};
 use drydock_kernel::component::make_component;
 use drydock_kernel::copy::{self, Clipboard, copy_selection};
@@ -44,7 +45,7 @@ use drydock_kernel::tools::scale::{
 use drydock_kernel::tools::tape::{TapeError, TapeStage, TapeTool};
 use drydock_kernel::tools::translate::{MoveError, MoveStage, MoveTool};
 use drydock_kernel::tools::{Input, Target, ToolError};
-use drydock_kernel::topology::FaceId;
+use drydock_kernel::topology::{EdgeId, FaceId};
 use drydock_kernel::transform;
 use drydock_kernel::units::{self, LengthFormat, Unit};
 use drydock_view::{Camera, Projection};
@@ -316,6 +317,7 @@ pub struct Editor {
     arc3: Arc3Tool,
     push: Option<PushState>,
     push_hover: Option<FaceId>,
+    follow: FollowTool,
     last_push: Option<LastPush>,
     offset: Option<OffsetState>,
     offset_hover: Option<FaceId>,
@@ -496,6 +498,7 @@ impl Editor {
             arc3: Arc3Tool::new(plane_for_normal(DVec3::Z)),
             push: None,
             push_hover: None,
+            follow: FollowTool::new(),
             last_push: None,
             offset: None,
             offset_hover: None,
@@ -655,6 +658,7 @@ impl Editor {
         self.push = None;
         self.push_hover = None;
         self.idle_offset();
+        self.follow.reset();
         self.rotate = RotateTool::new(plane_for_normal(DVec3::Z));
         self.rotate_segments.clear();
         self.translate = MoveTool::new();
@@ -904,6 +908,21 @@ impl Editor {
             Tool::Tape => self.click_tape(model, view, cursor),
             Tool::Erase => self.click_erase(model, view, cursor),
             Tool::Paint => self.click_paint(model, view, cursor, mods),
+            Tool::FollowMe => {
+                let body = self.body(model);
+                let under = Under {
+                    face: self
+                        .face_under(model, view, cursor)
+                        .map(|(face, _, _)| face),
+                    entity: self.pick_at(model, view, cursor),
+                };
+                let changed = self.follow.click(model, body, under, &mut self.undo);
+                self.message = self.follow.message().map(str::to_owned);
+                if changed {
+                    self.prune(model);
+                }
+                changed
+            }
             Tool::Rectangle | Tool::Circle | Tool::Arc | Tool::Arc3 => {
                 let before = self.undo.undo_count();
                 let (origin, dir) = self.body_ray(view, cursor);
@@ -1020,6 +1039,7 @@ impl Editor {
         }
         match key {
             EditKey::Cancel => {
+                self.follow.reset();
                 if self.paste.take().is_some() {
                     self.hint = None;
                     return false;
@@ -1058,6 +1078,15 @@ impl Editor {
                 false
             }
             EditKey::Enter => {
+                if self.tool == Tool::FollowMe {
+                    let body = self.body(model);
+                    let changed = self.follow.apply(model, body, &mut self.undo);
+                    self.message = self.follow.message().map(str::to_owned);
+                    if changed {
+                        self.prune(model);
+                    }
+                    return changed;
+                }
                 if self.typed.is_empty() {
                     return false;
                 }
@@ -1341,7 +1370,13 @@ impl Editor {
                 };
                 Some(("Length", value.map(length).unwrap_or_default()))
             }
-            Tool::Orbit | Tool::Pan | Tool::Zoom | Tool::Select | Tool::Erase | Tool::Paint => None,
+            Tool::Orbit
+            | Tool::Pan
+            | Tool::Zoom
+            | Tool::Select
+            | Tool::Erase
+            | Tool::Paint
+            | Tool::FollowMe => None,
         }
     }
 
@@ -1486,6 +1521,7 @@ impl Editor {
             Tool::Orbit | Tool::Pan | Tool::Zoom | Tool::Select | Tool::Erase | Tool::Paint => {
                 Vec::new()
             }
+            Tool::FollowMe => self.follow.preview().to_vec(),
         }
     }
 
@@ -1508,6 +1544,7 @@ impl Editor {
             | Tool::Tape
             | Tool::Erase
             | Tool::Offset
+            | Tool::FollowMe
             | Tool::Paint => None,
         }
     }
@@ -1561,6 +1598,29 @@ impl Editor {
             return None;
         }
         self.offset.as_ref().map(|offset| offset.distance)
+    }
+
+    /// Follow Me: the profile face once picked (`docs/specs/m9-followme-tool.md`); `None`
+    /// before that and for other tools.
+    pub fn follow_profile(&self) -> Option<FaceId> {
+        if self.tool != Tool::FollowMe {
+            return None;
+        }
+        self.follow.profile()
+    }
+
+    /// Follow Me: the edges picked as the path so far, in the order they were picked (a path
+    /// face gives its outer loop's edges in loop order); empty before any and for other tools.
+    pub fn follow_path(&self) -> Vec<EdgeId> {
+        if self.tool != Tool::FollowMe {
+            return Vec::new();
+        }
+        self.follow.path().to_vec()
+    }
+
+    /// Follow Me: what the status bar tells the user to do next; `None` for other tools.
+    pub fn follow_hint(&self) -> Option<&'static str> {
+        (self.tool == Tool::FollowMe).then(|| self.follow.hint())
     }
 
     /// Rotate: the tool, for drawing the protractor (`docs/specs/m3-app-rotate.md`). `None`
@@ -3692,21 +3752,14 @@ impl Editor {
         };
         let face = offset.face;
         let body = self.body(model);
-        let result = faceoffset::offset_face(model, body, face, distance, &mut self.undo, "Offset")
-            .or_else(|error| match error {
-                FaceOffsetError::Invalid(drydock_kernel::topology::Violation::DuplicateFace(
-                    _,
-                    _,
-                )) => faceoffset::offset_face_with_hole_fills(
-                    model,
-                    body,
-                    face,
-                    distance,
-                    &mut self.undo,
-                    "Offset",
-                ),
-                other => Err(other),
-            });
+        let result = faceoffset::offset_face_shrinking_fills(
+            model,
+            body,
+            face,
+            distance,
+            &mut self.undo,
+            "Offset",
+        );
         match result {
             Ok(_) => {
                 self.offset = None;

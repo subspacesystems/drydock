@@ -45,6 +45,9 @@ pub enum Tool {
     Paint,
     /// Offset a face's edges inward or outward (`docs/specs/m9-offset-tool.md`).
     Offset,
+    /// Follow Me: sweep a profile face along a path of edges (`docs/specs/m9-followme-tool.md`).
+    /// Reached from the Tools menu; it has no toolbar button or shortcut.
+    FollowMe,
 }
 
 /// A key for the editor (`docs/specs/m2-app-editor.md`).
@@ -222,6 +225,7 @@ pub fn drag(
             | Tool::Tape
             | Tool::Erase
             | Tool::Offset
+            | Tool::FollowMe
             | Tool::Paint => None,
         },
         Button::Right => None,

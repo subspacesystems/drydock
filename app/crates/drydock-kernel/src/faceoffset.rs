@@ -7,13 +7,16 @@
 //! Behaviour: `docs/specs/m9-offset-face.md`. Not the M7 clearance offset in `offset.rs`, which
 //! moves a solid's faces along their normals.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
-use glam::DVec3;
+use glam::{DVec2, DVec3};
 
+use crate::curve::{self, Curve};
 use crate::geom::{self, LINEAR_TOL};
-use crate::model::{BodyId, FaceMaterials, Model, ModelEdit, ModelError, UndoStack};
-use crate::topology::{Context, EdgeId, EdgeUse, Face, FaceId, Loop, Record, TopoError, Violation};
+use crate::model::{BodyId, Model, ModelEdit, ModelError, UndoStack};
+use crate::topology::{
+    Context, EdgeId, EdgeUse, Face, FaceId, Loop, Record, TopoError, VertexId, Violation,
+};
 
 /// Longest mitre, as a multiple of the distance. A corner whose mitre would be longer (an
 /// interior angle under about 29 degrees on the side the loop moves away from) is bevelled.
@@ -59,6 +62,19 @@ pub struct FaceOffset {
     pub edges: Vec<Vec<EdgeId>>,
 }
 
+struct LoopOffset {
+    old_vertices: Vec<VertexId>,
+    points: Vec<DVec3>,
+    vertex_point: Vec<Option<usize>>,
+}
+
+fn face_loops(face: &Face) -> Vec<Loop> {
+    std::iter::once(&face.outer)
+        .chain(face.inner.iter())
+        .cloned()
+        .collect()
+}
+
 fn reverse_loop(loop_: &Loop) -> Loop {
     let mut uses: Vec<EdgeUse> = loop_.uses.iter().rev().copied().collect();
     for use_ in &mut uses {
@@ -67,29 +83,27 @@ fn reverse_loop(loop_: &Loop) -> Loop {
     Loop { uses }
 }
 
-fn face_loops(face: &Face) -> Vec<Loop> {
-    let mut loops = vec![face.outer.clone()];
-    loops.extend(face.inner.iter().cloned());
-    loops
-}
-
-struct LoopOffset {
-    points: Vec<DVec3>,
-    single: Vec<Option<usize>>,
-}
-
-fn offset_one(points: &[DVec3], n: DVec3, distance: f64) -> Result<LoopOffset, FaceOffsetError> {
+fn offset_loop(
+    ctx: &Context,
+    loop_: &Loop,
+    n: DVec3,
+    distance: f64,
+) -> Result<LoopOffset, FaceOffsetError> {
+    let old_vertices = ctx.loop_vertices(loop_);
+    let points = ctx.loop_points(loop_);
     let k = points.len();
-    let mut out = Vec::new();
-    let mut starts = Vec::with_capacity(k);
-    let mut single = Vec::with_capacity(k);
+    let mut corners: Vec<Vec<DVec3>> = Vec::with_capacity(k);
+
     for j in 0..k {
-        let p = points[j];
-        let e0 = (p - points[(j + k - 1) % k]).normalize_or_zero();
-        let e1 = (points[(j + 1) % k] - p).normalize_or_zero();
-        if e0 == DVec3::ZERO || e1 == DVec3::ZERO {
+        let prev = points[(j + k - 1) % k];
+        let next = points[(j + 1) % k];
+        let a = points[j] - prev;
+        let b = next - points[j];
+        if a.length() == 0.0 || b.length() == 0.0 {
             return Err(FaceOffsetError::LoopsCross);
         }
+        let e0 = a.normalize();
+        let e1 = b.normalize();
         let n0 = e0.cross(n);
         let n1 = e1.cross(n);
         let c = n0.dot(n1);
@@ -98,51 +112,50 @@ fn offset_one(points: &[DVec3], n: DVec3, distance: f64) -> Result<LoopOffset, F
         }
         let m = (n0 + n1) / (1.0 + c);
         let turn = e0.cross(e1).dot(n);
-        starts.push(out.len());
         if distance * turn > 0.0 && m.length() > MITRE_LIMIT {
-            single.push(None);
-            out.push(p + n0 * distance);
-            out.push(p + n1 * distance);
+            corners.push(vec![points[j] + distance * n0, points[j] + distance * n1]);
         } else {
-            single.push(Some(out.len()));
-            out.push(p + m * distance);
+            corners.push(vec![points[j] + distance * m]);
         }
     }
 
     for j in 0..k {
-        let edge = points[(j + 1) % k] - points[j];
-        let Some(e) = edge.try_normalize() else {
-            return Err(FaceOffsetError::LoopsCross);
-        };
-        let next = (j + 1) % k;
-        let last = if next == 0 {
-            out.len() - 1
-        } else {
-            starts[next] - 1
-        };
-        let from = out[last];
-        let to = out[starts[next]];
+        let e = (points[(j + 1) % k] - points[j]).normalize();
+        let from = *corners[j].last().expect("a corner has points");
+        let to = corners[(j + 1) % k][0];
         if (to - from).dot(e) <= LINEAR_TOL {
             return Err(FaceOffsetError::Collapsed);
         }
     }
 
-    let _ = starts;
+    let mut new_points = Vec::new();
+    let mut vertex_point = Vec::with_capacity(k);
+    for corner in &corners {
+        if corner.len() == 1 {
+            vertex_point.push(Some(new_points.len()));
+        } else {
+            vertex_point.push(None);
+        }
+        new_points.extend_from_slice(corner);
+    }
+
     Ok(LoopOffset {
-        points: out,
-        single,
+        old_vertices,
+        points: new_points,
+        vertex_point,
     })
 }
 
-fn offset_new_loops(
+fn to_3d(p: DVec2) -> DVec3 {
+    DVec3::new(p.x, p.y, 0.0)
+}
+
+fn prepare_offsets(
     ctx: &Context,
     face: FaceId,
     distance: f64,
-) -> Result<Vec<LoopOffset>, FaceOffsetError> {
-    let face_data = ctx
-        .face(face)
-        .cloned()
-        .ok_or(FaceOffsetError::MissingFace(face))?;
+) -> Result<(Vec<LoopOffset>, DVec3), FaceOffsetError> {
+    let face_data = ctx.face(face).ok_or(FaceOffsetError::MissingFace(face))?;
     if !distance.is_finite() || distance.abs() <= LINEAR_TOL {
         return Err(FaceOffsetError::BadDistance);
     }
@@ -150,37 +163,37 @@ fn offset_new_loops(
         .face_plane(face)
         .ok_or(FaceOffsetError::NotPlanar(face))?;
     let n = plane.normal;
-    let loops = face_loops(&face_data);
-
-    let mut old_points = Vec::with_capacity(loops.len());
+    let loops = face_loops(face_data);
     for loop_ in &loops {
-        let pts = ctx.loop_points(loop_);
-        if geom::max_plane_deviation(&pts, &plane) > LINEAR_TOL {
+        if geom::max_plane_deviation(&ctx.loop_points(loop_), &plane) > LINEAR_TOL {
             return Err(FaceOffsetError::NotPlanar(face));
         }
-        old_points.push(pts);
     }
 
-    let mut new_loops = Vec::with_capacity(loops.len());
-    for pts in &old_points {
-        new_loops.push(offset_one(pts, n, distance)?);
-    }
-    let new_points: Vec<&[DVec3]> = new_loops.iter().map(|loop_| &loop_.points[..]).collect();
+    let offsets: Vec<LoopOffset> = loops
+        .iter()
+        .map(|loop_| offset_loop(ctx, loop_, n, distance))
+        .collect::<Result<_, _>>()?;
 
-    for poly in &new_points {
-        let poly2 = geom::to_plane_2d(poly, n);
-        if !geom::polygon_is_simple_2d(&poly2, LINEAR_TOL) {
+    let polys: Vec<Vec<DVec2>> = offsets
+        .iter()
+        .map(|offset| geom::to_plane_2d(&offset.points, n))
+        .collect();
+    for poly in &polys {
+        if !geom::polygon_is_simple_2d(poly, LINEAR_TOL) {
             return Err(FaceOffsetError::LoopsCross);
         }
     }
-    for a in 0..new_points.len() {
-        for b in a + 1..new_points.len() {
-            for i in 0..new_points[a].len() {
-                let a0 = new_points[a][i];
-                let a1 = new_points[a][(i + 1) % new_points[a].len()];
-                for j in 0..new_points[b].len() {
-                    let b0 = new_points[b][j];
-                    let b1 = new_points[b][(j + 1) % new_points[b].len()];
+    for i in 0..polys.len() {
+        for j in i + 1..polys.len() {
+            let a = &polys[i];
+            let b = &polys[j];
+            for ai in 0..a.len() {
+                let a0 = to_3d(a[ai]);
+                let a1 = to_3d(a[(ai + 1) % a.len()]);
+                for bi in 0..b.len() {
+                    let b0 = to_3d(b[bi]);
+                    let b1 = to_3d(b[(bi + 1) % b.len()]);
                     if geom::segment_intersection(a0, a1, b0, b1, LINEAR_TOL)
                         != geom::SegmentHit::None
                     {
@@ -190,17 +203,35 @@ fn offset_new_loops(
             }
         }
     }
-    let outer2 = geom::to_plane_2d(new_points[0], n);
-    for poly in new_points[1..].iter().copied() {
-        for p in poly {
-            let p2 = geom::to_plane_2d(std::slice::from_ref(p), n)[0];
-            if geom::point_in_polygon_2d(p2, &outer2, LINEAR_TOL) != geom::Containment::Inside {
-                return Err(FaceOffsetError::LoopsCross);
+    if let Some(outer) = polys.first() {
+        for hole in &polys[1..] {
+            for p in hole {
+                if geom::point_in_polygon_2d(*p, outer, LINEAR_TOL) != geom::Containment::Inside {
+                    return Err(FaceOffsetError::LoopsCross);
+                }
             }
         }
     }
 
-    Ok(new_loops)
+    Ok((offsets, n))
+}
+
+fn curve_is_concentric(ctx: &Context, old: &Curve, chain: &[VertexId], new: &Curve) -> bool {
+    if new.center.distance(old.center) > LINEAR_TOL {
+        return false;
+    }
+    for id in chain {
+        let Some(vertex) = ctx.vertex(*id) else {
+            return false;
+        };
+        let d = vertex.position - new.center;
+        let h = d.dot(new.normal);
+        let rho = (d - new.normal * h).length();
+        if (rho - new.radius).abs() > LINEAR_TOL || h.abs() > LINEAR_TOL {
+            return false;
+        }
+    }
+    true
 }
 
 /// The points of `face`'s loops offset by `distance` in the face plane (positive grows the
@@ -212,8 +243,8 @@ pub fn offset_loops(
     face: FaceId,
     distance: f64,
 ) -> Result<Vec<Vec<DVec3>>, FaceOffsetError> {
-    offset_new_loops(ctx, face, distance)
-        .map(|loops| loops.into_iter().map(|loop_| loop_.points).collect())
+    let (offsets, _) = prepare_offsets(ctx, face, distance)?;
+    Ok(offsets.into_iter().map(|offset| offset.points).collect())
 }
 
 /// Offset `face` of `body` by `distance` in its plane (positive outward), as one undo step
@@ -229,10 +260,12 @@ pub fn offset_face(
     offset_face_impl(model, body, face, distance, undo, label, false)
 }
 
-/// [`offset_face`], but removes a coplanar face that exactly fills one of the face's holes
-/// before offsetting, so an outward offset can shrink a filled hole. The Offset tool uses
-/// this; the faces filling the holes are gone afterwards.
-pub fn offset_face_with_hole_fills(
+/// [`offset_face`], except that an outward offset may shrink a filled hole: a face whose outer
+/// loop runs along exactly the edges of one of `face`'s holes (a window in a wall) keeps its
+/// id, inner loops and materials, but is bounded by the new hole loop instead, so the hole
+/// ring takes the band between the two. [`offset_face`] refuses that case with
+/// `Invalid(DuplicateFace)`. The Offset tool uses this one.
+pub fn offset_face_shrinking_fills(
     model: &mut Model,
     body: BodyId,
     face: FaceId,
@@ -243,6 +276,35 @@ pub fn offset_face_with_hole_fills(
     offset_face_impl(model, body, face, distance, undo, label, true)
 }
 
+/// For each hole of `face_data` (in order), the face that fills it, if any, with its data and
+/// whether its outer loop runs the same way as the hole loop (it fronts the other way).
+fn hole_fills(ctx: &Context, face: FaceId, face_data: &Face) -> Vec<Option<(FaceId, Face, bool)>> {
+    face_data
+        .inner
+        .iter()
+        .map(|hole| {
+            let hole_edges: BTreeMap<EdgeId, bool> =
+                hole.uses.iter().map(|u| (u.edge, u.reversed)).collect();
+            ctx.faces()
+                .find(|(id, other)| {
+                    *id != face
+                        && other.outer.uses.len() == hole_edges.len()
+                        && other
+                            .outer
+                            .uses
+                            .iter()
+                            .all(|u| hole_edges.contains_key(&u.edge))
+                })
+                .map(|(id, other)| {
+                    let first = other.outer.uses[0];
+                    let same_way = hole_edges[&first.edge] == first.reversed;
+                    (id, other.clone(), same_way)
+                })
+        })
+        .collect()
+}
+
+#[allow(clippy::too_many_arguments)]
 fn offset_face_impl(
     model: &mut Model,
     body: BodyId,
@@ -250,209 +312,254 @@ fn offset_face_impl(
     distance: f64,
     undo: &mut UndoStack,
     label: &str,
-    fill_holes: bool,
+    shrink_fills: bool,
 ) -> Result<FaceOffset, FaceOffsetError> {
     let body_ref = model.body(body).ok_or(FaceOffsetError::MissingBody(body))?;
-    let ctx = body_ref.geometry();
-    let old_face = ctx
-        .face(face)
-        .cloned()
-        .ok_or(FaceOffsetError::MissingFace(face))?;
-    let old_materials = body_ref.face_materials(face);
-    let offsets = offset_new_loops(ctx, face, distance)?;
-    let new_points: Vec<&[DVec3]> = offsets.iter().map(|offset| &offset.points[..]).collect();
-    let old_loops = face_loops(&old_face);
-    let old_vertices: Vec<Vec<crate::topology::VertexId>> = old_loops
-        .iter()
-        .map(|loop_| ctx.loop_vertices(loop_))
-        .collect();
-    let face_edges: BTreeSet<EdgeId> = old_loops
-        .iter()
-        .flat_map(|loop_| loop_.uses.iter().map(|use_| use_.edge))
-        .collect();
-    let face_curves: Vec<(crate::curve::Curve, usize)> = ctx
-        .curves()
-        .filter_map(|(id, curve)| {
-            let edges = crate::curve::curve_edges(ctx, id);
-            if edges.is_empty() || !edges.iter().all(|edge| face_edges.contains(edge)) {
-                return None;
+    let (face_data, old_materials, face_curves, before_violations, before_overlaps, fills) = {
+        let ctx = body_ref.geometry();
+        let face_data = ctx
+            .face(face)
+            .cloned()
+            .ok_or(FaceOffsetError::MissingFace(face))?;
+        let old_materials = body_ref.face_materials(face);
+        let loops = face_loops(&face_data);
+        let mut edges = BTreeSet::new();
+        for loop_ in &loops {
+            for use_ in &loop_.uses {
+                edges.insert(use_.edge);
             }
-            let at = old_loops.iter().position(|loop_| {
-                let own: BTreeSet<EdgeId> = loop_.uses.iter().map(|use_| use_.edge).collect();
-                edges.iter().all(|edge| own.contains(edge))
-            })?;
-            Some((curve.clone(), at))
-        })
-        .collect();
-    let fill_faces: Vec<FaceId> = if fill_holes && distance > 0.0 {
-        let hole_edges: Vec<BTreeSet<EdgeId>> = old_loops
-            .iter()
-            .skip(1)
-            .map(|loop_| loop_.uses.iter().map(|use_| use_.edge).collect())
-            .collect();
-        ctx.faces()
-            .filter(|(id, other)| {
-                *id != face
-                    && other.inner.is_empty()
-                    && hole_edges.iter().any(|edges| {
-                        other
-                            .outer
-                            .uses
-                            .iter()
-                            .map(|use_| use_.edge)
-                            .collect::<BTreeSet<_>>()
-                            == *edges
-                    })
+        }
+        let face_curves: Vec<Curve> = ctx
+            .curves()
+            .filter_map(|(id, curve)| {
+                let curve_edges = curve::curve_edges(ctx, id);
+                (!curve_edges.is_empty() && curve_edges.iter().all(|edge| edges.contains(edge)))
+                    .then(|| curve.clone())
             })
-            .map(|(id, _)| id)
-            .collect()
-    } else {
-        Vec::new()
+            .collect();
+        let before_violations = ctx.validate();
+        let before_overlaps = ctx.face_overlaps();
+        let fills = if shrink_fills && distance > 0.0 {
+            hole_fills(ctx, face, &face_data)
+                .into_iter()
+                .map(|fill| {
+                    fill.map(|(id, data, same_way)| {
+                        (id, data, same_way, body_ref.face_materials(id))
+                    })
+                })
+                .collect()
+        } else {
+            vec![None; face_data.inner.len()]
+        };
+        (
+            face_data,
+            old_materials,
+            face_curves,
+            before_violations,
+            before_overlaps,
+            fills,
+        )
     };
-    let before_violations = ctx.validate();
-    let before_overlaps = ctx.face_overlaps();
+
+    let (offsets, _) = {
+        let ctx = model
+            .body(body)
+            .ok_or(FaceOffsetError::MissingBody(body))?
+            .geometry();
+        prepare_offsets(ctx, face, distance)?
+    };
 
     let mut edit = ModelEdit::new();
-    let built = model
-        .edit_geometry(body, &mut edit, |ctx, log| -> Result<_, TopoError> {
-            let mut new_loops = Vec::with_capacity(new_points.len());
-            let mut edges = Vec::with_capacity(new_points.len());
-            let mut vertex_ids = Vec::with_capacity(new_points.len());
-            for points in new_points.iter().copied() {
-                let mut verts = Vec::with_capacity(points.len());
-                for point in points {
-                    verts.push(ctx.insert_vertex(*point, log));
+    let built = model.edit_geometry(
+        body,
+        &mut edit,
+        |ctx, log| -> Result<FaceOffset, TopoError> {
+            let mut new_vertices: Vec<Vec<VertexId>> = Vec::with_capacity(offsets.len());
+            let mut new_edges: Vec<Vec<EdgeId>> = Vec::with_capacity(offsets.len());
+            let mut new_loops: Vec<Loop> = Vec::with_capacity(offsets.len());
+            for offset in &offsets {
+                let vertices: Vec<VertexId> = offset
+                    .points
+                    .iter()
+                    .map(|p| ctx.insert_vertex(*p, log))
+                    .collect();
+                let mut edges = Vec::with_capacity(vertices.len());
+                for i in 0..vertices.len() {
+                    edges.push(ctx.insert_edge(
+                        vertices[i],
+                        vertices[(i + 1) % vertices.len()],
+                        log,
+                    )?);
                 }
-                let mut uses = Vec::with_capacity(verts.len());
-                let mut ids = Vec::with_capacity(verts.len());
-                for i in 0..verts.len() {
-                    let edge = ctx.insert_edge(verts[i], verts[(i + 1) % verts.len()], log)?;
-                    uses.push(EdgeUse::forward(edge));
-                    ids.push(edge);
-                }
-                new_loops.push(Loop { uses });
-                edges.push(ids);
-                vertex_ids.push(verts);
+                new_loops.push(Loop {
+                    uses: edges.iter().map(|edge| EdgeUse::forward(*edge)).collect(),
+                });
+                new_vertices.push(vertices);
+                new_edges.push(edges);
             }
-            for id in &fill_faces {
-                ctx.delete_face(*id, log)?;
-            }
-            let mut hole_rings = Vec::with_capacity(new_loops.len().saturating_sub(1));
-            let (inner, ring);
-            if distance < 0.0 {
-                let remove = Record::RemoveFace(face, old_face.clone());
-                ctx.apply(&remove)?;
-                log.records.push(remove);
+
+            let old_loops = face_loops(&face_data);
+            let old_outer = old_loops[0].clone();
+            let old_holes = &old_loops[1..];
+
+            let result = if distance < 0.0 {
+                ctx.delete_face(face, log)?;
                 let readd = Record::AddFace(
                     face,
                     Face {
-                        outer: old_loops[0].clone(),
+                        outer: old_outer.clone(),
                         inner: vec![reverse_loop(&new_loops[0])],
                     },
                 );
                 ctx.apply(&readd)?;
                 log.records.push(readd);
-                ring = face;
-                inner = ctx.insert_face(
+                let inner = ctx.insert_face(
                     Face {
                         outer: new_loops[0].clone(),
                         inner: new_loops[1..].to_vec(),
                     },
                     log,
                 )?;
-                for (i, old) in old_loops.iter().enumerate().skip(1) {
+                let mut hole_rings = Vec::with_capacity(old_holes.len());
+                for (i, old_hole) in old_holes.iter().enumerate() {
                     hole_rings.push(ctx.insert_face(
                         Face {
-                            outer: reverse_loop(&new_loops[i]),
-                            inner: vec![old.clone()],
+                            outer: reverse_loop(&new_loops[i + 1]),
+                            inner: vec![old_hole.clone()],
                         },
                         log,
                     )?);
                 }
+                FaceOffset {
+                    inner,
+                    ring: face,
+                    hole_rings,
+                    edges: new_edges,
+                }
             } else {
-                inner = face;
-                ring = ctx.insert_face(
+                let ring = ctx.insert_face(
                     Face {
                         outer: new_loops[0].clone(),
-                        inner: vec![reverse_loop(&old_loops[0])],
+                        inner: vec![reverse_loop(&old_outer)],
                     },
                     log,
                 )?;
-                for (i, old) in old_loops.iter().enumerate().skip(1) {
+                let mut hole_rings = Vec::with_capacity(old_holes.len());
+                for (i, old_hole) in old_holes.iter().enumerate() {
+                    if let Some((fill, _, _, _)) = &fills[i] {
+                        ctx.delete_face(*fill, log)?;
+                    }
                     hole_rings.push(ctx.insert_face(
                         Face {
-                            outer: reverse_loop(old),
-                            inner: vec![new_loops[i].clone()],
+                            outer: reverse_loop(old_hole),
+                            inner: vec![new_loops[i + 1].clone()],
                         },
                         log,
                     )?);
-                }
-            }
-
-            for (curve, at) in &face_curves {
-                let map = |vertex| {
-                    let index = old_vertices[*at].iter().position(|old| *old == vertex)?;
-                    let point = offsets[*at].single[index]?;
-                    Some(vertex_ids[*at][point])
-                };
-                let mapped = |chain: &[_]| -> Option<Vec<_>> {
-                    chain.iter().map(|vertex| map(*vertex)).collect()
-                };
-                let accept = |chain: &[_]| -> Option<crate::curve::Curve> {
-                    let fitted = crate::curve::fit(ctx, chain, curve.start)?;
-                    if fitted.center.distance(curve.center) > LINEAR_TOL {
-                        return None;
+                    if let Some((fill, data, same_way, _)) = &fills[i] {
+                        let new_hole = &new_loops[i + 1];
+                        let readd = Record::AddFace(
+                            *fill,
+                            Face {
+                                outer: if *same_way {
+                                    new_hole.clone()
+                                } else {
+                                    reverse_loop(new_hole)
+                                },
+                                inner: data.inner.clone(),
+                            },
+                        );
+                        ctx.apply(&readd)?;
+                        log.records.push(readd);
                     }
-                    let on_circle = chain.iter().all(|vertex| {
-                        let Some(vertex) = ctx.vertex(*vertex) else {
-                            return false;
-                        };
-                        let d = vertex.position - curve.center;
-                        let radial = (d - curve.normal * d.dot(curve.normal)).length();
-                        (radial - fitted.radius).abs() <= LINEAR_TOL
-                            && d.dot(curve.normal).abs() <= LINEAR_TOL
-                    });
-                    on_circle.then_some(fitted)
-                };
-                let mut fitted = mapped(&curve.vertices).and_then(|chain| accept(&chain));
-                if fitted.is_none() && !curve.is_closed() && curve.vertices.len() >= 5 {
-                    fitted = mapped(&curve.vertices[1..curve.vertices.len() - 1])
-                        .and_then(|chain| accept(&chain));
                 }
-                if let Some(fitted) = fitted {
-                    ctx.insert_curve(fitted, log);
+                FaceOffset {
+                    inner: face,
+                    ring,
+                    hole_rings,
+                    edges: new_edges,
+                }
+            };
+
+            let mut vertex_map: BTreeMap<VertexId, VertexId> = BTreeMap::new();
+            for (i, offset) in offsets.iter().enumerate() {
+                for (j, old) in offset.old_vertices.iter().enumerate() {
+                    if let Some(point) = offset.vertex_point[j] {
+                        vertex_map.insert(*old, new_vertices[i][point]);
+                    }
                 }
             }
 
-            Ok((inner, ring, hole_rings, edges))
-        })
-        .map_err(FaceOffsetError::Model)?;
-    let (inner, ring, hole_rings, edges) = match built {
-        Ok(value) => value,
-        Err(error) => {
+            for old in &face_curves {
+                let mut mapped = None;
+                if let Some(chain) = old
+                    .vertices
+                    .iter()
+                    .map(|v| vertex_map.get(v).copied())
+                    .collect::<Option<Vec<_>>>()
+                    && let Some(new) = curve::fit(ctx, &chain, old.start)
+                    && curve_is_concentric(ctx, old, &chain, &new)
+                {
+                    mapped = Some(new);
+                }
+                if mapped.is_none() && !old.is_closed() && old.vertices.len() >= 5 {
+                    let middle = &old.vertices[1..old.vertices.len() - 1];
+                    if let Some(chain) = middle
+                        .iter()
+                        .map(|v| vertex_map.get(v).copied())
+                        .collect::<Option<Vec<_>>>()
+                        && let Some(new) = curve::fit(ctx, &chain, old.start)
+                        && curve_is_concentric(ctx, old, &chain, &new)
+                    {
+                        mapped = Some(new);
+                    }
+                }
+                if let Some(new) = mapped {
+                    ctx.insert_curve(new, log);
+                }
+            }
+
+            Ok(result)
+        },
+    );
+
+    let result = match built {
+        Ok(Ok(result)) => result,
+        Ok(Err(err)) => {
             let _ = model.apply_edit(&edit.inverse());
-            return Err(FaceOffsetError::Model(ModelError::Topo(error)));
+            return Err(FaceOffsetError::Model(ModelError::Topo(err)));
+        }
+        Err(err) => {
+            let _ = model.apply_edit(&edit.inverse());
+            return Err(FaceOffsetError::Model(err));
         }
     };
 
-    if old_materials != FaceMaterials::default() {
-        let mut faces: Vec<FaceId> = vec![inner, ring];
-        faces.extend(hole_rings.iter().copied());
-        let mut seen = BTreeSet::new();
-        for id in faces {
-            if !seen.insert(id) {
-                continue;
-            }
-            let current = model
-                .body(body)
-                .ok_or(FaceOffsetError::MissingBody(body))?
-                .face_materials(id);
-            if current != old_materials
-                && let Err(error) = model.set_face_materials(body, id, old_materials, &mut edit)
-            {
-                let _ = model.apply_edit(&edit.inverse());
-                return Err(FaceOffsetError::Model(error));
-            }
+    let mut faces: Vec<FaceId> = vec![result.inner, result.ring];
+    faces.extend(result.hole_rings.iter().copied());
+    for g in faces {
+        let current = model
+            .body(body)
+            .ok_or(FaceOffsetError::MissingBody(body))?
+            .face_materials(g);
+        if current != old_materials
+            && let Err(err) = model.set_face_materials(body, g, old_materials, &mut edit)
+        {
+            let _ = model.apply_edit(&edit.inverse());
+            return Err(FaceOffsetError::Model(err));
+        }
+    }
+
+    for (fill, _, _, materials) in fills.iter().flatten() {
+        let current = model
+            .body(body)
+            .ok_or(FaceOffsetError::MissingBody(body))?
+            .face_materials(*fill);
+        if current != *materials
+            && let Err(err) = model.set_face_materials(body, *fill, *materials, &mut edit)
+        {
+            let _ = model.apply_edit(&edit.inverse());
+            return Err(FaceOffsetError::Model(err));
         }
     }
 
@@ -461,15 +568,17 @@ fn offset_face_impl(
             .body(body)
             .ok_or(FaceOffsetError::MissingBody(body))?
             .geometry();
-        (
-            ctx.validate()
-                .into_iter()
-                .find(|violation| !before_violations.contains(violation)),
-            ctx.face_overlaps()
-                .into_iter()
-                .find(|pair| !before_overlaps.contains(pair)),
-        )
+        let new_violation = ctx
+            .validate()
+            .into_iter()
+            .find(|v| !before_violations.contains(v));
+        let new_overlap = ctx
+            .face_overlaps()
+            .into_iter()
+            .find(|pair| !before_overlaps.contains(pair));
+        (new_violation, new_overlap)
     };
+
     if let Some(violation) = new_violation {
         let _ = model.apply_edit(&edit.inverse());
         return Err(FaceOffsetError::Invalid(violation));
@@ -480,10 +589,5 @@ fn offset_face_impl(
     }
 
     undo.push(label, edit);
-    Ok(FaceOffset {
-        inner,
-        ring,
-        hole_rings,
-        edges,
-    })
+    Ok(result)
 }
