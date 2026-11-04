@@ -187,6 +187,7 @@ pub fn shapes(icon: Icon, rect: Rect, color: Color32) -> Vec<Shape> {
     };
 
     match icon {
+        Icon::Tool(Tool::Offset) => unimplemented!("m9-offset-tool"),
         Icon::Tool(Tool::Select) => {
             d.half *= 0.9;
             d.closed(&[

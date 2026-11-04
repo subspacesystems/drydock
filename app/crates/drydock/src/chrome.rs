@@ -283,6 +283,7 @@ pub fn tool_shortcut(tool: Tool) -> &'static str {
         Tool::Tape => "T",
         Tool::Erase => "E",
         Tool::Paint => "B",
+        Tool::Offset => unimplemented!("m9-offset-tool"),
         Tool::Orbit => "O",
         Tool::Pan => "H",
         Tool::Zoom => "Z",

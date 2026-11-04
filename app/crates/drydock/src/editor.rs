@@ -870,6 +870,7 @@ impl Editor {
             Tool::Tape => self.click_tape(model, view, cursor),
             Tool::Erase => self.click_erase(model, view, cursor),
             Tool::Paint => self.click_paint(model, view, cursor, mods),
+            Tool::Offset => unimplemented!("m9-offset-tool"),
             Tool::Rectangle | Tool::Circle | Tool::Arc | Tool::Arc3 => {
                 let before = self.undo.undo_count();
                 let (origin, dir) = self.body_ray(view, cursor);
@@ -1294,7 +1295,13 @@ impl Editor {
                 };
                 Some(("Length", value.map(length).unwrap_or_default()))
             }
-            Tool::Orbit | Tool::Pan | Tool::Zoom | Tool::Select | Tool::Erase | Tool::Paint => None,
+            Tool::Orbit
+            | Tool::Pan
+            | Tool::Zoom
+            | Tool::Select
+            | Tool::Erase
+            | Tool::Paint
+            | Tool::Offset => None,
         }
     }
 
@@ -1431,9 +1438,13 @@ impl Editor {
                     _ => Vec::new(),
                 }
             }
-            Tool::Orbit | Tool::Pan | Tool::Zoom | Tool::Select | Tool::Erase | Tool::Paint => {
-                Vec::new()
-            }
+            Tool::Orbit
+            | Tool::Pan
+            | Tool::Zoom
+            | Tool::Select
+            | Tool::Erase
+            | Tool::Paint
+            | Tool::Offset => Vec::new(),
         }
     }
 
@@ -1455,6 +1466,7 @@ impl Editor {
             | Tool::Scale
             | Tool::Tape
             | Tool::Erase
+            | Tool::Offset
             | Tool::Paint => None,
         }
     }
@@ -1487,6 +1499,18 @@ impl Editor {
             return None;
         }
         self.push.as_ref().map(|push| push.distance)
+    }
+
+    /// Offset: the face under the cursor while idle, the face being offset while an offset is
+    /// in progress (`docs/specs/m9-offset-tool.md`). `None` for other tools.
+    pub fn offset_face(&self) -> Option<FaceId> {
+        unimplemented!("m9-offset-tool")
+    }
+
+    /// Offset: the signed distance (positive grows the face) the next click would use; `None`
+    /// while no offset is in progress or for other tools.
+    pub fn offset_distance(&self) -> Option<f64> {
+        unimplemented!("m9-offset-tool")
     }
 
     /// Rotate: the tool, for drawing the protractor (`docs/specs/m3-app-rotate.md`). `None`

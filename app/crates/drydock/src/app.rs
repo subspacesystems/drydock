@@ -2243,6 +2243,7 @@ impl App {
                     Tool::Tape => "Tape Measure",
                     Tool::Erase => "Erase",
                     Tool::Paint => "Paint Bucket",
+                    Tool::Offset => "Offset",
                 });
                 if self.view.tool == Tool::Move {
                     ui.separator();

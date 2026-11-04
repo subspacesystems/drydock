@@ -43,6 +43,8 @@ pub enum Tool {
     /// Paint Bucket: paint the clicked side or the selection; Alt samples
     /// (`docs/specs/m4-app-paint.md`).
     Paint,
+    /// Offset a face's edges inward or outward (`docs/specs/m9-offset-tool.md`).
+    Offset,
 }
 
 /// A key for the editor (`docs/specs/m2-app-editor.md`).
@@ -219,6 +221,7 @@ pub fn drag(
             | Tool::Scale
             | Tool::Tape
             | Tool::Erase
+            | Tool::Offset
             | Tool::Paint => None,
         },
         Button::Right => None,

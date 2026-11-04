@@ -508,6 +508,7 @@ pub fn tool_key(tool: Tool) -> &'static str {
         Tool::Tape => "tape",
         Tool::Erase => "erase",
         Tool::Paint => "paint",
+        Tool::Offset => unimplemented!("m9-offset-tool"),
         Tool::Orbit => "orbit",
         Tool::Pan => "pan",
         Tool::Zoom => "zoom",
