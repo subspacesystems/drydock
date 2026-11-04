@@ -600,7 +600,8 @@ fn a_curved_profile_keeps_its_curve_on_the_start_cap() {
     let s = sweep(&mut m, &mut undo, f, &straight(1.0)).unwrap();
     let c = ctx(&m);
     assert_eq!(s.sides.len(), 12);
-    assert_eq!(c.curve_count(), 1);
+    // The second is the end cap's (m9-sweep-curves).
+    assert_eq!(c.curve_count(), 2);
     let cap: Vec<EdgeId> = c
         .face(f)
         .unwrap()
