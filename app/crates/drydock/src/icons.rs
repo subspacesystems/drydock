@@ -32,7 +32,7 @@ pub enum Icon {
 }
 
 /// Every tool, in `chrome::TOOL_BUTTONS` order.
-pub const TOOLS: [Tool; 16] = [
+pub const TOOLS: [Tool; 17] = [
     Tool::Select,
     Tool::Line,
     Tool::Rectangle,
@@ -40,6 +40,7 @@ pub const TOOLS: [Tool; 16] = [
     Tool::Arc,
     Tool::Arc3,
     Tool::PushPull,
+    Tool::Offset,
     Tool::Move,
     Tool::Rotate,
     Tool::Scale,
@@ -187,7 +188,47 @@ pub fn shapes(icon: Icon, rect: Rect, color: Color32) -> Vec<Shape> {
     };
 
     match icon {
-        Icon::Tool(Tool::Offset) => unimplemented!("m9-offset-tool"),
+        Icon::Tool(Tool::Offset) => {
+            let r = 0.18;
+            let mut outer = vec![(0.8, 0.2), (0.8, 0.62)];
+            outer.extend(arc_points(
+                0.62,
+                0.62,
+                r,
+                0.0,
+                -std::f32::consts::FRAC_PI_2,
+                5,
+            ));
+            outer.extend(arc_points(
+                -0.62,
+                0.62,
+                r,
+                -std::f32::consts::FRAC_PI_2,
+                -std::f32::consts::PI,
+                5,
+            ));
+            outer.extend(arc_points(
+                -0.62,
+                -0.62,
+                r,
+                std::f32::consts::PI,
+                std::f32::consts::FRAC_PI_2,
+                5,
+            ));
+            outer.extend(arc_points(
+                0.62,
+                -0.62,
+                r,
+                std::f32::consts::FRAC_PI_2,
+                0.0,
+                5,
+            ));
+            outer.push((0.8, -0.2));
+            d.line(&outer);
+            d.rect(-0.36, -0.36, 0.36, 0.36);
+            d.seg((0.36, 0.0), (0.66, 0.0));
+            d.arrow((0.5, 0.0), (0.9, 0.0), 0.24);
+        }
         Icon::Tool(Tool::Select) => {
             d.half *= 0.9;
             d.closed(&[

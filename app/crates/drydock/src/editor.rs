@@ -18,6 +18,7 @@ use drydock_kernel::copy::{self, Clipboard, copy_selection};
 use drydock_kernel::editpath::EditPath;
 use drydock_kernel::erase::erase;
 use drydock_kernel::explode::explode;
+use drydock_kernel::faceoffset::{self, FaceOffsetError};
 use drydock_kernel::infer::{self, Inference, Probe, Snap};
 use drydock_kernel::model::{
     BodyId, DefinitionId, DefinitionInfo, Instance, InstanceId, Material, MaterialId, Model,
@@ -170,6 +171,7 @@ fn takes_text(tool: Tool) -> bool {
         || tool == Tool::Move
         || tool == Tool::Scale
         || tool == Tool::Tape
+        || tool == Tool::Offset
 }
 
 /// The parameter along `start + t·n` of the point closest to the ray `origin + u·dir`.
@@ -250,6 +252,16 @@ struct LastPush {
     undo_count: usize,
 }
 
+/// An offset in progress: the face, a point on the reference edge, that edge's outward
+/// direction in the face plane, and the signed distance the next click would use.
+struct OffsetState {
+    face: FaceId,
+    edge_point: DVec3,
+    outward: DVec3,
+    distance: f64,
+    segments: Vec<(DVec3, DVec3)>,
+}
+
 #[derive(Clone, Copy)]
 struct PasteState {
     point: Option<DVec3>,
@@ -305,6 +317,9 @@ pub struct Editor {
     push: Option<PushState>,
     push_hover: Option<FaceId>,
     last_push: Option<LastPush>,
+    offset: Option<OffsetState>,
+    offset_hover: Option<FaceId>,
+    last_offset: Option<f64>,
     rotate: RotateTool,
     rotate_segments: Vec<(DVec3, DVec3)>,
     translate: MoveTool,
@@ -412,6 +427,16 @@ fn scale_error_message(error: &ScaleError) -> &'static str {
     }
 }
 
+fn offset_error_message(error: &FaceOffsetError) -> Option<&'static str> {
+    match error {
+        FaceOffsetError::Collapsed => Some("That offset is too big for the face"),
+        FaceOffsetError::LoopsCross => Some("The offset edges would cross"),
+        FaceOffsetError::Overlap(_, _) => Some("The offset would run into another face"),
+        FaceOffsetError::BadDistance => None,
+        _ => Some("Can't offset that"),
+    }
+}
+
 fn format_factors(factors: DVec3) -> String {
     if (factors.x - factors.y).abs() <= 1e-9 && (factors.y - factors.z).abs() <= 1e-9 {
         format!("{:.3}", factors.x)
@@ -472,6 +497,9 @@ impl Editor {
             push: None,
             push_hover: None,
             last_push: None,
+            offset: None,
+            offset_hover: None,
+            last_offset: None,
             rotate: RotateTool::new(plane_for_normal(DVec3::Z)),
             rotate_segments: Vec::new(),
             translate: MoveTool::new(),
@@ -626,6 +654,7 @@ impl Editor {
         self.message = None;
         self.push = None;
         self.push_hover = None;
+        self.idle_offset();
         self.rotate = RotateTool::new(plane_for_normal(DVec3::Z));
         self.rotate_segments.clear();
         self.translate = MoveTool::new();
@@ -732,6 +761,10 @@ impl Editor {
         }
         if self.tool == Tool::PushPull {
             self.move_push(model, view, cursor);
+            return;
+        }
+        if self.tool == Tool::Offset {
+            self.move_offset(model, view, cursor);
             return;
         }
         if self.tool == Tool::Rotate {
@@ -864,13 +897,13 @@ impl Editor {
             }
             Tool::Orbit | Tool::Pan | Tool::Zoom => false,
             Tool::PushPull => self.click_push(model, view, cursor, count),
+            Tool::Offset => self.click_offset(model, view, cursor),
             Tool::Rotate => self.click_rotate(model, view, cursor),
             Tool::Move => self.click_move(model, view, cursor),
             Tool::Scale => self.click_scale(model, view, cursor, mods),
             Tool::Tape => self.click_tape(model, view, cursor),
             Tool::Erase => self.click_erase(model, view, cursor),
             Tool::Paint => self.click_paint(model, view, cursor, mods),
-            Tool::Offset => unimplemented!("m9-offset-tool"),
             Tool::Rectangle | Tool::Circle | Tool::Arc | Tool::Arc3 => {
                 let before = self.undo.undo_count();
                 let (origin, dir) = self.body_ray(view, cursor);
@@ -1011,7 +1044,8 @@ impl Editor {
                 self.plane_lock = None;
                 self.message = None;
                 self.push = None;
-                if self.tool == Tool::PushPull {
+                self.idle_offset();
+                if matches!(self.tool, Tool::PushPull | Tool::Offset) {
                     self.hint = None;
                 }
                 if matches!(
@@ -1042,6 +1076,9 @@ impl Editor {
                 }
                 if self.tool == Tool::Tape {
                     return self.enter_tape(text, model);
+                }
+                if self.tool == Tool::Offset {
+                    return self.enter_offset(text, model);
                 }
                 if !is_drawing(self.tool) {
                     return false;
@@ -1096,7 +1133,8 @@ impl Editor {
                 self.idle_tape();
                 self.typed.clear();
                 self.push = None;
-                if self.tool == Tool::PushPull {
+                self.idle_offset();
+                if matches!(self.tool, Tool::PushPull | Tool::Offset) {
                     self.hint = None;
                 }
                 match self.undo.undo(model) {
@@ -1120,7 +1158,8 @@ impl Editor {
                 self.idle_tape();
                 self.typed.clear();
                 self.push = None;
-                if self.tool == Tool::PushPull {
+                self.idle_offset();
+                if matches!(self.tool, Tool::PushPull | Tool::Offset) {
                     self.hint = None;
                 }
                 match self.undo.redo(model) {
@@ -1256,6 +1295,13 @@ impl Editor {
                 };
                 Some(("Distance", value.unwrap_or_default()))
             }
+            Tool::Offset => {
+                let value = match self.offset.as_ref() {
+                    Some(offset) => Some(length(offset.distance.abs())),
+                    None => self.last_offset.map(|distance| length(distance.abs())),
+                };
+                Some(("Distance", value.unwrap_or_default()))
+            }
             Tool::Rotate => {
                 let value = match self.rotate.angle() {
                     Some(angle) => format!("{:.1}°", angle),
@@ -1295,13 +1341,7 @@ impl Editor {
                 };
                 Some(("Length", value.map(length).unwrap_or_default()))
             }
-            Tool::Orbit
-            | Tool::Pan
-            | Tool::Zoom
-            | Tool::Select
-            | Tool::Erase
-            | Tool::Paint
-            | Tool::Offset => None,
+            Tool::Orbit | Tool::Pan | Tool::Zoom | Tool::Select | Tool::Erase | Tool::Paint => None,
         }
     }
 
@@ -1382,6 +1422,11 @@ impl Editor {
                 }
                 segments
             }
+            Tool::Offset => self
+                .offset
+                .as_ref()
+                .map(|offset| offset.segments.clone())
+                .unwrap_or_default(),
             Tool::Rotate => {
                 let mut segments = self.rotate.preview();
                 if self.rotate.stage() == RotateStage::Angle
@@ -1438,13 +1483,9 @@ impl Editor {
                     _ => Vec::new(),
                 }
             }
-            Tool::Orbit
-            | Tool::Pan
-            | Tool::Zoom
-            | Tool::Select
-            | Tool::Erase
-            | Tool::Paint
-            | Tool::Offset => Vec::new(),
+            Tool::Orbit | Tool::Pan | Tool::Zoom | Tool::Select | Tool::Erase | Tool::Paint => {
+                Vec::new()
+            }
         }
     }
 
@@ -1504,13 +1545,22 @@ impl Editor {
     /// Offset: the face under the cursor while idle, the face being offset while an offset is
     /// in progress (`docs/specs/m9-offset-tool.md`). `None` for other tools.
     pub fn offset_face(&self) -> Option<FaceId> {
-        unimplemented!("m9-offset-tool")
+        if self.tool != Tool::Offset {
+            return None;
+        }
+        match self.offset.as_ref() {
+            Some(offset) => Some(offset.face),
+            None => self.offset_hover,
+        }
     }
 
     /// Offset: the signed distance (positive grows the face) the next click would use; `None`
     /// while no offset is in progress or for other tools.
     pub fn offset_distance(&self) -> Option<f64> {
-        unimplemented!("m9-offset-tool")
+        if self.tool != Tool::Offset {
+            return None;
+        }
+        self.offset.as_ref().map(|offset| offset.distance)
     }
 
     /// Rotate: the tool, for drawing the protractor (`docs/specs/m3-app-rotate.md`). `None`
@@ -1535,6 +1585,13 @@ impl Editor {
         self.move_copy = on;
     }
 
+    /// Drop an offset in progress and the distance the box remembered.
+    fn idle_offset(&mut self) {
+        self.offset = None;
+        self.offset_hover = None;
+        self.last_offset = None;
+    }
+
     /// Drop the tool in progress and the typed text, as the editing commands do.
     fn idle_edit(&mut self) {
         self.line = LineTool::new();
@@ -1545,6 +1602,7 @@ impl Editor {
         self.idle_tape();
         self.typed.clear();
         self.push = None;
+        self.idle_offset();
         self.hint = None;
     }
 
@@ -2282,6 +2340,7 @@ impl Editor {
         self.idle_tape();
         self.typed.clear();
         self.push = None;
+        self.idle_offset();
         self.hint = None;
         if self.selection.is_empty() {
             self.message = Some("Select something to erase".to_string());
@@ -2387,6 +2446,7 @@ impl Editor {
         self.idle_tape();
         self.typed.clear();
         self.push = None;
+        self.idle_offset();
         self.hint = None;
         if self.selection.is_empty() {
             self.message = Some(
@@ -2527,6 +2587,7 @@ impl Editor {
         self.idle_tape();
         self.typed.clear();
         self.push = None;
+        self.idle_offset();
         self.hint = None;
         let instance = match self.selection.as_slice() {
             [Entity::Instance(instance)] => *instance,
@@ -3505,6 +3566,183 @@ impl Editor {
                 false
             }
         }
+    }
+
+    fn move_offset(&mut self, model: &mut Model, view: &Viewport, cursor: DVec2) {
+        let (origin, dir) = self.body_ray(view, cursor);
+        self.offset_hover = model
+            .body(self.body(model))
+            .and_then(|body| infer::ray_face(body.geometry(), origin, dir))
+            .map(|(face, _)| face);
+        let Some((face, edge_point, outward)) = self
+            .offset
+            .as_ref()
+            .map(|offset| (offset.face, offset.edge_point, offset.outward))
+        else {
+            self.hint = None;
+            return;
+        };
+
+        let Some(plane) = model
+            .body(self.body(model))
+            .and_then(|body| body.geometry().face_plane(face))
+        else {
+            return;
+        };
+        let inf = self.infer_at(model, view, cursor);
+        let (snap, axis) = match inf {
+            Some(inf) => (inf.snap, inf.axis),
+            None => (Snap::Along, None),
+        };
+        let point = match inf {
+            Some(inf) if matches!(inf.snap, Snap::Endpoint(_) | Snap::Midpoint(_)) => inf.point,
+            _ => {
+                let denom = plane.normal.dot(dir);
+                if denom.abs() < 1e-12 {
+                    return;
+                }
+                let t = plane.normal.dot(plane.point - origin) / denom;
+                origin + dir * t
+            }
+        };
+        let distance = (point - edge_point).dot(outward);
+        let segments = if distance.abs() <= TOL {
+            Vec::new()
+        } else {
+            match model.body(self.body(model)) {
+                Some(body) => match faceoffset::offset_loops(body.geometry(), face, distance) {
+                    Ok(loops) => loops
+                        .iter()
+                        .flat_map(|points| {
+                            let n = points.len();
+                            (0..n).map(move |i| (points[i], points[(i + 1) % n]))
+                        })
+                        .collect(),
+                    Err(_) => Vec::new(),
+                },
+                None => Vec::new(),
+            }
+        };
+        if let Some(offset) = self.offset.as_mut() {
+            offset.distance = distance;
+            offset.segments = segments;
+        }
+        self.hint = Some(Inference { point, snap, axis });
+        self.message = None;
+    }
+
+    fn click_offset(&mut self, model: &mut Model, view: &Viewport, cursor: DVec2) -> bool {
+        if let Some(offset) = self.offset.as_ref() {
+            let distance = offset.distance;
+            if distance.abs() <= TOL {
+                return false;
+            }
+            return self.commit_offset(model, distance);
+        }
+
+        let Some((face, hit, normal)) = self.face_under(model, view, cursor) else {
+            return false;
+        };
+        let Some(body) = model.body(self.body(model)) else {
+            return false;
+        };
+        let ctx = body.geometry();
+        let Some(face_data) = ctx.face(face) else {
+            return false;
+        };
+        let mut loops = vec![ctx.loop_points(&face_data.outer)];
+        for inner in &face_data.inner {
+            loops.push(ctx.loop_points(inner));
+        }
+        let mut nearest: Option<(f64, DVec3, DVec3)> = None;
+        for points in &loops {
+            let n = points.len();
+            for i in 0..n {
+                let a = points[i];
+                let b = points[(i + 1) % n];
+                let distance = drydock_kernel::geom::point_segment_distance(hit, a, b);
+                if nearest.as_ref().is_none_or(|(best, _, _)| distance < *best) {
+                    let edge = unit_or(b - a, DVec3::X);
+                    let outward = unit_or(edge.cross(normal), DVec3::Z);
+                    nearest = Some((distance, a, outward));
+                }
+            }
+        }
+        let Some((_, edge_point, outward)) = nearest else {
+            return false;
+        };
+        self.offset = Some(OffsetState {
+            face,
+            edge_point,
+            outward,
+            distance: 0.0,
+            segments: Vec::new(),
+        });
+        self.hint = Some(Inference {
+            point: hit,
+            snap: Snap::OnFace(face),
+            axis: None,
+        });
+        false
+    }
+
+    fn commit_offset(&mut self, model: &mut Model, distance: f64) -> bool {
+        let Some(offset) = self.offset.as_ref() else {
+            return false;
+        };
+        let face = offset.face;
+        let body = self.body(model);
+        let result = faceoffset::offset_face(model, body, face, distance, &mut self.undo, "Offset")
+            .or_else(|error| match error {
+                FaceOffsetError::Invalid(drydock_kernel::topology::Violation::DuplicateFace(
+                    _,
+                    _,
+                )) => faceoffset::offset_face_with_hole_fills(
+                    model,
+                    body,
+                    face,
+                    distance,
+                    &mut self.undo,
+                    "Offset",
+                ),
+                other => Err(other),
+            });
+        match result {
+            Ok(_) => {
+                self.offset = None;
+                self.offset_hover = None;
+                self.hint = None;
+                self.message = None;
+                self.typed.clear();
+                self.last_offset = Some(distance);
+                self.prune(model);
+                true
+            }
+            Err(error) => {
+                self.message = offset_error_message(&error).map(str::to_string);
+                false
+            }
+        }
+    }
+
+    fn enter_offset(&mut self, text: String, model: &mut Model) -> bool {
+        let length = match units::parse_length(&text, model.length_format().input_unit()) {
+            Ok(length) => length,
+            Err(_) => {
+                self.message = Some("Not a length".to_string());
+                return false;
+            }
+        };
+
+        if let Some(offset) = self.offset.as_ref() {
+            let direction = if offset.distance < 0.0 { -1.0 } else { 1.0 };
+            let flip = if length < 0.0 { -1.0 } else { 1.0 };
+            let distance = length.abs() * direction * flip;
+            return self.commit_offset(model, distance);
+        }
+
+        self.message = Some("Click a face first".to_string());
+        false
     }
 
     fn shape_anchor(&self) -> Option<DVec3> {

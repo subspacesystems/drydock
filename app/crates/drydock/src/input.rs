@@ -257,6 +257,7 @@ pub fn key(key: &str, mods: Modifiers) -> Option<Action> {
         "Z" if shift => Some(Action::ZoomExtents),
         "P" if shift => Some(Action::ToggleProjection),
         "P" if plain => Some(Action::SelectTool(Tool::PushPull)),
+        "I" if plain => Some(Action::SelectTool(Tool::Offset)),
         "M" if plain => Some(Action::SelectTool(Tool::Move)),
         "Q" if plain => Some(Action::SelectTool(Tool::Rotate)),
         "S" if plain => Some(Action::SelectTool(Tool::Scale)),

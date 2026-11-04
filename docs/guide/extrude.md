@@ -13,3 +13,7 @@ While you are pushing, type a length and press `Enter` to set the distance exact
 ## Repeating a push
 
 Double click another face to push it by the same distance as the last push. This saves time when several faces need the same thickness, such as the walls of a room or the steps of a staircase. Check the preview, then let the double click do the work. Once you are comfortable with this, you can build up detailed models from a few flat shapes and a series of consistent pushes.
+
+## Offset
+
+Press `I` for the Offset tool. Click a face, then move the cursor toward the side you want the face to grow or shrink, or type a length and press `Enter`. Moving outward grows the face and moving inward shrinks it. Holes move the other way, so they shrink when the face grows and grow when it shrinks. If a distance is too big for the face, or if the offset edges would run into another face, the change is refused and a message explains why. `Esc` abandons an offset in progress, and one undo takes back a finished one.
