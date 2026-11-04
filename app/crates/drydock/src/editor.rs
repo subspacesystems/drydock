@@ -12,6 +12,7 @@
 
 use std::collections::BTreeSet;
 
+use crate::follow_tool::{FollowTool, Under};
 use drydock_kernel::click::{self, ClickMods};
 use drydock_kernel::component::make_component;
 use drydock_kernel::copy::{self, Clipboard, copy_selection};
@@ -304,6 +305,7 @@ pub struct Editor {
     arc3: Arc3Tool,
     push: Option<PushState>,
     push_hover: Option<FaceId>,
+    follow: FollowTool,
     last_push: Option<LastPush>,
     rotate: RotateTool,
     rotate_segments: Vec<(DVec3, DVec3)>,
@@ -471,6 +473,7 @@ impl Editor {
             arc3: Arc3Tool::new(plane_for_normal(DVec3::Z)),
             push: None,
             push_hover: None,
+            follow: FollowTool::new(),
             last_push: None,
             rotate: RotateTool::new(plane_for_normal(DVec3::Z)),
             rotate_segments: Vec::new(),
@@ -626,6 +629,7 @@ impl Editor {
         self.message = None;
         self.push = None;
         self.push_hover = None;
+        self.follow.reset();
         self.rotate = RotateTool::new(plane_for_normal(DVec3::Z));
         self.rotate_segments.clear();
         self.translate = MoveTool::new();
@@ -871,7 +875,21 @@ impl Editor {
             Tool::Erase => self.click_erase(model, view, cursor),
             Tool::Paint => self.click_paint(model, view, cursor, mods),
             Tool::Offset => unimplemented!("m9-offset-tool"),
-            Tool::FollowMe => unimplemented!("m9-followme-tool"),
+            Tool::FollowMe => {
+                let body = self.body(model);
+                let under = Under {
+                    face: self
+                        .face_under(model, view, cursor)
+                        .map(|(face, _, _)| face),
+                    entity: self.pick_at(model, view, cursor),
+                };
+                let changed = self.follow.click(model, body, under, &mut self.undo);
+                self.message = self.follow.message().map(str::to_owned);
+                if changed {
+                    self.prune(model);
+                }
+                changed
+            }
             Tool::Rectangle | Tool::Circle | Tool::Arc | Tool::Arc3 => {
                 let before = self.undo.undo_count();
                 let (origin, dir) = self.body_ray(view, cursor);
@@ -988,6 +1006,7 @@ impl Editor {
         }
         match key {
             EditKey::Cancel => {
+                self.follow.reset();
                 if self.paste.take().is_some() {
                     self.hint = None;
                     return false;
@@ -1025,6 +1044,15 @@ impl Editor {
                 false
             }
             EditKey::Enter => {
+                if self.tool == Tool::FollowMe {
+                    let body = self.body(model);
+                    let changed = self.follow.apply(model, body, &mut self.undo);
+                    self.message = self.follow.message().map(str::to_owned);
+                    if changed {
+                        self.prune(model);
+                    }
+                    return changed;
+                }
                 if self.typed.is_empty() {
                     return false;
                 }
@@ -1446,8 +1474,8 @@ impl Editor {
             | Tool::Select
             | Tool::Erase
             | Tool::Paint
-            | Tool::Offset
-            | Tool::FollowMe => Vec::new(),
+            | Tool::Offset => Vec::new(),
+            Tool::FollowMe => self.follow.preview().to_vec(),
         }
     }
 
@@ -1520,18 +1548,24 @@ impl Editor {
     /// Follow Me: the profile face once picked (`docs/specs/m9-followme-tool.md`); `None`
     /// before that and for other tools.
     pub fn follow_profile(&self) -> Option<FaceId> {
-        unimplemented!("m9-followme-tool")
+        if self.tool != Tool::FollowMe {
+            return None;
+        }
+        self.follow.profile()
     }
 
     /// Follow Me: the edges picked as the path so far, in the order they were picked (a path
     /// face gives its outer loop's edges in loop order); empty before any and for other tools.
     pub fn follow_path(&self) -> Vec<EdgeId> {
-        unimplemented!("m9-followme-tool")
+        if self.tool != Tool::FollowMe {
+            return Vec::new();
+        }
+        self.follow.path().to_vec()
     }
 
     /// Follow Me: what the status bar tells the user to do next; `None` for other tools.
     pub fn follow_hint(&self) -> Option<&'static str> {
-        unimplemented!("m9-followme-tool")
+        (self.tool == Tool::FollowMe).then(|| self.follow.hint())
     }
 
     /// Rotate: the tool, for drawing the protractor (`docs/specs/m3-app-rotate.md`). `None`
