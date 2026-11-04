@@ -102,6 +102,7 @@ fn tool_icons_have_enough_ink_at_toolbar_sizes() {
 fn redrawn_icons_stand_apart_from_all_others() {
     let redrawn = [
         Tool::PushPull,
+        Tool::Offset,
         Tool::Rotate,
         Tool::Scale,
         Tool::Tape,

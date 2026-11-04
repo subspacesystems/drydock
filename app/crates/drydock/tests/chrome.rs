@@ -65,6 +65,7 @@ fn button_table_lists_every_tool_once() {
         Tool::Arc,
         Tool::Arc3,
         Tool::PushPull,
+        Tool::Offset,
         Tool::Move,
         Tool::Rotate,
         Tool::Scale,
@@ -76,7 +77,14 @@ fn button_table_lists_every_tool_once() {
         assert_eq!(tools.iter().filter(|t| **t == tool).count(), 1, "{tool:?}");
     }
     let labels: Vec<&str> = TOOL_BUTTONS.iter().map(|(_, l)| *l).collect();
-    for label in ["Extrude", "Move", "Rotate", "Scale", "Tape Measure"] {
+    for label in [
+        "Extrude",
+        "Offset",
+        "Move",
+        "Rotate",
+        "Scale",
+        "Tape Measure",
+    ] {
         assert!(labels.contains(&label), "{label}");
     }
 }

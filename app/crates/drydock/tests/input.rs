@@ -296,7 +296,7 @@ fn unlisted_keys_and_modifier_sets_do_nothing() {
 fn flip_is_menu_only_and_new_keys_do_not_shadow_old_ones() {
     // No plain letter flips; every letter bound before M3 still does what it did. (B became
     // the Paint Bucket in M4, `docs/specs/m4-app-paint.md`.)
-    for name in ["F", "X", "Y", "G"] {
+    for name in ["X", "Y", "G"] {
         assert_eq!(key(name, NONE), None, "{name}");
     }
     for (name, tool) in [
@@ -311,6 +311,8 @@ fn flip_is_menu_only_and_new_keys_do_not_shadow_old_ones() {
         assert_eq!(key(name, NONE), Some(Action::SelectTool(tool)), "{name}");
     }
     assert_eq!(key("A", SHIFT), Some(Action::SelectTool(Tool::Arc3)));
+    // Offset took I (m9-offset-tool); F is kept for Follow Me, G stays free.
+    assert_eq!(key("I", NONE), Some(Action::SelectTool(Tool::Offset)));
     assert_eq!(key("S", CTRL), Some(Action::Save));
     assert_eq!(key("S", CTRL_SHIFT), Some(Action::SaveAs));
 }
