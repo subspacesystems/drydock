@@ -286,6 +286,17 @@ Moved up by Tyrel (2026-10-28) so beta testers can try the app after 3D printing
 - Follow Me: extrude a face along a path of connected edges.
 - Offset: offset a face's edges inward/outward by a distance, with typed value.
 
+| Task | What | Needs |
+| --- | --- | --- |
+| `m9-sweep-path` | Kernel: a set of edges or a face's outer loop as one ordered sweep path (`sweep.rs`) | |
+| `m9-sweep-face` | Kernel: sweep a profile face along a path (side faces, mitred joints, end caps), one undo step | `m9-sweep-path` |
+| `m9-followme-tool` | Follow Me tool: pick the profile face and the path, preview, apply | `m9-sweep-face` |
+| `m9-sweep-curves` | Curves carried through a sweep (profile arcs stay arcs on the swept surface edges) | `m9-sweep-face` |
+| `m9-offset-face` | Kernel: offset a face's loops in its plane, mitred corners, inward split or outward ring (`faceoffset.rs`) | |
+| `m9-offset-tool` | Offset tool: pick a face, drag or type the distance, preview, apply | `m9-offset-face` |
+
+Done when: Follow Me sweeps a face along an open and a closed path, and Offset insets and outsets a face by a dragged or typed distance, both one undo step each, checked in the real window.
+
 ## M10: Tags and model library hook
 
 - Tags: assign entities to tags; show/hide tags.
