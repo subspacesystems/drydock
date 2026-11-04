@@ -1163,6 +1163,7 @@ impl Editor {
                 self.typed.clear();
                 self.push = None;
                 self.idle_offset();
+                self.follow.reset();
                 if matches!(self.tool, Tool::PushPull | Tool::Offset) {
                     self.hint = None;
                 }
@@ -1188,6 +1189,7 @@ impl Editor {
                 self.typed.clear();
                 self.push = None;
                 self.idle_offset();
+                self.follow.reset();
                 if matches!(self.tool, Tool::PushPull | Tool::Offset) {
                     self.hint = None;
                 }
