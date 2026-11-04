@@ -45,6 +45,7 @@ pub mod solid;
 pub mod sticky;
 pub mod sun;
 pub mod sweep;
+pub mod sweepface;
 pub mod tape;
 pub mod tess;
 pub mod text3d;
