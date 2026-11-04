@@ -257,8 +257,65 @@ pub fn offset_face(
     undo: &mut UndoStack,
     label: &str,
 ) -> Result<FaceOffset, FaceOffsetError> {
+    offset_face_impl(model, body, face, distance, undo, label, false)
+}
+
+/// [`offset_face`], except that an outward offset may shrink a filled hole: a face whose outer
+/// loop runs along exactly the edges of one of `face`'s holes (a window in a wall) keeps its
+/// id, inner loops and materials, but is bounded by the new hole loop instead, so the hole
+/// ring takes the band between the two. [`offset_face`] refuses that case with
+/// `Invalid(DuplicateFace)`. The Offset tool uses this one.
+pub fn offset_face_shrinking_fills(
+    model: &mut Model,
+    body: BodyId,
+    face: FaceId,
+    distance: f64,
+    undo: &mut UndoStack,
+    label: &str,
+) -> Result<FaceOffset, FaceOffsetError> {
+    offset_face_impl(model, body, face, distance, undo, label, true)
+}
+
+/// For each hole of `face_data` (in order), the face that fills it, if any, with its data and
+/// whether its outer loop runs the same way as the hole loop (it fronts the other way).
+fn hole_fills(ctx: &Context, face: FaceId, face_data: &Face) -> Vec<Option<(FaceId, Face, bool)>> {
+    face_data
+        .inner
+        .iter()
+        .map(|hole| {
+            let hole_edges: BTreeMap<EdgeId, bool> =
+                hole.uses.iter().map(|u| (u.edge, u.reversed)).collect();
+            ctx.faces()
+                .find(|(id, other)| {
+                    *id != face
+                        && other.outer.uses.len() == hole_edges.len()
+                        && other
+                            .outer
+                            .uses
+                            .iter()
+                            .all(|u| hole_edges.contains_key(&u.edge))
+                })
+                .map(|(id, other)| {
+                    let first = other.outer.uses[0];
+                    let same_way = hole_edges[&first.edge] == first.reversed;
+                    (id, other.clone(), same_way)
+                })
+        })
+        .collect()
+}
+
+#[allow(clippy::too_many_arguments)]
+fn offset_face_impl(
+    model: &mut Model,
+    body: BodyId,
+    face: FaceId,
+    distance: f64,
+    undo: &mut UndoStack,
+    label: &str,
+    shrink_fills: bool,
+) -> Result<FaceOffset, FaceOffsetError> {
     let body_ref = model.body(body).ok_or(FaceOffsetError::MissingBody(body))?;
-    let (face_data, old_materials, face_curves, before_violations, before_overlaps) = {
+    let (face_data, old_materials, face_curves, before_violations, before_overlaps, fills) = {
         let ctx = body_ref.geometry();
         let face_data = ctx
             .face(face)
@@ -282,12 +339,25 @@ pub fn offset_face(
             .collect();
         let before_violations = ctx.validate();
         let before_overlaps = ctx.face_overlaps();
+        let fills = if shrink_fills && distance > 0.0 {
+            hole_fills(ctx, face, &face_data)
+                .into_iter()
+                .map(|fill| {
+                    fill.map(|(id, data, same_way)| {
+                        (id, data, same_way, body_ref.face_materials(id))
+                    })
+                })
+                .collect()
+        } else {
+            vec![None; face_data.inner.len()]
+        };
         (
             face_data,
             old_materials,
             face_curves,
             before_violations,
             before_overlaps,
+            fills,
         )
     };
 
@@ -376,6 +446,9 @@ pub fn offset_face(
                 )?;
                 let mut hole_rings = Vec::with_capacity(old_holes.len());
                 for (i, old_hole) in old_holes.iter().enumerate() {
+                    if let Some((fill, _, _, _)) = &fills[i] {
+                        ctx.delete_face(*fill, log)?;
+                    }
                     hole_rings.push(ctx.insert_face(
                         Face {
                             outer: reverse_loop(old_hole),
@@ -383,6 +456,22 @@ pub fn offset_face(
                         },
                         log,
                     )?);
+                    if let Some((fill, data, same_way, _)) = &fills[i] {
+                        let new_hole = &new_loops[i + 1];
+                        let readd = Record::AddFace(
+                            *fill,
+                            Face {
+                                outer: if *same_way {
+                                    new_hole.clone()
+                                } else {
+                                    reverse_loop(new_hole)
+                                },
+                                inner: data.inner.clone(),
+                            },
+                        );
+                        ctx.apply(&readd)?;
+                        log.records.push(readd);
+                    }
                 }
                 FaceOffset {
                     inner: face,
@@ -455,6 +544,19 @@ pub fn offset_face(
             .face_materials(g);
         if current != old_materials
             && let Err(err) = model.set_face_materials(body, g, old_materials, &mut edit)
+        {
+            let _ = model.apply_edit(&edit.inverse());
+            return Err(FaceOffsetError::Model(err));
+        }
+    }
+
+    for (fill, _, _, materials) in fills.iter().flatten() {
+        let current = model
+            .body(body)
+            .ok_or(FaceOffsetError::MissingBody(body))?
+            .face_materials(*fill);
+        if current != *materials
+            && let Err(err) = model.set_face_materials(body, *fill, *materials, &mut edit)
         {
             let _ = model.apply_edit(&edit.inverse());
             return Err(FaceOffsetError::Model(err));

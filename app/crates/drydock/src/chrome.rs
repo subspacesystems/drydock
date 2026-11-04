@@ -194,7 +194,7 @@ pub fn name_prompt(ctx: &eframe::egui::Context, prompt: &mut NamePrompt) -> Opti
 }
 
 /// The toolbar's buttons, top to bottom: tool and button label.
-pub const TOOL_BUTTONS: [(Tool, &str); 16] = [
+pub const TOOL_BUTTONS: [(Tool, &str); 17] = [
     (Tool::Select, "Select"),
     (Tool::Line, "Line"),
     (Tool::Rectangle, "Rectangle"),
@@ -202,6 +202,7 @@ pub const TOOL_BUTTONS: [(Tool, &str); 16] = [
     (Tool::Arc, "Arc"),
     (Tool::Arc3, "3-Point Arc"),
     (Tool::PushPull, "Extrude"),
+    (Tool::Offset, "Offset"),
     (Tool::Move, "Move"),
     (Tool::Rotate, "Rotate"),
     (Tool::Scale, "Scale"),
@@ -224,7 +225,13 @@ pub const TOOL_GROUPS: [&[Tool]; 5] = [
         Tool::Arc,
         Tool::Arc3,
     ],
-    &[Tool::PushPull, Tool::Move, Tool::Rotate, Tool::Scale],
+    &[
+        Tool::PushPull,
+        Tool::Offset,
+        Tool::Move,
+        Tool::Rotate,
+        Tool::Scale,
+    ],
     &[Tool::Tape, Tool::Erase, Tool::Paint],
     &[Tool::Orbit, Tool::Pan, Tool::Zoom],
 ];
@@ -283,7 +290,7 @@ pub fn tool_shortcut(tool: Tool) -> &'static str {
         Tool::Tape => "T",
         Tool::Erase => "E",
         Tool::Paint => "B",
-        Tool::Offset => unimplemented!("m9-offset-tool"),
+        Tool::Offset => "I",
         Tool::FollowMe => "",
         Tool::Orbit => "O",
         Tool::Pan => "H",

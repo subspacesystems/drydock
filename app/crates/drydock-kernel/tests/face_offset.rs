@@ -609,6 +609,64 @@ fn ring_over_another_face_is_refused() {
 }
 
 #[test]
+fn shrinking_fills_shrinks_the_face_in_a_hole() {
+    // As in `outward_into_a_filled_hole_is_refused`, but with the variant the Offset tool uses:
+    // the filling face keeps its id and fronts the same way, bounded by the smaller hole.
+    let mut m = Model::new();
+    let pts = xy(&[
+        (0.0, 0.0),
+        (4.0, 0.0),
+        (4.0, 4.0),
+        (0.0, 4.0),
+        (1.0, 1.0),
+        (3.0, 1.0),
+        (3.0, 3.0),
+        (1.0, 3.0),
+    ]);
+    let ids = mesh(
+        &mut m,
+        &pts,
+        &[&[&[0, 1, 2, 3], &[4, 7, 6, 5]], &[&[4, 5, 6, 7]]],
+    );
+    let before = m.clone();
+    let fill_normal = geo(&m).face_plane(ids[1]).unwrap().normal;
+    let mut undo = UndoStack::new();
+    let r = offset_face_shrinking_fills(&mut m, BodyId::Root, ids[0], 0.25, &mut undo, "Offset")
+        .unwrap();
+    assert_eq!(undo.undo_count(), 1);
+    assert_eq!(r.hole_rings.len(), 1);
+    assert_eq!(geo(&m).face_count(), 4);
+    assert!(geo(&m).validate().is_empty(), "{:?}", geo(&m).validate());
+    assert!(geo(&m).face_overlaps().is_empty());
+    assert!(geo(&m).face_plane(ids[1]).unwrap().normal.dot(fill_normal) > 0.999);
+    let mut fill: Vec<DVec3> = geo(&m)
+        .face(ids[1])
+        .unwrap()
+        .outer
+        .uses
+        .iter()
+        .map(|u| {
+            geo(&m)
+                .vertex(geo(&m).edge(u.edge).unwrap().ends[0])
+                .unwrap()
+                .position
+        })
+        .collect();
+    fill.sort_by(|a, b| a.x.total_cmp(&b.x).then(a.y.total_cmp(&b.y)));
+    let want = xy(&[(1.25, 1.25), (1.25, 2.75), (2.75, 1.25), (2.75, 2.75)]);
+    for (got, want) in fill.iter().zip(&want) {
+        assert!(got.distance(*want) < 1e-9, "{fill:?}");
+    }
+    // Without a fill it is plain `offset_face`; inward it never touches the fill.
+    undo.undo(&mut m).unwrap();
+    assert!(m == before);
+    let r = offset_face_shrinking_fills(&mut m, BodyId::Root, ids[0], -0.25, &mut undo, "Offset")
+        .unwrap();
+    assert_eq!(r.hole_rings.len(), 1);
+    assert!(geo(&m).validate().is_empty());
+}
+
+#[test]
 fn outward_into_a_filled_hole_is_refused() {
     // The hole is filled by another face; the outward hole ring would lie on it.
     let mut m = Model::new();

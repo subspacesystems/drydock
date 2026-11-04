@@ -22,7 +22,7 @@ const NONE: Modifiers = Modifiers {
     alt: false,
 };
 
-const ALL_TOOLS: [Tool; 16] = [
+const ALL_TOOLS: [Tool; 17] = [
     Tool::Orbit,
     Tool::Pan,
     Tool::Zoom,
@@ -33,6 +33,7 @@ const ALL_TOOLS: [Tool; 16] = [
     Tool::Arc,
     Tool::Arc3,
     Tool::PushPull,
+    Tool::Offset,
     Tool::Rotate,
     Tool::Move,
     Tool::Scale,

@@ -1643,6 +1643,7 @@ impl App {
                 | Tool::Arc
                 | Tool::Arc3
                 | Tool::PushPull
+                | Tool::Offset
                 | Tool::Rotate
                 | Tool::Move
                 | Tool::Scale
@@ -1926,6 +1927,13 @@ impl App {
                 paint_primitives(painter, &self.view.camera, &primitives, &project);
             }
             if let Some(face) = editor.pushpull_face()
+                && let Some(body) = kernel.body(open_body)
+            {
+                let primitives = overlay::face_highlight(body.geometry(), face);
+                let primitives = overlay::transformed(primitives, open_transform);
+                paint_primitives(painter, &self.view.camera, &primitives, &project);
+            }
+            if let Some(face) = editor.offset_face()
                 && let Some(body) = kernel.body(open_body)
             {
                 let primitives = overlay::face_highlight(body.geometry(), face);
