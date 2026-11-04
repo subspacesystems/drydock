@@ -25,3 +25,7 @@ While you are drawing, you can type a number instead of clicking. Add a unit suc
 ## Locking a direction
 
 The arrow keys lock a line to an axis: `Right` is red, `Left` is green, and `Up` or `Down` is blue. Press the same arrow again to release the lock. If you hold `Shift`, the line locks to the direction you are already showing. Locking keeps a line perfectly straight while you choose its length.
+
+## Locking the drawing plane
+
+Shapes are drawn on a plane, normally the face under the cursor. With Rectangle, Circle, Arc and 3-Point Arc, the arrow keys fix that plane before your first click. `Right` draws on a plane facing red, `Left` on one facing green, and `Up` or `Down` on a flat one facing blue. Press the same arrow again to release the lock. Use this to stand a profile up in empty space, for example a circle for a pipe that Follow Me will carry along a path (see [Follow Me](extrude.md)).
