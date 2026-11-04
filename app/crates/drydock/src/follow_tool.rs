@@ -9,6 +9,8 @@
 
 use drydock_kernel::model::{BodyId, Model, UndoStack};
 use drydock_kernel::select::Entity;
+use drydock_kernel::sweep::{self, PathError};
+use drydock_kernel::sweepface::{self, SweepError};
 use drydock_kernel::topology::{EdgeId, FaceId};
 use glam::DVec3;
 
@@ -65,7 +67,13 @@ impl FollowTool {
 
     /// The step the user is on: [`HINT_PROFILE`], [`HINT_PATH`] or [`HINT_APPLY`].
     pub fn hint(&self) -> &'static str {
-        unimplemented!("m9-followme-tool")
+        if self.profile.is_none() {
+            HINT_PROFILE
+        } else if self.path.is_empty() {
+            HINT_PATH
+        } else {
+            HINT_APPLY
+        }
     }
 
     /// The preview: the world segments of every section's loops and the lines joining
@@ -89,14 +97,169 @@ impl FollowTool {
         under: Under,
         undo: &mut UndoStack,
     ) -> bool {
-        let _ = (model, body, under, undo);
-        unimplemented!("m9-followme-tool")
+        self.message = None;
+        let Some(profile) = self.profile else {
+            if let Some(face) = under.face {
+                self.profile = Some(face);
+            }
+            self.recompute_preview(model, body);
+            return false;
+        };
+
+        match under.entity {
+            Some(Entity::Edge(edge)) => {
+                if self.on_profile_outline(model, body, profile, edge) {
+                    self.message = Some("That edge is part of the profile.".to_string());
+                } else {
+                    self.path_face = None;
+                    if let Some(index) = self.path.iter().position(|&e| e == edge) {
+                        self.path.remove(index);
+                    } else {
+                        self.path.push(edge);
+                    }
+                }
+            }
+            Some(Entity::Face(face)) => {
+                if face == profile {
+                    self.message = Some("That face is the profile.".to_string());
+                } else if self.path_face == Some(face) {
+                    return self.apply(model, body, undo);
+                } else {
+                    match Self::perimeter(model, body, face) {
+                        Some(path) => {
+                            self.path = path.edges;
+                            self.path_face = Some(face);
+                        }
+                        None => {
+                            self.message = Some("That face has no outline to follow.".to_string());
+                        }
+                    }
+                }
+            }
+            Some(Entity::Instance(_)) | None => {}
+        }
+
+        self.recompute_preview(model, body);
+        false
     }
 
     /// Enter: sweep the profile along the path as one undo step labelled [`LABEL`]. Returns
     /// true when the model changed. On a refusal the picks stay and `message` says why.
     pub fn apply(&mut self, model: &mut Model, body: BodyId, undo: &mut UndoStack) -> bool {
-        let _ = (model, body, undo);
-        unimplemented!("m9-followme-tool")
+        self.message = None;
+        let Some(profile) = self.profile else {
+            return false;
+        };
+        if self.path.is_empty() {
+            return false;
+        }
+
+        let path = {
+            let Some(body_ref) = model.body(body) else {
+                self.message = Some("The body is gone.".to_string());
+                return false;
+            };
+            match sweep::path_from_edges(body_ref.geometry(), &self.path) {
+                Ok(path) => path,
+                Err(error) => {
+                    self.message = Some(path_error_message(&error).to_string());
+                    return false;
+                }
+            }
+        };
+
+        match sweepface::sweep_face(model, body, profile, &path, undo, LABEL) {
+            Ok(_) => {
+                self.reset();
+                true
+            }
+            Err(error) => {
+                self.message = Some(sweep_error_message(&error).to_string());
+                false
+            }
+        }
+    }
+
+    fn perimeter(model: &Model, body: BodyId, face: FaceId) -> Option<sweep::SweepPath> {
+        let body_ref = model.body(body)?;
+        sweep::face_perimeter(body_ref.geometry(), face).ok()
+    }
+
+    fn on_profile_outline(
+        &self,
+        model: &Model,
+        body: BodyId,
+        profile: FaceId,
+        edge: EdgeId,
+    ) -> bool {
+        let Some(body_ref) = model.body(body) else {
+            return false;
+        };
+        let ctx = body_ref.geometry();
+        ctx.face(profile)
+            .is_some_and(|face| face.outer.uses.iter().any(|use_| use_.edge == edge))
+    }
+
+    fn recompute_preview(&mut self, model: &Model, body: BodyId) {
+        self.segments.clear();
+        let Some(profile) = self.profile else {
+            return;
+        };
+        if self.path.is_empty() {
+            return;
+        }
+        let Some(body_ref) = model.body(body) else {
+            return;
+        };
+        let ctx = body_ref.geometry();
+        let Ok(path) = sweep::path_from_edges(ctx, &self.path) else {
+            return;
+        };
+        let Ok(sections) = sweepface::sweep_sections(ctx, profile, &path) else {
+            return;
+        };
+        for section in &sections {
+            for points in section {
+                for i in 0..points.len() {
+                    self.segments
+                        .push((points[i], points[(i + 1) % points.len()]));
+                }
+            }
+        }
+        for pair in sections.windows(2) {
+            for (first, second) in pair[0].iter().zip(&pair[1]) {
+                for (&a, &b) in first.iter().zip(second) {
+                    self.segments.push((a, b));
+                }
+            }
+        }
+    }
+}
+
+fn path_error_message(error: &PathError) -> &'static str {
+    match error {
+        PathError::Empty => "Pick some edges for the path.",
+        PathError::UnknownEdge(_) => "One of the path edges is gone.",
+        PathError::UnknownFace(_) => "That face is gone.",
+        PathError::Branch(_) => "The path branches where three or more edges meet.",
+        PathError::Gap { .. } => "The path has a gap: its edges are not all connected.",
+    }
+}
+
+fn sweep_error_message(error: &SweepError) -> &'static str {
+    match error {
+        SweepError::MissingBody(_) => "The body is gone.",
+        SweepError::MissingFace(_) => "The profile face is gone.",
+        SweepError::BadPath => "The path is too short or has a zero-length segment.",
+        SweepError::ProfileShared(_) => "The profile touches another face.",
+        SweepError::DegenerateMitre(_) => "The path turns too sharply for the profile.",
+        SweepError::NotOnPath => "The profile's plane does not meet the path.",
+        SweepError::MitreMismatch(_) => "The profile does not lie in the path's mitre plane.",
+        SweepError::ProfileParallel => "The profile is parallel to the path.",
+        SweepError::Folded(_) => "The profile is too big for a turn in the path.",
+        SweepError::Twisted => "The path twists the profile and does not close it.",
+        SweepError::Invalid(_) => "The sweep would make the model invalid.",
+        SweepError::Overlap(_, _) => "The sweep would overlap another face.",
+        SweepError::Model(_) => "The model could not be changed.",
     }
 }
