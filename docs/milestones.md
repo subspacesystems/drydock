@@ -296,7 +296,7 @@ Moved up by Tyrel (2026-10-28) so beta testers can try the app after 3D printing
 | `m9-offset-tool` | Offset tool: pick a face, drag or type the distance, preview, apply | `m9-offset-face` |
 | `m9-offset-message` | Fix: Offset's refusal message stays in the status bar (the window calls the pointer move every frame, which cleared it) | `m9-offset-tool` |
 | `m9-followme-undo` | Fix: Undo and Redo drop Follow Me's picks and preview, as for Offset and Extrude | `m9-followme-tool` |
-| `m9-guide-followme` | User Guide: a Follow Me section, and the arrow keys that lock a shape's drawing plane | `m9-followme-tool` |
+| m9-guide-followme (done directly, no task) | User Guide: a Follow Me section, and the arrow keys that lock a shape's drawing plane | `m9-followme-tool` |
 
 Done when: Follow Me sweeps a face along an open and a closed path, and Offset insets and outsets a face by a dragged or typed distance, both one undo step each, checked in the real window.
 
