@@ -28,6 +28,7 @@ pub mod curve;
 pub mod editpath;
 pub mod erase;
 pub mod explode;
+pub mod faceoffset;
 mod faces;
 pub mod format;
 pub mod geom;
