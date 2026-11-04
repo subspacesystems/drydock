@@ -19,7 +19,7 @@
 //! `docs/specs/m5-geo-model.md` (geolocation and shadow settings), `docs/specs/m7-solid-check.md`
 //! (solid check), `docs/specs/m7-solid-repair.md` (solid repair), `docs/specs/m7-curves.md`
 //! (arcs and circles kept as curves), `docs/specs/m7-clearance-offset.md` (grow and shrink
-//! by a clearance).
+//! by a clearance), `docs/specs/m9-sweep-path.md` (sweep paths for Follow Me).
 
 pub mod click;
 pub mod component;
@@ -43,6 +43,7 @@ pub mod shapes;
 pub mod solid;
 pub mod sticky;
 pub mod sun;
+pub mod sweep;
 pub mod tape;
 pub mod tess;
 pub mod text3d;
