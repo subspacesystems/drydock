@@ -17,3 +17,16 @@ Double click another face to push it by the same distance as the last push. This
 ## Offset
 
 Press `I` for the Offset tool. Click a face, then move the cursor toward the side you want the face to grow or shrink, or type a length and press `Enter`. Moving outward grows the face and moving inward shrinks it. Holes move the other way, so they shrink when the face grows and grow when it shrinks. If a distance is too big for the face, or if the offset edges would run into another face, the change is refused and a message explains why. `Esc` abandons an offset in progress, and one undo takes back a finished one.
+
+## Follow Me
+
+Follow Me carries a flat profile along a path and builds a solid from the trail. Choose **Tools > Follow Me**; it has no key and no toolbar button.
+
+- **Pick the profile.** Click the face you want to carry.
+- **Pick the path.** Click the path's edges one by one; a second click on an edge takes it out again. Or click a face to use its outline as the path.
+- **Check the preview.** It shows the shape the sweep will make.
+- **Apply.** Press `Enter`, or click the path face a second time. `Esc` cancels. One undo takes back a finished sweep.
+
+The profile has to be a free face: not drawn on another face, and with its edges used by no other face. The path edges must be connected and must not branch. Corners of the path are mitred, and a circle as the profile gives a round pipe. To stand a profile up away from the path's plane, lock the drawing plane with an arrow key before you draw it (see [Drawing](drawing.md)).
+
+Follow Me refuses a profile that stands on the path face, and a sweep whose end would lie along other edges. A message in the status bar says why.
