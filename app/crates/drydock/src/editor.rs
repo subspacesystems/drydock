@@ -43,7 +43,7 @@ use drydock_kernel::tools::scale::{
 use drydock_kernel::tools::tape::{TapeError, TapeStage, TapeTool};
 use drydock_kernel::tools::translate::{MoveError, MoveStage, MoveTool};
 use drydock_kernel::tools::{Input, Target, ToolError};
-use drydock_kernel::topology::FaceId;
+use drydock_kernel::topology::{EdgeId, FaceId};
 use drydock_kernel::transform;
 use drydock_kernel::units::{self, LengthFormat, Unit};
 use drydock_view::{Camera, Projection};
@@ -871,6 +871,7 @@ impl Editor {
             Tool::Erase => self.click_erase(model, view, cursor),
             Tool::Paint => self.click_paint(model, view, cursor, mods),
             Tool::Offset => unimplemented!("m9-offset-tool"),
+            Tool::FollowMe => unimplemented!("m9-followme-tool"),
             Tool::Rectangle | Tool::Circle | Tool::Arc | Tool::Arc3 => {
                 let before = self.undo.undo_count();
                 let (origin, dir) = self.body_ray(view, cursor);
@@ -1301,7 +1302,8 @@ impl Editor {
             | Tool::Select
             | Tool::Erase
             | Tool::Paint
-            | Tool::Offset => None,
+            | Tool::Offset
+            | Tool::FollowMe => None,
         }
     }
 
@@ -1444,7 +1446,8 @@ impl Editor {
             | Tool::Select
             | Tool::Erase
             | Tool::Paint
-            | Tool::Offset => Vec::new(),
+            | Tool::Offset
+            | Tool::FollowMe => Vec::new(),
         }
     }
 
@@ -1467,6 +1470,7 @@ impl Editor {
             | Tool::Tape
             | Tool::Erase
             | Tool::Offset
+            | Tool::FollowMe
             | Tool::Paint => None,
         }
     }
@@ -1511,6 +1515,23 @@ impl Editor {
     /// while no offset is in progress or for other tools.
     pub fn offset_distance(&self) -> Option<f64> {
         unimplemented!("m9-offset-tool")
+    }
+
+    /// Follow Me: the profile face once picked (`docs/specs/m9-followme-tool.md`); `None`
+    /// before that and for other tools.
+    pub fn follow_profile(&self) -> Option<FaceId> {
+        unimplemented!("m9-followme-tool")
+    }
+
+    /// Follow Me: the edges picked as the path so far, in the order they were picked (a path
+    /// face gives its outer loop's edges in loop order); empty before any and for other tools.
+    pub fn follow_path(&self) -> Vec<EdgeId> {
+        unimplemented!("m9-followme-tool")
+    }
+
+    /// Follow Me: what the status bar tells the user to do next; `None` for other tools.
+    pub fn follow_hint(&self) -> Option<&'static str> {
+        unimplemented!("m9-followme-tool")
     }
 
     /// Rotate: the tool, for drawing the protractor (`docs/specs/m3-app-rotate.md`). `None`

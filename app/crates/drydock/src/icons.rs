@@ -188,6 +188,11 @@ pub fn shapes(icon: Icon, rect: Rect, color: Color32) -> Vec<Shape> {
 
     match icon {
         Icon::Tool(Tool::Offset) => unimplemented!("m9-offset-tool"),
+        Icon::Tool(Tool::FollowMe) => {
+            d.closed(&[(-0.6, -0.5), (-0.2, -0.5), (-0.2, -0.1), (-0.6, -0.1)]);
+            d.seg((-0.2, -0.3), (0.3, -0.3));
+            d.seg((0.3, -0.3), (0.3, 0.5));
+        }
         Icon::Tool(Tool::Select) => {
             d.half *= 0.9;
             d.closed(&[

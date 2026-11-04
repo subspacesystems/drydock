@@ -284,6 +284,7 @@ pub fn tool_shortcut(tool: Tool) -> &'static str {
         Tool::Erase => "E",
         Tool::Paint => "B",
         Tool::Offset => unimplemented!("m9-offset-tool"),
+        Tool::FollowMe => "",
         Tool::Orbit => "O",
         Tool::Pan => "H",
         Tool::Zoom => "Z",
@@ -1045,6 +1046,11 @@ fn menu_bar_inner(
                         ui.close();
                     }
                 }
+            }
+            ui.separator();
+            if menu_item(ui, None, "Follow Me", "", state.tool == Tool::FollowMe).clicked() {
+                chosen = Some(Action::SelectTool(Tool::FollowMe));
+                ui.close();
             }
             ui.separator();
             let fit_check = ui

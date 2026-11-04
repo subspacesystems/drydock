@@ -1649,6 +1649,7 @@ impl App {
                 | Tool::Tape
                 | Tool::Erase
                 | Tool::Paint
+                | Tool::FollowMe
         );
         if !drawing && !armed {
             return;
@@ -2244,10 +2245,17 @@ impl App {
                     Tool::Erase => "Erase",
                     Tool::Paint => "Paint Bucket",
                     Tool::Offset => "Offset",
+                    Tool::FollowMe => "Follow Me",
                 });
                 if self.view.tool == Tool::Move {
                     ui.separator();
                     ui.label("Ctrl: copy");
+                }
+                if self.view.tool == Tool::FollowMe
+                    && let Some(hint) = self.editor.as_ref().and_then(Editor::follow_hint)
+                {
+                    ui.separator();
+                    ui.label(hint);
                 }
             });
         });
