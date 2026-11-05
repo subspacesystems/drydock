@@ -108,64 +108,70 @@ pub struct Palette {
 /// The palette for `theme`: each field is the token's value for that theme, with aliases
 /// resolved (`tokens.json`; the table in `design/brand/README.md`).
 pub fn palette(theme: Theme) -> Palette {
-    let c = egui::Color32::from_rgb;
     match theme {
-        Theme::Light => Palette {
-            bg: c(0xEE, 0xF7, 0xFF),
-            bg_sunken: c(0xE2, 0xE8, 0xF4),
-            surface: c(0xFF, 0xFF, 0xFF),
-            surface_raised: c(0xFF, 0xFF, 0xFF),
-            border: c(0xCB, 0xD1, 0xDF),
-            border_control: c(0x84, 0x8C, 0x9F),
-            ink: c(0x09, 0x11, 0x26),
-            ink_muted: c(0x3D, 0x47, 0x5E),
-            accent: c(0x00, 0x73, 0x9C),
-            accent_soft: egui::Color32::from_rgba_unmultiplied(0, 115, 156, 31),
-            action: c(0x52, 0x47, 0xC9),
-            on_action: c(0xFF, 0xFF, 0xFF),
-            product: c(0xA8, 0x4A, 0x14),
-            warning: c(0x8A, 0x64, 0x00),
-            danger: c(0xB3, 0x20, 0x3F),
-            viewport_bg: c(0xF4, 0xF8, 0xFC),
-            edge: c(0x09, 0x11, 0x26),
-            face_front: c(0xE2, 0xE8, 0xF4),
-            face_back: c(0xC2, 0x5A, 0x8C),
-            axis_x: c(0xD6, 0x2D, 0x45),
-            axis_y: c(0x13, 0x99, 0x4F),
-            axis_z: c(0x2F, 0x6F, 0xE0),
-        },
         Theme::Dark => Palette {
-            bg: c(0x09, 0x11, 0x26),
-            bg_sunken: c(0x05, 0x0A, 0x19),
-            surface: c(0x0D, 0x16, 0x2D),
-            surface_raised: c(0x16, 0x1F, 0x37),
-            border: c(0x26, 0x30, 0x47),
-            border_control: c(0x5F, 0x69, 0x7E),
-            ink: c(0xEE, 0xF7, 0xFF),
-            ink_muted: c(0xAA, 0xB1, 0xC1),
-            accent: c(0x1F, 0xD5, 0xFF),
+            bg: c(0x091126),
+            bg_sunken: c(0x050A19),
+            surface: c(0x0D162D),
+            surface_raised: c(0x161F37),
+            border: c(0x263047),
+            border_control: c(0x5F697E),
+            ink: c(0xEEF7FF),
+            ink_muted: c(0xAAB1C1),
+            accent: c(0x1FD5FF),
             accent_soft: egui::Color32::from_rgba_unmultiplied(31, 213, 255, 41),
-            action: c(0x8E, 0x83, 0xFC),
-            on_action: c(0x09, 0x11, 0x26),
-            product: c(0xFF, 0x8A, 0x3D),
-            warning: c(0xFF, 0xD2, 0x4D),
-            danger: c(0xFF, 0x5C, 0x7A),
-            viewport_bg: c(0x05, 0x0A, 0x19),
-            edge: c(0xEE, 0xF7, 0xFF),
-            face_front: c(0x3D, 0x47, 0x5E),
-            face_back: c(0xB0, 0x4A, 0x80),
-            axis_x: c(0xFF, 0x4F, 0x64),
-            axis_y: c(0x33, 0xD1, 0x7A),
-            axis_z: c(0x6F, 0xA3, 0xFF),
+            action: c(0x8E83FC),
+            on_action: c(0x091126),
+            product: c(0xFF8A3D),
+            warning: c(0xFFD24D),
+            danger: c(0xFF5C7A),
+            viewport_bg: c(0x050A19),
+            edge: c(0xEEF7FF),
+            face_front: c(0x3D475E),
+            face_back: c(0xB04A80),
+            axis_x: c(0xFF4F64),
+            axis_y: c(0x33D17A),
+            axis_z: c(0x6FA3FF),
+        },
+        Theme::Light => Palette {
+            bg: c(0xEEF7FF),
+            bg_sunken: c(0xE2E8F4),
+            surface: c(0xFFFFFF),
+            surface_raised: c(0xFFFFFF),
+            border: c(0xCBD1DF),
+            border_control: c(0x848C9F),
+            ink: c(0x091126),
+            ink_muted: c(0x3D475E),
+            accent: c(0x00739C),
+            accent_soft: egui::Color32::from_rgba_unmultiplied(0, 115, 156, 31),
+            action: c(0x5247C9),
+            on_action: c(0xFFFFFF),
+            product: c(0xA84A14),
+            warning: c(0x8A6400),
+            danger: c(0xB3203F),
+            viewport_bg: c(0xF4F8FC),
+            edge: c(0x091126),
+            face_front: c(0xE2E8F4),
+            face_back: c(0xC25A8C),
+            axis_x: c(0xD62D45),
+            axis_y: c(0x13994F),
+            axis_z: c(0x2F6FE0),
         },
     }
 }
 
-/// The egui style for `theme`: egui's own colours for the scheme with the desktop look on
-/// top. Widget corners at most 3 points, the hovered fill differs from the resting one,
-/// item spacing 4 to 8 points tall, rows 20 to 28 points tall, button padding at least 6
+/// A colour in the `0xRRGGBB` form of the token tables.
+fn c(hex: u32) -> egui::Color32 {
+    egui::Color32::from_rgb((hex >> 16) as u8, (hex >> 8) as u8, hex as u8)
+}
+
+/// The egui style for `theme`: the brand palette of `palette(theme)` mapped onto egui's
+/// visuals, flat: no window shadow (menus and popups keep theirs), controls 4 points
+/// rounded, menus and windows 8, the hovered fill differs from the resting one, item
+/// spacing 4 to 8 points tall, rows 20 to 28 points tall, button padding at least 6
 /// points wide.
 pub fn style(theme: Theme) -> Style {
+    let p = palette(theme);
     let mut style = Style {
         visuals: match theme {
             Theme::Light => egui::Visuals::light(),
@@ -173,20 +179,46 @@ pub fn style(theme: Theme) -> Style {
         },
         ..Default::default()
     };
-    let widgets = &mut style.visuals.widgets;
+    let v = &mut style.visuals;
+    v.panel_fill = p.surface;
+    v.window_fill = p.surface_raised;
+    v.extreme_bg_color = p.bg_sunken;
+    v.faint_bg_color = p.bg;
+    v.code_bg_color = p.bg_sunken;
+    v.window_stroke = egui::Stroke::new(1.0, p.border);
+    v.weak_text_color = Some(p.ink_muted);
+    v.selection.bg_fill = p.accent_soft;
+    v.selection.stroke = egui::Stroke::new(1.0, p.accent);
+    v.hyperlink_color = p.accent;
+    v.warn_fg_color = p.warning;
+    v.error_fg_color = p.danger;
     for widget in [
-        &mut widgets.noninteractive,
-        &mut widgets.inactive,
-        &mut widgets.hovered,
-        &mut widgets.active,
-        &mut widgets.open,
+        &mut v.widgets.noninteractive,
+        &mut v.widgets.inactive,
+        &mut v.widgets.hovered,
+        &mut v.widgets.active,
+        &mut v.widgets.open,
     ] {
-        widget.corner_radius = CornerRadius::same(2);
+        widget.corner_radius = CornerRadius::same(4);
+        widget.fg_stroke = egui::Stroke::new(1.0, p.ink);
     }
-    style.visuals.menu_corner_radius = CornerRadius::same(2);
-    style.visuals.window_corner_radius = CornerRadius::same(2);
-    let border = style.visuals.widgets.noninteractive.bg_stroke.color;
-    style.visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, border);
+    v.widgets.noninteractive.bg_fill = p.surface;
+    v.widgets.noninteractive.weak_bg_fill = p.surface;
+    v.widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0, p.border);
+    v.widgets.inactive.bg_fill = p.surface_raised;
+    v.widgets.inactive.weak_bg_fill = p.surface;
+    v.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, p.border_control);
+    for widget in [&mut v.widgets.hovered, &mut v.widgets.active] {
+        widget.bg_fill = p.accent_soft;
+        widget.weak_bg_fill = p.accent_soft;
+        widget.bg_stroke = egui::Stroke::new(1.0, p.accent);
+    }
+    v.widgets.open.bg_fill = p.bg;
+    v.widgets.open.weak_bg_fill = p.bg;
+    v.widgets.open.bg_stroke = egui::Stroke::new(1.0, p.border_control);
+    v.menu_corner_radius = CornerRadius::same(8);
+    v.window_corner_radius = CornerRadius::same(8);
+    v.window_shadow = egui::Shadow::NONE;
 
     style.spacing.item_spacing.y = 6.0;
     style.spacing.interact_size.y = 24.0;
