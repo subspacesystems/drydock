@@ -79,17 +79,9 @@ fn the_build_version_is_the_one_build_rs_emitted() {
 #[test]
 fn plain_builds_are_not_0_0_1() {
     let text = std::fs::read_to_string(crate_dir().join("../../Cargo.toml")).unwrap();
-    // The workspace version follows the milestones: 0.8 shipped M8, 0.9 is M9.
-    // Anything older means the bump was lost.
-    let version = text
-        .lines()
-        .find_map(|l| l.trim().strip_prefix("version = \""))
-        .and_then(|v| v.split('"').next())
-        .expect("workspace version line");
-    let minor: u32 = version.split('.').nth(1).unwrap().parse().unwrap();
     assert!(
-        version.starts_with("0.") && minor >= 9,
-        "workspace version is {version}, expected 0.9 or later"
+        text.contains("version = \"0.9."),
+        "workspace version is 0.9.x"
     );
     assert!(!VERSION.starts_with("0.0."), "{VERSION}");
 }

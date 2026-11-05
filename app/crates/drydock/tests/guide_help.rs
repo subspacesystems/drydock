@@ -38,11 +38,16 @@ fn installed_layout_comes_first() {
 }
 
 #[test]
-fn dev_fallback_is_the_build_folder() {
+fn dev_fallback_is_the_guide_the_build_made() {
+    // The build script builds docs/guide into $OUT_DIR/guide and exports it as DRYDOCK_DEV_GUIDE.
+    let dev = PathBuf::from(env!("DRYDOCK_DEV_GUIDE"));
     let c = guide_candidates(None);
-    assert_eq!(c.len(), 1);
-    let last = c[0].to_string_lossy().replace('\\', "/");
-    assert!(last.ends_with("target/guide/index.html"), "{last}");
+    assert_eq!(c, vec![dev.join(GUIDE_INDEX)]);
+    let c = guide_candidates(Some(Path::new("/opt/drydock")));
+    assert_eq!(c.len(), 2);
+    assert_eq!(c[1], dev.join(GUIDE_INDEX));
+    let text = c[1].to_string_lossy().replace('\\', "/");
+    assert!(!text.contains("../../target"), "{text}");
 }
 
 #[test]
