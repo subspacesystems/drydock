@@ -46,16 +46,17 @@ impl BrowserLauncher for SystemBrowser {
 }
 
 /// Where the guide's index page may be, best first: installed layout (`guide/index.html`
-/// next to the executable, when `exe_dir` is known), then the dev build folder
-/// `app/target/guide/index.html` (found from this crate's manifest folder).
+/// next to the executable, when `exe_dir` is known), then the dev folder the build script
+/// built the guide into (`DRYDOCK_DEV_GUIDE`).
 pub fn guide_candidates(exe_dir: Option<&Path>) -> Vec<PathBuf> {
-    let dev = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target/guide")
-        .join(GUIDE_INDEX);
-    match exe_dir {
-        Some(dir) => vec![dir.join("guide").join(GUIDE_INDEX), dev],
-        None => vec![dev],
+    let mut candidates = Vec::new();
+    if let Some(dir) = exe_dir {
+        candidates.push(dir.join("guide").join(GUIDE_INDEX));
     }
+    if let Some(dev) = option_env!("DRYDOCK_DEV_GUIDE") {
+        candidates.push(Path::new(dev).join(GUIDE_INDEX));
+    }
+    candidates
 }
 
 /// The first candidate for which `exists` is true.
