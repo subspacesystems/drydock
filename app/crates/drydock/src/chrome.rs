@@ -354,6 +354,31 @@ pub fn about_text() -> String {
     format!("Drydock {VERSION} ({GIT_HASH})")
 }
 
+/// The line under the version in the About window.
+pub const PRODUCT_LINE: &str = "A Subspace Systems product.";
+
+/// Width in points of the lockup image in the About window; the height follows the SVG's
+/// aspect ratio (3410 x 748).
+pub const LOCKUP_WIDTH: f32 = 341.0;
+
+/// The brand lockup SVG for the dark theme (`dark`) or the light one.
+pub fn lockup_svg(dark: bool) -> &'static [u8] {
+    let _ = dark;
+    unimplemented!("m10-brand-about")
+}
+
+/// The image URI the lockup is registered under: distinct for the two themes, ending `.svg`.
+pub fn lockup_uri(dark: bool) -> &'static str {
+    let _ = dark;
+    unimplemented!("m10-brand-about")
+}
+
+/// Registers both lockups with `ctx` (and the SVG loader); safe to call repeatedly.
+pub fn install_lockups(ctx: &eframe::egui::Context) {
+    let _ = ctx;
+    unimplemented!("m10-brand-about")
+}
+
 /// The names in the repository's `CONTRIBUTORS` file.
 pub const CONTRIBUTORS: &str = include_str!("../../../../CONTRIBUTORS");
 
