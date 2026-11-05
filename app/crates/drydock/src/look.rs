@@ -5,7 +5,7 @@
 //! light or dark following the OS, the brand palette and standard spacing. Pure
 //! functions over egui types so tests need no window.
 
-use eframe::egui::{self, CornerRadius, FontDefinitions, FontFamily, Margin, Style};
+use eframe::egui::{self, CornerRadius, FontDefinitions, FontFamily, Margin, Style, TextStyle};
 
 /// Roboto Regular 2.138, bundled (`assets/fonts/README.md`).
 pub const ROBOTO: &[u8] = include_bytes!("../assets/fonts/Roboto-Regular.ttf");
@@ -160,6 +160,15 @@ pub fn palette(theme: Theme) -> Palette {
     }
 }
 
+/// Buttons and headings use Roboto Medium, the rest of the styles keep egui's families.
+fn brand_fonts(style: &mut Style) {
+    for text_style in [TextStyle::Button, TextStyle::Heading] {
+        if let Some(font_id) = style.text_styles.get_mut(&text_style) {
+            font_id.family = medium();
+        }
+    }
+}
+
 /// A colour in the `0xRRGGBB` form of the token tables.
 fn c(hex: u32) -> egui::Color32 {
     egui::Color32::from_rgb((hex >> 16) as u8, (hex >> 8) as u8, hex as u8)
@@ -179,6 +188,7 @@ pub fn style(theme: Theme) -> Style {
         },
         ..Default::default()
     };
+    brand_fonts(&mut style);
     let v = &mut style.visuals;
     v.panel_fill = p.surface;
     v.window_fill = p.surface_raised;
