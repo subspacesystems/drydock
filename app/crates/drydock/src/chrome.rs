@@ -194,7 +194,7 @@ pub fn name_prompt(ctx: &eframe::egui::Context, prompt: &mut NamePrompt) -> Opti
 }
 
 /// The toolbar's buttons, top to bottom: tool and button label.
-pub const TOOL_BUTTONS: [(Tool, &str); 17] = [
+pub const TOOL_BUTTONS: [(Tool, &str); 18] = [
     (Tool::Select, "Select"),
     (Tool::Line, "Line"),
     (Tool::Rectangle, "Rectangle"),
@@ -203,6 +203,7 @@ pub const TOOL_BUTTONS: [(Tool, &str); 17] = [
     (Tool::Arc3, "3-Point Arc"),
     (Tool::PushPull, "Extrude"),
     (Tool::Offset, "Offset"),
+    (Tool::FollowMe, "Follow Me"),
     (Tool::Move, "Move"),
     (Tool::Rotate, "Rotate"),
     (Tool::Scale, "Scale"),
@@ -228,6 +229,7 @@ pub const TOOL_GROUPS: [&[Tool]; 5] = [
     &[
         Tool::PushPull,
         Tool::Offset,
+        Tool::FollowMe,
         Tool::Move,
         Tool::Rotate,
         Tool::Scale,
@@ -291,7 +293,7 @@ pub fn tool_shortcut(tool: Tool) -> &'static str {
         Tool::Erase => "E",
         Tool::Paint => "B",
         Tool::Offset => "I",
-        Tool::FollowMe => "",
+        Tool::FollowMe => "F",
         Tool::Orbit => "O",
         Tool::Pan => "H",
         Tool::Zoom => "Z",
@@ -1053,11 +1055,6 @@ fn menu_bar_inner(
                         ui.close();
                     }
                 }
-            }
-            ui.separator();
-            if menu_item(ui, None, "Follow Me", "", state.tool == Tool::FollowMe).clicked() {
-                chosen = Some(Action::SelectTool(Tool::FollowMe));
-                ui.close();
             }
             ui.separator();
             let fit_check = ui

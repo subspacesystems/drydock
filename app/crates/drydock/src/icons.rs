@@ -32,7 +32,7 @@ pub enum Icon {
 }
 
 /// Every tool, in `chrome::TOOL_BUTTONS` order.
-pub const TOOLS: [Tool; 17] = [
+pub const TOOLS: [Tool; 18] = [
     Tool::Select,
     Tool::Line,
     Tool::Rectangle,
@@ -41,6 +41,7 @@ pub const TOOLS: [Tool; 17] = [
     Tool::Arc3,
     Tool::PushPull,
     Tool::Offset,
+    Tool::FollowMe,
     Tool::Move,
     Tool::Rotate,
     Tool::Scale,
@@ -230,9 +231,14 @@ pub fn shapes(icon: Icon, rect: Rect, color: Color32) -> Vec<Shape> {
             d.arrow((0.5, 0.0), (0.9, 0.0), 0.24);
         }
         Icon::Tool(Tool::FollowMe) => {
-            d.closed(&[(-0.6, -0.5), (-0.2, -0.5), (-0.2, -0.1), (-0.6, -0.1)]);
-            d.seg((-0.2, -0.3), (0.3, -0.3));
-            d.seg((0.3, -0.3), (0.3, 0.5));
+            d.closed(&[
+                (-0.44, -0.45),
+                (-0.04, -0.45),
+                (-0.04, -0.05),
+                (-0.44, -0.05),
+            ]);
+            d.seg((-0.04, -0.25), (0.46, -0.25));
+            d.seg((0.46, -0.25), (0.46, 0.55));
         }
         Icon::Tool(Tool::Select) => {
             d.half *= 0.9;
