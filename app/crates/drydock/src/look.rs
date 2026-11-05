@@ -161,9 +161,10 @@ pub fn primary_hover_fill(theme: Theme) -> egui::Color32 {
 }
 
 /// A dialog's confirming button (`docs/specs/m10-brand-dialog-buttons.md`): filled with the
-/// theme's `action` (`primary_hover_fill` while hovered), label `text` in Roboto Medium
-/// (`medium()`) in `on_action`, the minimum size and padding of other buttons. Focus ring
-/// and border stay accent. Returns the button's response.
+/// theme's `action` (`primary_hover_fill` while hovered), label `text` in `on_action`
+/// (the label font stays the button text style's; no `medium()` here, tests without the
+/// brand fonts must still lay it out), at least `ui.spacing().interact_size` big, with the
+/// padding of other buttons. Focus ring and border stay accent. Returns the response.
 pub fn primary_button(ui: &mut egui::Ui, text: &str) -> egui::Response {
     let _ = (ui, text);
     unimplemented!("m10-brand-dialog-buttons")
