@@ -363,20 +363,28 @@ pub const LOCKUP_WIDTH: f32 = 341.0;
 
 /// The brand lockup SVG for the dark theme (`dark`) or the light one.
 pub fn lockup_svg(dark: bool) -> &'static [u8] {
-    let _ = dark;
-    unimplemented!("m10-brand-about")
+    if dark {
+        include_bytes!("../../../../design/brand/logo/drydock-lockup-h-dark.svg")
+    } else {
+        include_bytes!("../../../../design/brand/logo/drydock-lockup-h-light.svg")
+    }
 }
 
 /// The image URI the lockup is registered under: distinct for the two themes, ending `.svg`.
 pub fn lockup_uri(dark: bool) -> &'static str {
-    let _ = dark;
-    unimplemented!("m10-brand-about")
+    if dark {
+        "bytes://drydock-lockup-dark.svg"
+    } else {
+        "bytes://drydock-lockup-light.svg"
+    }
 }
 
 /// Registers both lockups with `ctx` (and the SVG loader); safe to call repeatedly.
 pub fn install_lockups(ctx: &eframe::egui::Context) {
-    let _ = ctx;
-    unimplemented!("m10-brand-about")
+    egui_extras::install_image_loaders(ctx);
+    for dark in [false, true] {
+        ctx.include_bytes(lockup_uri(dark), lockup_svg(dark));
+    }
 }
 
 /// The names in the repository's `CONTRIBUTORS` file.
@@ -385,9 +393,8 @@ pub const CONTRIBUTORS: &str = include_str!("../../../../CONTRIBUTORS");
 /// The About window's lines, top to bottom (`docs/specs/m4-ui-menus.md`).
 pub fn about_lines() -> Vec<String> {
     let mut lines = vec![
-        "Subspace Drydock".to_owned(),
-        "by Subspace Systems".to_owned(),
         about_text(),
+        PRODUCT_LINE.to_owned(),
         format!("License: {}", env!("CARGO_PKG_LICENSE")),
         "Copyright (c) 2026 Subspace Systems".to_owned(),
         "Contributors:".to_owned(),
@@ -407,12 +414,22 @@ pub fn about_window(ctx: &eframe::egui::Context, open: &mut bool) {
     if !*open {
         return;
     }
+    if !ctx.fonts(|fonts| fonts.families().contains(&crate::look::medium())) {
+        ctx.set_fonts(crate::look::font_definitions());
+    }
+    install_lockups(ctx);
     let mut close = false;
     eframe::egui::Window::new("About Drydock")
         .collapsible(false)
         .resizable(false)
         .open(open)
         .show(ctx, |ui| {
+            let dark = ui.visuals().dark_mode;
+            ui.add(
+                eframe::egui::Image::new(lockup_uri(dark))
+                    .fit_to_exact_size(vec2(LOCKUP_WIDTH, LOCKUP_WIDTH * 748.0 / 3410.0))
+                    .alt_text("Subspace Drydock"),
+            );
             for line in about_lines() {
                 ui.label(line);
             }
