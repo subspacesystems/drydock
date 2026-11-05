@@ -300,13 +300,28 @@ Moved up by Tyrel (2026-10-28) so beta testers can try the app after 3D printing
 | `m9-followme-button` | Fix: Follow Me gets key `F`, a toolbar button after Offset, and its icon in the Tools menu | `m9-followme-tool` |
 | m9-version (done directly, no task) | Fix: workspace version 0.9.0, so a plain cargo build's Help > About says 0.9.0 | |
 | `m9-guide-dev` | Fix: Help > User Guide works from a plain `cargo build`/`cargo run` (the build makes the guide) | |
+| `m9-linux-titlebar` | Fix: Linux window gets the GNOME-style title bar with title text (winit sctk-adwaita), app id and Drydock icon | |
+| `m9-linux-desktop-entry` | Fix: Linux desktop entry and hicolor icons so the dock shows Drydock | `m9-linux-titlebar` |
 
 Done when: Follow Me sweeps a face along an open and a closed path, and Offset insets and outsets a face by a dragged or typed distance, both one undo step each, checked in the real window.
 
 ## M10: Tags and model library hook
 
+- Brand: the Subspace look from `design/brand/`: theme colors for light and dark, Roboto fonts, the new icon set, viewport colors, app icon and About box.
 - Tags: assign entities to tags; show/hide tags.
 - Library hook: import pipeline abstracted behind a "model source" interface so an online library could be added later.
+
+| Task | What | Needs |
+| --- | --- | --- |
+| `m10-brand-theme` | Brand colors as egui `Visuals` for light and dark (README table), corners 4/8, flat with shadows only on menus and popups, text contrast at least 4.5:1 | |
+| `m10-brand-fonts` | Roboto Regular and Medium for all UI, Roboto Mono Regular and Medium for numbers; the OS-font lookup goes | |
+| `m10-brand-icons` | The 24 icons from `design/brand/icons/`, tinted by the theme at 1x and 2x; active tool in accent with the orange bar | `m10-brand-theme` |
+| `m10-brand-dialog-buttons` | Primary dialog buttons in the action color (violet) with the on-action label | `m10-brand-theme` |
+| `m10-brand-viewport` | Viewport background, edges, front faces, rose back faces and axis colors per theme | `m10-brand-theme` |
+| `m10-brand-numbers` | Measurements box and Entity Info numbers in Roboto Mono with units; Measurements box corners 2 left, 8 right | `m10-brand-theme`, `m10-brand-fonts` |
+| `m10-brand-app-icon` | App icon from the new logo: `drydock-256.png`, the Windows `.ico` and the Linux hicolor sizes (favicon for 16 and 32) | `m10-brand-icons`, `m9-linux-desktop-entry` |
+| `m10-brand-about` | Help > About: the horizontal lockup in the current theme, the version, "A Subspace Systems product." | `m10-brand-icons` |
+| `m10-theme-default-dark` | When the OS doesn't say light or dark, Drydock starts in Dark | `m10-brand-theme` |
 
 ## Future (unscheduled)
 

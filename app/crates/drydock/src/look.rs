@@ -1,17 +1,20 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Subspace Systems
 
-//! The desktop look (`docs/specs/m6-native-look.md`): the OS's UI font loaded at run time,
-//! light or dark following the OS, flat square-ish controls and standard spacing. Pure
+//! The look (`docs/specs/m6-native-look.md`, `m10-brand-*`): the bundled Roboto fonts,
+//! light or dark following the OS, the brand palette and standard spacing. Pure
 //! functions over egui types so tests need no window.
 
-use std::path::PathBuf;
-use std::sync::Arc;
+use eframe::egui::{self, CornerRadius, FontDefinitions, FontFamily, Margin, Style};
 
-use eframe::egui::{self, CornerRadius, FontData, FontDefinitions, Margin, Style};
-
-/// Roboto, bundled: the fallback when the OS font can't be read, and for glyphs it lacks.
+/// Roboto Regular 2.138, bundled (`assets/fonts/README.md`).
 pub const ROBOTO: &[u8] = include_bytes!("../assets/fonts/Roboto-Regular.ttf");
+/// Roboto Medium 2.138.
+pub const ROBOTO_MEDIUM: &[u8] = include_bytes!("../assets/fonts/Roboto-Medium.ttf");
+/// Roboto Mono Regular 3.000 (static instance, wght 400).
+pub const ROBOTO_MONO: &[u8] = include_bytes!("../assets/fonts/RobotoMono-Regular.ttf");
+/// Roboto Mono Medium 3.000 (static instance, wght 500).
+pub const ROBOTO_MONO_MEDIUM: &[u8] = include_bytes!("../assets/fonts/RobotoMono-Medium.ttf");
 
 /// The colour scheme to draw with.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -20,7 +23,7 @@ pub enum Theme {
     Dark,
 }
 
-/// The operating systems whose UI fonts we know how to find.
+/// The operating systems we special-case (browser command, config folders).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Os {
     Windows,
@@ -48,6 +51,65 @@ pub fn theme_from(system: Option<egui::Theme>) -> Theme {
         Some(egui::Theme::Dark) => Theme::Dark,
         _ => Theme::Light,
     }
+}
+
+/// Every colour the app draws with, for one theme: the Subspace brand tokens of
+/// `design/brand/tokens.json` (`docs/specs/m10-brand-theme.md`). Other code takes colours
+/// from here, never from literals. There is no ground grid, so `viewport-grid` is absent.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Palette {
+    /// `bg`: page and app background.
+    pub bg: egui::Color32,
+    /// `bg-sunken`: wells, the viewport surround.
+    pub bg_sunken: egui::Color32,
+    /// `surface`: panels.
+    pub surface: egui::Color32,
+    /// `surface-raised`: menus, popups, dialogs.
+    pub surface_raised: egui::Color32,
+    /// `border`: hairlines between regions.
+    pub border: egui::Color32,
+    /// `border-control`: outlines of inputs and buttons.
+    pub border_control: egui::Color32,
+    /// `ink`: body text.
+    pub ink: egui::Color32,
+    /// `ink-muted`: secondary text.
+    pub ink_muted: egui::Color32,
+    /// `accent`: links, focus, selection, the active state.
+    pub accent: egui::Color32,
+    /// `accent-soft`: hover and selection tint (translucent; build with
+    /// `Color32::from_rgba_unmultiplied`).
+    pub accent_soft: egui::Color32,
+    /// `action`: primary button fill.
+    pub action: egui::Color32,
+    /// `on-action`: label on `action`.
+    pub on_action: egui::Color32,
+    /// `product`: drydock-orange ink, the active-tool marker.
+    pub product: egui::Color32,
+    /// `warning`.
+    pub warning: egui::Color32,
+    /// `danger`.
+    pub danger: egui::Color32,
+    /// `viewport-bg`.
+    pub viewport_bg: egui::Color32,
+    /// `edge`: model edges.
+    pub edge: egui::Color32,
+    /// `face-front`.
+    pub face_front: egui::Color32,
+    /// `face-back`: the rose of reversed faces.
+    pub face_back: egui::Color32,
+    /// `axis-x`.
+    pub axis_x: egui::Color32,
+    /// `axis-y`.
+    pub axis_y: egui::Color32,
+    /// `axis-z`.
+    pub axis_z: egui::Color32,
+}
+
+/// The palette for `theme`: each field is the token's value for that theme, with aliases
+/// resolved (`tokens.json`; the table in `design/brand/README.md`).
+pub fn palette(theme: Theme) -> Palette {
+    let _ = theme;
+    unimplemented!("m10-brand-theme")
 }
 
 /// The egui style for `theme`: egui's own colours for the scheme with the desktop look on
@@ -84,78 +146,74 @@ pub fn style(theme: Theme) -> Style {
     style
 }
 
-/// Where the OS keeps its UI font, best first. Absolute paths to `.ttf`, `.otf` or `.ttc`
-/// files; Windows lists `segoeui.ttf`.
-pub fn font_candidates(os: Os) -> Vec<PathBuf> {
-    let paths: &[&str] = match os {
-        Os::Windows => &[
-            r"C:\Windows\Fonts\segoeui.ttf",
-            r"C:\Windows\Fonts\segoeuib.ttf",
-            r"C:\Windows\Fonts\segoeuil.ttf",
-            r"C:\Windows\Fonts\arial.ttf",
-        ],
-        Os::Mac => &[
-            "/System/Library/Fonts/SFNS.ttf",
-            "/System/Library/Fonts/Helvetica.ttc",
-            "/System/Library/Fonts/Supplemental/Arial.ttf",
-            "/Library/Fonts/Arial.ttf",
-        ],
-        Os::Linux => &[
-            "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
-            "/usr/share/fonts/opentype/noto/NotoSans-Regular.ttf",
-            "/usr/share/fonts/truetype/cantarell/Cantarell-Regular.ttf",
-            "/usr/share/fonts/truetype/ubuntu/Ubuntu-R.ttf",
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-            "/usr/share/fonts/TTF/DejaVuSans.ttf",
-        ],
-    };
-    paths.iter().map(PathBuf::from).collect()
+/// The viewport colours for `theme` (`docs/specs/m10-brand-viewport.md`): `background` =
+/// `viewport_bg`, `default_line` = `edge`, `default_face` = `face_front`, `default_back` =
+/// `Some(face_back)`; all opaque, sRGB 0..1 (byte / 255). `sun` is `None`.
+pub fn viewport_style(theme: Theme) -> drydock_render::Style {
+    let _ = theme;
+    unimplemented!("m10-brand-viewport")
 }
 
-/// The bytes of the first of `paths` that exists and starts like a font file (TrueType,
-/// OpenType, or a collection); `None` if there is none.
-pub fn first_readable_font(paths: &[PathBuf]) -> Option<Vec<u8>> {
-    paths.iter().find_map(|path| {
-        let bytes = std::fs::read(path).ok()?;
-        let signature = bytes.get(..4)?;
-        (signature == [0, 1, 0, 0]
-            || signature == b"OTTO"
-            || signature == b"true"
-            || signature == b"ttcf")
-            .then_some(bytes)
-    })
+/// Set the colour fields of `style` (not `sun`) to those of `viewport_style(theme)`; true
+/// when anything changed, so the viewport must redraw.
+pub fn apply_viewport_theme(style: &mut drydock_render::Style, theme: Theme) -> bool {
+    let _ = (style, theme);
+    unimplemented!("m10-brand-viewport")
 }
 
-/// The fonts to install: with `system` bytes, a font named "System" first in the
-/// Proportional family followed by Roboto; without, Roboto alone. Monospace is always
-/// Roboto. No egui default fonts.
-pub fn font_definitions(system: Option<Vec<u8>>) -> FontDefinitions {
-    let mut fonts = FontDefinitions::empty();
-    fonts
-        .font_data
-        .insert("Roboto".to_owned(), Arc::new(FontData::from_static(ROBOTO)));
-    let proportional = if let Some(bytes) = system {
-        fonts
-            .font_data
-            .insert("System".to_owned(), Arc::new(FontData::from_owned(bytes)));
-        vec!["System".to_owned(), "Roboto".to_owned()]
-    } else {
-        vec!["Roboto".to_owned()]
-    };
-    fonts
-        .families
-        .insert(egui::FontFamily::Proportional, proportional);
-    fonts
-        .families
-        .insert(egui::FontFamily::Monospace, vec!["Roboto".to_owned()]);
-    fonts
+/// The colour of model axis `axis` (0 x, 1 y, 2 z) in `theme`: `palette(theme).axis_x` /
+/// `axis_y` / `axis_z` as RGB bytes; any other index gives mid-grey `[160, 160, 160]`.
+pub fn axis_color(theme: Theme, axis: usize) -> [u8; 3] {
+    let _ = (theme, axis);
+    unimplemented!("m10-brand-viewport")
 }
 
-/// Installs the fonts (the OS's UI font if readable) and the style for the OS's theme, both
-/// the light and the dark one so a theme change in the OS applies at once.
+/// The theme `visuals` belong to: Dark when `visuals.dark_mode`, else Light.
+pub fn theme_of(visuals: &egui::Visuals) -> Theme {
+    let _ = visuals;
+    unimplemented!("m10-brand-dialog-buttons")
+}
+
+/// The fill of a primary button under the pointer: `palette(theme).action` blended 10%
+/// toward white, per channel, rounded to nearest. Its contrast with `on_action` stays at
+/// least 4.5:1.
+pub fn primary_hover_fill(theme: Theme) -> egui::Color32 {
+    let _ = theme;
+    unimplemented!("m10-brand-dialog-buttons")
+}
+
+/// A dialog's confirming button (`docs/specs/m10-brand-dialog-buttons.md`): filled with the
+/// theme's `action` (`primary_hover_fill` while hovered), label `text` in `on_action`
+/// (the label font stays the button text style's; no `medium()` here, tests without the
+/// brand fonts must still lay it out), at least `ui.spacing().interact_size` big, with the
+/// padding of other buttons. Focus ring and border stay accent. Returns the response.
+pub fn primary_button(ui: &mut egui::Ui, text: &str) -> egui::Response {
+    let _ = (ui, text);
+    unimplemented!("m10-brand-dialog-buttons")
+}
+
+/// The family for Roboto Medium (weight 500): buttons and panel headers (`style()`).
+pub fn medium() -> FontFamily {
+    FontFamily::Name("medium".into())
+}
+
+/// The family for Roboto Mono Medium (weight 500): emphasised numbers.
+pub fn mono_medium() -> FontFamily {
+    FontFamily::Name("mono-medium".into())
+}
+
+/// The fonts to install, bundled only (`docs/specs/m10-brand-fonts.md`): font data keys
+/// "Roboto", "Roboto-Medium", "RobotoMono", "RobotoMono-Medium". Proportional is
+/// [Roboto], Monospace is [Roboto Mono], `medium()` is [Roboto Medium], `mono_medium()` is
+/// [Roboto Mono Medium]. Each family holds exactly that one font; no egui default fonts.
+pub fn font_definitions() -> FontDefinitions {
+    unimplemented!("m10-brand-fonts")
+}
+
+/// Installs the fonts and the style for the OS's theme, both the light and the dark one so
+/// a theme change in the OS applies at once.
 pub fn apply(ctx: &egui::Context) {
-    let system = first_readable_font(&font_candidates(Os::current()));
-    ctx.set_fonts(font_definitions(system));
+    ctx.set_fonts(font_definitions());
     ctx.set_style_of(egui::Theme::Light, style(Theme::Light));
     ctx.set_style_of(egui::Theme::Dark, style(Theme::Dark));
     ctx.set_theme(egui::ThemePreference::System);

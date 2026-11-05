@@ -7,6 +7,12 @@ SPDX: GPL-3.0-or-later
 
 Third-party material distributed with this software:
 
-- Roboto font 2.138 (crates/modeler/assets/fonts/Roboto-Regular.ttf),
+- Roboto font 2.138 (crates/drydock/assets/fonts/Roboto-Regular.ttf),
   Copyright 2011 Google Inc. Licensed under the Apache License 2.0
-  (crates/modeler/assets/fonts/LICENSE-Roboto).
+  (crates/drydock/assets/fonts/LICENSE-Roboto).
+- Roboto Medium 2.138 (crates/drydock/assets/fonts/Roboto-Medium.ttf), same source,
+  copyright and license as Roboto Regular.
+- Roboto Mono 3.000, Regular and Medium (crates/drydock/assets/fonts/RobotoMono-Regular.ttf,
+  RobotoMono-Medium.ttf), Copyright 2015 The Roboto Mono Project Authors
+  (https://github.com/googlefonts/robotomono). Licensed under the Apache License 2.0
+  (crates/drydock/assets/fonts/LICENSE-RobotoMono). Static instances of the variable font.

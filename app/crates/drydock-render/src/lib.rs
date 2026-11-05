@@ -33,6 +33,9 @@ pub struct Style {
     pub background: [f32; 4],
     /// Color for faces without a material, sRGB RGBA 0..1.
     pub default_face: [f32; 4],
+    /// Color for the back sides of faces without a material, sRGB RGBA 0..1. `None`: the
+    /// same as `default_face` (`docs/specs/m10-brand-viewport.md`).
+    pub default_back: Option<[f32; 4]>,
     /// Color for lines without a material, sRGB RGBA 0..1.
     pub default_line: [f32; 4],
     /// `Some`: lit materials are shaded by the sun instead of a light at the viewer
@@ -61,6 +64,7 @@ impl Default for Style {
         Style {
             background: [0.94, 0.95, 0.96, 1.0],
             default_face: [0.85, 0.85, 0.85, 1.0],
+            default_back: None,
             default_line: [0.0, 0.0, 0.0, 1.0],
             sun: None,
         }
