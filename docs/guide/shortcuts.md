@@ -16,6 +16,7 @@ Each toolbar tool has a key that picks it straight away.
 | 3-Point Arc | `Shift+A` |
 | Extrude | `P` |
 | Offset | `I` |
+| Follow Me | `F` |
 | Move | `M` |
 | Rotate | `Q` |
 | Scale | `S` |

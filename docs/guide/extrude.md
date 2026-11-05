@@ -20,7 +20,7 @@ Press `I` for the Offset tool. Click a face, then move the cursor toward the sid
 
 ## Follow Me
 
-Follow Me carries a flat profile along a path and builds a solid from the trail. Choose **Tools > Follow Me**; it has no key and no toolbar button.
+Follow Me carries a flat profile along a path and builds a solid from the trail. Press `F`, click the Follow Me button on the toolbar next to Offset, or choose **Tools > Follow Me**.
 
 - **Pick the profile.** Click the face you want to carry.
 - **Pick the path.** Click the path's edges one by one; a second click on an edge takes it out again. Or click a face to use its outline as the path.
