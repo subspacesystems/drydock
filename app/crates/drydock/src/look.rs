@@ -325,8 +325,11 @@ pub fn font_definitions() -> FontDefinitions {
 /// `theme_from(None)` (Dark) via egui's fallback theme.
 pub fn apply(ctx: &egui::Context) {
     ctx.set_fonts(font_definitions());
-    ctx.set_style_of(egui::Theme::Light, style(Theme::Light));
-    ctx.set_style_of(egui::Theme::Dark, style(Theme::Dark));
+    let mut light = style(Theme::Light);
+    let dark = style(Theme::Dark);
+    light.visuals.text_options = dark.visuals.text_options;
+    ctx.set_style_of(egui::Theme::Light, light);
+    ctx.set_style_of(egui::Theme::Dark, dark);
     ctx.options_mut(|o| {
         o.fallback_theme = match theme_from(None) {
             Theme::Dark => egui::Theme::Dark,
@@ -334,4 +337,6 @@ pub fn apply(ctx: &egui::Context) {
         };
     });
     ctx.set_theme(egui::ThemePreference::System);
+    ctx.run_ui(egui::RawInput::default(), |_| {})
+        .drop_without_applying_deltas();
 }
