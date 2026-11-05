@@ -490,6 +490,12 @@ pub fn model_info_window_with(
     }
 }
 
+/// The corners of the Measurements box (the status bar's measurement and typed text):
+/// 2 points on the left, 8 on the right (`docs/specs/m10-brand-numbers.md`).
+pub fn measurements_corners() -> eframe::egui::CornerRadius {
+    unimplemented!("m10-brand-numbers")
+}
+
 /// The measurement in the status bar: the label and value of `measurement` (if any), then
 /// the typed text (if any), drawn into `ui` (`docs/specs/m4-ui-status.md`).
 pub fn status_measurement(

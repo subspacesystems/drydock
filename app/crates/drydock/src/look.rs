@@ -207,7 +207,32 @@ pub fn mono_medium() -> FontFamily {
 /// [Roboto], Monospace is [Roboto Mono], `medium()` is [Roboto Medium], `mono_medium()` is
 /// [Roboto Mono Medium]. Each family holds exactly that one font; no egui default fonts.
 pub fn font_definitions() -> FontDefinitions {
-    unimplemented!("m10-brand-fonts")
+    let mut fonts = FontDefinitions::empty();
+    let data = [
+        ("Roboto", ROBOTO),
+        ("Roboto-Medium", ROBOTO_MEDIUM),
+        ("RobotoMono", ROBOTO_MONO),
+        ("RobotoMono-Medium", ROBOTO_MONO_MEDIUM),
+    ];
+    for (name, bytes) in data {
+        fonts.font_data.insert(
+            name.to_owned(),
+            std::sync::Arc::new(egui::FontData::from_static(bytes)),
+        );
+    }
+    fonts
+        .families
+        .insert(FontFamily::Proportional, vec!["Roboto".to_owned()]);
+    fonts
+        .families
+        .insert(FontFamily::Monospace, vec!["RobotoMono".to_owned()]);
+    fonts
+        .families
+        .insert(medium(), vec!["Roboto-Medium".to_owned()]);
+    fonts
+        .families
+        .insert(mono_medium(), vec!["RobotoMono-Medium".to_owned()]);
+    fonts
 }
 
 /// Installs the fonts and the style for the OS's theme, both the light and the dark one so
