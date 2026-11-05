@@ -22,5 +22,13 @@ pub const ICON_PNG: &[u8] = include_bytes!("../assets/drydock-256.png");
 /// and `rgba.len() == width * height * 4`. Decodes with the `image` crate; the PNG is
 /// embedded, so a decode failure is a build defect and may panic.
 pub fn window_icon() -> IconData {
-    unimplemented!("m9-linux-titlebar")
+    let image = image::load_from_memory_with_format(ICON_PNG, image::ImageFormat::Png)
+        .expect("embedded icon PNG must decode")
+        .to_rgba8();
+    let (width, height) = image.dimensions();
+    IconData {
+        rgba: image.into_raw(),
+        width,
+        height,
+    }
 }
