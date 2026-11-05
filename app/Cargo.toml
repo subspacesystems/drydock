@@ -47,3 +47,7 @@ todo = "warn"
 # Tests decode large textures and XML; optimise dependencies even in test builds.
 [profile.dev.package."*"]
 opt-level = 3
+
+[patch.crates-io]
+# Draw sctk-adwaita title text with skrifa; upstream pulls unmaintained ttf-parser.
+sctk-adwaita = { path = "vendor/sctk-adwaita" }
