@@ -28,7 +28,7 @@ fn style_matches_the_scheme() {
 }
 
 #[test]
-fn controls_are_nearly_square() {
+fn controls_have_radius_4_and_menus_and_windows_8() {
     for theme in [Theme::Light, Theme::Dark] {
         let style = look::style(theme);
         let w = &style.visuals.widgets;
@@ -39,10 +39,240 @@ fn controls_are_nearly_square() {
             &w.active,
             &w.open,
         ] {
-            assert!(widget.corner_radius.nw <= 3, "{theme:?}");
-            assert!(widget.corner_radius.se <= 3, "{theme:?}");
+            assert_eq!(
+                widget.corner_radius,
+                egui::CornerRadius::same(4),
+                "{theme:?}"
+            );
         }
-        assert!(style.visuals.menu_corner_radius.nw <= 3);
+        assert_eq!(
+            style.visuals.menu_corner_radius,
+            egui::CornerRadius::same(8)
+        );
+        assert_eq!(
+            style.visuals.window_corner_radius,
+            egui::CornerRadius::same(8)
+        );
+    }
+}
+
+#[test]
+fn windows_are_flat_and_popups_keep_a_shadow() {
+    for theme in [Theme::Light, Theme::Dark] {
+        let v = look::style(theme).visuals;
+        assert_eq!(v.window_shadow, egui::Shadow::NONE, "{theme:?}");
+        assert_ne!(v.popup_shadow, egui::Shadow::NONE, "{theme:?}");
+    }
+}
+
+fn c(hex: u32) -> egui::Color32 {
+    egui::Color32::from_rgb((hex >> 16) as u8, (hex >> 8) as u8, hex as u8)
+}
+
+#[test]
+fn palette_holds_the_brand_tokens() {
+    let d = look::palette(Theme::Dark);
+    assert_eq!(d.bg, c(0x091126));
+    assert_eq!(d.bg_sunken, c(0x050A19));
+    assert_eq!(d.surface, c(0x0D162D));
+    assert_eq!(d.surface_raised, c(0x161F37));
+    assert_eq!(d.border, c(0x263047));
+    assert_eq!(d.border_control, c(0x5F697E));
+    assert_eq!(d.ink, c(0xEEF7FF));
+    assert_eq!(d.ink_muted, c(0xAAB1C1));
+    assert_eq!(d.accent, c(0x1FD5FF));
+    assert_eq!(
+        d.accent_soft,
+        egui::Color32::from_rgba_unmultiplied(31, 213, 255, 41)
+    );
+    assert_eq!(d.action, c(0x8E83FC));
+    assert_eq!(d.on_action, c(0x091126));
+    assert_eq!(d.product, c(0xFF8A3D));
+    assert_eq!(d.warning, c(0xFFD24D));
+    assert_eq!(d.danger, c(0xFF5C7A));
+    assert_eq!(d.viewport_bg, c(0x050A19));
+    assert_eq!(d.edge, c(0xEEF7FF));
+    assert_eq!(d.face_front, c(0x3D475E));
+    assert_eq!(d.face_back, c(0xB04A80));
+    assert_eq!(
+        (d.axis_x, d.axis_y, d.axis_z),
+        (c(0xFF4F64), c(0x33D17A), c(0x6FA3FF))
+    );
+
+    let l = look::palette(Theme::Light);
+    assert_eq!(l.bg, c(0xEEF7FF));
+    assert_eq!(l.bg_sunken, c(0xE2E8F4));
+    assert_eq!(l.surface, c(0xFFFFFF));
+    assert_eq!(l.surface_raised, c(0xFFFFFF));
+    assert_eq!(l.border, c(0xCBD1DF));
+    assert_eq!(l.border_control, c(0x848C9F));
+    assert_eq!(l.ink, c(0x091126));
+    assert_eq!(l.ink_muted, c(0x3D475E));
+    assert_eq!(l.accent, c(0x00739C));
+    assert_eq!(
+        l.accent_soft,
+        egui::Color32::from_rgba_unmultiplied(0, 115, 156, 31)
+    );
+    assert_eq!(l.action, c(0x5247C9));
+    assert_eq!(l.on_action, c(0xFFFFFF));
+    assert_eq!(l.product, c(0xA84A14));
+    assert_eq!(l.warning, c(0x8A6400));
+    assert_eq!(l.danger, c(0xB3203F));
+    assert_eq!(l.viewport_bg, c(0xF4F8FC));
+    assert_eq!(l.edge, c(0x091126));
+    assert_eq!(l.face_front, c(0xE2E8F4));
+    assert_eq!(l.face_back, c(0xC25A8C));
+    assert_eq!(
+        (l.axis_x, l.axis_y, l.axis_z),
+        (c(0xD62D45), c(0x13994F), c(0x2F6FE0))
+    );
+}
+
+#[test]
+fn style_maps_the_palette_onto_visuals() {
+    for theme in [Theme::Light, Theme::Dark] {
+        let p = look::palette(theme);
+        let v = look::style(theme).visuals;
+        let w = &v.widgets;
+        assert_eq!(v.panel_fill, p.surface, "{theme:?}");
+        assert_eq!(v.window_fill, p.surface_raised, "{theme:?}");
+        assert_eq!(v.extreme_bg_color, p.bg_sunken, "{theme:?}");
+        assert_eq!(v.faint_bg_color, p.bg, "{theme:?}");
+        assert_eq!(v.window_stroke.color, p.border, "{theme:?}");
+        assert_eq!(w.noninteractive.bg_stroke.color, p.border, "{theme:?}");
+        assert_eq!(w.inactive.bg_stroke.color, p.border_control, "{theme:?}");
+        for widget in [
+            &w.noninteractive,
+            &w.inactive,
+            &w.hovered,
+            &w.active,
+            &w.open,
+        ] {
+            assert_eq!(widget.fg_stroke.color, p.ink, "{theme:?}");
+        }
+        assert_eq!(v.weak_text_color, Some(p.ink_muted), "{theme:?}");
+        assert_eq!(w.hovered.weak_bg_fill, p.accent_soft, "{theme:?}");
+        assert_eq!(w.active.weak_bg_fill, p.accent_soft, "{theme:?}");
+        assert_eq!(v.selection.bg_fill, p.accent_soft, "{theme:?}");
+        assert_eq!(v.selection.stroke.color, p.accent, "{theme:?}");
+        assert_eq!(v.hyperlink_color, p.accent, "{theme:?}");
+        assert_eq!(v.warn_fg_color, p.warning, "{theme:?}");
+        assert_eq!(v.error_fg_color, p.danger, "{theme:?}");
+    }
+}
+
+/// sRGB channel to linear light (WCAG 2).
+fn lin(v: u8) -> f64 {
+    let v = f64::from(v) / 255.0;
+    if v <= 0.03928 {
+        v / 12.92
+    } else {
+        ((v + 0.055) / 1.055).powf(2.4)
+    }
+}
+
+fn luminance(c: [f64; 3]) -> f64 {
+    let l = |v: f64| lin(v.round() as u8);
+    0.2126 * l(c[0]) + 0.7152 * l(c[1]) + 0.0722 * l(c[2])
+}
+
+fn rgb(c: egui::Color32) -> [f64; 3] {
+    let [r, g, b, _] = c.to_srgba_unmultiplied();
+    [f64::from(r), f64::from(g), f64::from(b)]
+}
+
+fn contrast(a: [f64; 3], b: [f64; 3]) -> f64 {
+    let (x, y) = (luminance(a), luminance(b));
+    (x.max(y) + 0.05) / (x.min(y) + 0.05)
+}
+
+/// `top` (translucent) over the opaque `under`.
+fn over(top: egui::Color32, under: egui::Color32) -> [f64; 3] {
+    let [r, g, b, a] = top.to_srgba_unmultiplied();
+    let a = f64::from(a) / 255.0;
+    let u = rgb(under);
+    [
+        f64::from(r) * a + u[0] * (1.0 - a),
+        f64::from(g) * a + u[1] * (1.0 - a),
+        f64::from(b) * a + u[2] * (1.0 - a),
+    ]
+}
+
+#[test]
+fn text_has_at_least_4_5_to_1_contrast() {
+    for theme in [Theme::Light, Theme::Dark] {
+        let p = look::palette(theme);
+        let v = look::style(theme).visuals;
+        for (name, ink) in [("ink", p.ink), ("ink-muted", p.ink_muted)] {
+            for (bg_name, bg) in [
+                ("panel_fill", v.panel_fill),
+                ("window_fill", v.window_fill),
+                ("faint_bg_color", v.faint_bg_color),
+                ("extreme_bg_color", v.extreme_bg_color),
+            ] {
+                let ratio = contrast(rgb(ink), rgb(bg));
+                assert!(ratio >= 4.5, "{theme:?} {name} on {bg_name}: {ratio:.2}");
+            }
+        }
+        let ratio = contrast(rgb(p.ink), over(p.accent_soft, p.surface));
+        assert!(ratio >= 4.5, "{theme:?} ink on accent-soft: {ratio:.2}");
+    }
+}
+
+#[test]
+fn the_visuals_use_no_stock_egui_colours() {
+    for theme in [Theme::Light, Theme::Dark] {
+        let p = look::palette(theme);
+        let allowed = [
+            p.bg,
+            p.bg_sunken,
+            p.surface,
+            p.surface_raised,
+            p.border,
+            p.border_control,
+            p.ink,
+            p.ink_muted,
+            p.accent,
+            p.accent_soft,
+            p.action,
+            p.on_action,
+            p.product,
+            p.warning,
+            p.danger,
+            egui::Color32::TRANSPARENT,
+        ];
+        let v = look::style(theme).visuals;
+        let w = &v.widgets;
+        let mut found = vec![
+            ("panel_fill", v.panel_fill),
+            ("window_fill", v.window_fill),
+            ("extreme_bg_color", v.extreme_bg_color),
+            ("faint_bg_color", v.faint_bg_color),
+            ("window_stroke", v.window_stroke.color),
+            ("selection.bg_fill", v.selection.bg_fill),
+            ("selection.stroke", v.selection.stroke.color),
+            ("hyperlink_color", v.hyperlink_color),
+            ("warn_fg_color", v.warn_fg_color),
+            ("error_fg_color", v.error_fg_color),
+        ];
+        for (state, widget) in [
+            ("noninteractive", &w.noninteractive),
+            ("inactive", &w.inactive),
+            ("hovered", &w.hovered),
+            ("active", &w.active),
+            ("open", &w.open),
+        ] {
+            found.push((state, widget.bg_fill));
+            found.push((state, widget.weak_bg_fill));
+            found.push((state, widget.bg_stroke.color));
+            found.push((state, widget.fg_stroke.color));
+        }
+        for (name, color) in found {
+            assert!(
+                allowed.contains(&color),
+                "{theme:?} {name}: {color:?} is not a palette colour"
+            );
+        }
     }
 }
 
