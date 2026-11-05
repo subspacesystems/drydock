@@ -81,13 +81,31 @@ pub fn format_volume(cubic_meters: f64, format: LengthFormat) -> String {
 
 /// The label and value rows Entity Info shows for `status`, in order (see the spec).
 pub fn status_rows(status: &SolidStatus, format: LengthFormat) -> Vec<(String, String)> {
+    status_rows_numbered(status, format)
+        .into_iter()
+        .map(|(label, value, _)| (label, value))
+        .collect()
+}
+
+/// `status_rows` plus, for each row, whether the value is a number the panel draws in the
+/// monospace family (`docs/specs/m10-brand-numbers.md`): the volume and the counts, not
+/// "Yes"/"No".
+pub fn status_rows_numbered(
+    status: &SolidStatus,
+    format: LengthFormat,
+) -> Vec<(String, String, bool)> {
     let report = &status.report;
     let mut rows = vec![(
         "Solid".to_string(),
         if report.is_solid() { "Yes" } else { "No" }.to_string(),
+        false,
     )];
     if let Some(volume) = report.volume {
-        rows.push(("Volume".to_string(), format_volume(volume, format)));
+        rows.push((
+            "Volume".to_string(),
+            format_volume(volume, format),
+            true,
+        ));
     }
     let counts = [
         ("Open edges", report.open_edges.len()),
@@ -99,11 +117,11 @@ pub fn status_rows(status: &SolidStatus, format: LengthFormat) -> Vec<(String, S
     ];
     for (label, count) in counts {
         if count > 0 {
-            rows.push((label.to_string(), count.to_string()));
+            rows.push((label.to_string(), count.to_string(), true));
         }
     }
     if report.shells != 1 {
-        rows.push(("Shells".to_string(), report.shells.to_string()));
+        rows.push(("Shells".to_string(), report.shells.to_string(), true));
     }
     rows
 }
