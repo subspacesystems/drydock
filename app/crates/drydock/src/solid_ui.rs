@@ -101,11 +101,7 @@ pub fn status_rows_numbered(
         false,
     )];
     if let Some(volume) = report.volume {
-        rows.push((
-            "Volume".to_string(),
-            format_volume(volume, format),
-            true,
-        ));
+        rows.push(("Volume".to_string(), format_volume(volume, format), true));
     }
     let counts = [
         ("Open edges", report.open_edges.len()),
