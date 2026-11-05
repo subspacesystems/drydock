@@ -80,8 +80,8 @@ fn the_build_version_is_the_one_build_rs_emitted() {
 fn plain_builds_are_not_0_0_1() {
     let text = std::fs::read_to_string(crate_dir().join("../../Cargo.toml")).unwrap();
     assert!(
-        text.contains("version = \"0.8."),
-        "workspace version is 0.8.x"
+        text.contains("version = \"0.9."),
+        "workspace version is 0.9.x"
     );
     assert!(!VERSION.starts_with("0.0."), "{VERSION}");
 }
