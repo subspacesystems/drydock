@@ -2,8 +2,9 @@
 //!
 //! Requires no dynamically linked dependencies.
 //!
-//! Can fallback to an embedded Cantarell-Regular.ttf font (SIL Open Font Licence v1.1)
-//! if the system font doesn't work.
+//! Uses the system title-bar font found with `fc-match`. Drydock embeds no fallback font
+//! (upstream bundles Cantarell, which is OFL-1.1): without a usable system font the title
+//! bar draws no text.
 use crate::title::{config, font_preference::FontPreference};
 use skrifa::{
     instance::{Location, LocationRef, Size},
@@ -13,12 +14,28 @@ use skrifa::{
 use std::{fs::File, process::Command};
 use tiny_skia::{Color, FillRule, Paint, Pixmap, Transform};
 
-const ROBOTO: &[u8] = include_bytes!("../../../../crates/drydock/assets/fonts/Roboto-Regular.ttf");
+/// Bytes of the title font: a memory-mapped system font, or (in tests) a static font.
+#[derive(Debug)]
+enum FontData {
+    Mapped(memmap2::Mmap),
+    #[cfg(test)]
+    Static(&'static [u8]),
+}
+
+impl FontData {
+    fn bytes(&self) -> &[u8] {
+        match self {
+            FontData::Mapped(m) => m,
+            #[cfg(test)]
+            FontData::Static(b) => b,
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct SkrifaTitleText {
     title: String,
-    font: Option<(memmap2::Mmap, FontPreference)>,
+    font: Option<(FontData, FontPreference)>,
     original_px_size: f32,
     px_size: f32,
     color: Color,
@@ -31,7 +48,7 @@ impl SkrifaTitleText {
         let font_pref_pt_size = font_pref.pt_size;
         let font = font_file_matching(&font_pref)
             .and_then(|f| mmap(&f))
-            .map(|mmap| (mmap, font_pref));
+            .map(|mmap| (FontData::Mapped(mmap), font_pref));
 
         // Convert point size to pixel size.
         // 1pt = 1/72in, 1px = 1/96in, so px = pt * (96/72)
@@ -80,7 +97,7 @@ impl SkrifaTitleText {
             return None;
         }
 
-        let font = parse_font(&self.font);
+        let font = parse_font(&self.font)?;
         let font_pref = self.font.as_ref().map(|(_, pref)| pref);
         let size = Size::new(self.px_size);
         let is_bold = font_pref
@@ -168,16 +185,10 @@ impl SkrifaTitleText {
     }
 }
 
-/// Parse the memmapped system font or fall back to the bundled Roboto.
-fn parse_font<'a>(sys_font: &'a Option<(memmap2::Mmap, FontPreference)>) -> skrifa::FontRef<'a> {
-    match sys_font {
-        Some((mmap, _font_pref)) => skrifa::FontRef::from_index(mmap, 0).unwrap_or_else(|_| {
-            #[allow(clippy::unwrap_used)]
-            skrifa::FontRef::from_index(ROBOTO, 0).unwrap()
-        }),
-        #[allow(clippy::unwrap_used)]
-        _ => skrifa::FontRef::from_index(ROBOTO, 0).unwrap(),
-    }
+/// Parse the title font; `None` when there is none or it does not parse (no title text).
+fn parse_font(font: &Option<(FontData, FontPreference)>) -> Option<skrifa::FontRef<'_>> {
+    let (data, _font_pref) = font.as_ref()?;
+    skrifa::FontRef::from_index(data.bytes(), 0).ok()
 }
 
 /// Font-config without dynamically linked dependencies
@@ -233,11 +244,19 @@ mod tests {
 
     use super::*;
 
-    /// Helper to create a renderer using only the bundled Cantarell font.
+    /// Drydock's own Roboto (Apache-2.0), embedded in test builds only.
+    const TEST_FONT: &[u8] =
+        include_bytes!("../../../../crates/drydock/assets/fonts/Roboto-Regular.ttf");
+
+    fn test_font() -> Option<(FontData, FontPreference)> {
+        Some((FontData::Static(TEST_FONT), FontPreference::default()))
+    }
+
+    /// Helper to create a renderer using the test font.
     fn new_renderer() -> SkrifaTitleText {
         let mut renderer = SkrifaTitleText {
             title: String::new(),
-            font: None, // forces fallback to bundled Cantarell
+            font: test_font(),
             original_px_size: 13.3,
             px_size: 13.3,
             color: Color::BLACK,
@@ -293,8 +312,17 @@ mod tests {
     }
 
     #[test]
-    fn parse_bundled_font_succeeds() {
-        let font = parse_font(&None);
+    fn no_font_draws_no_title() {
+        let mut renderer = new_renderer();
+        renderer.font = None;
+        renderer.update_title("Other");
+        assert!(renderer.pixmap().is_none());
+    }
+
+    #[test]
+    fn parse_test_font_succeeds() {
+        let data = test_font();
+        let font = parse_font(&data).expect("test font parses");
         let metrics = font.metrics(Size::new(16.0), LocationRef::default());
         assert!(metrics.units_per_em > 0);
         assert!(metrics.ascent > 0.0);

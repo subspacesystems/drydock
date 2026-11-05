@@ -16,3 +16,6 @@ Third-party material distributed with this software:
   RobotoMono-Medium.ttf), Copyright 2015 The Roboto Mono Project Authors
   (https://github.com/googlefonts/robotomono). Licensed under the Apache License 2.0
   (crates/drydock/assets/fonts/LICENSE-RobotoMono). Static instances of the variable font.
+- sctk-adwaita 0.10.1 (vendor/sctk-adwaita), Copyright (c) 2022 Bartłomiej Maryńczak.
+  Licensed under the MIT License (vendor/sctk-adwaita/LICENSE). Patched for Drydock:
+  the title is drawn with skrifa, and the bundled Cantarell font is left out.

@@ -4,6 +4,7 @@
 //! `overlay::axis_lines`. See docs/specs/m4-axes-depth.md and docs/specs/m4-axes-screen.md
 //! (the negative half became one dashed line, sized in screen pixels).
 
+use drydock::look::Theme;
 use drydock::overlay::{Primitive, axes, axis_lines};
 use drydock_render::ExtraLine;
 use glam::{DMat4, DQuat, DVec3};
@@ -38,7 +39,7 @@ fn of_axis(lines: &[ExtraLine], i: usize) -> Vec<ExtraLine> {
 #[test]
 fn the_positive_halves_are_single_lines_like_the_overlay_axes() {
     let t = placed();
-    let lines = axis_lines(t, 100.0, 1.0);
+    let lines = axis_lines(t, 100.0, 1.0, Theme::Dark);
     let reference = axes(t, 100.0);
     for i in 0..3 {
         let Primitive::Line { a, b, .. } = reference[2 * i] else {
@@ -51,7 +52,7 @@ fn the_positive_halves_are_single_lines_like_the_overlay_axes() {
 
 #[test]
 fn each_axis_has_its_colour_and_order() {
-    let lines = axis_lines(DMat4::IDENTITY, 10.0, 1.0);
+    let lines = axis_lines(DMat4::IDENTITY, 10.0, 1.0, Theme::Dark);
     let mut last = 0;
     for l in &lines {
         let i = COLORS
@@ -67,7 +68,7 @@ fn each_axis_has_its_colour_and_order() {
 #[test]
 fn each_axis_is_a_solid_positive_line_then_a_dashed_negative_line() {
     let t = placed();
-    let lines = axis_lines(t, 10.0, 1.0);
+    let lines = axis_lines(t, 10.0, 1.0, Theme::Dark);
     assert_eq!(lines.len(), 6);
     let origin = t.transform_point3(DVec3::ZERO);
     for (i, unit) in [DVec3::X, DVec3::Y, DVec3::Z].into_iter().enumerate() {
@@ -84,7 +85,7 @@ fn each_axis_is_a_solid_positive_line_then_a_dashed_negative_line() {
 #[test]
 fn width_and_dashes_are_points_times_pixels_per_point() {
     for (ppp, width, dash) in [(1.0, 1.5, [6.0, 4.0]), (2.0, 3.0, [12.0, 8.0])] {
-        let lines = axis_lines(DMat4::IDENTITY, 10.0, ppp);
+        let lines = axis_lines(DMat4::IDENTITY, 10.0, ppp, Theme::Dark);
         for l in &lines {
             assert!((l.width_px - width).abs() < 1e-6, "ppp {ppp}");
         }
@@ -97,7 +98,7 @@ fn width_and_dashes_are_points_times_pixels_per_point() {
 #[test]
 fn a_bad_pixels_per_point_counts_as_one() {
     for ppp in [0.0, -1.0, f32::NAN, f32::INFINITY] {
-        let lines = axis_lines(DMat4::IDENTITY, 10.0, ppp);
+        let lines = axis_lines(DMat4::IDENTITY, 10.0, ppp, Theme::Dark);
         assert_eq!(lines.len(), 6, "ppp {ppp}");
         assert!((lines[0].width_px - 1.5).abs() < 1e-6, "ppp {ppp}");
         assert_eq!(lines[1].dash_px, Some([6.0, 4.0]), "ppp {ppp}");
@@ -107,12 +108,12 @@ fn a_bad_pixels_per_point_counts_as_one() {
 #[test]
 fn a_flattened_axis_and_bad_input_are_left_out_like_the_overlay_axes() {
     let flat = DMat4::from_scale(DVec3::new(1.0, 1.0, 0.0));
-    let lines = axis_lines(flat, 10.0, 1.0);
+    let lines = axis_lines(flat, 10.0, 1.0, Theme::Dark);
     assert!(of_axis(&lines, 2).is_empty());
     assert!(!of_axis(&lines, 0).is_empty() && !of_axis(&lines, 1).is_empty());
     for half in [0.0, -1.0, f64::NAN] {
-        assert!(axis_lines(DMat4::IDENTITY, half, 1.0).is_empty());
+        assert!(axis_lines(DMat4::IDENTITY, half, 1.0, Theme::Dark).is_empty());
     }
     let away = DMat4::from_translation(DVec3::new(f64::NAN, 0.0, 0.0));
-    assert!(axis_lines(away, 10.0, 1.0).is_empty());
+    assert!(axis_lines(away, 10.0, 1.0, Theme::Dark).is_empty());
 }

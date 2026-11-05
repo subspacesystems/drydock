@@ -8,6 +8,7 @@ license = "MIT"
 repository = "https://github.com/PolyMeilex/sctk-adwaita"
 documentation = "https://docs.rs/sctk-adwaita"
 description = "Adwaita-like SCTK Frame"
+publish = false
 
 [dependencies]
 log = "0.4"
@@ -16,12 +17,18 @@ tiny-skia = { version = "0.11", default-features = false, features = [
   "std",
   "simd",
 ] }
-smithay-client-toolkit = { version = "0.19.0", default-features = false }
-skrifa = { version = "0.44", default-features = false, features = ["std"], optional = true }
+smithay-client-toolkit = { version = "0.19.0", default_features = false }
+
+# Draw title text using crossfont `--features crossfont`
+crossfont = { version = "0.8.0", optional = true }
+# The feature winit enables is still called `ab_glyph`, but the renderer uses
+# skrifa so the unmaintained ttf-parser crate stays out of the dependency tree.
+skrifa = { version = ">=0.40, <=0.44", default-features = false, features = [
+  "std",
+], optional = true }
 
 [features]
-# Keep the upstream feature name that winit's `wayland-csd-adwaita` turns on,
-# but draw title text with skrifa instead of the unmaintained ttf-parser.
 default = ["ab_glyph"]
+crossfont = ["dep:crossfont"]
 ab_glyph = ["dep:skrifa", "memmap2"]
 skrifa = ["dep:skrifa", "memmap2"]
