@@ -92,6 +92,9 @@ def main():
         offset += len(data)
     with open("assets/drydock.ico", "wb") as f:
         f.write(out + b"".join(images))
+    # The window and desktop icon on Linux: the 256 px frame as a plain PNG.
+    with open("assets/drydock-256.png", "wb") as f:
+        f.write(images[SIZES.index(256)])
 
 
 main()

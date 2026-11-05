@@ -7,3 +7,4 @@ One file per decision: `NNN-short-title.md` with Status, Context, Decision, Cons
 | [001](001-stack.md) | Stack: Rust, wgpu, egui/eframe, ArtCraft reuse | Accepted |
 | [004](004-kernel-design.md) | Geometry kernel design | Accepted |
 | [006](006-map-data.md) | Bundled map data for the Geolocation globe | Accepted |
+| [008](008-linux-window-decorations.md) | Linux window decorations (sctk-adwaita) | Accepted |
