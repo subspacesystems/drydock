@@ -17,6 +17,7 @@ glam.workspace = true
 image.workspace = true
 eframe.workspace = true
 egui-wgpu.workspace = true
+egui_extras.workspace = true
 wgpu.workspace = true
 
 # Linux only: turns on winit's client-side title bar with text and the GNOME look
@@ -32,6 +33,7 @@ winresource.workspace = true
 [dev-dependencies]
 proptest.workspace = true
 egui_kittest.workspace = true
+usvg.workspace = true
 
 [lints]
 workspace = true
