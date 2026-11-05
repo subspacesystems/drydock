@@ -108,8 +108,56 @@ pub struct Palette {
 /// The palette for `theme`: each field is the token's value for that theme, with aliases
 /// resolved (`tokens.json`; the table in `design/brand/README.md`).
 pub fn palette(theme: Theme) -> Palette {
-    let _ = theme;
-    unimplemented!("m10-brand-theme")
+    match theme {
+        Theme::Dark => Palette {
+            bg: egui::Color32::from_rgb(0x09, 0x11, 0x26),
+            bg_sunken: egui::Color32::from_rgb(0x05, 0x0A, 0x19),
+            surface: egui::Color32::from_rgb(0x0D, 0x16, 0x2D),
+            surface_raised: egui::Color32::from_rgb(0x16, 0x1F, 0x37),
+            border: egui::Color32::from_rgb(0x26, 0x30, 0x47),
+            border_control: egui::Color32::from_rgb(0x5F, 0x69, 0x7E),
+            ink: egui::Color32::from_rgb(0xEE, 0xF7, 0xFF),
+            ink_muted: egui::Color32::from_rgb(0xAA, 0xB1, 0xC1),
+            accent: egui::Color32::from_rgb(0x1F, 0xD5, 0xFF),
+            accent_soft: egui::Color32::from_rgba_unmultiplied(31, 213, 255, 41),
+            action: egui::Color32::from_rgb(0x8E, 0x83, 0xFC),
+            on_action: egui::Color32::from_rgb(0x09, 0x11, 0x26),
+            product: egui::Color32::from_rgb(0xFF, 0x8A, 0x3D),
+            warning: egui::Color32::from_rgb(0xFF, 0xD2, 0x4D),
+            danger: egui::Color32::from_rgb(0xFF, 0x5C, 0x7A),
+            viewport_bg: egui::Color32::from_rgb(0x05, 0x0A, 0x19),
+            edge: egui::Color32::from_rgb(0xEE, 0xF7, 0xFF),
+            face_front: egui::Color32::from_rgb(0x3D, 0x47, 0x5E),
+            face_back: egui::Color32::from_rgb(0xB0, 0x4A, 0x80),
+            axis_x: egui::Color32::from_rgb(0xFF, 0x4F, 0x64),
+            axis_y: egui::Color32::from_rgb(0x33, 0xD1, 0x7A),
+            axis_z: egui::Color32::from_rgb(0x6F, 0xA3, 0xFF),
+        },
+        Theme::Light => Palette {
+            bg: egui::Color32::from_rgb(0xEE, 0xF7, 0xFF),
+            bg_sunken: egui::Color32::from_rgb(0xE2, 0xE8, 0xF4),
+            surface: egui::Color32::from_rgb(0xFF, 0xFF, 0xFF),
+            surface_raised: egui::Color32::from_rgb(0xFF, 0xFF, 0xFF),
+            border: egui::Color32::from_rgb(0xCB, 0xD1, 0xDF),
+            border_control: egui::Color32::from_rgb(0x84, 0x8C, 0x9F),
+            ink: egui::Color32::from_rgb(0x09, 0x11, 0x26),
+            ink_muted: egui::Color32::from_rgb(0x3D, 0x47, 0x5E),
+            accent: egui::Color32::from_rgb(0x00, 0x73, 0x9C),
+            accent_soft: egui::Color32::from_rgba_unmultiplied(0, 115, 156, 31),
+            action: egui::Color32::from_rgb(0x52, 0x47, 0xC9),
+            on_action: egui::Color32::from_rgb(0xFF, 0xFF, 0xFF),
+            product: egui::Color32::from_rgb(0xA8, 0x4A, 0x14),
+            warning: egui::Color32::from_rgb(0x8A, 0x64, 0x00),
+            danger: egui::Color32::from_rgb(0xB3, 0x20, 0x3F),
+            viewport_bg: egui::Color32::from_rgb(0xF4, 0xF8, 0xFC),
+            edge: egui::Color32::from_rgb(0x09, 0x11, 0x26),
+            face_front: egui::Color32::from_rgb(0xE2, 0xE8, 0xF4),
+            face_back: egui::Color32::from_rgb(0xC2, 0x5A, 0x8C),
+            axis_x: egui::Color32::from_rgb(0xD6, 0x2D, 0x45),
+            axis_y: egui::Color32::from_rgb(0x13, 0x99, 0x4F),
+            axis_z: egui::Color32::from_rgb(0x2F, 0x6F, 0xE0),
+        },
+    }
 }
 
 /// The egui style for `theme`: egui's own colours for the scheme with the desktop look on
@@ -150,28 +198,61 @@ pub fn style(theme: Theme) -> Style {
 /// `viewport_bg`, `default_line` = `edge`, `default_face` = `face_front`, `default_back` =
 /// `Some(face_back)`; all opaque, sRGB 0..1 (byte / 255). `sun` is `None`.
 pub fn viewport_style(theme: Theme) -> drydock_render::Style {
-    let _ = theme;
-    unimplemented!("m10-brand-viewport")
+    let palette = palette(theme);
+    let color = |c: egui::Color32| {
+        [
+            f32::from(c.r()) / 255.0,
+            f32::from(c.g()) / 255.0,
+            f32::from(c.b()) / 255.0,
+            1.0,
+        ]
+    };
+    drydock_render::Style {
+        background: color(palette.viewport_bg),
+        default_line: color(palette.edge),
+        default_face: color(palette.face_front),
+        default_back: Some(color(palette.face_back)),
+        sun: None,
+    }
 }
 
 /// Set the colour fields of `style` (not `sun`) to those of `viewport_style(theme)`; true
 /// when anything changed, so the viewport must redraw.
 pub fn apply_viewport_theme(style: &mut drydock_render::Style, theme: Theme) -> bool {
-    let _ = (style, theme);
-    unimplemented!("m10-brand-viewport")
+    let wanted = viewport_style(theme);
+    let changed = style.background != wanted.background
+        || style.default_line != wanted.default_line
+        || style.default_face != wanted.default_face
+        || style.default_back != wanted.default_back;
+    if changed {
+        style.background = wanted.background;
+        style.default_line = wanted.default_line;
+        style.default_face = wanted.default_face;
+        style.default_back = wanted.default_back;
+    }
+    changed
 }
 
 /// The colour of model axis `axis` (0 x, 1 y, 2 z) in `theme`: `palette(theme).axis_x` /
 /// `axis_y` / `axis_z` as RGB bytes; any other index gives mid-grey `[160, 160, 160]`.
 pub fn axis_color(theme: Theme, axis: usize) -> [u8; 3] {
-    let _ = (theme, axis);
-    unimplemented!("m10-brand-viewport")
+    let palette = palette(theme);
+    let color = match axis {
+        0 => palette.axis_x,
+        1 => palette.axis_y,
+        2 => palette.axis_z,
+        _ => egui::Color32::from_rgb(160, 160, 160),
+    };
+    [color.r(), color.g(), color.b()]
 }
 
 /// The theme `visuals` belong to: Dark when `visuals.dark_mode`, else Light.
 pub fn theme_of(visuals: &egui::Visuals) -> Theme {
-    let _ = visuals;
-    unimplemented!("m10-brand-dialog-buttons")
+    if visuals.dark_mode {
+        Theme::Dark
+    } else {
+        Theme::Light
+    }
 }
 
 /// The fill of a primary button under the pointer: `palette(theme).action` blended 10%
