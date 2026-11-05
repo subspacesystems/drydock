@@ -3,7 +3,6 @@
 
 //! Inference feedback text and colors for the viewport (`docs/specs/m2-hints.md`).
 
-use crate::look::Theme;
 use drydock_kernel::infer::{Inference, Snap};
 
 /// What to draw next to the cursor for an inferred point.
@@ -14,10 +13,8 @@ pub struct HintLabel {
     pub color: [u8; 3],
 }
 
-/// Display color of an axis index (0 red, 1 green, 2 blue) in `theme`; gray for anything
-/// else (`look::axis_color`).
-pub fn axis_color(theme: Theme, axis: usize) -> [u8; 3] {
-    let _ = theme; // m10-brand-viewport: delegate to `look::axis_color`
+/// Display color of an axis index (0 red, 1 green, 2 blue); gray for anything else.
+pub fn axis_color(axis: usize) -> [u8; 3] {
     match axis {
         0 => [220, 50, 47],
         1 => [40, 160, 60],
@@ -61,7 +58,7 @@ pub fn snap_name(snap: Snap) -> String {
 }
 
 /// The label for an inference.
-pub fn hint_label(inference: &Inference, theme: Theme) -> HintLabel {
+pub fn hint_label(inference: &Inference) -> HintLabel {
     let snap = snap_name(inference.snap);
     match inference.axis {
         None => HintLabel {
@@ -70,11 +67,11 @@ pub fn hint_label(inference: &Inference, theme: Theme) -> HintLabel {
         },
         Some(axis) if inference.snap == Snap::OnAxis(axis) => HintLabel {
             text: snap,
-            color: axis_color(theme, axis),
+            color: axis_color(axis),
         },
         Some(axis) => HintLabel {
             text: format!("{snap} on {} Axis", axis_name(axis)),
-            color: axis_color(theme, axis),
+            color: axis_color(axis),
         },
     }
 }
