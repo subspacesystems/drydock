@@ -159,6 +159,7 @@ fn main() -> ExitCode {
             }
         };
     }
+    drydock::desktop_entry::install_for_current_user();
     let options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
             .with_title("Drydock")
