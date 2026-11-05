@@ -24,3 +24,9 @@ The window also gets an app id (`APP_ID` in `window_icon.rs`, `com.subspacesyste
 - The local patch must be refreshed by hand when winit moves to a newer `sctk-adwaita`.
 - The Windows and macOS builds do not take the dependency.
 - If winit moves to another minor version, the dependency line must follow it (a test checks that the lock's winit lists sctk-adwaita).
+
+## Update (m10-brand-theme, m9-linux-titlebar)
+m10-brand-theme briefly switched winit to `wayland-csd-adwaita-notitle` to drop `ttf-parser`,
+which also dropped the title text. m9-linux-titlebar went back to `wayland-csd-adwaita`: the
+local `sctk-adwaita` above already draws the title with `skrifa`, so the title stays and
+`ttf-parser` stays out.

@@ -22,7 +22,9 @@ wgpu.workspace = true
 
 # Linux only: turns on winit's client-side title bar with text and the GNOME look
 # (sctk-adwaita). The feature unifies with the winit that egui-winit uses; keep this on the
-# same 0.30.x as Cargo.lock (docs/specs/m9-linux-titlebar.md).
+# same 0.30.x as Cargo.lock (docs/specs/m9-linux-titlebar.md). sctk-adwaita is patched
+# locally (vendor/sctk-adwaita) to draw the title with skrifa, so the unmaintained
+# ttf-parser crate stays out (docs/adr/008-linux-window-decorations.md).
 [target.'cfg(target_os = "linux")'.dependencies]
 winit = { version = "0.30", default-features = false, features = ["wayland-csd-adwaita"] }
 
