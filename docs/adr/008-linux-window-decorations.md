@@ -23,3 +23,10 @@ The window also gets an app id (`APP_ID` in `window_icon.rs`, `com.subspacesyste
 - Linux builds gain about nine small pure-Rust crates; other systems are unchanged.
 - The Windows and macOS builds do not take the dependency.
 - If winit moves to another minor version, the dependency line must follow it (a test checks that the lock's winit lists sctk-adwaita).
+
+## Update (m10-brand-theme)
+`ttf-parser`, which `ab_glyph` uses for the title text, is unmaintained (RUSTSEC-2026-0192).
+The dependency now uses winit's `wayland-csd-adwaita-notitle` feature: `sctk-adwaita` still
+draws the GNOME frame, but without title text. Revisit when winit offers a maintained text
+renderer (`skrifa`). The `ab_glyph`, `owned_ttf_parser` and `ttf-parser` rows above no longer
+apply.

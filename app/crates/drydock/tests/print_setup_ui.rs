@@ -51,7 +51,7 @@ fn harness(
         },
         state,
     );
-    h.ctx.set_fonts(look::font_definitions(None));
+    h.ctx.set_fonts(look::font_definitions());
     h.run();
     h
 }

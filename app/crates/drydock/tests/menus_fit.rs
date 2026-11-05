@@ -23,7 +23,7 @@ type Seen = Rc<RefCell<Vec<Action>>>;
 
 /// The app's fonts (the test build has no egui default fonts, so text would measure 0).
 fn fonts<S>(h: &Harness<'_, S>) {
-    h.ctx.set_fonts(look::font_definitions(None));
+    h.ctx.set_fonts(look::font_definitions());
 }
 
 fn menus(state: MenuState<'static>, seen: &Seen) -> Harness<'static> {

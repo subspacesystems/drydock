@@ -28,6 +28,12 @@ image = { version = "0.25", default-features = false, features = ["png", "jpeg"]
 # No "default_fonts": egui's bundled fonts are OFL/Ubuntu-licensed; the app ships Roboto.
 eframe = { version = "0.36", default-features = false, features = ["wgpu", "wayland", "x11"] }
 egui-wgpu = "0.36"
+# SVG image loader for the brand icons (rasterised by resvg); same major as egui 0.36.
+egui_extras = { version = "0.36", default-features = false, features = ["svg"] }
+# Parses the icon SVGs in tests (already in the lock through egui_extras).
+usvg = { version = "0.45", default-features = false }
+# Renders the brand logo SVGs to the app icon files (tests/app_icon.rs; resvg re-exports tiny-skia).
+resvg = { version = "0.45", default-features = false }
 # Same major as egui-wgpu 0.36, so the app can hand the renderer egui's device.
 wgpu = { version = "30", default-features = false, features = ["std", "wgsl", "vulkan", "dx12", "metal"] }
 pollster = "1"

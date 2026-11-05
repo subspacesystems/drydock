@@ -30,7 +30,7 @@ fn menus(state: MenuState<'static>, seen: &Seen) -> Harness<'static> {
 
 fn open(h: &mut Harness<'_>, menu: &str) {
     // m6-menus-2: menus are as wide as their text, so the text needs real fonts.
-    h.ctx.set_fonts(drydock::look::font_definitions(None));
+    h.ctx.set_fonts(drydock::look::font_definitions());
     h.run();
     h.get_by_label(menu).click();
     h.run();

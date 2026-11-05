@@ -17,13 +17,15 @@ glam.workspace = true
 image.workspace = true
 eframe.workspace = true
 egui-wgpu.workspace = true
+egui_extras.workspace = true
 wgpu.workspace = true
 
-# Linux only: turns on winit's client-side title bar with text and the GNOME look
-# (sctk-adwaita). The feature unifies with the winit that egui-winit uses; keep this on the
-# same 0.30.x as Cargo.lock (docs/specs/m9-linux-titlebar.md).
+# Linux only: turns on winit's client-side title bar and the GNOME look (sctk-adwaita).
+# The feature unifies with the winit that egui-winit uses; keep this on the same 0.30.x as
+# Cargo.lock (docs/specs/m9-linux-titlebar.md). The notitle variant avoids ab_glyph, which
+# pulls the unmaintained ttf-parser crate.
 [target.'cfg(target_os = "linux")'.dependencies]
-winit = { version = "0.30", default-features = false, features = ["wayland-csd-adwaita"] }
+winit = { version = "0.30", default-features = false, features = ["wayland-csd-adwaita-notitle"] }
 
 [build-dependencies]
 drydock-guide.workspace = true
@@ -32,6 +34,8 @@ winresource.workspace = true
 [dev-dependencies]
 proptest.workspace = true
 egui_kittest.workspace = true
+usvg.workspace = true
+resvg.workspace = true
 
 [lints]
 workspace = true

@@ -67,6 +67,38 @@ pub fn all() -> Vec<Icon> {
     icons
 }
 
+/// Side of the SVG artwork in its own units (`viewBox="0 0 20 20"`).
+pub const SVG_SIZE: f32 = 20.0;
+
+/// Height in points of the bar under the active tool's button.
+pub const ACTIVE_BAR_HEIGHT: f32 = 2.0;
+
+/// The file name stem of `icon` in `design/brand/icons/` (`"pushpull"`, `"arc3"`, `"list"`).
+/// `docs/specs/m10-brand-icons.md`.
+pub fn name(icon: Icon) -> &'static str {
+    let _ = icon;
+    unimplemented!("m10-brand-icons")
+}
+
+/// The icon's SVG source, embedded with `include_bytes!` from `design/brand/icons/`.
+pub fn svg(icon: Icon) -> &'static [u8] {
+    let _ = icon;
+    unimplemented!("m10-brand-icons")
+}
+
+/// The image URI the icon is registered under in egui's loaders (ends in `.svg`).
+pub fn uri(icon: Icon) -> String {
+    let _ = icon;
+    unimplemented!("m10-brand-icons")
+}
+
+/// Installs egui_extras' image loaders and registers every icon's bytes under `uri(icon)`.
+/// Cheap and safe to call again; `icon_button` and `paint` call it themselves.
+pub fn install(ctx: &egui::Context) {
+    let _ = ctx;
+    unimplemented!("m10-brand-icons")
+}
+
 /// Small helper for drawing in normalized icon coordinates: `(-1, -1)` is the top-left
 /// of the square, `(1, 1)` the bottom-right. Screen y grows downwards.
 struct Draw {
