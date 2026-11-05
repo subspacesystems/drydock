@@ -34,6 +34,7 @@ winresource.workspace = true
 proptest.workspace = true
 egui_kittest.workspace = true
 usvg.workspace = true
+resvg.workspace = true
 
 [lints]
 workspace = true

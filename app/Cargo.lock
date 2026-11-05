@@ -580,6 +580,7 @@ dependencies = [
  "glam",
  "image",
  "proptest",
+ "resvg",
  "usvg",
  "wgpu",
  "winit",

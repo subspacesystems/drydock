@@ -146,6 +146,52 @@ pub fn style(theme: Theme) -> Style {
     style
 }
 
+/// The viewport colours for `theme` (`docs/specs/m10-brand-viewport.md`): `background` =
+/// `viewport_bg`, `default_line` = `edge`, `default_face` = `face_front`, `default_back` =
+/// `Some(face_back)`; all opaque, sRGB 0..1 (byte / 255). `sun` is `None`.
+pub fn viewport_style(theme: Theme) -> drydock_render::Style {
+    let _ = theme;
+    unimplemented!("m10-brand-viewport")
+}
+
+/// Set the colour fields of `style` (not `sun`) to those of `viewport_style(theme)`; true
+/// when anything changed, so the viewport must redraw.
+pub fn apply_viewport_theme(style: &mut drydock_render::Style, theme: Theme) -> bool {
+    let _ = (style, theme);
+    unimplemented!("m10-brand-viewport")
+}
+
+/// The colour of model axis `axis` (0 x, 1 y, 2 z) in `theme`: `palette(theme).axis_x` /
+/// `axis_y` / `axis_z` as RGB bytes; any other index gives mid-grey `[160, 160, 160]`.
+pub fn axis_color(theme: Theme, axis: usize) -> [u8; 3] {
+    let _ = (theme, axis);
+    unimplemented!("m10-brand-viewport")
+}
+
+/// The theme `visuals` belong to: Dark when `visuals.dark_mode`, else Light.
+pub fn theme_of(visuals: &egui::Visuals) -> Theme {
+    let _ = visuals;
+    unimplemented!("m10-brand-dialog-buttons")
+}
+
+/// The fill of a primary button under the pointer: `palette(theme).action` blended 10%
+/// toward white, per channel, rounded to nearest. Its contrast with `on_action` stays at
+/// least 4.5:1.
+pub fn primary_hover_fill(theme: Theme) -> egui::Color32 {
+    let _ = theme;
+    unimplemented!("m10-brand-dialog-buttons")
+}
+
+/// A dialog's confirming button (`docs/specs/m10-brand-dialog-buttons.md`): filled with the
+/// theme's `action` (`primary_hover_fill` while hovered), label `text` in `on_action`
+/// (the label font stays the button text style's; no `medium()` here, tests without the
+/// brand fonts must still lay it out), at least `ui.spacing().interact_size` big, with the
+/// padding of other buttons. Focus ring and border stay accent. Returns the response.
+pub fn primary_button(ui: &mut egui::Ui, text: &str) -> egui::Response {
+    let _ = (ui, text);
+    unimplemented!("m10-brand-dialog-buttons")
+}
+
 /// The family for Roboto Medium (weight 500): buttons and panel headers (`style()`).
 pub fn medium() -> FontFamily {
     FontFamily::Name("medium".into())
@@ -161,7 +207,32 @@ pub fn mono_medium() -> FontFamily {
 /// [Roboto], Monospace is [Roboto Mono], `medium()` is [Roboto Medium], `mono_medium()` is
 /// [Roboto Mono Medium]. Each family holds exactly that one font; no egui default fonts.
 pub fn font_definitions() -> FontDefinitions {
-    unimplemented!("m10-brand-fonts")
+    let mut fonts = FontDefinitions::empty();
+    let data = [
+        ("Roboto", ROBOTO),
+        ("Roboto-Medium", ROBOTO_MEDIUM),
+        ("RobotoMono", ROBOTO_MONO),
+        ("RobotoMono-Medium", ROBOTO_MONO_MEDIUM),
+    ];
+    for (name, bytes) in data {
+        fonts.font_data.insert(
+            name.to_owned(),
+            std::sync::Arc::new(egui::FontData::from_static(bytes)),
+        );
+    }
+    fonts
+        .families
+        .insert(FontFamily::Proportional, vec!["Roboto".to_owned()]);
+    fonts
+        .families
+        .insert(FontFamily::Monospace, vec!["RobotoMono".to_owned()]);
+    fonts
+        .families
+        .insert(medium(), vec!["Roboto-Medium".to_owned()]);
+    fonts
+        .families
+        .insert(mono_medium(), vec!["RobotoMono-Medium".to_owned()]);
+    fonts
 }
 
 /// Installs the fonts and the style for the OS's theme, both the light and the dark one so
