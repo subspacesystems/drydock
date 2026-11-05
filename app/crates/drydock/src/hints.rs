@@ -3,7 +3,7 @@
 
 //! Inference feedback text and colors for the viewport (`docs/specs/m2-hints.md`).
 
-use crate::look::Theme;
+use crate::look::{self, Theme};
 use drydock_kernel::infer::{Inference, Snap};
 
 /// What to draw next to the cursor for an inferred point.
@@ -17,13 +17,7 @@ pub struct HintLabel {
 /// Display color of an axis index (0 red, 1 green, 2 blue) in `theme`; gray for anything
 /// else (`look::axis_color`).
 pub fn axis_color(theme: Theme, axis: usize) -> [u8; 3] {
-    let _ = theme; // m10-brand-viewport: delegate to `look::axis_color`
-    match axis {
-        0 => [220, 50, 47],
-        1 => [40, 160, 60],
-        2 => [50, 90, 220],
-        _ => [160, 160, 160],
-    }
+    look::axis_color(theme, axis)
 }
 
 /// Marker color for a snap kind when no axis applies.

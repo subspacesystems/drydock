@@ -271,7 +271,7 @@ impl App {
             components: ComponentsPanel::default(),
             shadows_preview: None,
             texture: TextureForm::default(),
-            style: Style::default(),
+            style: look::viewport_style(look::theme_of(&cc.egui_ctx.global_style().visuals)),
             gpu,
             model: None,
             editor: None,
@@ -1773,12 +1773,13 @@ impl App {
 
     /// Make the offscreen target match the panel, re-render if needed, and paint it.
     fn paint_viewport(&mut self, ui: &egui::Ui, frame: &eframe::Frame, rect: Rect) {
+        let theme = look::theme_of(&ui.ctx().global_style().visuals);
         let mut extra = if self.view.axes {
             overlay::axis_lines(
                 self.open_transform(),
                 self.view.camera.distance * 100.0,
                 ui.ctx().pixels_per_point(),
-                look::Theme::Dark, // m10-brand-viewport: the OS theme
+                theme,
             )
         } else {
             Vec::new()
@@ -1856,6 +1857,7 @@ impl App {
 
     /// Draw the editor's preview, hint, selection and draw plane over the rendered view.
     fn paint_overlays(&self, ui: &egui::Ui, rect: Rect) {
+        let theme = look::theme_of(&ui.ctx().global_style().visuals);
         let view = EditorViewport {
             camera: self.view.camera,
             size_px: (f64::from(rect.width()), f64::from(rect.height())),
@@ -1917,29 +1919,29 @@ impl App {
             let open_body = editor.path().body(kernel).unwrap_or(BodyId::Root);
             let primitives =
                 overlay::selection(kernel, open_body, open_transform, editor.selection());
-            paint_primitives(painter, &self.view.camera, &primitives, &project);
+            paint_primitives(painter, &self.view.camera, &primitives, &project, theme);
             if let Some(marks) = self.solid_marks.marks() {
                 let primitives = mark_primitives(marks);
-                paint_primitives(painter, &self.view.camera, &primitives, &project);
+                paint_primitives(painter, &self.view.camera, &primitives, &project, theme);
             }
             if let Some(handles) = editor.texture_handles(kernel) {
                 let primitives = texture_handles::primitives(&handles);
                 let primitives = overlay::transformed(primitives, open_transform);
-                paint_primitives(painter, &self.view.camera, &primitives, &project);
+                paint_primitives(painter, &self.view.camera, &primitives, &project, theme);
             }
             if let Some(face) = editor.pushpull_face()
                 && let Some(body) = kernel.body(open_body)
             {
                 let primitives = overlay::face_highlight(body.geometry(), face);
                 let primitives = overlay::transformed(primitives, open_transform);
-                paint_primitives(painter, &self.view.camera, &primitives, &project);
+                paint_primitives(painter, &self.view.camera, &primitives, &project, theme);
             }
             if let Some(face) = editor.offset_face()
                 && let Some(body) = kernel.body(open_body)
             {
                 let primitives = overlay::face_highlight(body.geometry(), face);
                 let primitives = overlay::transformed(primitives, open_transform);
-                paint_primitives(painter, &self.view.camera, &primitives, &project);
+                paint_primitives(painter, &self.view.camera, &primitives, &project, theme);
             }
             if let Some(tool) = editor.scale_tool() {
                 let bounds = tool
@@ -1952,7 +1954,7 @@ impl App {
                         tool.handle_grabbed(),
                     );
                     let primitives = overlay::transformed(primitives, open_transform);
-                    paint_primitives(painter, &self.view.camera, &primitives, &project);
+                    paint_primitives(painter, &self.view.camera, &primitives, &project, theme);
                 }
             }
             let primitives = overlay::guides(
@@ -1960,7 +1962,7 @@ impl App {
                 self.view.camera.target,
                 self.view.camera.distance * 10.0,
             );
-            paint_primitives(painter, &self.view.camera, &primitives, &project);
+            paint_primitives(painter, &self.view.camera, &primitives, &project, theme);
         }
         if let Some(tool) = editor.rotate_tool() {
             // Before the center click the protractor follows the cursor, so the plane it
@@ -1976,13 +1978,13 @@ impl App {
                 };
                 let primitives =
                     overlay::protractor(center, tool.plane(), radius, start, tool.angle());
-                paint_primitives(painter, &self.view.camera, &primitives, &project);
+                paint_primitives(painter, &self.view.camera, &primitives, &project, theme);
             }
         }
         if let Some(hint) = editor.hint()
             && let Some(point) = project(hint.point)
         {
-            let label = hint_label(&hint, look::Theme::Dark);
+            let label = hint_label(&hint, theme);
             let color = Color32::from_rgb(label.color[0], label.color[1], label.color[2]);
             if hint.axis.is_some() {
                 let preview = editor.preview();
@@ -2883,6 +2885,10 @@ enum PanelAction {
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+        let theme = look::theme_of(&ctx.global_style().visuals);
+        if look::apply_viewport_theme(&mut self.style, theme) {
+            self.dirty = true;
+        }
         if ctx.input(|input| input.viewport().close_requested()) && !self.allow_close {
             let modified = self.model.as_ref().is_some_and(|model| model.modified);
             if modified {
@@ -3381,7 +3387,7 @@ fn unsaved_dialog(ctx: &egui::Context, name: &str) -> Option<UnsavedChoice> {
 }
 
 /// Stroke colour and width for an overlay primitive.
-fn overlay_style(style: overlay::Style) -> (Color32, f32) {
+fn overlay_style(style: overlay::Style, theme: look::Theme) -> (Color32, f32) {
     match style {
         overlay::Style::FaceHighlight => (ACCENT_COLOR, 2.0),
         overlay::Style::BoundsBox => (Color32::from_rgb(130, 140, 155), 1.0),
@@ -3398,14 +3404,10 @@ fn overlay_style(style: overlay::Style) -> (Color32, f32) {
             let ([r, g, b, a], width) = overlay::problem_stroke();
             (Color32::from_rgba_unmultiplied(r, g, b, a), width)
         }
-        overlay::Style::Axis { axis, .. } => (
-            match axis {
-                0 => Color32::from_rgb(200, 40, 40),
-                1 => Color32::from_rgb(40, 150, 40),
-                _ => Color32::from_rgb(40, 70, 210),
-            },
-            1.5,
-        ),
+        overlay::Style::Axis { axis, .. } => {
+            let [r, g, b] = look::axis_color(theme, axis);
+            (Color32::from_rgb(r, g, b), 1.5)
+        }
     }
 }
 
@@ -3429,11 +3431,12 @@ fn paint_primitives(
     camera: &drydock_view::Camera,
     primitives: &[Primitive],
     project: &dyn Fn(DVec3) -> Option<Pos2>,
+    theme: look::Theme,
 ) {
     for primitive in primitives {
         match primitive {
             Primitive::Line { a, b, style } => {
-                let (color, width) = overlay_style(*style);
+                let (color, width) = overlay_style(*style, theme);
                 let Some((a, b)) = overlay::clip_in_front(camera, *a, *b) else {
                     continue;
                 };
@@ -3453,7 +3456,7 @@ fn paint_primitives(
                 }
             }
             Primitive::Polygon { points, style } => {
-                let (color, width) = overlay_style(*style);
+                let (color, width) = overlay_style(*style, theme);
                 let projected: Vec<Pos2> = points.iter().filter_map(|p| project(*p)).collect();
                 if projected.len() < 2 {
                     continue;
@@ -3481,7 +3484,7 @@ fn paint_primitives(
                 }
             }
             Primitive::Marker { at, style } => {
-                let (color, _) = overlay_style(*style);
+                let (color, _) = overlay_style(*style, theme);
                 let Some(at) = project(*at) else {
                     continue;
                 };
