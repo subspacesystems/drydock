@@ -298,7 +298,7 @@ Moved up by Tyrel (2026-10-28) so beta testers can try the app after 3D printing
 | `m9-followme-undo` | Fix: Undo and Redo drop Follow Me's picks and preview, as for Offset and Extrude | `m9-followme-tool` |
 | m9-guide-followme (done directly, no task) | User Guide: a Follow Me section, and the arrow keys that lock a shape's drawing plane | `m9-followme-tool` |
 | `m9-followme-button` | Fix: Follow Me gets key `F`, a toolbar button after Offset, and its icon in the Tools menu | `m9-followme-tool` |
-| `m9-version` | Fix: workspace version 0.9.0, so a plain cargo build's Help > About says 0.9.0 | |
+| m9-version (done directly, no task) | Fix: workspace version 0.9.0, so a plain cargo build's Help > About says 0.9.0 | |
 | `m9-guide-dev` | Fix: Help > User Guide works from a plain `cargo build`/`cargo run` (the build makes the guide) | |
 
 Done when: Follow Me sweeps a face along an open and a closed path, and Offset insets and outsets a face by a dragged or typed distance, both one undo step each, checked in the real window.
