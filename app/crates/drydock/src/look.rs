@@ -50,6 +50,65 @@ pub fn theme_from(system: Option<egui::Theme>) -> Theme {
     }
 }
 
+/// Every colour the app draws with, for one theme: the Subspace brand tokens of
+/// `design/brand/tokens.json` (`docs/specs/m10-brand-theme.md`). Other code takes colours
+/// from here, never from literals. There is no ground grid, so `viewport-grid` is absent.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Palette {
+    /// `bg`: page and app background.
+    pub bg: egui::Color32,
+    /// `bg-sunken`: wells, the viewport surround.
+    pub bg_sunken: egui::Color32,
+    /// `surface`: panels.
+    pub surface: egui::Color32,
+    /// `surface-raised`: menus, popups, dialogs.
+    pub surface_raised: egui::Color32,
+    /// `border`: hairlines between regions.
+    pub border: egui::Color32,
+    /// `border-control`: outlines of inputs and buttons.
+    pub border_control: egui::Color32,
+    /// `ink`: body text.
+    pub ink: egui::Color32,
+    /// `ink-muted`: secondary text.
+    pub ink_muted: egui::Color32,
+    /// `accent`: links, focus, selection, the active state.
+    pub accent: egui::Color32,
+    /// `accent-soft`: hover and selection tint (translucent; build with
+    /// `Color32::from_rgba_unmultiplied`).
+    pub accent_soft: egui::Color32,
+    /// `action`: primary button fill.
+    pub action: egui::Color32,
+    /// `on-action`: label on `action`.
+    pub on_action: egui::Color32,
+    /// `product`: drydock-orange ink, the active-tool marker.
+    pub product: egui::Color32,
+    /// `warning`.
+    pub warning: egui::Color32,
+    /// `danger`.
+    pub danger: egui::Color32,
+    /// `viewport-bg`.
+    pub viewport_bg: egui::Color32,
+    /// `edge`: model edges.
+    pub edge: egui::Color32,
+    /// `face-front`.
+    pub face_front: egui::Color32,
+    /// `face-back`: the rose of reversed faces.
+    pub face_back: egui::Color32,
+    /// `axis-x`.
+    pub axis_x: egui::Color32,
+    /// `axis-y`.
+    pub axis_y: egui::Color32,
+    /// `axis-z`.
+    pub axis_z: egui::Color32,
+}
+
+/// The palette for `theme`: each field is the token's value for that theme, with aliases
+/// resolved (`tokens.json`; the table in `design/brand/README.md`).
+pub fn palette(theme: Theme) -> Palette {
+    let _ = theme;
+    unimplemented!("m10-brand-theme")
+}
+
 /// The egui style for `theme`: egui's own colours for the scheme with the desktop look on
 /// top. Widget corners at most 3 points, the hovered fill differs from the resting one,
 /// item spacing 4 to 8 points tall, rows 20 to 28 points tall, button padding at least 6
