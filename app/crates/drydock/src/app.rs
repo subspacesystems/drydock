@@ -3363,7 +3363,7 @@ fn unsaved_dialog(ctx: &egui::Context, name: &str) -> Option<UnsavedChoice> {
         ui.label(format!("Save changes to {name}?"));
         ui.add_space(8.0);
         ui.horizontal(|ui| {
-            if ui.button("Save").clicked() {
+            if look::primary_button(ui, "Save").clicked() {
                 choice = Some(UnsavedChoice::Save);
             }
             if ui.button("Discard").clicked() {
@@ -3845,7 +3845,7 @@ impl SaveDialog {
             if let Some(target) = &self.replacing {
                 ui.label(format!("Replace {}?", file_name(target)));
                 ui.horizontal(|ui| {
-                    if ui.button("Replace").clicked() {
+                    if look::primary_button(ui, "Replace").clicked() {
                         outcome = SaveOutcome::Save(target.clone());
                     }
                     if ui.button("Cancel").clicked() {
@@ -3871,7 +3871,7 @@ impl SaveDialog {
                     SaveMode::Export(_) | SaveMode::ExportFolder(_) => "Export",
                 };
                 ui.horizontal(|ui| {
-                    if (ui.button(choose).clicked() || submitted)
+                    if (look::primary_button(ui, choose).clicked() || submitted)
                         && let Some(target) = self.target()
                     {
                         if matches!(self.mode, SaveMode::ExportFolder(_)) && target.is_dir() {
