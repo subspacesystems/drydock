@@ -20,6 +20,10 @@ fn main() {
     )
     .unwrap_or_else(|error| panic!("{error}"));
     println!("cargo:rustc-env=DRYDOCK_VERSION={version}");
+    // Skeleton (m9-guide-dev): exports the folder but does not build the guide yet.
+    if let Ok(out) = std::env::var("OUT_DIR") {
+        println!("cargo:rustc-env=DRYDOCK_DEV_GUIDE={out}/guide");
+    }
     let git_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../.git");
     for file in ["HEAD", "logs/HEAD"] {
         let path = git_dir.join(file);

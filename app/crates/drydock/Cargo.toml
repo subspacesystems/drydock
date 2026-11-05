@@ -20,6 +20,7 @@ egui-wgpu.workspace = true
 wgpu.workspace = true
 
 [build-dependencies]
+drydock-guide.workspace = true
 winresource.workspace = true
 
 [dev-dependencies]
