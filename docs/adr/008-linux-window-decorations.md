@@ -11,15 +11,22 @@ On Ubuntu (Wayland, GNOME) the Drydock window showed a bar drawn by the toolkit 
 | Crate | License |
 | --- | --- |
 | sctk-adwaita | MIT |
-| ab_glyph, ab_glyph_rasterizer, owned_ttf_parser | Apache-2.0 |
-| ttf-parser | MIT OR Apache-2.0 |
 | tiny-skia, tiny-skia-path | BSD-3-Clause |
 | arrayref | BSD-2-Clause |
 | strict-num | MIT |
 
+`sctk-adwaita` 0.10.1 is patched locally (`app/vendor/sctk-adwaita`, `[patch.crates-io]` in `app/.cargo/config.toml`): winit's feature still asks for its `ab_glyph` title renderer, which pulled `ttf-parser`, flagged unmaintained (RUSTSEC-2026-0192). The local copy draws the title with `skrifa`, already in the lock, so `ab_glyph`, `owned_ttf_parser` and `ttf-parser` are gone. It also leaves out upstream's embedded Cantarell font (OFL-1.1, outside the allow list; kept OFL fonts out of the app): the title uses the system font that `fc-match` finds, and without one the bar shows no text. Its unit tests use our Roboto, in test builds only.
+
 The window also gets an app id (`APP_ID` in `window_icon.rs`, `com.subspacesystems.Drydock`, the name of the desktop entry) and our own icon (`window_icon.rs`), so the dock shows Drydock and not a default. eframe's `persistence` feature is off, so the app id keys no stored state.
 
 ## Consequences
-- Linux builds gain about nine small pure-Rust crates; other systems are unchanged.
+- Linux builds gain a few small pure-Rust crates; other systems are unchanged.
+- The local patch must be refreshed by hand when winit moves to a newer `sctk-adwaita`.
 - The Windows and macOS builds do not take the dependency.
 - If winit moves to another minor version, the dependency line must follow it (a test checks that the lock's winit lists sctk-adwaita).
+
+## Update (m10-brand-theme, m9-linux-titlebar)
+m10-brand-theme briefly switched winit to `wayland-csd-adwaita-notitle` to drop `ttf-parser`,
+which also dropped the title text. m9-linux-titlebar went back to `wayland-csd-adwaita`: the
+local `sctk-adwaita` above already draws the title with `skrifa`, so the title stays and
+`ttf-parser` stays out.

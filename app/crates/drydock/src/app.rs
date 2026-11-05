@@ -1778,6 +1778,7 @@ impl App {
                 self.open_transform(),
                 self.view.camera.distance * 100.0,
                 ui.ctx().pixels_per_point(),
+                look::Theme::Dark, // m10-brand-viewport: the OS theme
             )
         } else {
             Vec::new()
