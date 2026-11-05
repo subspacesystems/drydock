@@ -135,7 +135,7 @@ fn add_tool_inserts_or_moves_within_a_toolbar() {
     );
     assert_eq!(
         tools(&layout, 2),
-        vec![PushPull, Offset, Move, Rotate, Scale],
+        vec![PushPull, Offset, FollowMe, Move, Rotate, Scale],
         "a tool can sit on two toolbars"
     );
     let before = layout.clone();
@@ -232,6 +232,7 @@ fn tool_keys() {
         "arc3",
         "pushpull",
         "offset",
+        "followme",
         "move",
         "rotate",
         "scale",
