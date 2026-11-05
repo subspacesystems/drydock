@@ -302,8 +302,13 @@ pub fn theme_of(visuals: &egui::Visuals) -> Theme {
 /// toward white, per channel, rounded to nearest. Its contrast with `on_action` stays at
 /// least 4.5:1.
 pub fn primary_hover_fill(theme: Theme) -> egui::Color32 {
-    let _ = theme;
-    unimplemented!("m10-brand-dialog-buttons")
+    let action = palette(theme).action;
+    let lighten = |c: u8| (f32::from(c) + (255.0 - f32::from(c)) * 0.1).round() as u8;
+    egui::Color32::from_rgb(
+        lighten(action.r()),
+        lighten(action.g()),
+        lighten(action.b()),
+    )
 }
 
 /// A dialog's confirming button (`docs/specs/m10-brand-dialog-buttons.md`): filled with the
@@ -312,8 +317,30 @@ pub fn primary_hover_fill(theme: Theme) -> egui::Color32 {
 /// brand fonts must still lay it out), at least `ui.spacing().interact_size` big, with the
 /// padding of other buttons. Focus ring and border stay accent. Returns the response.
 pub fn primary_button(ui: &mut egui::Ui, text: &str) -> egui::Response {
-    let _ = (ui, text);
-    unimplemented!("m10-brand-dialog-buttons")
+    let min_size = ui.spacing().interact_size;
+    primary_button_sized(ui, text, min_size)
+}
+
+/// [`primary_button`] with an explicit minimum size, for dialogs whose button row has its own.
+pub fn primary_button_sized(ui: &mut egui::Ui, text: &str, min_size: egui::Vec2) -> egui::Response {
+    let theme = theme_of(ui.visuals());
+    let p = palette(theme);
+    let hover = primary_hover_fill(theme);
+    ui.scope(|ui| {
+        let widgets = &mut ui.visuals_mut().widgets;
+        widgets.inactive.weak_bg_fill = p.action;
+        widgets.hovered.weak_bg_fill = hover;
+        widgets.active.weak_bg_fill = hover;
+        for widget in [
+            &mut widgets.inactive,
+            &mut widgets.hovered,
+            &mut widgets.active,
+        ] {
+            widget.fg_stroke.color = p.on_action;
+        }
+        ui.add(egui::Button::new(text).min_size(min_size))
+    })
+    .inner
 }
 
 /// The family for Roboto Medium (weight 500): buttons and panel headers (`style()`).

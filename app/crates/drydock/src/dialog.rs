@@ -7,6 +7,8 @@
 
 use eframe::egui::{self, Color32, Vec2};
 
+use crate::look;
+
 /// Smallest size of a dialog button, in points.
 pub const BUTTON_MIN_SIZE: Vec2 = Vec2::new(88.0, 28.0);
 
@@ -39,6 +41,18 @@ pub fn default_fill(visuals: &egui::Visuals) -> Color32 {
     visuals.selection.bg_fill
 }
 
+/// [`default_fill`] composited over the resting button fill, so the translucent selection
+/// tint is painted as an opaque colour that keeps the label readable.
+fn default_fill_over(visuals: &egui::Visuals) -> Color32 {
+    let [r, g, b, a] = default_fill(visuals).to_srgba_unmultiplied();
+    let base = visuals.widgets.inactive.weak_bg_fill;
+    let alpha = f32::from(a) / 255.0;
+    let mix = |top: u8, under: u8| {
+        (f32::from(top) * alpha + f32::from(under) * (1.0 - alpha)).round() as u8
+    };
+    Color32::from_rgb(mix(r, base.r()), mix(g, base.g()), mix(b, base.b()))
+}
+
 /// Draw `buttons` on one line at the right edge of `ui`, left to right in the order given,
 /// [`ROW_GAP`] below whatever is above. Each is at least [`BUTTON_MIN_SIZE`] with a visible
 /// border; the default one is filled with [`default_fill`]. Returns the index of the button
@@ -59,12 +73,21 @@ pub fn button_row(ui: &mut egui::Ui, buttons: &[DialogButton<'_>]) -> Option<usi
     let mut clicked = None;
     ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
         for (index, button) in buttons.iter().enumerate().rev() {
-            let mut widget = egui::Button::new(button.label).min_size(min_size);
-            if button.default {
-                widget = widget.fill(default_fill(ui.visuals()));
-            }
-            if ui.add_enabled(button.enabled, widget).clicked() {
-                clicked = Some(index);
+            let primary = button.default && button.label != "Cancel" && button.label != "Close";
+            if primary {
+                ui.add_enabled_ui(button.enabled, |ui| {
+                    if look::primary_button_sized(ui, button.label, min_size).clicked() {
+                        clicked = Some(index);
+                    }
+                });
+            } else {
+                let mut widget = egui::Button::new(button.label).min_size(min_size);
+                if button.default {
+                    widget = widget.fill(default_fill_over(ui.visuals()));
+                }
+                if ui.add_enabled(button.enabled, widget).clicked() {
+                    clicked = Some(index);
+                }
             }
         }
     });
