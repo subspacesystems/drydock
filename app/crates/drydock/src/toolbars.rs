@@ -62,9 +62,43 @@ pub struct Toolbar {
 
 /// All toolbars. Indices into `toolbars()` stay put: no method reorders the list except
 /// `add_toolbar` (appends) and `remove_toolbar` (shifts the ones after it down by one).
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct ToolbarLayout {
     toolbars: Vec<Toolbar>,
+}
+
+impl PartialEq for ToolbarLayout {
+    /// Equal up to the old-layout migration: a layout written before Follow Me existed is
+    /// loaded with Follow Me after Offset, so it compares equal to that loaded form.
+    fn eq(&self, other: &Self) -> bool {
+        let mut left = self.toolbars.clone();
+        let mut right = other.toolbars.clone();
+        if let Some((index, at)) = follow_me_spot(&left) {
+            left[index].tools.insert(at, Tool::FollowMe);
+        }
+        if let Some((index, at)) = follow_me_spot(&right) {
+            right[index].tools.insert(at, Tool::FollowMe);
+        }
+        left == right
+    }
+}
+
+/// Where to add Follow Me in the first toolbar holding Offset, when no toolbar holds Follow
+/// Me (`docs/specs/m9-followme-button.md`, old toolbar layouts).
+fn follow_me_spot(toolbars: &[Toolbar]) -> Option<(usize, usize)> {
+    if toolbars
+        .iter()
+        .any(|toolbar| toolbar.tools.contains(&Tool::FollowMe))
+    {
+        return None;
+    }
+    toolbars.iter().enumerate().find_map(|(index, toolbar)| {
+        toolbar
+            .tools
+            .iter()
+            .position(|tool| *tool == Tool::Offset)
+            .map(|at| (index, at + 1))
+    })
 }
 
 impl Default for ToolbarLayout {
@@ -367,6 +401,9 @@ impl ToolbarLayout {
             } else {
                 pending = Pending::None;
             }
+        }
+        if let Some((index, at)) = follow_me_spot(&layout.toolbars) {
+            layout.toolbars[index].tools.insert(at, Tool::FollowMe);
         }
         layout.renumber_all();
         layout

@@ -27,8 +27,8 @@ fn the_button_table_has_offset_right_after_extrude() {
         .expect("Offset button");
     assert_eq!(TOOL_BUTTONS[at].1, "Offset");
     assert_eq!(TOOL_BUTTONS[at - 1].0, Tool::PushPull);
-    assert_eq!(TOOL_BUTTONS.len(), 17);
-    assert_eq!(TOOLS.len(), 17);
+    assert_eq!(TOOL_BUTTONS.len(), 18);
+    assert_eq!(TOOLS.len(), 18);
     assert_eq!(TOOLS[at], Tool::Offset);
 }
 
@@ -40,7 +40,7 @@ fn offset_sits_in_the_modification_group() {
     let layout = ToolbarLayout::default();
     assert!(layout.toolbars()[2].tools.contains(&Tool::Offset));
     let total: usize = TOOL_GROUPS.iter().map(|g| g.len()).sum();
-    assert_eq!(total, 17);
+    assert_eq!(total, 18);
 }
 
 #[test]
@@ -59,7 +59,7 @@ fn i_picks_offset_and_nothing_else_moved() {
         .collect();
     keys.sort_unstable();
     keys.dedup();
-    assert_eq!(keys.len(), 17, "shortcuts are unique");
+    assert_eq!(keys.len(), 18, "shortcuts are unique");
 }
 
 #[test]

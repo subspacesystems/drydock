@@ -24,11 +24,11 @@ fn tools(layout: &ToolbarLayout) -> Vec<Tool> {
 fn available_is_everything_else_in_button_order() {
     let layout = ToolbarLayout::default();
     let free = available_tools(&layout, DRAWING);
-    assert_eq!(free.len(), 17 - 5);
+    assert_eq!(free.len(), 18 - 5);
     assert_eq!(free[0], Tool::Select);
     assert_eq!(free[1], Tool::PushPull);
     assert!(!free.contains(&Tool::Line));
-    assert_eq!(available_tools(&layout, 99).len(), 17);
+    assert_eq!(available_tools(&layout, 99).len(), 18);
 }
 
 #[test]

@@ -262,6 +262,7 @@ pub fn key(key: &str, mods: Modifiers) -> Option<Action> {
         "P" if shift => Some(Action::ToggleProjection),
         "P" if plain => Some(Action::SelectTool(Tool::PushPull)),
         "I" if plain => Some(Action::SelectTool(Tool::Offset)),
+        "F" if plain => Some(Action::SelectTool(Tool::FollowMe)),
         "M" if plain => Some(Action::SelectTool(Tool::Move)),
         "Q" if plain => Some(Action::SelectTool(Tool::Rotate)),
         "S" if plain => Some(Action::SelectTool(Tool::Scale)),

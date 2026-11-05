@@ -66,6 +66,7 @@ fn button_table_lists_every_tool_once() {
         Tool::Arc3,
         Tool::PushPull,
         Tool::Offset,
+        Tool::FollowMe,
         Tool::Move,
         Tool::Rotate,
         Tool::Scale,
@@ -80,6 +81,7 @@ fn button_table_lists_every_tool_once() {
     for label in [
         "Extrude",
         "Offset",
+        "Follow Me",
         "Move",
         "Rotate",
         "Scale",
