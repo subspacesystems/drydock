@@ -220,6 +220,7 @@ pub struct App {
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>, file: Option<PathBuf>) -> App {
         look::apply(&cc.egui_ctx);
+        icons::install(&cc.egui_ctx);
         let gpu = cc.wgpu_render_state.as_ref().map(|state| {
             let renderer = Renderer::new(&state.device);
             let scene = renderer.upload(&state.device, &state.queue, &FlatScene::default());
