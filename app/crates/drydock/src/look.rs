@@ -146,6 +146,29 @@ pub fn style(theme: Theme) -> Style {
     style
 }
 
+/// The theme `visuals` belong to: Dark when `visuals.dark_mode`, else Light.
+pub fn theme_of(visuals: &egui::Visuals) -> Theme {
+    let _ = visuals;
+    unimplemented!("m10-brand-dialog-buttons")
+}
+
+/// The fill of a primary button under the pointer: `palette(theme).action` blended 10%
+/// toward white, per channel, rounded to nearest. Its contrast with `on_action` stays at
+/// least 4.5:1.
+pub fn primary_hover_fill(theme: Theme) -> egui::Color32 {
+    let _ = theme;
+    unimplemented!("m10-brand-dialog-buttons")
+}
+
+/// A dialog's confirming button (`docs/specs/m10-brand-dialog-buttons.md`): filled with the
+/// theme's `action` (`primary_hover_fill` while hovered), label `text` in Roboto Medium
+/// (`medium()`) in `on_action`, the minimum size and padding of other buttons. Focus ring
+/// and border stay accent. Returns the button's response.
+pub fn primary_button(ui: &mut egui::Ui, text: &str) -> egui::Response {
+    let _ = (ui, text);
+    unimplemented!("m10-brand-dialog-buttons")
+}
+
 /// The family for Roboto Medium (weight 500): buttons and panel headers (`style()`).
 pub fn medium() -> FontFamily {
     FontFamily::Name("medium".into())
