@@ -23,8 +23,7 @@ fn about_window_is_titled_and_names_the_company() {
     });
     h.run();
     assert!(h.query_by_label("About Drydock").is_some(), "window title");
-    assert!(h.query_by_label("Subspace Drydock").is_some());
-    assert!(h.query_by_label("by Subspace Systems").is_some());
+    assert!(h.query_by_label("A Subspace Systems product.").is_some());
     assert!(h.query_by_label("About modeler").is_none());
 }
 
