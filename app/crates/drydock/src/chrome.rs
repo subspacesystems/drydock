@@ -518,25 +518,43 @@ pub fn model_info_window_with(
 /// The corners of the Measurements box (the status bar's measurement and typed text):
 /// 2 points on the left, 8 on the right (`docs/specs/m10-brand-numbers.md`).
 pub fn measurements_corners() -> eframe::egui::CornerRadius {
-    unimplemented!("m10-brand-numbers")
+    eframe::egui::CornerRadius {
+        nw: 2,
+        sw: 2,
+        ne: 8,
+        se: 8,
+    }
 }
 
 /// The measurement in the status bar: the label and value of `measurement` (if any), then
-/// the typed text (if any), drawn into `ui` (`docs/specs/m4-ui-status.md`).
+/// the typed text (if any), drawn into `ui` (`docs/specs/m4-ui-status.md`). The value and
+/// the typed text are monospace; what is shown goes inside a frame with
+/// [`measurements_corners`], nothing shown no frame (`docs/specs/m10-brand-numbers.md`).
 pub fn status_measurement(
     ui: &mut eframe::egui::Ui,
     measurement: Option<(&str, &str)>,
     typed: &str,
 ) {
-    if let Some((label, value)) = measurement {
-        ui.label(label);
-        if !value.is_empty() {
-            ui.monospace(value);
+    if measurement.is_none() && typed.is_empty() {
+        return;
+    }
+    let widget = ui.style().visuals.widgets.noninteractive;
+    let frame = eframe::egui::Frame::new()
+        .inner_margin(eframe::egui::Margin::symmetric(8, 3))
+        .corner_radius(measurements_corners())
+        .fill(widget.bg_fill)
+        .stroke(widget.bg_stroke);
+    frame.show(ui, |ui| {
+        if let Some((label, value)) = measurement {
+            ui.label(label);
+            if !value.is_empty() {
+                ui.monospace(value);
+            }
         }
-    }
-    if !typed.is_empty() {
-        ui.monospace(typed);
-    }
+        if !typed.is_empty() {
+            ui.monospace(typed);
+        }
+    });
 }
 
 /// Where the parts of one menu row go (`docs/specs/m6-menus.md`).
