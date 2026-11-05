@@ -405,7 +405,9 @@ pub fn axis_lines(
     transform: DMat4,
     half_length: f64,
     pixels_per_point: f32,
+    theme: crate::look::Theme,
 ) -> Vec<drydock_render::ExtraLine> {
+    let _ = theme; // m10-brand-viewport: colours from `look::axis_color`
     const COLORS: [[f32; 4]; 3] = [
         [200.0 / 255.0, 40.0 / 255.0, 40.0 / 255.0, 1.0],
         [40.0 / 255.0, 150.0 / 255.0, 40.0 / 255.0, 1.0],
