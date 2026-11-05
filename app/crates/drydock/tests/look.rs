@@ -7,10 +7,10 @@ use drydock::look::{self, Theme};
 use eframe::egui;
 
 #[test]
-fn theme_follows_the_os_and_defaults_to_light() {
+fn theme_follows_the_os_and_defaults_to_dark() {
     assert_eq!(look::theme_from(Some(egui::Theme::Dark)), Theme::Dark);
     assert_eq!(look::theme_from(Some(egui::Theme::Light)), Theme::Light);
-    assert_eq!(look::theme_from(None), Theme::Light);
+    assert_eq!(look::theme_from(None), Theme::Dark);
 }
 
 #[test]
