@@ -1286,10 +1286,11 @@ impl Renderer {
             }
 
             pass.set_pipeline(&self.opaque_back_pipeline);
+            let back = style.default_back.unwrap_or(style.default_face);
             for batch in scene.batches.iter().filter(|batch| !batch.transparent) {
                 let material = batch.material.unwrap_or_else(|| GpuMaterial {
-                    color: linear_color(style.default_face),
-                    opacity: style.default_face[3],
+                    color: linear_color(back),
+                    opacity: back[3],
                     unlit: false,
                     texture: None,
                 });
