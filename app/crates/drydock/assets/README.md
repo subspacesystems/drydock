@@ -1,5 +1,6 @@
 # Assets
 
 - `land_110m.bin`: land outlines for the Geolocation globe, from Natural Earth 1:110m land (public domain, naturalearthdata.com). Built by `tools/land_data.py`; format in that script. See `docs/adr/006-map-data.md`.
-- `drydock.ico`: the app icon (an isometric cube on a navy tile), our own artwork, embedded in `drydock.exe` by `build.rs`. Drawn by `make-icon.py` (standard library only); sizes 16, 32, 48 and 256.
-- `drydock-256.png`: the 256 px frame of the icon as a PNG, also written by `make-icon.py`; the Linux window icon (`window_icon.rs`) and, later, the desktop entry's icons.
+- `drydock.ico`: the Windows app icon, our own artwork from `design/brand/logo` (the app icon and favicon SVGs), embedded in `drydock.exe` by `build.rs`. Holds PNG frames at 16, 32, 48 and 256 px.
+- `drydock-256.png`: the 256 px app icon as a PNG, the Linux window icon (`window_icon.rs`) and the source of the Linux hicolor icons.
+- The icon files are written by the ignored test `write_icon_files` in `tests/app_icon.rs`: `cargo test -p drydock --test app_icon -- --ignored write_icon_files`.
