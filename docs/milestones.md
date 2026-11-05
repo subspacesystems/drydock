@@ -321,6 +321,7 @@ Done when: Follow Me sweeps a face along an open and a closed path, and Offset i
 | `m10-brand-numbers` | Measurements box and Entity Info numbers in Roboto Mono with units; Measurements box corners 2 left, 8 right | `m10-brand-theme`, `m10-brand-fonts` |
 | `m10-brand-app-icon` | App icon from the new logo: `drydock-256.png`, the Windows `.ico` and the Linux hicolor sizes (favicon for 16 and 32) | `m10-brand-icons`, `m9-linux-desktop-entry` |
 | `m10-brand-about` | Help > About: the horizontal lockup in the current theme, the version, "A Subspace Systems product." | `m10-brand-icons` |
+| `m10-theme-default-dark` | When the OS doesn't say light or dark, Drydock starts in Dark | `m10-brand-theme` |
 
 ## Future (unscheduled)
 
