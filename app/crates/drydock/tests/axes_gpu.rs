@@ -9,10 +9,11 @@ use drydock::overlay::{Primitive, axes, axis_lines};
 use drydock_render::ExtraLine;
 use glam::{DMat4, DQuat, DVec3};
 
+/// The Dark theme's axis colors (`axis-x`, `axis-y`, `axis-z`).
 const COLORS: [[f32; 4]; 3] = [
-    [200.0 / 255.0, 40.0 / 255.0, 40.0 / 255.0, 1.0],
-    [40.0 / 255.0, 150.0 / 255.0, 40.0 / 255.0, 1.0],
-    [40.0 / 255.0, 70.0 / 255.0, 210.0 / 255.0, 1.0],
+    [1.0, 79.0 / 255.0, 100.0 / 255.0, 1.0],
+    [51.0 / 255.0, 209.0 / 255.0, 122.0 / 255.0, 1.0],
+    [111.0 / 255.0, 163.0 / 255.0, 1.0, 1.0],
 ];
 
 fn near(a: DVec3, b: DVec3) -> bool {

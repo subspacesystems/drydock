@@ -407,12 +407,6 @@ pub fn axis_lines(
     pixels_per_point: f32,
     theme: crate::look::Theme,
 ) -> Vec<drydock_render::ExtraLine> {
-    let _ = theme; // m10-brand-viewport: colours from `look::axis_color`
-    const COLORS: [[f32; 4]; 3] = [
-        [200.0 / 255.0, 40.0 / 255.0, 40.0 / 255.0, 1.0],
-        [40.0 / 255.0, 150.0 / 255.0, 40.0 / 255.0, 1.0],
-        [40.0 / 255.0, 70.0 / 255.0, 210.0 / 255.0, 1.0],
-    ];
     if !half_length.is_finite() || half_length <= 0.0 {
         return Vec::new();
     }
@@ -435,7 +429,13 @@ pub fn axis_lines(
             continue;
         }
         let dir = mapped / length;
-        let color = COLORS[axis];
+        let [r, g, b] = crate::look::axis_color(theme, axis);
+        let color = [
+            f32::from(r) / 255.0,
+            f32::from(g) / 255.0,
+            f32::from(b) / 255.0,
+            1.0,
+        ];
         out.push(drydock_render::ExtraLine {
             a: origin,
             b: origin + dir * half_length,

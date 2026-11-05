@@ -5,7 +5,7 @@
 //! light or dark following the OS, the brand palette and standard spacing. Pure
 //! functions over egui types so tests need no window.
 
-use eframe::egui::{self, CornerRadius, FontDefinitions, FontFamily, Margin, Style};
+use eframe::egui::{self, CornerRadius, FontDefinitions, FontFamily, Margin, Style, TextStyle};
 
 /// Roboto Regular 2.138, bundled (`assets/fonts/README.md`).
 pub const ROBOTO: &[u8] = include_bytes!("../assets/fonts/Roboto-Regular.ttf");
@@ -160,6 +160,15 @@ pub fn palette(theme: Theme) -> Palette {
     }
 }
 
+/// Buttons and headings use Roboto Medium, the rest of the styles keep egui's families.
+fn brand_fonts(style: &mut Style) {
+    for text_style in [TextStyle::Button, TextStyle::Heading] {
+        if let Some(font_id) = style.text_styles.get_mut(&text_style) {
+            font_id.family = medium();
+        }
+    }
+}
+
 /// A colour in the `0xRRGGBB` form of the token tables.
 fn c(hex: u32) -> egui::Color32 {
     egui::Color32::from_rgb((hex >> 16) as u8, (hex >> 8) as u8, hex as u8)
@@ -179,6 +188,7 @@ pub fn style(theme: Theme) -> Style {
         },
         ..Default::default()
     };
+    brand_fonts(&mut style);
     let v = &mut style.visuals;
     v.panel_fill = p.surface;
     v.window_fill = p.surface_raised;
@@ -231,28 +241,61 @@ pub fn style(theme: Theme) -> Style {
 /// `viewport_bg`, `default_line` = `edge`, `default_face` = `face_front`, `default_back` =
 /// `Some(face_back)`; all opaque, sRGB 0..1 (byte / 255). `sun` is `None`.
 pub fn viewport_style(theme: Theme) -> drydock_render::Style {
-    let _ = theme;
-    unimplemented!("m10-brand-viewport")
+    let palette = palette(theme);
+    let color = |c: egui::Color32| {
+        [
+            f32::from(c.r()) / 255.0,
+            f32::from(c.g()) / 255.0,
+            f32::from(c.b()) / 255.0,
+            1.0,
+        ]
+    };
+    drydock_render::Style {
+        background: color(palette.viewport_bg),
+        default_line: color(palette.edge),
+        default_face: color(palette.face_front),
+        default_back: Some(color(palette.face_back)),
+        sun: None,
+    }
 }
 
 /// Set the colour fields of `style` (not `sun`) to those of `viewport_style(theme)`; true
 /// when anything changed, so the viewport must redraw.
 pub fn apply_viewport_theme(style: &mut drydock_render::Style, theme: Theme) -> bool {
-    let _ = (style, theme);
-    unimplemented!("m10-brand-viewport")
+    let wanted = viewport_style(theme);
+    let changed = style.background != wanted.background
+        || style.default_line != wanted.default_line
+        || style.default_face != wanted.default_face
+        || style.default_back != wanted.default_back;
+    if changed {
+        style.background = wanted.background;
+        style.default_line = wanted.default_line;
+        style.default_face = wanted.default_face;
+        style.default_back = wanted.default_back;
+    }
+    changed
 }
 
 /// The colour of model axis `axis` (0 x, 1 y, 2 z) in `theme`: `palette(theme).axis_x` /
 /// `axis_y` / `axis_z` as RGB bytes; any other index gives mid-grey `[160, 160, 160]`.
 pub fn axis_color(theme: Theme, axis: usize) -> [u8; 3] {
-    let _ = (theme, axis);
-    unimplemented!("m10-brand-viewport")
+    let palette = palette(theme);
+    let color = match axis {
+        0 => palette.axis_x,
+        1 => palette.axis_y,
+        2 => palette.axis_z,
+        _ => egui::Color32::from_rgb(160, 160, 160),
+    };
+    [color.r(), color.g(), color.b()]
 }
 
 /// The theme `visuals` belong to: Dark when `visuals.dark_mode`, else Light.
 pub fn theme_of(visuals: &egui::Visuals) -> Theme {
-    let _ = visuals;
-    unimplemented!("m10-brand-dialog-buttons")
+    if visuals.dark_mode {
+        Theme::Dark
+    } else {
+        Theme::Light
+    }
 }
 
 /// The fill of a primary button under the pointer: `palette(theme).action` blended 10%
