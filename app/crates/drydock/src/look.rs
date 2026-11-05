@@ -1,17 +1,20 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Subspace Systems
 
-//! The desktop look (`docs/specs/m6-native-look.md`): the OS's UI font loaded at run time,
-//! light or dark following the OS, flat square-ish controls and standard spacing. Pure
+//! The look (`docs/specs/m6-native-look.md`, `m10-brand-*`): the bundled Roboto fonts,
+//! light or dark following the OS, the brand palette and standard spacing. Pure
 //! functions over egui types so tests need no window.
 
-use std::path::PathBuf;
-use std::sync::Arc;
+use eframe::egui::{self, CornerRadius, FontDefinitions, FontFamily, Margin, Style};
 
-use eframe::egui::{self, CornerRadius, FontData, FontDefinitions, Margin, Style};
-
-/// Roboto, bundled: the fallback when the OS font can't be read, and for glyphs it lacks.
+/// Roboto Regular 2.138, bundled (`assets/fonts/README.md`).
 pub const ROBOTO: &[u8] = include_bytes!("../assets/fonts/Roboto-Regular.ttf");
+/// Roboto Medium 2.138.
+pub const ROBOTO_MEDIUM: &[u8] = include_bytes!("../assets/fonts/Roboto-Medium.ttf");
+/// Roboto Mono Regular 3.000 (static instance, wght 400).
+pub const ROBOTO_MONO: &[u8] = include_bytes!("../assets/fonts/RobotoMono-Regular.ttf");
+/// Roboto Mono Medium 3.000 (static instance, wght 500).
+pub const ROBOTO_MONO_MEDIUM: &[u8] = include_bytes!("../assets/fonts/RobotoMono-Medium.ttf");
 
 /// The colour scheme to draw with.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -20,7 +23,7 @@ pub enum Theme {
     Dark,
 }
 
-/// The operating systems whose UI fonts we know how to find.
+/// The operating systems we special-case (browser command, config folders).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Os {
     Windows,
@@ -143,78 +146,28 @@ pub fn style(theme: Theme) -> Style {
     style
 }
 
-/// Where the OS keeps its UI font, best first. Absolute paths to `.ttf`, `.otf` or `.ttc`
-/// files; Windows lists `segoeui.ttf`.
-pub fn font_candidates(os: Os) -> Vec<PathBuf> {
-    let paths: &[&str] = match os {
-        Os::Windows => &[
-            r"C:\Windows\Fonts\segoeui.ttf",
-            r"C:\Windows\Fonts\segoeuib.ttf",
-            r"C:\Windows\Fonts\segoeuil.ttf",
-            r"C:\Windows\Fonts\arial.ttf",
-        ],
-        Os::Mac => &[
-            "/System/Library/Fonts/SFNS.ttf",
-            "/System/Library/Fonts/Helvetica.ttc",
-            "/System/Library/Fonts/Supplemental/Arial.ttf",
-            "/Library/Fonts/Arial.ttf",
-        ],
-        Os::Linux => &[
-            "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
-            "/usr/share/fonts/opentype/noto/NotoSans-Regular.ttf",
-            "/usr/share/fonts/truetype/cantarell/Cantarell-Regular.ttf",
-            "/usr/share/fonts/truetype/ubuntu/Ubuntu-R.ttf",
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-            "/usr/share/fonts/TTF/DejaVuSans.ttf",
-        ],
-    };
-    paths.iter().map(PathBuf::from).collect()
+/// The family for Roboto Medium (weight 500): buttons and panel headers (`style()`).
+pub fn medium() -> FontFamily {
+    FontFamily::Name("medium".into())
 }
 
-/// The bytes of the first of `paths` that exists and starts like a font file (TrueType,
-/// OpenType, or a collection); `None` if there is none.
-pub fn first_readable_font(paths: &[PathBuf]) -> Option<Vec<u8>> {
-    paths.iter().find_map(|path| {
-        let bytes = std::fs::read(path).ok()?;
-        let signature = bytes.get(..4)?;
-        (signature == [0, 1, 0, 0]
-            || signature == b"OTTO"
-            || signature == b"true"
-            || signature == b"ttcf")
-            .then_some(bytes)
-    })
+/// The family for Roboto Mono Medium (weight 500): emphasised numbers.
+pub fn mono_medium() -> FontFamily {
+    FontFamily::Name("mono-medium".into())
 }
 
-/// The fonts to install: with `system` bytes, a font named "System" first in the
-/// Proportional family followed by Roboto; without, Roboto alone. Monospace is always
-/// Roboto. No egui default fonts.
-pub fn font_definitions(system: Option<Vec<u8>>) -> FontDefinitions {
-    let mut fonts = FontDefinitions::empty();
-    fonts
-        .font_data
-        .insert("Roboto".to_owned(), Arc::new(FontData::from_static(ROBOTO)));
-    let proportional = if let Some(bytes) = system {
-        fonts
-            .font_data
-            .insert("System".to_owned(), Arc::new(FontData::from_owned(bytes)));
-        vec!["System".to_owned(), "Roboto".to_owned()]
-    } else {
-        vec!["Roboto".to_owned()]
-    };
-    fonts
-        .families
-        .insert(egui::FontFamily::Proportional, proportional);
-    fonts
-        .families
-        .insert(egui::FontFamily::Monospace, vec!["Roboto".to_owned()]);
-    fonts
+/// The fonts to install, bundled only (`docs/specs/m10-brand-fonts.md`): font data keys
+/// "Roboto", "Roboto-Medium", "RobotoMono", "RobotoMono-Medium". Proportional is
+/// [Roboto], Monospace is [Roboto Mono], `medium()` is [Roboto Medium], `mono_medium()` is
+/// [Roboto Mono Medium]. Each family holds exactly that one font; no egui default fonts.
+pub fn font_definitions() -> FontDefinitions {
+    unimplemented!("m10-brand-fonts")
 }
 
-/// Installs the fonts (the OS's UI font if readable) and the style for the OS's theme, both
-/// the light and the dark one so a theme change in the OS applies at once.
+/// Installs the fonts and the style for the OS's theme, both the light and the dark one so
+/// a theme change in the OS applies at once.
 pub fn apply(ctx: &egui::Context) {
-    let system = first_readable_font(&font_candidates(Os::current()));
-    ctx.set_fonts(font_definitions(system));
+    ctx.set_fonts(font_definitions());
     ctx.set_style_of(egui::Theme::Light, style(Theme::Light));
     ctx.set_style_of(egui::Theme::Dark, style(Theme::Dark));
     ctx.set_theme(egui::ThemePreference::System);

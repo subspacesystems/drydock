@@ -79,7 +79,7 @@ fn row(buttons: &[(&'static str, bool, bool)]) -> Harness<'static, Row> {
                 got: Vec::new(),
             },
         );
-    h.ctx.set_fonts(look::font_definitions(None));
+    h.ctx.set_fonts(look::font_definitions());
     h.run();
     h
 }
@@ -175,7 +175,7 @@ fn geo_window() -> Harness<'static, Windows> {
             changed: 0,
         },
     );
-    h.ctx.set_fonts(look::font_definitions(None));
+    h.ctx.set_fonts(look::font_definitions());
     h.run();
     h
 }
