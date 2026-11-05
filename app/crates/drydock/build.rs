@@ -20,9 +20,19 @@ fn main() {
     )
     .unwrap_or_else(|error| panic!("{error}"));
     println!("cargo:rustc-env=DRYDOCK_VERSION={version}");
-    // Skeleton (m9-guide-dev): exports the folder but does not build the guide yet.
-    if let Ok(out) = std::env::var("OUT_DIR") {
-        println!("cargo:rustc-env=DRYDOCK_DEV_GUIDE={out}/guide");
+    let guide_src = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../docs/guide");
+    if guide_src.join("SUMMARY.md").exists() {
+        let out = Path::new(&std::env::var("OUT_DIR").unwrap()).join("guide");
+        if out.exists()
+            && let Err(error) = std::fs::remove_dir_all(&out)
+        {
+            panic!("failed to clear {}: {error}", out.display());
+        }
+        if let Err(error) = drydock_guide::build(&guide_src, &out) {
+            panic!("{error}");
+        }
+        println!("cargo:rustc-env=DRYDOCK_DEV_GUIDE={}", out.display());
+        println!("cargo:rerun-if-changed={}", guide_src.display());
     }
     let git_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../.git");
     for file in ["HEAD", "logs/HEAD"] {
