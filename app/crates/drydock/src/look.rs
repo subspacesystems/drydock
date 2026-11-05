@@ -146,6 +146,28 @@ pub fn style(theme: Theme) -> Style {
     style
 }
 
+/// The viewport colours for `theme` (`docs/specs/m10-brand-viewport.md`): `background` =
+/// `viewport_bg`, `default_line` = `edge`, `default_face` = `face_front`, `default_back` =
+/// `Some(face_back)`; all opaque, sRGB 0..1 (byte / 255). `sun` is `None`.
+pub fn viewport_style(theme: Theme) -> drydock_render::Style {
+    let _ = theme;
+    unimplemented!("m10-brand-viewport")
+}
+
+/// Set the colour fields of `style` (not `sun`) to those of `viewport_style(theme)`; true
+/// when anything changed, so the viewport must redraw.
+pub fn apply_viewport_theme(style: &mut drydock_render::Style, theme: Theme) -> bool {
+    let _ = (style, theme);
+    unimplemented!("m10-brand-viewport")
+}
+
+/// The colour of model axis `axis` (0 x, 1 y, 2 z) in `theme`: `palette(theme).axis_x` /
+/// `axis_y` / `axis_z` as RGB bytes; any other index gives mid-grey `[160, 160, 160]`.
+pub fn axis_color(theme: Theme, axis: usize) -> [u8; 3] {
+    let _ = (theme, axis);
+    unimplemented!("m10-brand-viewport")
+}
+
 /// The theme `visuals` belong to: Dark when `visuals.dark_mode`, else Light.
 pub fn theme_of(visuals: &egui::Visuals) -> Theme {
     let _ = visuals;
