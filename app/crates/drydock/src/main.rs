@@ -13,6 +13,7 @@ use std::process::ExitCode;
 use drydock::document::Document;
 use drydock::shading;
 use drydock::viewstate::{ViewState, scene_bounds};
+use drydock::window_icon::{APP_ID, window_icon};
 use drydock_render::{Style, render_headless};
 use drydock_view::StandardView;
 
@@ -162,7 +163,9 @@ fn main() -> ExitCode {
         viewport: eframe::egui::ViewportBuilder::default()
             .with_title("Drydock")
             .with_inner_size([1280.0, 800.0])
-            .with_drag_and_drop(true),
+            .with_drag_and_drop(true)
+            .with_app_id(APP_ID)
+            .with_icon(window_icon()),
         ..Default::default()
     };
     let file = args.file;

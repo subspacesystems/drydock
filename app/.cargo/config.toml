@@ -1,0 +1,5 @@
+# Local sctk-adwaita 0.10.1 with a skrifa title renderer: winit 0.30 asks for
+# sctk-adwaita's ab_glyph feature, which would pull the unmaintained ttf-parser
+# crate (RUSTSEC-2026-0192). Keep winit's GNOME title bar and avoid it.
+[patch.crates-io]
+sctk-adwaita = { path = "vendor/sctk-adwaita" }
