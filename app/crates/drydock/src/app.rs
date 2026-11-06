@@ -34,6 +34,7 @@ use drydock::mesh_import::{self, MeshUnit, UnitsOutcome};
 use drydock::model_source::{
     entry_for_path, import_component_from, import_meshes_from, local_source_for,
 };
+use drydock::open_buttons::OpenMode;
 use drydock::overlay::{self, Primitive};
 use drydock::print_setup::{
     self, FitReport, PrintSettings, PrintSetupEvent, PrintSetupTexts, PrintSetupView,
@@ -3603,17 +3604,6 @@ enum DialogOutcome {
     Pending,
     Open(PathBuf),
     Cancel,
-}
-
-/// What an `OpenDialog` is picking a file for.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum OpenMode {
-    /// Replace the open document.
-    Open,
-    /// Add the file as a component source.
-    Component,
-    /// Add the file's groups to the open model.
-    Models,
 }
 
 /// A minimal open-file dialog in plain egui: browse folders, pick a model file, or type
