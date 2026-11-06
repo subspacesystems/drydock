@@ -406,6 +406,7 @@ fn view_groups_axes_panels_and_layout_items_apart() {
         "Entity Info",
         "Materials",
         "Components",
+        "Tags",
         "Shadows",
         "Texture Position",
         "Toolbars",
@@ -418,7 +419,7 @@ fn view_groups_axes_panels_and_layout_items_apart() {
     }
     let gap = |a: usize| rects[a + 1].top() - rects[a].bottom();
     let normal = gap(1); // Entity Info -> Materials
-    for inside in [1, 2, 3, 4, 6] {
+    for inside in [1, 2, 3, 4, 5, 7] {
         assert!(
             (gap(inside) - normal).abs() < 0.5,
             "{} -> {} should be in one group",
@@ -426,7 +427,7 @@ fn view_groups_axes_panels_and_layout_items_apart() {
             order[inside + 1]
         );
     }
-    for split in [0, 5, 7] {
+    for split in [0, 6, 8] {
         assert!(
             gap(split) >= normal + 3.0,
             "a separator between {} and {} (gap {}, normal {normal})",
