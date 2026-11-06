@@ -4,7 +4,8 @@
 //! A whole model: the root body, component and group definitions with their own bodies,
 //! instances placing definitions with a transform, and materials.
 //!
-//! Behaviour: `docs/specs/m1-model.md`, guides: `docs/specs/m3-guides-model.md`. Like `topology`, every change is a `ModelRecord`
+//! Behaviour: `docs/specs/m1-model.md`, guides: `docs/specs/m3-guides-model.md`, tags:
+//! `docs/specs/m10-tags-kernel.md`. Like `topology`, every change is a `ModelRecord`
 //! that `ModelRecord::inverse` undoes; `UndoStack` keeps labelled `ModelEdit`s.
 
 use std::collections::BTreeMap;
@@ -13,6 +14,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use glam::{DMat4, DVec2};
 
 use crate::sun::{Geolocation, ShadowSettings};
+use crate::tags::{TagId, TagRecord, Tags};
 use crate::tape::{Guide, GuideId, Guides};
 use crate::texture::TextureMap;
 use crate::topology::{Context, Edit, FaceId, Record, TopoError, Violation};
@@ -228,6 +230,9 @@ pub enum ModelRecord {
         from: crate::units::LengthFormat,
         to: crate::units::LengthFormat,
     },
+    /// A change to the tags or to the tag an instance carries
+    /// (`docs/specs/m10-tags-kernel.md`).
+    Tag(TagRecord),
 }
 
 impl ModelRecord {
@@ -290,6 +295,7 @@ impl ModelRecord {
                 from: *to,
                 to: *from,
             },
+            ModelRecord::Tag(record) => ModelRecord::Tag(record.inverse()),
         }
     }
 }
@@ -353,6 +359,16 @@ pub enum ModelError {
     /// A geolocation or shadow setting is non-finite or out of range
     /// (`docs/specs/m5-geo-model.md`).
     BadSettings,
+    /// No tag with this id (`docs/specs/m10-tags-kernel.md`).
+    MissingTag(TagId),
+    /// A tag name that is empty or only whitespace.
+    BadTagName,
+    /// A `RemoveTag` record while an instance still carries the tag.
+    TagInUse(TagId),
+    /// A `RemoveInstance` record for an instance that still carries a tag.
+    InstanceTagged(InstanceId),
+    /// No instance with this id in any body.
+    UnknownInstance(InstanceId),
 }
 
 /// A broken model invariant found by `Model::validate`.
@@ -365,8 +381,8 @@ pub enum ModelViolation {
     GroupInstances(DefinitionId, usize),
 }
 
-/// A whole model. Equality compares the root, definitions, materials, geolocation and
-/// shadow settings, not id counters.
+/// A whole model. Equality compares the root, definitions, materials, geolocation, shadow
+/// settings, length format and tags, not id counters.
 #[derive(Clone, Debug, Default)]
 pub struct Model {
     root: Body,
@@ -380,6 +396,7 @@ pub struct Model {
     geolocation: Geolocation,
     shadows: ShadowSettings,
     length_format: LengthFormat,
+    tags: Tags,
 }
 
 /// A process-unique identity; a clone takes a fresh one, so caches keyed on it never
@@ -409,6 +426,7 @@ impl PartialEq for Model {
             && self.geolocation == other.geolocation
             && self.shadows == other.shadows
             && self.length_format == other.length_format
+            && self.tags == other.tags
     }
 }
 
@@ -536,7 +554,8 @@ impl Model {
         }
     }
 
-    fn instance_location(&self, id: InstanceId) -> Option<BodyId> {
+    /// The body holding the instance (instance ids are unique across the model).
+    pub(crate) fn instance_location(&self, id: InstanceId) -> Option<BodyId> {
         if self.root.instance(id).is_some() {
             return Some(BodyId::Root);
         }
@@ -592,6 +611,16 @@ impl Model {
     }
 
     // -- queries --------------------------------------------------------------------
+
+    /// The model's tags and their assignments (`docs/specs/m10-tags-kernel.md`).
+    pub fn tags(&self) -> &Tags {
+        &self.tags
+    }
+
+    #[allow(dead_code)] // skeleton: used by the tag operations (m10-tags-kernel)
+    pub(crate) fn tags_mut(&mut self) -> &mut Tags {
+        &mut self.tags
+    }
 
     pub fn root(&self) -> &Body {
         &self.root
@@ -920,6 +949,10 @@ impl Model {
             .instance(id)
             .cloned()
             .ok_or(ModelError::MissingInstance(body, id))?;
+        if self.tags.instance_tag(id).is_some() {
+            // untag first, so undo gives the tag back and no assignment is left dangling
+            self.assign_tag(id, None, log)?;
+        }
         let record = ModelRecord::RemoveInstance(body, id, data);
         self.apply(&record)?;
         log.records.push(record);
@@ -1169,6 +1202,9 @@ impl Model {
                 if stored != instance {
                     return Err(ModelError::Mismatch);
                 }
+                if self.tags.instance_tag(*id).is_some() {
+                    return Err(ModelError::InstanceTagged(*id));
+                }
                 if let Some(b) = self.body_mut(*body) {
                     b.instances.remove(id);
                 }
@@ -1289,6 +1325,7 @@ impl Model {
                 self.shadows = *to;
                 Ok(())
             }
+            ModelRecord::Tag(record) => self.apply_tag_record(record),
         }
     }
 
