@@ -10,6 +10,8 @@
 
 use std::path::{Path, PathBuf};
 
+use crate::window_icon::{APP_ID, ICON_PNG};
+
 /// Icon sizes written under `icons/hicolor/<n>x<n>/apps/`, in this order. The 256 px icon is
 /// `window_icon::ICON_PNG` itself; the others are scaled down from it.
 pub const ICON_SIZES: [u32; 3] = [48, 128, 256];
@@ -41,21 +43,75 @@ pub fn data_dir_from(xdg_data_home: Option<&str>, home: Option<&str>) -> Option<
 /// followed by ` %f`, escaped as the spec describes (quoting rules, then the file's
 /// string-escape rule, then `%` doubled).
 pub fn exec_line(exe: &Path) -> String {
-    let _ = exe;
-    unimplemented!("m9-linux-desktop-entry")
+    let path = exe.to_string_lossy();
+    let mut quoted = String::from("\"");
+    for c in path.chars() {
+        match c {
+            '"' | '`' | '$' | '\\' => quoted.push('\\'),
+            _ => {}
+        }
+        quoted.push(c);
+    }
+    quoted.push('"');
+    let escaped: String = quoted
+        .chars()
+        .flat_map(|c| match c {
+            '\\' => vec![c, c],
+            '%' => vec!['%', '%'],
+            c => vec![c],
+        })
+        .collect();
+    format!("{escaped} %f")
 }
 
 /// The text of `<APP_ID>.desktop` for the program at `exe`.
 pub fn desktop_entry_text(exe: &Path) -> String {
-    let _ = exe;
-    unimplemented!("m9-linux-desktop-entry")
+    format!(
+        "[Desktop Entry]\n\
+         Type=Application\n\
+         Name=Drydock\n\
+         Comment=3D modeler for architecture and woodworking\n\
+         Exec={exec}\n\
+         Icon={APP_ID}\n\
+         Terminal=false\n\
+         Categories=Graphics;3DGraphics;\n\
+         StartupWMClass={APP_ID}\n",
+        exec = exec_line(exe)
+    )
 }
 
 /// Every file to keep up to date under `data_dir`, with its wanted bytes: the desktop entry
 /// first, then the icons in [`ICON_SIZES`] order.
 pub fn files_for(data_dir: &Path, exe: &Path) -> Vec<DesktopFile> {
-    let _ = (data_dir, exe);
-    unimplemented!("m9-linux-desktop-entry")
+    let mut files = vec![DesktopFile {
+        path: data_dir
+            .join("applications")
+            .join(format!("{APP_ID}.desktop")),
+        bytes: desktop_entry_text(exe).into_bytes(),
+    }];
+    let full = image::load_from_memory_with_format(ICON_PNG, image::ImageFormat::Png)
+        .expect("embedded icon PNG must decode")
+        .to_rgba8();
+    for n in ICON_SIZES {
+        let bytes = if n == full.width() {
+            ICON_PNG.to_vec()
+        } else {
+            let scaled =
+                image::imageops::resize(&full, n, n, image::imageops::FilterType::Lanczos3);
+            let mut png = Vec::new();
+            scaled
+                .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+                .expect("png encodes");
+            png
+        };
+        files.push(DesktopFile {
+            path: data_dir
+                .join("icons/hicolor")
+                .join(format!("{n}x{n}/apps/{APP_ID}.png")),
+            bytes,
+        });
+    }
+    files
 }
 
 /// Write each file of [`files_for`] that is missing or whose bytes differ, creating the
