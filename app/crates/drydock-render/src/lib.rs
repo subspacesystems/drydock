@@ -236,7 +236,6 @@ pub struct Viewport {
     pub color: wgpu::Texture,
     pub color_view: wgpu::TextureView,
     /// A view of `color` in [`DISPLAY_FORMAT`], for handing to egui.
-    /// TODO(m10-viewport-gamma): skeleton; still an sRGB view.
     pub display_view: wgpu::TextureView,
     msaa_view: Option<wgpu::TextureView>,
     _msaa_color: Option<wgpu::Texture>,
@@ -943,10 +942,13 @@ impl Renderer {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                 | wgpu::TextureUsages::COPY_SRC
                 | wgpu::TextureUsages::TEXTURE_BINDING,
-            view_formats: &[],
+            view_formats: &[DISPLAY_FORMAT],
         });
         let color_view = color.create_view(&wgpu::TextureViewDescriptor::default());
-        let display_view = color.create_view(&wgpu::TextureViewDescriptor::default());
+        let display_view = color.create_view(&wgpu::TextureViewDescriptor {
+            format: Some(DISPLAY_FORMAT),
+            ..wgpu::TextureViewDescriptor::default()
+        });
         let (msaa_texture, msaa_view) = if SAMPLE_COUNT > 1 {
             let texture = device.create_texture(&wgpu::TextureDescriptor {
                 label: Some("drydock-render multisample color"),
