@@ -17,6 +17,9 @@ use eframe::egui::{self, Sense, Stroke, Vec2, vec2};
 pub struct TagsPanel {
     /// The tag being renamed and the text typed so far.
     pub editing: Option<(TagId, String)>,
+    /// Group and component instances in the selection; the app sets it every frame. The
+    /// assign buttons are enabled only when it is above 0.
+    pub selected: usize,
 }
 
 /// What the user asked for in the panel this frame.
@@ -30,6 +33,9 @@ pub enum TagAction {
     SetVisible(TagId, bool),
     /// The delete button was clicked.
     Delete(TagId),
+    /// An assign button was clicked: give the selected instances this tag (`None` = the
+    /// "No tag" button, which untags them).
+    Assign(Option<TagId>),
 }
 
 /// The name for a new tag: `Tag N` with the smallest N >= 1 no tag already has (compared

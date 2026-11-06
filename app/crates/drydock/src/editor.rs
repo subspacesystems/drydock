@@ -2723,6 +2723,16 @@ impl Editor {
         }
     }
 
+    /// Give every group and component instance in the selection the tag, or untag them with
+    /// `None`, as one undo step "Assign Tag" (or "Remove Tag" for `None`). Selected edges and
+    /// faces are ignored. True when something changed; false (no step) when the selection has
+    /// no instance, nothing would change, or the tag doesn't exist (the last sets a message).
+    /// Behaviour: `docs/specs/m10-tags-assign.md`.
+    pub fn assign_selection_tag(&mut self, model: &mut Model, tag: Option<TagId>) -> bool {
+        let _ = (model, tag);
+        unimplemented!("m10-tags-assign")
+    }
+
     /// Rename a tag as one undo step "Rename Tag". True when accepted (also when the name is
     /// unchanged: no step then); false with a message when refused.
     pub fn rename_tag(&mut self, model: &mut Model, id: TagId, name: &str) -> bool {

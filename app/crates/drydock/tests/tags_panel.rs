@@ -76,6 +76,9 @@ fn apply(editor: &mut Editor, model: &mut Model, action: TagAction) {
         TagAction::Delete(id) => {
             editor.remove_tag(model, id);
         }
+        TagAction::Assign(tag) => {
+            editor.assign_selection_tag(model, tag);
+        }
     }
 }
 

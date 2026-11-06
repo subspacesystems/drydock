@@ -14,6 +14,7 @@
 
 use drydock_kernel::model::{BodyId, DefinitionId, InstanceId, MaterialId, Model};
 use drydock_kernel::select::Entity;
+use drydock_kernel::tags::TagId;
 use drydock_kernel::tools::scale::bounds;
 use drydock_kernel::units::Unit;
 use eframe::egui;
@@ -285,6 +286,25 @@ pub fn material_label(model: &Model, material: Shared<Option<MaterialId>>) -> St
     }
 }
 
+/// The tag shared by the group and component instances in `selection` that `body` has:
+/// `None` when there are none, else `Same(tag)` (`Same(None)` = untagged) or `Varies`.
+/// Behaviour: `docs/specs/m10-tags-assign.md`.
+pub fn selection_tag(
+    model: &Model,
+    body: BodyId,
+    selection: &[Entity],
+) -> Option<Shared<Option<TagId>>> {
+    let _ = (model, body, selection);
+    unimplemented!("m10-tags-assign")
+}
+
+/// The Tag dropdown's text for `tag`: "No tag", "Mixed", or the tag's name ("?" when the
+/// model doesn't have it).
+pub fn tag_label(model: &Model, tag: Shared<Option<TagId>>) -> String {
+    let _ = (model, tag);
+    unimplemented!("m10-tags-assign")
+}
+
 /// What the user asked for in the panel this frame.
 #[derive(Clone, Debug, PartialEq)]
 pub enum InfoAction {
@@ -292,6 +312,9 @@ pub enum InfoAction {
     RenameInstance(InstanceId, String),
     /// The Repair button for this group or component (`docs/specs/m7-solid-ui.md`).
     Repair(InstanceId),
+    /// A choice in the Tag dropdown: give every selected group and component this tag
+    /// (`None` = "No tag").
+    SetTag(Option<TagId>),
 }
 
 /// The panel's state between frames: the name fields' text.
