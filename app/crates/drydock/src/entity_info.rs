@@ -17,7 +17,7 @@ use drydock_kernel::select::Entity;
 use drydock_kernel::tags::TagId;
 use drydock_kernel::tools::scale::bounds;
 use drydock_kernel::units::Unit;
-use eframe::egui;
+use eframe::egui::{self, TextWrapMode};
 use glam::DVec3;
 
 use crate::solid_ui::{can_repair, status_rows_numbered};
@@ -453,28 +453,8 @@ pub fn entity_info_panel(
         }
     }
 
-    if let Some(shared) = selection_tag(model, body, selection) {
-        egui::ComboBox::from_label("Tag")
-            .selected_text(tag_label(model, shared))
-            .show_ui(ui, |ui| {
-                let current = matches!(shared, Shared::Same(None));
-                if ui.selectable_label(current, "No tag").clicked() && !current && action.is_none()
-                {
-                    action = Some(InfoAction::SetTag(None));
-                }
-                for id in crate::tags_panel::listed_tags(model) {
-                    let Some(tag) = model.tag(id) else {
-                        continue;
-                    };
-                    let current = matches!(shared, Shared::Same(Some(selected)) if selected == id);
-                    if ui.selectable_label(current, &tag.name).clicked()
-                        && !current
-                        && action.is_none()
-                    {
-                        action = Some(InfoAction::SetTag(Some(id)));
-                    }
-                }
-            });
+      if let Some(shared) = selection_tag(model, body, selection) {
+        tag_row(ui, shared, model, &mut action);
     }
 
     let solid = panel.solid.get(model, body, selection).map(|status| {
