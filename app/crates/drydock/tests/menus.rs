@@ -280,22 +280,21 @@ fn tools_menu_marks_only_the_current_tool() {
 #[test]
 fn about_lines_name_version_license_and_contributors() {
     let lines = about_lines();
-    assert_eq!(lines[0], "Subspace Drydock");
-    assert_eq!(lines[1], "by Subspace Systems");
-    assert_eq!(lines[2], about_text());
+    assert_eq!(lines[0], about_text());
+    assert_eq!(lines[1], "A Subspace Systems product.");
     assert_eq!(
-        lines[3],
+        lines[2],
         "License: GPL-3.0-or-later"
     );
-    assert_eq!(lines[4], "Copyright (c) 2026 Subspace Systems");
-    assert_eq!(lines[5], "Contributors:");
+    assert_eq!(lines[3], "Copyright (c) 2026 Subspace Systems");
+    assert_eq!(lines[4], "Contributors:");
     let names: Vec<&str> = CONTRIBUTORS
         .lines()
         .map(str::trim)
         .filter(|l| !l.is_empty() && !l.starts_with('#'))
         .collect();
     assert!(!names.is_empty());
-    assert_eq!(&lines[6..], names.as_slice());
+    assert_eq!(&lines[5..], names.as_slice());
     assert!(lines.iter().any(|l| l == "Tyrel Haveman"));
     assert!(lines.iter().all(|l| !l.starts_with('#') && !l.is_empty()));
 }
