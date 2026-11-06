@@ -7,7 +7,7 @@
 
 use std::path::{Path, PathBuf};
 
-use drydock_kernel::model::Model;
+use drydock_kernel::model::{BodyId, Model};
 use drydock_kernel::select::Entity;
 use drydock_mesh::print_mesh::{self, PrintObject};
 use drydock_mesh::print_mesh::{PrintMesh, PrintOptions, PrintScope, Skipped};
@@ -98,7 +98,7 @@ pub struct ExportReport {
 /// Whether the open model has anything to export: its root body holds at least one group
 /// or component instance (loose geometry alone does not count).
 pub fn can_export(model: &Model) -> bool {
-    model.root().instances().next().is_some()
+    model.visible_instances(BodyId::Root).next().is_some()
 }
 
 /// The save dialog's suggested name for an export of the document at `document_path`: the

@@ -105,7 +105,7 @@ pub struct PrintMesh {
 pub fn print_mesh(model: &Model, scope: PrintScope, options: &PrintOptions) -> PrintMesh {
     let mut out = PrintMesh::default();
     let mut reports: BTreeMap<DefinitionId, SolidReport> = BTreeMap::new();
-    for (id, instance) in model.root().instances() {
+    for (id, instance) in model.visible_instances(BodyId::Root) {
         if let PrintScope::Instances(ids) = scope
             && !ids.contains(&id)
         {
@@ -182,7 +182,7 @@ fn walk(
     }
 
     if depth < 64 {
-        for (_, child) in body.instances() {
+        for (_, child) in model.visible_instances(BodyId::Definition(definition)) {
             let child_name = object_name(model, child);
             walk(
                 model,
