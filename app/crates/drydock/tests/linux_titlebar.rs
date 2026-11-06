@@ -122,11 +122,11 @@ fn icon_is_our_artwork_not_a_blank_or_default() {
     };
     // Rounded tile: the corner is transparent, the middle of the left edge is the navy tile.
     assert_eq!(px(0, 0)[3], 0, "corner is transparent");
-    assert_eq!(px(w / 20, w / 2), [0x14, 0x2B, 0x4A, 255], "tile colour");
+    assert_eq!(px(w / 20, w / 2), [0x09, 0x11, 0x26, 255], "tile colour");
     // The cube's top face is near white.
     assert_eq!(
         px(w / 2, w * 33 / 100),
-        [0xF2, 0xF6, 0xFB, 255],
+        [0xEE, 0xF7, 0xFF, 255],
         "cube top face"
     );
 }
@@ -140,7 +140,7 @@ fn icon_png_is_the_256_frame_of_the_ico() {
     let found = ico.windows(ICON_PNG.len()).any(|w| w == ICON_PNG);
     assert!(
         found,
-        "drydock-256.png differs from the .ico's 256 px frame: rerun make-icon.py"
+        "drydock-256.png differs from the .ico's 256 px frame: rerun write_icon_files"
     );
 }
 
@@ -158,6 +158,7 @@ fn the_window_is_built_with_the_app_id_and_our_icon() {
 }
 
 #[test]
-fn make_icon_writes_the_png() {
-    assert!(read("assets/make-icon.py").contains("drydock-256.png"));
+fn app_icon_writer_writes_the_png() {
+    let writer = read("tests/app_icon.rs");
+    assert!(writer.contains("drydock-256.png") && writer.contains("write_icon_files"));
 }
