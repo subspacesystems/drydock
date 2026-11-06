@@ -320,6 +320,51 @@ pub fn tag_label(model: &Model, tag: Shared<Option<TagId>>) -> String {
     }
 }
 
+/// The Tag row: the label on the left, then a dropdown as wide as the space left in the
+/// row. Long names are truncated in the box and in the menu so they never widen the panel.
+fn tag_row(
+    ui: &mut egui::Ui,
+    shared: Shared<Option<TagId>>,
+    model: &Model,
+    action: &mut Option<InfoAction>,
+) {
+    ui.horizontal(|ui| {
+        ui.label("Tag");
+        let width = ui.available_width().max(60.0);
+        let text = tag_label(model, shared);
+        let enabled = ui.is_enabled();
+        let combo = egui::ComboBox::from_id_salt("entity_info_tag")
+            .width(width)
+            .truncate()
+            .selected_text(text.clone())
+            .show_ui(ui, |ui| {
+                ui.style_mut().wrap_mode = Some(TextWrapMode::Truncate);
+                let current = matches!(shared, Shared::Same(None));
+                if ui.selectable_label(current, "No tag").clicked() && !current && action.is_none()
+                {
+                    *action = Some(InfoAction::SetTag(None));
+                }
+                for id in crate::tags_panel::listed_tags(model) {
+                    let Some(tag) = model.tag(id) else {
+                        continue;
+                    };
+                    let current = matches!(shared, Shared::Same(Some(selected)) if selected == id);
+                    if ui.selectable_label(current, &tag.name).clicked()
+                        && !current
+                        && action.is_none()
+                    {
+                        *action = Some(InfoAction::SetTag(Some(id)));
+                    }
+                }
+            });
+        combo.response.widget_info(|| {
+            let mut info = egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, enabled, "Tag");
+            info.current_text_value = Some(text.clone());
+            info
+        });
+    });
+}
+
 /// What the user asked for in the panel this frame.
 #[derive(Clone, Debug, PartialEq)]
 pub enum InfoAction {
@@ -453,7 +498,7 @@ pub fn entity_info_panel(
         }
     }
 
-      if let Some(shared) = selection_tag(model, body, selection) {
+    if let Some(shared) = selection_tag(model, body, selection) {
         tag_row(ui, shared, model, &mut action);
     }
 
