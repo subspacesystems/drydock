@@ -2720,12 +2720,43 @@ impl Editor {
         unimplemented!("m10-tags-panel")
     }
 
-    /// Show or hide a tag as one undo step "Show Tag" / "Hide Tag". True when accepted (also
-    /// when unchanged: no step then). `m10-tags-hidden-selection` extends this to drop the
-    /// tag's instances from the selection.
+    /// Show or hide a tag as one undo step "Show Tag" / "Hide Tag". False, with no step, when
+    /// the tag is missing or already has that visibility. Hiding drops the tag's instances
+    /// from the selection and closes an edit path through one.
     pub fn set_tag_visible(&mut self, model: &mut Model, id: TagId, visible: bool) -> bool {
-        let _ = (model, id, visible);
-        unimplemented!("m10-tags-panel")
+        let Some(tag) = model.tag(id) else {
+            self.message = Some("Can't change that tag".to_string());
+            return false;
+        };
+        if tag.visible == visible {
+            self.message = None;
+            return false;
+        }
+        let mut log = ModelEdit::new();
+        if model.set_tag_visible(id, visible, &mut log).is_err() {
+            self.message = Some("Can't change that tag".to_string());
+            return false;
+        }
+        let label = if visible { "Show Tag" } else { "Hide Tag" };
+        self.undo.push(label, log);
+        self.message = None;
+        if !visible {
+            self.selection.retain(|entity| match entity {
+                Entity::Instance(instance) => model.instance_visible(*instance),
+                _ => true,
+            });
+            if let Some(index) = self
+                .path
+                .steps
+                .iter()
+                .position(|instance| !model.instance_visible(*instance))
+            {
+                while self.path.steps.len() > index {
+                    self.close_path();
+                }
+            }
+        }
+        true
     }
 
     /// Delete a tag (its instances become untagged) as one undo step "Delete Tag". True when
