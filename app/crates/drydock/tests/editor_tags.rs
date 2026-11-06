@@ -117,8 +117,8 @@ fn show_and_hide_are_one_step_each_with_their_own_label() {
     assert_eq!(undo_label(&editor).as_deref(), Some("Show Tag"));
     assert_eq!(steps(&editor), 3);
 
-    // Unchanged: accepted, no step.
-    assert!(editor.set_tag_visible(&mut model, id, true));
+    // Unchanged: refused, no step (m10-tags-hidden-selection).
+    assert!(!editor.set_tag_visible(&mut model, id, true));
     assert_eq!(steps(&editor), 3);
 
     assert!(editor.key(EditKey::Undo, &mut model));
