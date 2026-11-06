@@ -615,6 +615,7 @@ version = "0.9.0"
 dependencies = [
  "bytemuck",
  "drydock-dae",
+ "drydock-kernel",
  "drydock-view",
  "glam",
  "image",
