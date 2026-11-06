@@ -112,6 +112,37 @@ pub fn tags_panel(ui: &mut egui::Ui, panel: &mut TagsPanel, model: &Model) -> Op
                         .editing
                         .as_ref()
                         .is_some_and(|(editing_id, _)| *editing_id == id);
+                    let left_width = ui.available_width();
+                    let assign_clicked = {
+                        let enabled = panel.selected > 0;
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            let delete_enabled = ui.is_enabled();
+                            let delete = ui.button("x");
+                            delete.widget_info(|| {
+                                egui::WidgetInfo::labeled(
+                                    egui::WidgetType::Button,
+                                    delete_enabled,
+                                    format!("Delete {}", tag.name),
+                                )
+                            });
+                            if delete.clicked() && action.is_none() {
+                                action = Some(TagAction::Delete(id));
+                            }
+                            let assign = ui.add_enabled(enabled, egui::Button::new("Assign"));
+                            assign.widget_info(|| {
+                                egui::WidgetInfo::labeled(
+                                    egui::WidgetType::Button,
+                                    enabled,
+                                    format!("Assign selection to {}", tag.name),
+                                )
+                            });
+                            assign.clicked() && action.is_none()
+                        })
+                        .inner
+                    };
+                    if assign_clicked {
+                        action = Some(TagAction::Assign(Some(id)));
+                    }
                     if editing_this {
                         let mut text = panel
                             .editing
@@ -121,7 +152,7 @@ pub fn tags_panel(ui: &mut egui::Ui, panel: &mut TagsPanel, model: &Model) -> Op
                         let text_id = ui.make_persistent_id(("tag-rename", id));
                         let mut output = egui::TextEdit::singleline(&mut text)
                             .id(text_id)
-                            .desired_width(f32::INFINITY)
+                            .desired_width(f32::max(left_width, 40.0))
                             .show(ui);
                         let has_focus = output.response.has_focus();
                         let lost_focus = output.response.lost_focus();
@@ -142,37 +173,14 @@ pub fn tags_panel(ui: &mut egui::Ui, panel: &mut TagsPanel, model: &Model) -> Op
                             panel.editing = Some((id, text));
                         }
                     } else {
-                        let response = ui.add(egui::Label::new(&tag.name).sense(Sense::click()));
+                        let (_pos, _galley, response) = egui::Label::new(&tag.name)
+                            .truncate()
+                            .sense(Sense::click())
+                            .layout_in_ui(ui);
                         if response.double_clicked() {
                             panel.editing = Some((id, tag.name.clone()));
                             ui.ctx().request_repaint();
                         }
-                    }
-
-                    let enabled = panel.selected > 0;
-                    let response = ui.add_enabled(enabled, egui::Button::new("Assign"));
-                    response.widget_info(|| {
-                        egui::WidgetInfo::labeled(
-                            egui::WidgetType::Button,
-                            enabled,
-                            format!("Assign selection to {}", tag.name),
-                        )
-                    });
-                    if response.clicked() && action.is_none() {
-                        action = Some(TagAction::Assign(Some(id)));
-                    }
-
-                    let enabled = ui.is_enabled();
-                    let response = ui.button("x");
-                    response.widget_info(|| {
-                        egui::WidgetInfo::labeled(
-                            egui::WidgetType::Button,
-                            enabled,
-                            format!("Delete {}", tag.name),
-                        )
-                    });
-                    if response.clicked() && action.is_none() {
-                        action = Some(TagAction::Delete(id));
                     }
                 });
                 if let Some((id, text)) = end_rename {
