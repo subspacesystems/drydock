@@ -20,6 +20,9 @@ use wgpu::util::DeviceExt;
 
 /// The color format every viewport texture uses.
 pub const COLOR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
+/// The format of [`Viewport::display_view`]: the same bytes read as plain (not sRGB-aware)
+/// values, which is what egui's shader expects of the textures it draws.
+pub const DISPLAY_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 /// Share of a lit material's color that doesn't depend on the angle to the viewer.
 /// Faces seen head-on show their full color; faces seen edge-on show `AMBIENT` of it.
 pub const AMBIENT: f32 = 0.4;
@@ -232,6 +235,9 @@ pub struct Viewport {
     /// Color texture in [`COLOR_FORMAT`], usable as a texture binding and copy source.
     pub color: wgpu::Texture,
     pub color_view: wgpu::TextureView,
+    /// A view of `color` in [`DISPLAY_FORMAT`], for handing to egui.
+    /// TODO(m10-viewport-gamma): skeleton; still an sRGB view.
+    pub display_view: wgpu::TextureView,
     msaa_view: Option<wgpu::TextureView>,
     _msaa_color: Option<wgpu::Texture>,
     _depth: wgpu::Texture,
@@ -940,6 +946,7 @@ impl Renderer {
             view_formats: &[],
         });
         let color_view = color.create_view(&wgpu::TextureViewDescriptor::default());
+        let display_view = color.create_view(&wgpu::TextureViewDescriptor::default());
         let (msaa_texture, msaa_view) = if SAMPLE_COUNT > 1 {
             let texture = device.create_texture(&wgpu::TextureDescriptor {
                 label: Some("drydock-render multisample color"),
@@ -972,6 +979,7 @@ impl Renderer {
             height,
             color,
             color_view,
+            display_view,
             msaa_view,
             _msaa_color: msaa_texture,
             _depth: depth,

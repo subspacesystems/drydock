@@ -1802,14 +1802,14 @@ impl App {
             match gpu.texture {
                 Some(id) => egui_renderer.update_egui_texture_from_wgpu_texture(
                     &state.device,
-                    &viewport.color_view,
+                    &viewport.display_view,
                     wgpu::FilterMode::Linear,
                     id,
                 ),
                 None => {
                     gpu.texture = Some(egui_renderer.register_native_texture(
                         &state.device,
-                        &viewport.color_view,
+                        &viewport.display_view,
                         wgpu::FilterMode::Linear,
                     ));
                 }
