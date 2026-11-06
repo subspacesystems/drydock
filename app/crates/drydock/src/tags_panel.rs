@@ -140,43 +140,46 @@ pub fn tags_panel(ui: &mut egui::Ui, panel: &mut TagsPanel, model: &Model) -> Op
                         }
 
                         let left_width = ui.available_width();
-                        if editing_this {
-                            let mut text = panel
-                                .editing
-                                .as_ref()
-                                .map(|(_, text)| text.clone())
-                                .unwrap_or_default();
-                            let text_id = ui.make_persistent_id(("tag-rename", id));
-                            let mut output = egui::TextEdit::singleline(&mut text)
-                                .id(text_id)
-                                .desired_width(f32::max(left_width, 40.0))
-                                .show(ui);
-                            let has_focus = output.response.has_focus();
-                            let lost_focus = output.response.lost_focus();
-                            let escape = ui.input(|input| input.key_pressed(egui::Key::Escape));
-                            if escape {
-                                end_rename = Some((id, None));
-                            } else if lost_focus {
-                                end_rename = Some((id, Some(text.clone())));
+                        ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                            if editing_this {
+                                let mut text = panel
+                                    .editing
+                                    .as_ref()
+                                    .map(|(_, text)| text.clone())
+                                    .unwrap_or_default();
+                                let text_id = ui.make_persistent_id(("tag-rename", id));
+                                let mut output = egui::TextEdit::singleline(&mut text)
+                                    .id(text_id)
+                                    .desired_width(f32::max(left_width, 40.0))
+                                    .show(ui);
+                                let has_focus = output.response.has_focus();
+                                let lost_focus = output.response.lost_focus();
+                                let escape = ui.input(|input| input.key_pressed(egui::Key::Escape));
+                                if escape {
+                                    end_rename = Some((id, None));
+                                } else if lost_focus {
+                                    end_rename = Some((id, Some(text.clone())));
+                                } else {
+                                    if !has_focus {
+                                        output.response.request_focus();
+                                        output.state.cursor.set_char_range(Some(
+                                            egui::text::CCursorRange::select_all(&output.galley),
+                                        ));
+                                        output.state.store(ui.ctx(), output.response.id);
+                                        ui.ctx().request_repaint();
+                                    }
+                                    panel.editing = Some((id, text));
+                                }
                             } else {
-                                if !has_focus {
-                                    output.response.request_focus();
-                                    output.state.cursor.set_char_range(Some(
-                                        egui::text::CCursorRange::select_all(&output.galley),
-                                    ));
-                                    output.state.store(ui.ctx(), output.response.id);
+                                let response = ui.add(
+                                    egui::Label::new(&tag.name).truncate().sense(Sense::click()),
+                                );
+                                if response.double_clicked() {
+                                    panel.editing = Some((id, tag.name.clone()));
                                     ui.ctx().request_repaint();
                                 }
-                                panel.editing = Some((id, text));
                             }
-                        } else {
-                            let response = ui
-                                .add(egui::Label::new(&tag.name).truncate().sense(Sense::click()));
-                            if response.double_clicked() {
-                                panel.editing = Some((id, tag.name.clone()));
-                                ui.ctx().request_repaint();
-                            }
-                        }
+                        });
                     });
                 });
                 if let Some((id, text)) = end_rename {
