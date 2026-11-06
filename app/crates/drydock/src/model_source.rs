@@ -307,10 +307,21 @@ pub fn import_component_from(
 /// trimmed; blank = "Component") that `drydock_kernel::copy::import_component` refused with
 /// `error`. Behaviour: `docs/specs/m10-import-component-tolerant.md`.
 pub fn import_failure_message(name: &str, error: &CopyError) -> String {
-    // Skeleton (m10-import-component-tolerant): the old message until the task fills it in,
-    // so a refused import doesn't panic on main meanwhile.
-    let _ = (name, error);
-    "Import failed".to_string()
+    let name = name.trim();
+    let name = if name.is_empty() { "Component" } else { name };
+    let message = match error {
+        CopyError::Empty => "Nothing to import".to_string(),
+        CopyError::Invalid(added) => {
+            let n = added.len();
+            if n == 1 {
+                format!("Can't import {name}: it would add 1 problem to the model")
+            } else {
+                format!("Can't import {name}: it would add {n} problems to the model")
+            }
+        }
+        _ => format!("Can't import {name}: its geometry couldn't be copied"),
+    };
+    message.replace(['\r', '\n'], " ")
 }
 
 /// [`fetch_meshes`], then `Editor::import_groups` into `model`; returns how many instances
