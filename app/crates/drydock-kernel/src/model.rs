@@ -617,7 +617,6 @@ impl Model {
         &self.tags
     }
 
-    #[allow(dead_code)] // skeleton: used by the tag operations (m10-tags-kernel)
     pub(crate) fn tags_mut(&mut self) -> &mut Tags {
         &mut self.tags
     }

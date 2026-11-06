@@ -10,7 +10,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::model::{BodyId, Instance, InstanceId, Model, ModelEdit, ModelError};
+use crate::model::{BodyId, Instance, InstanceId, Model, ModelEdit, ModelError, ModelRecord};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct TagId(pub u64);
@@ -85,7 +85,6 @@ pub struct Tags {
     tags: BTreeMap<TagId, Tag>,
     assigned: BTreeMap<InstanceId, TagId>,
     /// The id `Model::add_tag` hands out next; always past every id ever added.
-    #[allow(dead_code)] // skeleton: used by the tag operations (m10-tags-kernel)
     next: u64,
 }
 
@@ -147,8 +146,10 @@ impl Model {
     /// False only when the instance carries a tag that is hidden. Looks at the instance's own
     /// tag, not at the instances that contain it.
     pub fn instance_visible(&self, instance: InstanceId) -> bool {
-        let _ = instance;
-        unimplemented!("m10-tags-kernel")
+        match self.instance_tag(instance) {
+            Some(tag) => self.tag(tag).is_none_or(|tag| tag.visible),
+            None => true,
+        }
     }
 
     /// The instances of `body` that are not hidden (`instance_visible`), in id order. Empty
@@ -168,8 +169,14 @@ impl Model {
     /// Add a visible tag named `name` as one record; returns its id (never one used before
     /// in this model). Errors: `BadTagName`.
     pub fn add_tag(&mut self, name: &str, log: &mut ModelEdit) -> Result<TagId, ModelError> {
-        let _ = (name, log);
-        unimplemented!("m10-tags-kernel")
+        if !tag_name_is_good(name) {
+            return Err(ModelError::BadTagName);
+        }
+        let id = TagId(self.tags().next);
+        let record = TagRecord::AddTag(id, Tag::new(name));
+        self.apply(&ModelRecord::Tag(record.clone()))?;
+        log.records.push(ModelRecord::Tag(record));
+        Ok(id)
     }
 
     /// Rename the tag as one record; nothing when the name is unchanged. Errors: `MissingTag`,
@@ -180,8 +187,21 @@ impl Model {
         name: &str,
         log: &mut ModelEdit,
     ) -> Result<(), ModelError> {
-        let _ = (id, name, log);
-        unimplemented!("m10-tags-kernel")
+        let from = self.tag(id).ok_or(ModelError::MissingTag(id))?.clone();
+        if !tag_name_is_good(name) {
+            return Err(ModelError::BadTagName);
+        }
+        if from.name == name {
+            return Ok(());
+        }
+        let to = Tag {
+            name: name.to_string(),
+            visible: from.visible,
+        };
+        let record = TagRecord::SetTag { id, from, to };
+        self.apply(&ModelRecord::Tag(record.clone()))?;
+        log.records.push(ModelRecord::Tag(record));
+        Ok(())
     }
 
     /// Show or hide the tag as one record; nothing when unchanged. Errors: `MissingTag`.
@@ -191,15 +211,31 @@ impl Model {
         visible: bool,
         log: &mut ModelEdit,
     ) -> Result<(), ModelError> {
-        let _ = (id, visible, log);
-        unimplemented!("m10-tags-kernel")
+        let from = self.tag(id).ok_or(ModelError::MissingTag(id))?.clone();
+        if from.visible == visible {
+            return Ok(());
+        }
+        let to = Tag {
+            name: from.name.clone(),
+            visible,
+        };
+        let record = TagRecord::SetTag { id, from, to };
+        self.apply(&ModelRecord::Tag(record.clone()))?;
+        log.records.push(ModelRecord::Tag(record));
+        Ok(())
     }
 
     /// Remove the tag: first untag every instance carrying it (ascending instance id), then
     /// remove it. Errors: `MissingTag`.
     pub fn remove_tag(&mut self, id: TagId, log: &mut ModelEdit) -> Result<(), ModelError> {
-        let _ = (id, log);
-        unimplemented!("m10-tags-kernel")
+        let tag = self.tag(id).ok_or(ModelError::MissingTag(id))?.clone();
+        for instance in self.tags().instances_with(id) {
+            self.assign_tag(instance, None, log)?;
+        }
+        let record = TagRecord::RemoveTag(id, tag);
+        self.apply(&ModelRecord::Tag(record.clone()))?;
+        log.records.push(ModelRecord::Tag(record));
+        Ok(())
     }
 
     /// Give the instance (in any body) the tag, or untag it with `None`, as one record;
@@ -210,13 +246,88 @@ impl Model {
         tag: Option<TagId>,
         log: &mut ModelEdit,
     ) -> Result<(), ModelError> {
-        let _ = (instance, tag, log);
-        unimplemented!("m10-tags-kernel")
+        if self.instance_location(instance).is_none() {
+            return Err(ModelError::UnknownInstance(instance));
+        }
+        if let Some(id) = tag
+            && self.tag(id).is_none()
+        {
+            return Err(ModelError::MissingTag(id));
+        }
+        let from = self.tags().instance_tag(instance);
+        if from == tag {
+            return Ok(());
+        }
+        let record = TagRecord::SetInstanceTag {
+            instance,
+            from,
+            to: tag,
+        };
+        self.apply(&ModelRecord::Tag(record.clone()))?;
+        log.records.push(ModelRecord::Tag(record));
+        Ok(())
     }
 
     /// Apply one tag record (called by `Model::apply`). On error, nothing changes.
     pub(crate) fn apply_tag_record(&mut self, record: &TagRecord) -> Result<(), ModelError> {
-        let _ = record;
-        unimplemented!("m10-tags-kernel")
+        match record {
+            TagRecord::AddTag(id, tag) => {
+                if !tag_name_is_good(&tag.name) {
+                    return Err(ModelError::BadTagName);
+                }
+                if self.tags().get(*id).is_some() {
+                    return Err(ModelError::IdInUse);
+                }
+                let tags = self.tags_mut();
+                tags.tags.insert(*id, tag.clone());
+                tags.next = tags.next.max(id.0.saturating_add(1));
+                Ok(())
+            }
+            TagRecord::RemoveTag(id, tag) => {
+                let stored = self.tags().get(*id).ok_or(ModelError::MissingTag(*id))?;
+                if stored != tag {
+                    return Err(ModelError::Mismatch);
+                }
+                if !self.tags().instances_with(*id).is_empty() {
+                    return Err(ModelError::TagInUse(*id));
+                }
+                self.tags_mut().tags.remove(id);
+                Ok(())
+            }
+            TagRecord::SetTag { id, from, to } => {
+                if !tag_name_is_good(&to.name) {
+                    return Err(ModelError::BadTagName);
+                }
+                let stored = self.tags().get(*id).ok_or(ModelError::MissingTag(*id))?;
+                if stored != from {
+                    return Err(ModelError::Mismatch);
+                }
+                self.tags_mut().tags.insert(*id, to.clone());
+                Ok(())
+            }
+            TagRecord::SetInstanceTag { instance, from, to } => {
+                if self.instance_location(*instance).is_none() {
+                    return Err(ModelError::UnknownInstance(*instance));
+                }
+                let current = self.tags().instance_tag(*instance);
+                if current != *from {
+                    return Err(ModelError::Mismatch);
+                }
+                if let Some(id) = to
+                    && self.tags().get(*id).is_none()
+                {
+                    return Err(ModelError::MissingTag(*id));
+                }
+                match to {
+                    Some(id) => {
+                        self.tags_mut().assigned.insert(*instance, *id);
+                    }
+                    None => {
+                        self.tags_mut().assigned.remove(instance);
+                    }
+                }
+                Ok(())
+            }
+        }
     }
 }
