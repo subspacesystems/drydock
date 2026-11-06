@@ -128,7 +128,7 @@ fn gather_body(
             return false;
         }
     }
-    for (_, inst) in b.instances() {
+    for (_, inst) in model.visible_instances(body) {
         let d = inst.definition;
         if path.contains(&d) {
             continue;
@@ -286,7 +286,7 @@ pub fn box_select(
             out.push(Entity::Face(id));
         }
     }
-    for (id, inst) in target.instances() {
+    for (id, inst) in model.visible_instances(body) {
         let mut g = Gathered::default();
         let mut path = vec![inst.definition];
         if gather_body(
@@ -419,7 +419,7 @@ fn gather_instance_segments(
             xform.transform_point3(b.position),
         ));
     }
-    for (_, inst) in b.instances() {
+    for (_, inst) in model.visible_instances(BodyId::Definition(definition)) {
         if path.contains(&inst.definition) {
             continue;
         }
