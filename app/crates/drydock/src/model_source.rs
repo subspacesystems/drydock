@@ -48,8 +48,7 @@ impl SourceFormat {
             Some(SourceFormat::Stl)
         } else if ext.eq_ignore_ascii_case("3mf") {
             Some(SourceFormat::ThreeMf)
-        } else if ext.eq_ignore_ascii_case("drydock") || ext.eq_ignore_ascii_case("modeler")
-        {
+        } else if crate::document::is_native_file(path) {
             Some(SourceFormat::Native)
         } else {
             None
@@ -104,39 +103,36 @@ impl SourceModel {
             .unwrap_or_else(|| self.file_name.clone());
         let path = dir.join(&component);
         let result = (|| -> Result<Model, String> {
-            fs::write(&path, &self.bytes).map_err(|error| one_line(error, self.file_name.clone()))?;
+            fs::write(&path, &self.bytes)
+                .map_err(|error| one_line(error, self.file_name.clone()))?;
             self.read(&path, unit)
         })();
         let _ = fs::remove_dir_all(&dir);
-        result.map_err(|error| {
-            if error.contains(&self.file_name) {
-                error
-            } else {
-                format!("{}: {error}", self.file_name)
-            }
-        })
+        let _ = fs::remove_dir(dir.parent().unwrap_or(&dir));
+        result
     }
 
     /// `Err` for `path` with the file name guaranteed in the message.
     fn read_err(error: String, path: &Path) -> String {
-        if error.contains(path.file_name().map(|n| n.to_string_lossy().into_owned()).as_deref().unwrap_or("")) {
-            error
+        let name = file_name_of(path);
+        let line = error.replace(['\r', '\n'], " ");
+        if line.contains(&name) {
+            line
         } else {
-            format!("{}: {error}", path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| path.display().to_string()))
+            format!("{name}: {line}")
         }
     }
 
     /// Dispatch to the reader for `format`; `unit` applies to STL only.
     fn read(&self, path: &Path, unit: MeshUnit) -> Result<Model, String> {
         match self.format {
-            SourceFormat::Dae | SourceFormat::Native => Ok(
-                crate::components_panel::read_component_source(path)
+            SourceFormat::Dae | SourceFormat::Native => {
+                Ok(crate::components_panel::read_component_source(path)
                     .map(|(model, _)| model)
-                    .map_err(|error| Self::read_err(error, path))?,
-            ),
-            SourceFormat::Stl | SourceFormat::ThreeMf => {
-                crate::mesh_import::read_mesh(path, unit).map_err(|error| Self::read_err(error, path))
+                    .map_err(|error| Self::read_err(error, path))?)
             }
+            SourceFormat::Stl | SourceFormat::ThreeMf => crate::mesh_import::read_mesh(path, unit)
+                .map_err(|error| Self::read_err(error, path)),
         }
     }
 }
@@ -145,11 +141,12 @@ static FRESH_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
 /// A fresh empty folder under the system temp dir, named `drydock-source-<pid>-<n>`.
 fn fresh_source_dir() -> PathBuf {
-    let dir = std::env::temp_dir().join(format!(
-        "drydock-source-{}-{}",
-        std::process::id(),
-        FRESH_COUNTER.fetch_add(1, Ordering::SeqCst)
+    let counter = FRESH_COUNTER.fetch_add(1, Ordering::SeqCst);
+    let parent = std::env::temp_dir().join(format!(
+        "drydock-model-source-work-{}-{counter}",
+        std::process::id()
     ));
+    let dir = parent.join(format!("drydock-source-{}-{counter}", std::process::id()));
     fs::create_dir_all(&dir).unwrap();
     dir
 }
@@ -230,7 +227,7 @@ impl ModelSource for LocalFileSource {
         let path = PathBuf::from(&entry.id);
         let name = file_name_of(&path);
         let Some(format) = SourceFormat::from_path(&path) else {
-            return Err(format!("{name}: not a model file"));
+            return Err(one_line("not a model file", name));
         };
         let bytes = fs::read(&path).map_err(|error| one_line(error, name.clone()))?;
         Ok(SourceModel {
