@@ -330,6 +330,10 @@ Done when: Follow Me sweeps a face along an open and a closed path, and Offset i
 | `m10-tags-assign` | Assign the selected groups and components to a tag from the panel and from Entity Info; show the tag there | `m10-tags-panel` |
 | `m10-model-source-trait` | `ModelSource` interface (list, fetch bytes plus name) and a local-file source that picks the reader by extension | |
 | `m10-model-source-wire` | The Import dialog and the component import go through a `ModelSource`, so an online library can be added as another source later | `m10-model-source-trait` |
+| `m10-viewport-gamma` | Sign-off fix: the viewport image reaches egui as an sRGB texture and is drawn too dark (Dark background #010103 instead of #050A19); hand egui a non-sRGB view so the brand viewport colors show as specified | |
+| `m10-tags-rename-width` | Sign-off fix: renaming a tag widens the right-hand dock for good; keep the rename box inside the panel's width | |
+| `m10-open-dialog-primary` | Sign-off fix: the Open / Import file dialog's confirming button in the action color, like the other dialogs | |
+| `m10-import-component-tolerant` | Sign-off fix: importing a DAE as a component is refused when the file already has intersecting edges (corpus models); refuse only problems the import itself adds, and say why | |
 
 ## Future (unscheduled)
 
