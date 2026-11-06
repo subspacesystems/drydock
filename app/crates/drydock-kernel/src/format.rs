@@ -20,6 +20,7 @@ use crate::model::{
 };
 use crate::paint::Side;
 use crate::sun::{Geolocation, LocalTime, ShadowSettings};
+use crate::tags::{Tag, TagId, TagRecord};
 use crate::tape::{Guide, GuideId};
 use crate::topology::{
     CurveId, Edge, EdgeId, EdgeUse, Face, FaceId, Loop, Record, TopoError, Vertex, VertexId,
@@ -27,7 +28,7 @@ use crate::topology::{
 use crate::units::{LengthFormat, Unit};
 
 /// The version this code writes, and the newest it reads.
-pub const FORMAT_VERSION: u32 = 6;
+pub const FORMAT_VERSION: u32 = 7;
 
 /// Why a model can't be written. Nothing was written.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -298,7 +299,10 @@ pub fn to_text(model: &Model) -> Result<String, WriteError> {
         || model.shadow_settings() != ShadowSettings::default();
     let has_units = model.length_format() != LengthFormat::default();
     let has_curves = bodies().any(|body| body.geometry().curve_count() > 0);
-    let version = if has_curves {
+    let has_tags = !model.tags().is_empty();
+    let version = if has_tags {
+        7
+    } else if has_curves {
         6
     } else if has_units {
         5
@@ -400,12 +404,26 @@ pub fn to_text(model: &Model) -> Result<String, WriteError> {
         out.push('\n');
     }
 
+    for (id, tag) in model.tags().iter() {
+        out.push_str(&format!(
+            "tag {} {} ",
+            id.0,
+            if tag.visible { "on" } else { "off" }
+        ));
+        push_quoted(&mut out, &tag.name);
+        out.push('\n');
+    }
+
     write_body(&mut out, BodyId::Root, model.root())?;
     for (id, _) in model.definitions() {
         let body = model
             .body(BodyId::Definition(id))
             .expect("definition bodies always exist");
         write_body(&mut out, BodyId::Definition(id), body)?;
+    }
+
+    for (instance, tag) in model.tags().assignments() {
+        out.push_str(&format!("tagged {} {}\n", instance.0, tag.0));
     }
 
     out.push_str("end\n");
@@ -959,6 +977,41 @@ fn apply_line(
             let body = current.ok_or(ReadErrorKind::NoBody)?;
             model
                 .apply(&ModelRecord::AddGuide(body, id, guide))
+                .map_err(rejected)?;
+            Ok(false)
+        }
+        "tag" => {
+            if version < 7 {
+                return Err(ReadErrorKind::UnknownRecord);
+            }
+            expect_count(tokens, 4)?;
+            let id = TagId(parse_u64(&tokens[1])?);
+            let visible = parse_flag(&tokens[2])?;
+            let name = quoted(&tokens[3])?.to_string();
+            model
+                .apply(&ModelRecord::Tag(TagRecord::AddTag(
+                    id,
+                    Tag { name, visible },
+                )))
+                .map_err(rejected)?;
+            Ok(false)
+        }
+        "tagged" => {
+            if version < 7 {
+                return Err(ReadErrorKind::UnknownRecord);
+            }
+            expect_count(tokens, 3)?;
+            let instance = InstanceId(parse_u64(&tokens[1])?);
+            let tag = TagId(parse_u64(&tokens[2])?);
+            if model.instance_tag(instance).is_some() {
+                return Err(ReadErrorKind::BadField);
+            }
+            model
+                .apply(&ModelRecord::Tag(TagRecord::SetInstanceTag {
+                    instance,
+                    from: None,
+                    to: Some(tag),
+                }))
                 .map_err(rejected)?;
             Ok(false)
         }

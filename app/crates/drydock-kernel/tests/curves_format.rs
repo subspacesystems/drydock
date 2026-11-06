@@ -76,8 +76,9 @@ fn replace_line(text: &str, index: usize, line: &str) -> String {
 }
 
 #[test]
-fn the_version_is_six() {
-    assert_eq!(FORMAT_VERSION, 6);
+fn curves_need_version_six() {
+    // version 6 added curves; m10-tags-kernel made it 7 (tests/tags_format.rs)
+    const { assert!(FORMAT_VERSION >= 6) };
 }
 
 #[test]
