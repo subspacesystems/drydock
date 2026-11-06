@@ -142,10 +142,7 @@ static FRESH_COUNTER: AtomicUsize = AtomicUsize::new(0);
 /// A fresh empty folder under the system temp dir, named `drydock-source-<pid>-<n>`.
 fn fresh_source_dir() -> PathBuf {
     let counter = FRESH_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let parent = std::env::temp_dir().join(format!(
-        "drydock-model-source-work-{}-{counter}",
-        std::process::id()
-    ));
+    let parent = std::env::temp_dir().join(format!("drydock-tmp-{}-{counter}", std::process::id()));
     let dir = parent.join(format!("drydock-source-{}-{counter}", std::process::id()));
     fs::create_dir_all(&dir).unwrap();
     dir
@@ -242,14 +239,20 @@ impl ModelSource for LocalFileSource {
 /// The entry for the file at `path` in the source [`local_source_for`] gives: id the path,
 /// title the file name without its extension, format from the extension (`None` if unknown).
 pub fn entry_for_path(path: &Path) -> SourceEntry {
-    let _ = path;
-    unimplemented!("m10-model-source-wire")
+    SourceEntry {
+        id: path.to_string_lossy().into_owned(),
+        title: title_of(&file_name_of(path)),
+        format: SourceFormat::from_path(path),
+    }
 }
 
 /// A [`LocalFileSource`] for the folder `path` is in (`.` when it has none).
 pub fn local_source_for(path: &Path) -> LocalFileSource {
-    let _ = path;
-    unimplemented!("m10-model-source-wire")
+    let dir = path
+        .parent()
+        .filter(|dir| !dir.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    LocalFileSource::new(dir)
 }
 
 /// Fetch `entry` from `source` and read it as the source of an imported component: its kernel
@@ -260,8 +263,10 @@ pub fn fetch_component(
     source: &dyn ModelSource,
     entry: &SourceEntry,
 ) -> Result<(Model, String), String> {
-    let _ = (source, entry);
-    unimplemented!("m10-model-source-wire")
+    let source_model = source.fetch(entry)?;
+    let name = source_model.title();
+    let model = source_model.into_model(MeshUnit::default())?;
+    Ok((model, name))
 }
 
 /// Fetch `entry` from `source` and read it as a mesh (STL in `unit`, or 3MF). A fetched model
@@ -272,8 +277,17 @@ pub fn fetch_meshes(
     entry: &SourceEntry,
     unit: MeshUnit,
 ) -> Result<Model, String> {
-    let _ = (source, entry, unit);
-    unimplemented!("m10-model-source-wire")
+    let source_model = source.fetch(entry)?;
+    if !matches!(
+        source_model.format,
+        SourceFormat::Stl | SourceFormat::ThreeMf
+    ) {
+        return Err(format!(
+            "{}: not an STL or 3MF file",
+            source_model.file_name
+        ));
+    }
+    source_model.into_model(unit)
 }
 
 /// [`fetch_component`], then `Editor::import_component` into `model`; returns the definition.
@@ -284,8 +298,8 @@ pub fn import_component_from(
     source: &dyn ModelSource,
     entry: &SourceEntry,
 ) -> Result<drydock_kernel::model::DefinitionId, String> {
-    let _ = (editor, model, source, entry);
-    unimplemented!("m10-model-source-wire")
+    let (source_model, name) = fetch_component(source, entry)?;
+    editor.import_component(model, &source_model, &name)
 }
 
 /// [`fetch_meshes`], then `Editor::import_groups` into `model`; returns how many instances
@@ -297,8 +311,8 @@ pub fn import_meshes_from(
     entry: &SourceEntry,
     unit: MeshUnit,
 ) -> Result<usize, String> {
-    let _ = (editor, model, source, entry, unit);
-    unimplemented!("m10-model-source-wire")
+    let source_model = fetch_meshes(source, entry, unit)?;
+    editor.import_groups(model, &source_model)
 }
 
 /// The last component of `path`, or its full text if it has none.
