@@ -108,6 +108,7 @@ impl SourceModel {
             self.read(&path, unit)
         })();
         let _ = fs::remove_dir_all(&dir);
+        let _ = fs::remove_dir(dir.parent().unwrap_or(&dir));
         result
     }
 
@@ -141,7 +142,11 @@ static FRESH_COUNTER: AtomicUsize = AtomicUsize::new(0);
 /// A fresh empty folder under the system temp dir, named `drydock-source-<pid>-<n>`.
 fn fresh_source_dir() -> PathBuf {
     let counter = FRESH_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let dir = std::env::temp_dir().join(format!("drydock-source-{}-{counter}", std::process::id()));
+    let parent = std::env::temp_dir().join(format!(
+        "drydock-model-source-work-{}-{counter}",
+        std::process::id()
+    ));
+    let dir = parent.join(format!("drydock-source-{}-{counter}", std::process::id()));
     fs::create_dir_all(&dir).unwrap();
     dir
 }
