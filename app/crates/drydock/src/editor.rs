@@ -2729,8 +2729,38 @@ impl Editor {
     /// no instance, nothing would change, or the tag doesn't exist (the last sets a message).
     /// Behaviour: `docs/specs/m10-tags-assign.md`.
     pub fn assign_selection_tag(&mut self, model: &mut Model, tag: Option<TagId>) -> bool {
-        let _ = (model, tag);
-        unimplemented!("m10-tags-assign")
+        if let Some(id) = tag
+            && model.tag(id).is_none()
+        {
+            self.message = Some("Can't assign that tag".to_string());
+            return false;
+        }
+
+        let mut log = ModelEdit::new();
+        let mut changed = false;
+        for entity in self.selection.clone() {
+            let Entity::Instance(instance) = entity else {
+                continue;
+            };
+            if model.instance_tag(instance) == tag {
+                continue;
+            }
+            if model.assign_tag(instance, tag, &mut log).is_ok() {
+                changed = true;
+            }
+        }
+
+        if !changed {
+            return false;
+        }
+        let label = if tag.is_some() {
+            "Assign Tag"
+        } else {
+            "Remove Tag"
+        };
+        self.undo.push(label, log);
+        self.message = None;
+        true
     }
 
     /// Rename a tag as one undo step "Rename Tag". True when accepted (also when the name is
