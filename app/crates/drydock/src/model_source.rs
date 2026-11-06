@@ -239,6 +239,68 @@ impl ModelSource for LocalFileSource {
     }
 }
 
+/// The entry for the file at `path` in the source [`local_source_for`] gives: id the path,
+/// title the file name without its extension, format from the extension (`None` if unknown).
+pub fn entry_for_path(path: &Path) -> SourceEntry {
+    let _ = path;
+    unimplemented!("m10-model-source-wire")
+}
+
+/// A [`LocalFileSource`] for the folder `path` is in (`.` when it has none).
+pub fn local_source_for(path: &Path) -> LocalFileSource {
+    let _ = path;
+    unimplemented!("m10-model-source-wire")
+}
+
+/// Fetch `entry` from `source` and read it as the source of an imported component: its kernel
+/// model and the definition name (`SourceModel::title`). Accepts every [`SourceFormat`]; STL
+/// is read in `MeshUnit::default()`. A fetch error is returned unchanged; a read error names
+/// the file, on one line.
+pub fn fetch_component(
+    source: &dyn ModelSource,
+    entry: &SourceEntry,
+) -> Result<(Model, String), String> {
+    let _ = (source, entry);
+    unimplemented!("m10-model-source-wire")
+}
+
+/// Fetch `entry` from `source` and read it as a mesh (STL in `unit`, or 3MF). A fetched model
+/// of any other format is `Err("<file name>: not an STL or 3MF file")` without reading it. A
+/// fetch error is returned unchanged.
+pub fn fetch_meshes(
+    source: &dyn ModelSource,
+    entry: &SourceEntry,
+    unit: MeshUnit,
+) -> Result<Model, String> {
+    let _ = (source, entry, unit);
+    unimplemented!("m10-model-source-wire")
+}
+
+/// [`fetch_component`], then `Editor::import_component` into `model`; returns the definition.
+/// On any `Err` the model is unchanged.
+pub fn import_component_from(
+    editor: &mut crate::editor::Editor,
+    model: &mut Model,
+    source: &dyn ModelSource,
+    entry: &SourceEntry,
+) -> Result<drydock_kernel::model::DefinitionId, String> {
+    let _ = (editor, model, source, entry);
+    unimplemented!("m10-model-source-wire")
+}
+
+/// [`fetch_meshes`], then `Editor::import_groups` into `model`; returns how many instances
+/// were added. On any `Err` the model is unchanged.
+pub fn import_meshes_from(
+    editor: &mut crate::editor::Editor,
+    model: &mut Model,
+    source: &dyn ModelSource,
+    entry: &SourceEntry,
+    unit: MeshUnit,
+) -> Result<usize, String> {
+    let _ = (editor, model, source, entry, unit);
+    unimplemented!("m10-model-source-wire")
+}
+
 /// The last component of `path`, or its full text if it has none.
 fn file_name_of(path: &Path) -> String {
     path.file_name()
