@@ -6,6 +6,8 @@
 
 use eframe::egui;
 
+use crate::look;
+
 /// What an open-file dialog is picking a file for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OpenMode {
@@ -28,13 +30,23 @@ pub struct OpenButtons {
 
 /// The confirming button's label: "Open" for `Open`, "Import" for the other two modes.
 pub fn choose_label(mode: OpenMode) -> &'static str {
-    let _ = mode;
-    unimplemented!("m10-open-dialog-primary")
+    match mode {
+        OpenMode::Open => "Open",
+        OpenMode::Component | OpenMode::Models => "Import",
+    }
 }
 
 /// Draws the row (confirming button via `look::primary_button`, then an ordinary Cancel)
 /// in a horizontal layout and reports the clicks.
 pub fn open_buttons(ui: &mut egui::Ui, mode: OpenMode) -> OpenButtons {
-    let _ = (ui, mode);
-    unimplemented!("m10-open-dialog-primary")
+    let mut buttons = OpenButtons::default();
+    ui.horizontal(|ui| {
+        if look::primary_button(ui, choose_label(mode)).clicked() {
+            buttons.chosen = true;
+        }
+        if ui.button("Cancel").clicked() {
+            buttons.cancelled = true;
+        }
+    });
+    buttons
 }
