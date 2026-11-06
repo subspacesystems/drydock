@@ -1060,13 +1060,13 @@ fn menu_bar_inner(
                     "Components",
                     Action::TogglePanel(PanelId::Components),
                 ),
+                (state.tags, "Tags", Action::TogglePanel(PanelId::Tags)),
                 (state.shadows, "Shadows", Action::ToggleShadows),
                 (
                     state.texture_position,
                     "Texture Position",
                     Action::TogglePanel(PanelId::TexturePosition),
                 ),
-                (state.tags, "Tags", Action::TogglePanel(PanelId::Tags)),
             ] {
                 if menu_check_item(ui, label, open).clicked() {
                     chosen = Some(action);
