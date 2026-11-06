@@ -28,6 +28,7 @@ pub mod look;
 pub mod materials_panel;
 pub mod mesh_export;
 pub mod mesh_import;
+pub mod model_source;
 pub mod overlay;
 pub mod print_setup;
 pub mod recent;
