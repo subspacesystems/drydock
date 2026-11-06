@@ -36,6 +36,7 @@ pub mod shadows_panel;
 pub mod solid_ui;
 pub mod sun_windows;
 pub mod swatches;
+pub mod tags_panel;
 pub mod text_tool;
 pub mod texture_handles;
 pub mod texture_panel;

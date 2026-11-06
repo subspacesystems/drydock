@@ -29,6 +29,7 @@ use drydock_kernel::paint::{self, Side};
 use drydock_kernel::pushpull::push_pull;
 use drydock_kernel::select::{self, BoxMode, Entity};
 use drydock_kernel::sun::{Geolocation, ShadowSettings};
+use drydock_kernel::tags::TagId;
 use drydock_kernel::tape::Guide;
 use drydock_kernel::text3d;
 use drydock_kernel::texture::{self, TextureMap};
@@ -2702,6 +2703,36 @@ impl Editor {
                 false
             }
         }
+    }
+
+    /// Add a tag named `name` as one undo step "New Tag". `None` with a message when the
+    /// kernel refuses (empty name).
+    /// Behaviour: `docs/specs/m10-tags-panel.md`.
+    pub fn add_tag(&mut self, model: &mut Model, name: &str) -> Option<TagId> {
+        let _ = (model, name);
+        unimplemented!("m10-tags-panel")
+    }
+
+    /// Rename a tag as one undo step "Rename Tag". True when accepted (also when the name is
+    /// unchanged: no step then); false with a message when refused.
+    pub fn rename_tag(&mut self, model: &mut Model, id: TagId, name: &str) -> bool {
+        let _ = (model, id, name);
+        unimplemented!("m10-tags-panel")
+    }
+
+    /// Show or hide a tag as one undo step "Show Tag" / "Hide Tag". True when accepted (also
+    /// when unchanged: no step then). `m10-tags-hidden-selection` extends this to drop the
+    /// tag's instances from the selection.
+    pub fn set_tag_visible(&mut self, model: &mut Model, id: TagId, visible: bool) -> bool {
+        let _ = (model, id, visible);
+        unimplemented!("m10-tags-panel")
+    }
+
+    /// Delete a tag (its instances become untagged) as one undo step "Delete Tag". True when
+    /// done; false with a message when the tag doesn't exist.
+    pub fn remove_tag(&mut self, model: &mut Model, id: TagId) -> bool {
+        let _ = (model, id);
+        unimplemented!("m10-tags-panel")
     }
 
     /// Remove materials nothing uses as one undo step "Purge Materials"; resets the current
