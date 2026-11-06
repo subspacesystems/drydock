@@ -75,7 +75,7 @@ impl SourceModel {
 
     /// Read the bytes into a kernel model by `format`. `unit` applies to STL only. With an
     /// `origin` the reader opens that file; without one the bytes are written to a fresh
-    /// folder under the system temp dir under `file_name`, read, and the folder removed
+    /// folder under the system temp dir (named `drydock-source-…`) under `file_name`, read, and the folder removed
     /// again. `Err` is a one-line message that names the file.
     pub fn into_model(&self, unit: MeshUnit) -> Result<Model, String> {
         let _ = unit;
