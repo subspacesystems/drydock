@@ -20,6 +20,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+use drydock_kernel::copy::CopyError;
 use drydock_kernel::model::Model;
 
 use crate::mesh_import::MeshUnit;
@@ -300,6 +301,16 @@ pub fn import_component_from(
 ) -> Result<drydock_kernel::model::DefinitionId, String> {
     let (source_model, name) = fetch_component(source, entry)?;
     editor.import_component(model, &source_model, &name)
+}
+
+/// The one-line status-bar message for a component import of `name` (the definition name,
+/// trimmed; blank = "Component") that `drydock_kernel::copy::import_component` refused with
+/// `error`. Behaviour: `docs/specs/m10-import-component-tolerant.md`.
+pub fn import_failure_message(name: &str, error: &CopyError) -> String {
+    // Skeleton (m10-import-component-tolerant): the old message until the task fills it in,
+    // so a refused import doesn't panic on main meanwhile.
+    let _ = (name, error);
+    "Import failed".to_string()
 }
 
 /// [`fetch_meshes`], then `Editor::import_groups` into `model`; returns how many instances

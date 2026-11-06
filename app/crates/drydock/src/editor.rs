@@ -1774,8 +1774,9 @@ impl Editor {
     /// Import `source` as a new component definition named `name` through the editor's undo
     /// stack (one step labelled "Import Component"), then start placing it as
     /// `place_definition` does. Returns the definition. `Err` is a one-line message (also
-    /// kept as the editor's message) and nothing changed.
-    /// Behaviour: `docs/specs/m6-components-import-ui.md`.
+    /// kept as the editor's message; `model_source::import_failure_message`) and nothing
+    /// changed. Behaviour: `docs/specs/m6-components-import-ui.md`,
+    /// `docs/specs/m10-import-component-tolerant.md`.
     pub fn import_component(
         &mut self,
         model: &mut Model,
@@ -1790,8 +1791,8 @@ impl Editor {
                     self.message = Some(message.clone());
                     return Err(message);
                 }
-                Err(_) => {
-                    let message = "Import failed".to_string();
+                Err(error) => {
+                    let message = crate::model_source::import_failure_message(name, &error);
                     self.message = Some(message.clone());
                     return Err(message);
                 }

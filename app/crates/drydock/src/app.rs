@@ -2182,7 +2182,10 @@ impl App {
                 ui.label(format!("{} texture {noun}", self.warnings.len()))
                     .on_hover_text(self.warnings.join("\n"));
             }
-            if let Some(error) = &self.error {
+            // The editor's message is drawn above; don't show the same text twice.
+            if let Some(error) = &self.error
+                && self.editor.as_ref().and_then(Editor::message) != Some(error.as_str())
+            {
                 ui.separator();
                 ui.colored_label(ERROR_COLOR, error);
             }
