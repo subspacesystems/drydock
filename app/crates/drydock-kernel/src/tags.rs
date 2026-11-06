@@ -10,7 +10,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::model::{InstanceId, Model, ModelEdit, ModelError};
+use crate::model::{BodyId, Instance, InstanceId, Model, ModelEdit, ModelError};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct TagId(pub u64);
@@ -149,6 +149,20 @@ impl Model {
     pub fn instance_visible(&self, instance: InstanceId) -> bool {
         let _ = instance;
         unimplemented!("m10-tags-kernel")
+    }
+
+    /// The instances of `body` that are not hidden (`instance_visible`), in id order. Empty
+    /// when the body doesn't exist. Every walk that draws, picks, snaps, selects or exports
+    /// goes through this instead of `Body::instances`; an instance inside a hidden one is
+    /// never reached because its parent is skipped.
+    pub fn visible_instances(
+        &self,
+        body: BodyId,
+    ) -> impl Iterator<Item = (InstanceId, &Instance)> + '_ {
+        self.body(body)
+            .into_iter()
+            .flat_map(|b| b.instances())
+            .filter(|(id, _)| self.instance_visible(*id))
     }
 
     /// Add a visible tag named `name` as one record; returns its id (never one used before

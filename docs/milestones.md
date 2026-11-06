@@ -323,7 +323,9 @@ Done when: Follow Me sweeps a face along an open and a closed path, and Offset i
 | `m10-brand-about` | Help > About: the horizontal lockup in the current theme, the version, "A Subspace Systems product." | `m10-brand-icons` |
 | `m10-theme-default-dark` | When the OS doesn't say light or dark, Drydock starts in Dark | `m10-brand-theme` |
 | `m10-tags-kernel` | Tags in the model: a tag has a name and a visible flag; groups and component instances can carry one tag; add, rename, remove (untags), show/hide, assign, all undoable; saved in the native format (v7) | |
-| `m10-tags-hidden` | Instances whose tag is hidden are left out of drawing, picking, snapping and export (not deleted) | `m10-tags-kernel` |
+| `m10-tags-hidden` | Instances whose tag is hidden are left out of drawing and export (not deleted) | `m10-tags-kernel` |
+| `m10-tags-hidden-pick` | Hidden instances are left out of picking, inference/snapping and box selection | `m10-tags-hidden` |
+| `m10-tags-hidden-selection` | Hiding a tag drops its instances from the selection (and closes an edit path through one); Editor `set_tag_visible` as one undo step | `m10-tags-hidden` |
 | `m10-tags-panel` | Tags panel: list with an eye toggle per tag, add, rename, delete | `m10-tags-kernel` |
 | `m10-tags-assign` | Assign the selected groups and components to a tag from the panel and from Entity Info; show the tag there | `m10-tags-panel` |
 | `m10-model-source-trait` | `ModelSource` interface (list, fetch bytes plus name) and a local-file source that picks the reader by extension | |

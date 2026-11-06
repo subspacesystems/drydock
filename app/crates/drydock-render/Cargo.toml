@@ -18,6 +18,7 @@ wgpu.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true
+drydock-kernel.workspace = true
 
 [lints]
 workspace = true
