@@ -45,11 +45,12 @@ impl Os {
 }
 
 /// The theme to use when the OS reports `system` (`None`: it doesn't say): the OS's choice,
-/// else Light.
+/// else Dark.
 pub fn theme_from(system: Option<egui::Theme>) -> Theme {
     match system {
         Some(egui::Theme::Dark) => Theme::Dark,
-        _ => Theme::Light,
+        Some(egui::Theme::Light) => Theme::Light,
+        None => Theme::Dark,
     }
 }
 
@@ -387,10 +388,22 @@ pub fn font_definitions() -> FontDefinitions {
 }
 
 /// Installs the fonts and the style for the OS's theme, both the light and the dark one so
-/// a theme change in the OS applies at once.
+/// a theme change in the OS applies at once. When the OS reports neither, the app draws in
+/// `theme_from(None)` (Dark) via egui's fallback theme.
 pub fn apply(ctx: &egui::Context) {
     ctx.set_fonts(font_definitions());
-    ctx.set_style_of(egui::Theme::Light, style(Theme::Light));
-    ctx.set_style_of(egui::Theme::Dark, style(Theme::Dark));
+    let mut light = style(Theme::Light);
+    let dark = style(Theme::Dark);
+    light.visuals.text_options = dark.visuals.text_options;
+    ctx.set_style_of(egui::Theme::Light, light);
+    ctx.set_style_of(egui::Theme::Dark, dark);
+    ctx.options_mut(|o| {
+        o.fallback_theme = match theme_from(None) {
+            Theme::Dark => egui::Theme::Dark,
+            Theme::Light => egui::Theme::Light,
+        };
+    });
     ctx.set_theme(egui::ThemePreference::System);
+    ctx.run_ui(egui::RawInput::default(), |_| {})
+        .drop_without_applying_deltas();
 }
