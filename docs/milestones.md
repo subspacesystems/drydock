@@ -335,6 +335,7 @@ Done when: Follow Me sweeps a face along an open and a closed path, and Offset i
 | `m10-open-dialog-primary` | Sign-off fix: the Open / Import file dialog's confirming button in the action color, like the other dialogs | |
 | `m10-import-component-tolerant` | Sign-off fix: importing a DAE as a component is refused when the file already has intersecting edges (corpus models); refuse only problems the import itself adds, and say why | |
 | `m10-tags-row-layout` | Sign-off fix: since the rename-width fix the tag name sits right-aligned next to Assign, far from its eye; name (or rename box) left next to the eye, Assign and delete at the right edge | `m10-tags-rename-width` |
+| `m10-entity-info-tag-width` | Sign-off fix: a long tag name in Entity Info's Tag box widens the right-hand dock for good; keep the box inside the panel's width (name truncated), label on the left like the other rows | |
 
 ## Future (unscheduled)
 
