@@ -9,9 +9,7 @@ use std::sync::mpsc::{self, Receiver, TryRecvError};
 
 use drydock::chrome::{self, MenuState};
 use drydock::clearance_offset::selected_instances;
-use drydock::components_panel::{
-    ComponentAction, ComponentsPanel, components_panel, read_component_source,
-};
+use drydock::components_panel::{ComponentAction, ComponentsPanel, components_panel};
 use drydock::dialog;
 use drydock::dock::{
     self, DockLayout, PanelEvent, PanelId, Side as DockSide, StackRow, apply_drop,
@@ -33,6 +31,9 @@ use drydock::mesh_export::{
     self, ExportDialog, ExportFormat, ExportOptions, ExportOutcome, StlLayout,
 };
 use drydock::mesh_import::{self, MeshUnit, UnitsOutcome};
+use drydock::model_source::{
+    entry_for_path, import_component_from, import_meshes_from, local_source_for,
+};
 use drydock::overlay::{self, Primitive};
 use drydock::print_setup::{
     self, FitReport, PrintSettings, PrintSetupEvent, PrintSetupTexts, PrintSetupView,
@@ -613,16 +614,11 @@ impl App {
 
     /// Read `path` as a component source, add it to the open model and start placing it.
     fn import_component_file(&mut self, ctx: &egui::Context, frame: &eframe::Frame, path: &Path) {
-        let (source, name) = match read_component_source(path) {
-            Ok(source) => source,
-            Err(message) => {
-                self.error = Some(message);
-                return;
-            }
-        };
+        let source = local_source_for(path);
+        let entry = entry_for_path(path);
         let result = if let (Some(editor), Some(document)) = (&mut self.editor, &mut self.model) {
             match document.kernel.as_mut() {
-                Some(model) => editor.import_component(model, &source, &name),
+                Some(model) => import_component_from(editor, model, &source, &entry).map(|_| ()),
                 None => Err(document
                     .kernel_error
                     .clone()
@@ -632,7 +628,7 @@ impl App {
             Err(format!("{}: no open model", file_name(path)))
         };
         match result {
-            Ok(_) => {
+            Ok(()) => {
                 self.error = None;
                 self.refresh_document(ctx, frame);
             }
@@ -648,16 +644,11 @@ impl App {
         path: &Path,
         unit: MeshUnit,
     ) {
-        let source = match mesh_import::read_mesh(path, unit) {
-            Ok(source) => source,
-            Err(message) => {
-                self.error = Some(message);
-                return;
-            }
-        };
+        let source = local_source_for(path);
+        let entry = entry_for_path(path);
         let result = if let (Some(editor), Some(document)) = (&mut self.editor, &mut self.model) {
             match document.kernel.as_mut() {
-                Some(model) => editor.import_groups(model, &source).map(|_| ()),
+                Some(model) => import_meshes_from(editor, model, &source, &entry, unit).map(|_| ()),
                 None => Err(document
                     .kernel_error
                     .clone()
