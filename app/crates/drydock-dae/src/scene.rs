@@ -262,8 +262,9 @@ impl Draw<'_> {
                 edges.push((a.position, b.position));
             }
 
-            let instances: Vec<(km::InstanceId, km::DefinitionId, DMat4, Option<usize>)> = body
-                .instances()
+            let instances: Vec<(km::InstanceId, km::DefinitionId, DMat4, Option<usize>)> = self
+                .model
+                .visible_instances(body_id)
                 .map(|(id, instance)| {
                     (
                         id,
