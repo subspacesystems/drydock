@@ -34,7 +34,7 @@ use drydock::mesh_import::{self, MeshUnit, UnitsOutcome};
 use drydock::model_source::{
     entry_for_path, import_component_from, import_meshes_from, local_source_for,
 };
-use drydock::open_buttons::OpenMode;
+use drydock::open_buttons::{self, OpenMode};
 use drydock::overlay::{self, Primitive};
 use drydock::print_setup::{
     self, FitReport, PrintSettings, PrintSetupEvent, PrintSetupTexts, PrintSetupView,
@@ -3713,25 +3713,20 @@ impl OpenDialog {
             if let Some(error) = &self.error {
                 ui.colored_label(ERROR_COLOR, error);
             }
-            ui.horizontal(|ui| {
-                let choose = match self.mode {
-                    OpenMode::Open => "Open",
-                    OpenMode::Component | OpenMode::Models => "Import",
-                };
-                if ui.button(choose).clicked() || submitted {
-                    let path = PathBuf::from(self.path_text.trim());
-                    if path.is_dir() {
-                        enter = Some(path);
-                    } else if path.is_file() {
-                        outcome = DialogOutcome::Open(path);
-                    } else {
-                        self.error = Some(format!("{}: no such file", path.display()));
-                    }
+            let buttons = open_buttons::open_buttons(ui, self.mode);
+            if buttons.chosen || submitted {
+                let path = PathBuf::from(self.path_text.trim());
+                if path.is_dir() {
+                    enter = Some(path);
+                } else if path.is_file() {
+                    outcome = DialogOutcome::Open(path);
+                } else {
+                    self.error = Some(format!("{}: no such file", path.display()));
                 }
-                if ui.button("Cancel").clicked() {
-                    outcome = DialogOutcome::Cancel;
-                }
-            });
+            }
+            if buttons.cancelled {
+                outcome = DialogOutcome::Cancel;
+            }
         });
         if let Some(dir) = enter {
             self.enter(dir);
