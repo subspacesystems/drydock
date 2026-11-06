@@ -70,6 +70,8 @@ pub struct MenuState<'a> {
     pub components: bool,
     /// The Texture Position panel is open (View menu; `docs/specs/m6-texture-panel.md`).
     pub texture_position: bool,
+    /// The Tags panel is open.
+    pub tags: bool,
     /// The File menu's recent files, most recent first (`docs/specs/m4-ui-menus.md`).
     pub recent: &'a [PathBuf],
     /// The current tool (checked in the Tools menu).
@@ -1058,6 +1060,7 @@ fn menu_bar_inner(
                     "Components",
                     Action::TogglePanel(PanelId::Components),
                 ),
+                (state.tags, "Tags", Action::TogglePanel(PanelId::Tags)),
                 (state.shadows, "Shadows", Action::ToggleShadows),
                 (
                     state.texture_position,

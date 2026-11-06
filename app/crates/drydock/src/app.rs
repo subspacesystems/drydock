@@ -42,6 +42,7 @@ use drydock::shading;
 use drydock::shadows_panel::{self, ShadowsEvent};
 use drydock::solid_ui::{MarkTracker, mark_primitives, marked_scene, repair_message};
 use drydock::sun_windows::SunWindows;
+use drydock::tags_panel::{TagAction, TagsPanel, default_tag_name, tags_panel};
 use drydock::text_tool::{self, TextDialog, TextOptions, TextOutcome};
 use drydock::texture_handles;
 use drydock::texture_panel::{TextureForm, texture_position_section};
@@ -140,6 +141,8 @@ pub struct App {
     entity_info: EntityInfoPanel,
     /// The Components panel's state.
     components: ComponentsPanel,
+    /// The Tags panel's state.
+    tags: TagsPanel,
     /// The sun settings being dragged in the Shadows panel, not yet recorded.
     shadows_preview: Option<ShadowSettings>,
     /// The Texture Position panel's typed values.
@@ -270,6 +273,7 @@ impl App {
             stacks: [Vec::new(), Vec::new()],
             entity_info: EntityInfoPanel::default(),
             components: ComponentsPanel::default(),
+            tags: TagsPanel::default(),
             shadows_preview: None,
             texture: TextureForm::default(),
             style: look::viewport_style(look::theme_of(&cc.egui_ctx.global_style().visuals)),
@@ -2103,6 +2107,7 @@ impl App {
             entity_info: self.dock.is_open(PanelId::EntityInfo),
             materials: self.dock.is_open(PanelId::Materials),
             components: self.dock.is_open(PanelId::Components),
+            tags: self.dock.is_open(PanelId::Tags),
             texture_position: self.dock.is_open(PanelId::TexturePosition),
             recent: self.recent.paths(),
             tool: self.view.tool,
@@ -2621,6 +2626,33 @@ impl App {
                         self.dirty = true;
                     }
                 }
+                PanelAction::Tag(action) => {
+                    let changed = if let (Some(editor), Some(document)) =
+                        (&mut self.editor, &mut self.model)
+                    {
+                        match document.kernel.as_mut() {
+                            Some(model) => match action {
+                                TagAction::Add => {
+                                    let name = default_tag_name(model);
+                                    editor.add_tag(model, &name).is_some()
+                                }
+                                TagAction::Rename(id, name) => editor.rename_tag(model, id, &name),
+                                TagAction::SetVisible(id, visible) => {
+                                    editor.set_tag_visible(model, id, visible)
+                                }
+                                TagAction::Delete(id) => editor.remove_tag(model, id),
+                            },
+                            None => false,
+                        }
+                    } else {
+                        false
+                    };
+                    if changed {
+                        self.refresh_document(ctx, frame);
+                    } else {
+                        self.dirty = true;
+                    }
+                }
                 PanelAction::Texture(face, side, op) => {
                     let changed = if let (Some(editor), Some(document)) =
                         (&mut self.editor, &mut self.model)
@@ -2746,6 +2778,19 @@ impl App {
                 };
                 if let Some(action) = components_panel(ui, &mut self.components, model) {
                     actions.push(PanelAction::Component(action));
+                }
+            }
+            PanelId::Tags => {
+                let (Some(_editor), Some(document)) = (&self.editor, &self.model) else {
+                    ui.label("No model");
+                    return actions;
+                };
+                let Some(model) = document.kernel.as_ref() else {
+                    ui.label("No model");
+                    return actions;
+                };
+                if let Some(action) = tags_panel(ui, &mut self.tags, model) {
+                    actions.push(PanelAction::Tag(action));
                 }
             }
             PanelId::Shadows => {
@@ -2881,6 +2926,7 @@ enum PanelAction {
     Texture(FaceId, Side, TextureOp),
     Handles(Option<(FaceId, Side)>),
     Shadow(ShadowsEvent, ShadowSettings),
+    Tag(TagAction),
 }
 
 impl eframe::App for App {
