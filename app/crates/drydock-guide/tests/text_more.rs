@@ -135,6 +135,12 @@ const PAGES: &[(&str, &str, &[&str], &[&str])] = &[
             "Ctrl+Shift+S",
         ],
     ),
+    (
+        "linux.md",
+        "Drydock on Linux",
+        &["Where the files go", "Removing them"],
+        &[".desktop", "XDG_DATA_HOME", "hicolor"],
+    ),
 ];
 
 fn guide_src() -> PathBuf {

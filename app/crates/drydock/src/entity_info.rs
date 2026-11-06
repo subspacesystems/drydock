@@ -19,7 +19,7 @@ use drydock_kernel::units::Unit;
 use eframe::egui;
 use glam::DVec3;
 
-use crate::solid_ui::{can_repair, status_rows};
+use crate::solid_ui::{can_repair, status_rows_numbered};
 
 /// What the selection is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -370,7 +370,7 @@ pub fn entity_info_panel(
     ui.label(title(&info));
 
     if info.kind == InfoKind::Edges {
-        value_row(
+        number_row(
             ui,
             "Length",
             &drydock_kernel::units::format_with(info.length.unwrap_or(0.0), format),
@@ -378,7 +378,7 @@ pub fn entity_info_panel(
     }
 
     if info.kind == InfoKind::Faces {
-        value_row(
+        number_row(
             ui,
             "Area",
             &drydock_kernel::units::format_area_with(info.area.unwrap_or(0.0), format),
@@ -411,20 +411,24 @@ pub fn entity_info_panel(
             &material_label(model, Shared::Same(instance.material)),
         );
         if !instance.group {
-            value_row(ui, "In model", &instance.copies.to_string());
+            number_row(ui, "In model", &instance.copies.to_string());
         }
     }
 
     let solid = panel.solid.get(model, body, selection).map(|status| {
         (
             status.instance,
-            status_rows(status, format),
+            status_rows_numbered(status, format),
             can_repair(status),
         )
     });
     if let Some((instance, rows, can_repair)) = solid {
-        for (label, value) in rows {
-            value_row(ui, &label, &value);
+        for (label, value, numeric) in rows {
+            if numeric {
+                number_row(ui, &label, &value);
+            } else {
+                value_row(ui, &label, &value);
+            }
         }
         let button = ui.add_enabled(can_repair, egui::Button::new("Repair"));
         if button.clicked() && action.is_none() {
@@ -433,17 +437,17 @@ pub fn entity_info_panel(
     }
 
     if let Some(size) = info.size {
-        value_row(
+        number_row(
             ui,
             "Width",
             &drydock_kernel::units::format_with(size.x, format),
         );
-        value_row(
+        number_row(
             ui,
             "Depth",
             &drydock_kernel::units::format_with(size.y, format),
         );
-        value_row(
+        number_row(
             ui,
             "Height",
             &drydock_kernel::units::format_with(size.z, format),
@@ -460,6 +464,15 @@ fn value_row(ui: &mut egui::Ui, label: &str, value: &str) {
     ui.horizontal(|ui| {
         ui.label(label);
         ui.label(value);
+    });
+}
+
+/// A `value_row` whose value is a number: monospace, the label stays proportional
+/// (`docs/specs/m10-brand-numbers.md`).
+fn number_row(ui: &mut egui::Ui, label: &str, value: &str) {
+    ui.horizontal(|ui| {
+        ui.label(label);
+        ui.monospace(value);
     });
 }
 

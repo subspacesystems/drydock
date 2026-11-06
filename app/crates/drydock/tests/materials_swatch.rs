@@ -6,6 +6,7 @@
 
 use std::path::PathBuf;
 
+use drydock::icons::{self, SVG_SIZE};
 use drydock::materials_panel::{MaterialAction, MaterialsPanel, materials_panel};
 use drydock::swatches::SwatchState;
 use drydock_kernel::model::{Material, MaterialId, Model, ModelEdit, Texture};
@@ -122,8 +123,32 @@ fn drawn_with(h: &Harness<'static, State>, texture: egui::TextureId) -> Vec<egui
         .collect()
 }
 
-/// Every texture used by the last frame apart from the font atlas.
+/// The textures of the brand icons drawn by the panel's buttons.
+fn icon_textures(h: &Harness<'static, State>) -> Vec<egui::TextureId> {
+    icons::install(&h.ctx);
+    let side = (SVG_SIZE * h.ctx.pixels_per_point()).round() as u32;
+    let hint = egui::load::SizeHint::Size {
+        width: side,
+        height: side,
+        maintain_aspect_ratio: false,
+    };
+    icons::all()
+        .into_iter()
+        .filter_map(|icon| {
+            match h
+                .ctx
+                .try_load_texture(&icons::uri(icon), egui::TextureOptions::LINEAR, hint)
+            {
+                Ok(egui::load::TexturePoll::Ready { texture }) => Some(texture.id),
+                _ => None,
+            }
+        })
+        .collect()
+}
+
+/// Every texture used by the last frame apart from the font atlas and the icon buttons.
 fn image_textures(h: &Harness<'static, State>) -> Vec<egui::TextureId> {
+    let icons = icon_textures(h);
     let mut shapes = Vec::new();
     for clipped in &h.output().shapes {
         flatten(&clipped.shape, &mut shapes);
@@ -131,7 +156,7 @@ fn image_textures(h: &Harness<'static, State>) -> Vec<egui::TextureId> {
     shapes
         .into_iter()
         .map(egui::Shape::texture_id)
-        .filter(|id| *id != egui::TextureId::default())
+        .filter(|id| *id != egui::TextureId::default() && !icons.contains(id))
         .collect()
 }
 

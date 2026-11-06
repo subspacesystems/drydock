@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Subspace Systems
 
-//! The app's own icons, drawn as vector shapes so they scale to any size and take the
-//! theme's text color. No image files: every icon is a few lines, circles and paths.
+//! The app's brand icons from `design/brand/icons/`, drawn as SVG images tinted by the
+//! theme. `svg` is public so cursors can reuse them.
 //!
-//! Behaviour: `docs/specs/m6-icons.md`.
+//! Behaviour: `docs/specs/m10-brand-icons.md`.
 
 use crate::input::Tool;
-use eframe::egui::{self, Color32, Pos2, Rect, Response, Sense, Shape, Stroke, Ui, Vec2, vec2};
+use crate::look;
+use eframe::egui::{self, Color32, Pos2, Rect, Response, Sense, Ui, Vec2, vec2};
 
 /// Side of an icon button in points (the icon is drawn inside, with a margin).
 pub const BUTTON_SIZE: f32 = 28.0;
@@ -76,454 +77,87 @@ pub const ACTIVE_BAR_HEIGHT: f32 = 2.0;
 /// The file name stem of `icon` in `design/brand/icons/` (`"pushpull"`, `"arc3"`, `"list"`).
 /// `docs/specs/m10-brand-icons.md`.
 pub fn name(icon: Icon) -> &'static str {
-    let _ = icon;
-    unimplemented!("m10-brand-icons")
+    match icon {
+        Icon::Tool(Tool::Select) => "select",
+        Icon::Tool(Tool::Line) => "line",
+        Icon::Tool(Tool::Rectangle) => "rectangle",
+        Icon::Tool(Tool::Circle) => "circle",
+        Icon::Tool(Tool::Arc) => "arc",
+        Icon::Tool(Tool::Arc3) => "arc3",
+        Icon::Tool(Tool::PushPull) => "pushpull",
+        Icon::Tool(Tool::Offset) => "offset",
+        Icon::Tool(Tool::FollowMe) => "followme",
+        Icon::Tool(Tool::Move) => "move",
+        Icon::Tool(Tool::Rotate) => "rotate",
+        Icon::Tool(Tool::Scale) => "scale",
+        Icon::Tool(Tool::Tape) => "tape",
+        Icon::Tool(Tool::Erase) => "erase",
+        Icon::Tool(Tool::Paint) => "paint",
+        Icon::Tool(Tool::Orbit) => "orbit",
+        Icon::Tool(Tool::Pan) => "pan",
+        Icon::Tool(Tool::Zoom) => "zoom",
+        Icon::List => "list",
+        Icon::Tiles => "tiles",
+        Icon::New => "new",
+        Icon::Edit => "edit",
+        Icon::Purge => "purge",
+        Icon::Eyedropper => "eyedropper",
+    }
 }
 
 /// The icon's SVG source, embedded with `include_bytes!` from `design/brand/icons/`.
 pub fn svg(icon: Icon) -> &'static [u8] {
-    let _ = icon;
-    unimplemented!("m10-brand-icons")
+    match icon {
+        Icon::Tool(Tool::Select) => include_bytes!("../../../../design/brand/icons/select.svg"),
+        Icon::Tool(Tool::Line) => include_bytes!("../../../../design/brand/icons/line.svg"),
+        Icon::Tool(Tool::Rectangle) => {
+            include_bytes!("../../../../design/brand/icons/rectangle.svg")
+        }
+        Icon::Tool(Tool::Circle) => include_bytes!("../../../../design/brand/icons/circle.svg"),
+        Icon::Tool(Tool::Arc) => include_bytes!("../../../../design/brand/icons/arc.svg"),
+        Icon::Tool(Tool::Arc3) => include_bytes!("../../../../design/brand/icons/arc3.svg"),
+        Icon::Tool(Tool::PushPull) => {
+            include_bytes!("../../../../design/brand/icons/pushpull.svg")
+        }
+        Icon::Tool(Tool::Offset) => include_bytes!("../../../../design/brand/icons/offset.svg"),
+        Icon::Tool(Tool::FollowMe) => {
+            include_bytes!("../../../../design/brand/icons/followme.svg")
+        }
+        Icon::Tool(Tool::Move) => include_bytes!("../../../../design/brand/icons/move.svg"),
+        Icon::Tool(Tool::Rotate) => include_bytes!("../../../../design/brand/icons/rotate.svg"),
+        Icon::Tool(Tool::Scale) => include_bytes!("../../../../design/brand/icons/scale.svg"),
+        Icon::Tool(Tool::Tape) => include_bytes!("../../../../design/brand/icons/tape.svg"),
+        Icon::Tool(Tool::Erase) => include_bytes!("../../../../design/brand/icons/erase.svg"),
+        Icon::Tool(Tool::Paint) => include_bytes!("../../../../design/brand/icons/paint.svg"),
+        Icon::Tool(Tool::Orbit) => include_bytes!("../../../../design/brand/icons/orbit.svg"),
+        Icon::Tool(Tool::Pan) => include_bytes!("../../../../design/brand/icons/pan.svg"),
+        Icon::Tool(Tool::Zoom) => include_bytes!("../../../../design/brand/icons/zoom.svg"),
+        Icon::List => include_bytes!("../../../../design/brand/icons/list.svg"),
+        Icon::Tiles => include_bytes!("../../../../design/brand/icons/tiles.svg"),
+        Icon::New => include_bytes!("../../../../design/brand/icons/new.svg"),
+        Icon::Edit => include_bytes!("../../../../design/brand/icons/edit.svg"),
+        Icon::Purge => include_bytes!("../../../../design/brand/icons/purge.svg"),
+        Icon::Eyedropper => include_bytes!("../../../../design/brand/icons/eyedropper.svg"),
+    }
 }
 
 /// The image URI the icon is registered under in egui's loaders (ends in `.svg`).
 pub fn uri(icon: Icon) -> String {
-    let _ = icon;
-    unimplemented!("m10-brand-icons")
+    format!("bytes://drydock-icon-{}.svg", name(icon))
 }
 
 /// Installs egui_extras' image loaders and registers every icon's bytes under `uri(icon)`.
 /// Cheap and safe to call again; `icon_button` and `paint` call it themselves.
 pub fn install(ctx: &egui::Context) {
-    let _ = ctx;
-    unimplemented!("m10-brand-icons")
-}
-
-/// Small helper for drawing in normalized icon coordinates: `(-1, -1)` is the top-left
-/// of the square, `(1, 1)` the bottom-right. Screen y grows downwards.
-struct Draw {
-    center: Pos2,
-    half: f32,
-    stroke: Stroke,
-    color: Color32,
-    fill: Color32,
-    out: Vec<Shape>,
-}
-
-impl Draw {
-    fn at(&self, x: f32, y: f32) -> Pos2 {
-        self.center + vec2(x, y) * self.half
+    let installed = egui::Id::new("drydock-icon-loaders-installed");
+    if ctx.data(|data| data.get_temp::<bool>(installed).unwrap_or(false)) {
+        return;
     }
-
-    fn seg(&mut self, a: (f32, f32), b: (f32, f32)) {
-        self.out.push(Shape::line_segment(
-            [self.at(a.0, a.1), self.at(b.0, b.1)],
-            self.stroke,
-        ));
+    ctx.data_mut(|data| data.insert_temp(installed, true));
+    egui_extras::install_image_loaders(ctx);
+    for icon in all() {
+        ctx.include_bytes(uri(icon), svg(icon));
     }
-
-    fn line(&mut self, points: &[(f32, f32)]) {
-        let points = points.iter().map(|(x, y)| self.at(*x, *y)).collect();
-        self.out.push(Shape::line(points, self.stroke));
-    }
-
-    fn closed(&mut self, points: &[(f32, f32)]) {
-        let points = points.iter().map(|(x, y)| self.at(*x, *y)).collect();
-        self.out.push(Shape::closed_line(points, self.stroke));
-    }
-
-    fn poly(&mut self, points: &[(f32, f32)]) {
-        let points = points.iter().map(|(x, y)| self.at(*x, *y)).collect();
-        self.out
-            .push(Shape::convex_polygon(points, self.color, Stroke::NONE));
-    }
-
-    fn poly_light(&mut self, points: &[(f32, f32)]) {
-        let points = points.iter().map(|(x, y)| self.at(*x, *y)).collect();
-        self.out
-            .push(Shape::convex_polygon(points, self.fill, Stroke::NONE));
-    }
-
-    fn circle(&mut self, x: f32, y: f32, r: f32) {
-        self.out.push(Shape::circle_stroke(
-            self.at(x, y),
-            r * self.half,
-            self.stroke,
-        ));
-    }
-
-    fn dot(&mut self, x: f32, y: f32, r: f32) {
-        self.out.push(Shape::circle_filled(
-            self.at(x, y),
-            r * self.half,
-            self.color,
-        ));
-    }
-
-    fn rect(&mut self, x0: f32, y0: f32, x1: f32, y1: f32) {
-        self.closed(&[(x0, y0), (x1, y0), (x1, y1), (x0, y1)]);
-    }
-
-    fn quad(&mut self, a: (f32, f32), control: (f32, f32), b: (f32, f32)) {
-        let points = [a, control, b].map(|(x, y)| self.at(x, y));
-        self.out.push(Shape::QuadraticBezier(
-            egui::epaint::QuadraticBezierShape::from_points_stroke(
-                points,
-                false,
-                Color32::TRANSPARENT,
-                self.stroke,
-            ),
-        ));
-    }
-
-    /// A filled arrowhead at `tip`, pointing away from `from`.
-    fn arrow(&mut self, from: (f32, f32), tip: (f32, f32), size: f32) {
-        let (dx, dy) = (tip.0 - from.0, tip.1 - from.1);
-        let len = (dx * dx + dy * dy).sqrt();
-        if len <= f32::EPSILON {
-            return;
-        }
-        let (ux, uy) = (dx / len, dy / len);
-        let (px, py) = (-uy, ux);
-        let base = (tip.0 - ux * size, tip.1 - uy * size);
-        let left = (base.0 + px * size * 0.5, base.1 + py * size * 0.5);
-        let right = (base.0 - px * size * 0.5, base.1 - py * size * 0.5);
-        self.poly(&[tip, left, right]);
-    }
-}
-
-fn rotate(point: (f32, f32), angle: f32) -> (f32, f32) {
-    let (sin, cos) = angle.sin_cos();
-    (point.0 * cos - point.1 * sin, point.0 * sin + point.1 * cos)
-}
-
-fn arc_points(cx: f32, cy: f32, r: f32, start: f32, end: f32, steps: usize) -> Vec<(f32, f32)> {
-    (0..=steps)
-        .map(|i| {
-            let t = start + (end - start) * i as f32 / steps as f32;
-            (cx + r * t.cos(), cy + r * t.sin())
-        })
-        .collect()
-}
-
-/// The shapes that draw `icon` inside `rect` in `color`. Only lines, paths, circles,
-/// rectangles and beziers (no text, no textures); every color used is `color`, possibly
-/// with a lower alpha.
-pub fn shapes(icon: Icon, rect: Rect, color: Color32) -> Vec<Shape> {
-    let side = rect.width().min(rect.height());
-    let mut d = Draw {
-        center: rect.center(),
-        half: side * 0.45,
-        stroke: Stroke::new((side / 14.0).max(1.0), color),
-        color,
-        fill: color.gamma_multiply(0.35),
-        out: Vec::new(),
-    };
-
-    match icon {
-        Icon::Tool(Tool::Offset) => {
-            let r = 0.18;
-            let mut outer = vec![(0.8, 0.2), (0.8, 0.62)];
-            outer.extend(arc_points(
-                0.62,
-                0.62,
-                r,
-                0.0,
-                -std::f32::consts::FRAC_PI_2,
-                5,
-            ));
-            outer.extend(arc_points(
-                -0.62,
-                0.62,
-                r,
-                -std::f32::consts::FRAC_PI_2,
-                -std::f32::consts::PI,
-                5,
-            ));
-            outer.extend(arc_points(
-                -0.62,
-                -0.62,
-                r,
-                std::f32::consts::PI,
-                std::f32::consts::FRAC_PI_2,
-                5,
-            ));
-            outer.extend(arc_points(
-                0.62,
-                -0.62,
-                r,
-                std::f32::consts::FRAC_PI_2,
-                0.0,
-                5,
-            ));
-            outer.push((0.8, -0.2));
-            d.line(&outer);
-            d.rect(-0.36, -0.36, 0.36, 0.36);
-            d.seg((0.36, 0.0), (0.66, 0.0));
-            d.arrow((0.5, 0.0), (0.9, 0.0), 0.24);
-        }
-        Icon::Tool(Tool::FollowMe) => {
-            d.closed(&[
-                (-0.44, -0.45),
-                (-0.04, -0.45),
-                (-0.04, -0.05),
-                (-0.44, -0.05),
-            ]);
-            d.seg((-0.04, -0.25), (0.46, -0.25));
-            d.seg((0.46, -0.25), (0.46, 0.55));
-        }
-        Icon::Tool(Tool::Select) => {
-            d.half *= 0.9;
-            d.closed(&[
-                (-0.65, -0.8),
-                (0.5, 0.15),
-                (0.03, 0.22),
-                (0.3, 0.78),
-                (0.02, 0.92),
-                (-0.18, 0.36),
-                (-0.65, 0.62),
-            ]);
-        }
-        Icon::Tool(Tool::Line) => {
-            d.seg((-0.7, 0.7), (0.7, -0.7));
-            d.dot(-0.7, 0.7, 0.14);
-            d.dot(0.7, -0.7, 0.14);
-        }
-        Icon::Tool(Tool::Rectangle) => d.rect(-0.7, -0.5, 0.7, 0.5),
-        Icon::Tool(Tool::Circle) => {
-            d.circle(0.0, 0.0, 0.68);
-            d.dot(0.0, 0.0, 0.11);
-            d.seg((0.0, 0.0), (0.48, -0.48));
-        }
-        Icon::Tool(Tool::Arc) => {
-            let r = 0.7;
-            let cy = 0.335;
-            d.line(&arc_points(
-                0.0,
-                cy,
-                r,
-                std::f32::consts::PI,
-                std::f32::consts::TAU,
-                20,
-            ));
-            d.dot(-r, cy, 0.11);
-            d.dot(r, cy, 0.11);
-            d.seg((0.0, cy), (0.0, cy - r));
-        }
-        Icon::Tool(Tool::Arc3) => {
-            let dy = 0.085;
-            d.quad((-0.86, 0.12 + dy), (0.0, -0.7 + dy), (0.86, 0.12 + dy));
-            d.dot(-0.86, 0.12 + dy, 0.12);
-            d.dot(0.0, -0.29 + dy, 0.12);
-            d.dot(0.86, 0.12 + dy, 0.12);
-        }
-        Icon::Tool(Tool::PushPull) => {
-            let dy = 0.056;
-            let top = [(0.0, -0.34), (0.56, -0.08), (0.0, 0.18), (-0.56, -0.08)]
-                .map(|(x, y)| (x, y + dy));
-            d.poly_light(&top);
-            d.closed(&top);
-            let (l2, b2, r2) = ((-0.56, 0.4 + dy), (0.0, 0.66 + dy), (0.56, 0.4 + dy));
-            d.seg(top[3], l2);
-            d.seg(top[2], b2);
-            d.seg(top[1], r2);
-            d.line(&[l2, b2, r2]);
-            d.seg((0.0, -0.05 + dy), (0.0, -0.8 + dy));
-            d.arrow((0.0, -0.35 + dy), (0.0, -0.82 + dy), 0.26);
-        }
-        Icon::Tool(Tool::Move) => {
-            d.dot(0.0, 0.0, 0.15);
-            d.seg((0.5, 0.0), (0.68, 0.0));
-            d.arrow((0.5, 0.0), (0.86, 0.0), 0.34);
-            d.seg((-0.5, 0.0), (-0.68, 0.0));
-            d.arrow((-0.5, 0.0), (-0.86, 0.0), 0.34);
-            d.seg((0.0, 0.5), (0.0, 0.68));
-            d.arrow((0.0, 0.5), (0.0, 0.86), 0.34);
-            d.seg((0.0, -0.5), (0.0, -0.68));
-            d.arrow((0.0, -0.5), (0.0, -0.86), 0.34);
-        }
-        Icon::Tool(Tool::Rotate) => {
-            let r = 0.64;
-            let start = 0.25 * std::f32::consts::PI;
-            let end = 1.75 * std::f32::consts::PI;
-            let pts = arc_points(0.0875, 0.011, r, start, end, 30);
-            let tip = *pts.last().unwrap();
-            let from = pts[pts.len() - 3];
-            d.line(&pts);
-            d.arrow(from, tip, 0.26);
-        }
-        Icon::Tool(Tool::Scale) => {
-            d.rect(-0.78, -0.78, 0.78, 0.78);
-            d.poly(&[(-0.78, 0.24), (-0.24, 0.24), (-0.24, 0.78), (-0.78, 0.78)]);
-            d.seg((-0.45, 0.45), (0.45, -0.45));
-            d.arrow((-0.25, 0.25), (-0.62, 0.62), 0.24);
-            d.arrow((0.25, -0.25), (0.62, -0.62), 0.24);
-        }
-        Icon::Tool(Tool::Tape) => {
-            let ox = 0.0667;
-            let (x0, y0, x1, y1, r) = (-0.8 + ox, -0.45, 0.05 + ox, 0.45, 0.14);
-            d.seg((x0 + r, y0), (x1 - r, y0));
-            d.quad((x1 - r, y0), (x1, y0), (x1, y0 + r));
-            d.seg((x1, y0 + r), (x1, y1 - r));
-            d.quad((x1, y1 - r), (x1, y1), (x1 - r, y1));
-            d.seg((x1 - r, y1), (x0 + r, y1));
-            d.quad((x0 + r, y1), (x0, y1), (x0, y1 - r));
-            d.seg((x0, y1 - r), (x0, y0 + r));
-            d.quad((x0, y0 + r), (x0, y0), (x0 + r, y0));
-            let (ty0, ty1) = (0.02, 0.18);
-            let (te, hx) = (0.7 + ox, 0.58 + ox);
-            d.seg((x1 - 0.02, ty0), (te, ty0));
-            d.seg((x1 - 0.02, ty1), (te, ty1));
-            d.seg((te, ty0), (te, ty1));
-            d.line(&[(te, ty1), (te, 0.3), (hx, 0.3)]);
-            for x in [0.2, 0.33, 0.46, 0.59] {
-                d.seg((x + ox, ty0), (x + ox, ty0 + 0.08));
-            }
-        }
-        Icon::Tool(Tool::Erase) => {
-            let a = -0.28;
-            let (cx, cy, l, h) = (0.0, -0.0686, 0.66, 0.27);
-            let corner = |x: f32, y: f32| {
-                let (rx, ry) = rotate((x, y), a);
-                (cx + rx, cy + ry)
-            };
-            let (c1, c2, c3, c4) = (corner(-l, -h), corner(l, -h), corner(l, h), corner(-l, h));
-            let (m1, m2) = (corner(0.02, -h), corner(0.02, h));
-            d.poly(&[c1, m1, m2, c4]);
-            d.closed(&[c1, c2, c3, c4]);
-            d.seg(m1, m2);
-            d.seg((-0.45, 0.5314), (0.45, 0.5314));
-        }
-        Icon::Tool(Tool::Paint) => {
-            let a = 0.32;
-            let (ox, oy) = (-0.0767, 0.17);
-            let t = |x: f32, y: f32| {
-                let (rx, ry) = rotate((x, y), a);
-                (rx + ox, ry + oy)
-            };
-            let body = [t(-0.52, -0.42), t(0.38, -0.42), t(0.24, 0.4), t(-0.38, 0.4)];
-            d.poly_light(&body);
-            d.closed(&body);
-            d.seg(t(-0.52, -0.42), t(0.38, -0.42));
-            d.seg(t(-0.44, -0.3), t(0.3, -0.3));
-            let handle: Vec<(f32, f32)> = arc_points(
-                -0.07,
-                -0.42,
-                0.4,
-                std::f32::consts::PI,
-                std::f32::consts::TAU,
-                14,
-            )
-            .into_iter()
-            .map(|(x, y)| t(x, y))
-            .collect();
-            d.line(&handle);
-            let drop = |x: f32, y: f32| (x + ox, y + oy);
-            d.poly(&[drop(0.55, -0.02), drop(0.7, 0.1), drop(0.56, 0.16)]);
-            d.dot(0.62 + ox, 0.12 + oy, 0.09);
-        }
-        Icon::Tool(Tool::Orbit) => {
-            let mut pts = Vec::new();
-            let n = 32;
-            for i in 0..=n {
-                let t = std::f32::consts::TAU * i as f32 / n as f32;
-                let p = (0.85 * t.cos(), 0.35 * t.sin());
-                pts.push(rotate(p, -0.35));
-            }
-            let tip = pts[2];
-            let from = pts[0];
-            d.closed(&pts[..n]);
-            d.arrow(from, tip, 0.22);
-            d.dot(0.0, 0.0, 0.14);
-        }
-        Icon::Tool(Tool::Pan) => {
-            let hand = [
-                (-0.3, 0.78),
-                (-0.44, 0.22),
-                (-0.57, 0.08),
-                (-0.75, -0.08),
-                (-0.67, -0.3),
-                (-0.4, -0.12),
-                (-0.4, -0.66),
-                (-0.33, -0.78),
-                (-0.24, -0.76),
-                (-0.22, -0.6),
-                (-0.2, -0.1),
-                (-0.16, -0.1),
-                (-0.16, -0.86),
-                (-0.08, -0.95),
-                (0.0, -0.86),
-                (0.02, -0.1),
-                (0.06, -0.1),
-                (0.08, -0.78),
-                (0.16, -0.88),
-                (0.24, -0.78),
-                (0.26, -0.1),
-                (0.3, -0.1),
-                (0.34, -0.56),
-                (0.42, -0.66),
-                (0.5, -0.56),
-                (0.52, -0.06),
-                (0.46, 0.22),
-                (0.3, 0.78),
-            ];
-            let hand = hand.map(|(x, y)| (x + 0.124, y + 0.114));
-            d.closed(&hand);
-        }
-        Icon::Tool(Tool::Zoom) => {
-            d.circle(-0.15, -0.2, 0.55);
-            d.seg((0.24, 0.19), (0.8, 0.78));
-        }
-        Icon::List => {
-            for y in [-0.5, 0.0, 0.5] {
-                d.dot(-0.62, y, 0.1);
-                d.seg((-0.35, y), (0.7, y));
-            }
-        }
-        Icon::Tiles => {
-            for (x0, x1) in [(-0.7, -0.12), (0.12, 0.7)] {
-                for (y0, y1) in [(-0.7, -0.12), (0.12, 0.7)] {
-                    d.rect(x0, y0, x1, y1);
-                }
-            }
-        }
-        Icon::New => {
-            d.seg((-0.7, 0.0), (0.7, 0.0));
-            d.seg((0.0, -0.7), (0.0, 0.7));
-        }
-        Icon::Edit => {
-            let a = -std::f32::consts::FRAC_PI_4;
-            let body = [
-                rotate((-0.8, -0.17), a),
-                rotate((0.4, -0.17), a),
-                rotate((0.82, 0.0), a),
-                rotate((0.4, 0.17), a),
-                rotate((-0.8, 0.17), a),
-            ];
-            d.closed(&body);
-            d.seg(rotate((0.4, -0.17), a), rotate((0.4, 0.17), a));
-        }
-        Icon::Eyedropper => {
-            // A pipette on the diagonal: a solid bulb top right, a short collar across
-            // it, then a narrow tube to a pointed tip at the bottom left.
-            let bulb = (0.42, -0.42);
-            d.dot(bulb.0, bulb.1, 0.28);
-            d.seg((-0.006, -0.306), (0.306, -0.006));
-            d.seg((0.103, -0.003), (-0.527, 0.633));
-            d.seg((-0.003, -0.103), (-0.633, 0.527));
-            d.poly(&[(-0.527, 0.633), (-0.633, 0.527), (-0.72, 0.72)]);
-        }
-        Icon::Purge => {
-            d.line(&[(-0.2, -0.5), (-0.2, -0.72), (0.2, -0.72), (0.2, -0.5)]);
-            d.seg((-0.65, -0.5), (0.65, -0.5));
-            d.seg((-0.5, -0.4), (0.5, -0.4));
-            d.line(&[(-0.5, -0.4), (-0.36, 0.7), (0.36, 0.7), (0.5, -0.4)]);
-            d.seg((-0.15, -0.2), (-0.1, 0.5));
-            d.seg((0.15, -0.2), (0.1, 0.5));
-        }
-    }
-
-    d.out
 }
 
 /// Side of the eyedropper cursor in points.
@@ -540,7 +174,23 @@ pub fn eyedropper_cursor_rect(pointer: Pos2) -> Rect {
 
 /// Draw `icon` inside `rect`.
 pub fn paint(painter: &egui::Painter, rect: Rect, icon: Icon, color: Color32) {
-    painter.extend(shapes(icon, rect, color));
+    let ctx = painter.ctx();
+    install(ctx);
+    let pixel_size = (rect.size() * ctx.pixels_per_point()).round();
+    let size_hint = egui::load::SizeHint::Size {
+        width: pixel_size.x.max(1.0) as u32,
+        height: pixel_size.y.max(1.0) as u32,
+        maintain_aspect_ratio: false,
+    };
+    let loaded = ctx.try_load_texture(&uri(icon), egui::TextureOptions::LINEAR, size_hint);
+    if let Ok(egui::load::TexturePoll::Ready { texture }) = loaded {
+        painter.image(
+            texture.id,
+            rect,
+            Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
+            color,
+        );
+    }
 }
 
 /// A square `BUTTON_SIZE` button showing `icon`, drawn selected when `selected`. Screen
@@ -559,12 +209,34 @@ pub fn icon_button(
     });
 
     let visuals = ui.style().interact_selectable(&response, selected);
-    let painter = ui.painter();
-    if selected || response.hovered() {
-        painter.rect_filled(rect, 4.0, visuals.weak_bg_fill);
+    let palette = look::palette(look::theme_of(ui.visuals()));
+    let color = if !enabled {
+        visuals.fg_stroke.color
+    } else if selected {
+        palette.accent
+    } else {
+        palette.ink
+    };
+
+    if selected {
+        ui.painter()
+            .rect_filled(rect.shrink(0.1), 4.0, palette.accent_soft);
+    } else if response.hovered() {
+        ui.painter().rect_filled(rect, 4.0, visuals.weak_bg_fill);
     }
-    let icon_rect = rect.shrink(4.0);
-    painter.extend(shapes(icon, icon_rect, visuals.fg_stroke.color));
+
+    install(ui.ctx());
+    egui::Image::new(uri(icon))
+        .tint(color)
+        .paint_at(ui, rect.shrink(4.0));
+
+    if selected && matches!(icon, Icon::Tool(_)) {
+        let bar = Rect::from_min_max(
+            Pos2::new(rect.min.x, rect.max.y - ACTIVE_BAR_HEIGHT),
+            rect.max,
+        );
+        ui.painter().rect_filled(bar, 0.0, palette.product);
+    }
 
     response.on_hover_text(tooltip)
 }

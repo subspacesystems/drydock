@@ -220,6 +220,7 @@ pub struct App {
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>, file: Option<PathBuf>) -> App {
         look::apply(&cc.egui_ctx);
+        icons::install(&cc.egui_ctx);
         let gpu = cc.wgpu_render_state.as_ref().map(|state| {
             let renderer = Renderer::new(&state.device);
             let scene = renderer.upload(&state.device, &state.queue, &FlatScene::default());
@@ -3369,7 +3370,7 @@ fn unsaved_dialog(ctx: &egui::Context, name: &str) -> Option<UnsavedChoice> {
         ui.label(format!("Save changes to {name}?"));
         ui.add_space(8.0);
         ui.horizontal(|ui| {
-            if ui.button("Save").clicked() {
+            if look::primary_button(ui, "Save").clicked() {
                 choice = Some(UnsavedChoice::Save);
             }
             if ui.button("Discard").clicked() {
@@ -3848,7 +3849,7 @@ impl SaveDialog {
             if let Some(target) = &self.replacing {
                 ui.label(format!("Replace {}?", file_name(target)));
                 ui.horizontal(|ui| {
-                    if ui.button("Replace").clicked() {
+                    if look::primary_button(ui, "Replace").clicked() {
                         outcome = SaveOutcome::Save(target.clone());
                     }
                     if ui.button("Cancel").clicked() {
@@ -3874,7 +3875,7 @@ impl SaveDialog {
                     SaveMode::Export(_) | SaveMode::ExportFolder(_) => "Export",
                 };
                 ui.horizontal(|ui| {
-                    if (ui.button(choose).clicked() || submitted)
+                    if (look::primary_button(ui, choose).clicked() || submitted)
                         && let Some(target) = self.target()
                     {
                         if matches!(self.mode, SaveMode::ExportFolder(_)) && target.is_dir() {
