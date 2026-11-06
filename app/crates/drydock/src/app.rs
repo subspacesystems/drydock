@@ -2641,6 +2641,7 @@ impl App {
                                     editor.set_tag_visible(model, id, visible)
                                 }
                                 TagAction::Delete(id) => editor.remove_tag(model, id),
+                                TagAction::Assign(tag) => editor.assign_selection_tag(model, tag),
                             },
                             None => false,
                         }
@@ -2781,7 +2782,7 @@ impl App {
                 }
             }
             PanelId::Tags => {
-                let (Some(_editor), Some(document)) = (&self.editor, &self.model) else {
+                let (Some(editor), Some(document)) = (&self.editor, &self.model) else {
                     ui.label("No model");
                     return actions;
                 };
@@ -2789,6 +2790,11 @@ impl App {
                     ui.label("No model");
                     return actions;
                 };
+                self.tags.selected = editor
+                    .selection()
+                    .iter()
+                    .filter(|entity| matches!(entity, Entity::Instance(_)))
+                    .count();
                 if let Some(action) = tags_panel(ui, &mut self.tags, model) {
                     actions.push(PanelAction::Tag(action));
                 }
@@ -2860,6 +2866,9 @@ impl App {
                 }
                 InfoAction::RenameInstance(id, name) => {
                     changed = editor.rename_instance(model, id, &name);
+                }
+                InfoAction::SetTag(tag) => {
+                    changed = editor.assign_selection_tag(model, tag);
                 }
                 InfoAction::Repair(id) => match editor.repair_instance(model, id) {
                     Ok(report) => {

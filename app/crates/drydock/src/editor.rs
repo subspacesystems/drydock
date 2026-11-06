@@ -2709,15 +2709,45 @@ impl Editor {
     /// kernel refuses (empty name).
     /// Behaviour: `docs/specs/m10-tags-panel.md`.
     pub fn add_tag(&mut self, model: &mut Model, name: &str) -> Option<TagId> {
-        let _ = (model, name);
-        unimplemented!("m10-tags-panel")
+        let mut log = ModelEdit::new();
+        match model.add_tag(name, &mut log) {
+            Ok(id) => {
+                self.undo.push("New Tag", log);
+                self.message = None;
+                Some(id)
+            }
+            Err(_) => {
+                self.message = Some("Can't make that tag".to_string());
+                None
+            }
+        }
+    }
+
+    /// Give every group and component instance in the selection the tag, or untag them with
+    /// `None`, as one undo step "Assign Tag" (or "Remove Tag" for `None`). Selected edges and
+    /// faces are ignored. True when something changed; false (no step) when the selection has
+    /// no instance, nothing would change, or the tag doesn't exist (the last sets a message).
+    /// Behaviour: `docs/specs/m10-tags-assign.md`.
+    pub fn assign_selection_tag(&mut self, model: &mut Model, tag: Option<TagId>) -> bool {
+        let _ = (model, tag);
+        unimplemented!("m10-tags-assign")
     }
 
     /// Rename a tag as one undo step "Rename Tag". True when accepted (also when the name is
     /// unchanged: no step then); false with a message when refused.
     pub fn rename_tag(&mut self, model: &mut Model, id: TagId, name: &str) -> bool {
-        let _ = (model, id, name);
-        unimplemented!("m10-tags-panel")
+        let mut log = ModelEdit::new();
+        match model.rename_tag(id, name, &mut log) {
+            Ok(()) => {
+                self.undo.push("Rename Tag", log);
+                self.message = None;
+                true
+            }
+            Err(_) => {
+                self.message = Some("Can't rename that tag".to_string());
+                false
+            }
+        }
     }
 
     /// Show or hide a tag as one undo step "Show Tag" / "Hide Tag". False, with no step, when
@@ -2762,8 +2792,18 @@ impl Editor {
     /// Delete a tag (its instances become untagged) as one undo step "Delete Tag". True when
     /// done; false with a message when the tag doesn't exist.
     pub fn remove_tag(&mut self, model: &mut Model, id: TagId) -> bool {
-        let _ = (model, id);
-        unimplemented!("m10-tags-panel")
+        let mut log = ModelEdit::new();
+        match model.remove_tag(id, &mut log) {
+            Ok(()) => {
+                self.undo.push("Delete Tag", log);
+                self.message = None;
+                true
+            }
+            Err(_) => {
+                self.message = Some("Can't delete that tag".to_string());
+                false
+            }
+        }
     }
 
     /// Remove materials nothing uses as one undo step "Purge Materials"; resets the current
