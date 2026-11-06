@@ -83,6 +83,10 @@ pub fn tags_panel(ui: &mut egui::Ui, panel: &mut TagsPanel, model: &Model) -> Op
         if ui.button("Add").clicked() {
             action = Some(TagAction::Add);
         }
+        let response = ui.add_enabled(panel.selected > 0, egui::Button::new("No tag"));
+        if response.clicked() && action.is_none() {
+            action = Some(TagAction::Assign(None));
+        }
     });
 
     let ids = listed_tags(model);
@@ -143,6 +147,19 @@ pub fn tags_panel(ui: &mut egui::Ui, panel: &mut TagsPanel, model: &Model) -> Op
                             panel.editing = Some((id, tag.name.clone()));
                             ui.ctx().request_repaint();
                         }
+                    }
+
+                    let enabled = panel.selected > 0;
+                    let response = ui.add_enabled(enabled, egui::Button::new("Assign"));
+                    response.widget_info(|| {
+                        egui::WidgetInfo::labeled(
+                            egui::WidgetType::Button,
+                            enabled,
+                            format!("Assign selection to {}", tag.name),
+                        )
+                    });
+                    if response.clicked() && action.is_none() {
+                        action = Some(TagAction::Assign(Some(id)));
                     }
 
                     let enabled = ui.is_enabled();

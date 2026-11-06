@@ -294,15 +294,30 @@ pub fn selection_tag(
     body: BodyId,
     selection: &[Entity],
 ) -> Option<Shared<Option<TagId>>> {
-    let _ = (model, body, selection);
-    unimplemented!("m10-tags-assign")
+    let target = model.body(body)?;
+    let mut tags = selection.iter().filter_map(|entity| match *entity {
+        Entity::Instance(id) if target.instance(id).is_some() => Some(model.instance_tag(id)),
+        _ => None,
+    });
+    let first = tags.next()?;
+    for tag in tags {
+        if tag != first {
+            return Some(Shared::Varies);
+        }
+    }
+    Some(Shared::Same(first))
 }
 
 /// The Tag dropdown's text for `tag`: "No tag", "Mixed", or the tag's name ("?" when the
 /// model doesn't have it).
 pub fn tag_label(model: &Model, tag: Shared<Option<TagId>>) -> String {
-    let _ = (model, tag);
-    unimplemented!("m10-tags-assign")
+    match tag {
+        Shared::Same(None) => "No tag".to_string(),
+        Shared::Same(Some(id)) => model
+            .tag(id)
+            .map_or_else(|| "?".to_string(), |tag| tag.name.clone()),
+        Shared::Varies => "Mixed".to_string(),
+    }
 }
 
 /// What the user asked for in the panel this frame.
@@ -436,6 +451,30 @@ pub fn entity_info_panel(
         if !instance.group {
             number_row(ui, "In model", &instance.copies.to_string());
         }
+    }
+
+    if let Some(shared) = selection_tag(model, body, selection) {
+        egui::ComboBox::from_label("Tag")
+            .selected_text(tag_label(model, shared))
+            .show_ui(ui, |ui| {
+                let current = matches!(shared, Shared::Same(None));
+                if ui.selectable_label(current, "No tag").clicked() && !current && action.is_none()
+                {
+                    action = Some(InfoAction::SetTag(None));
+                }
+                for id in crate::tags_panel::listed_tags(model) {
+                    let Some(tag) = model.tag(id) else {
+                        continue;
+                    };
+                    let current = matches!(shared, Shared::Same(Some(selected)) if selected == id);
+                    if ui.selectable_label(current, &tag.name).clicked()
+                        && !current
+                        && action.is_none()
+                    {
+                        action = Some(InfoAction::SetTag(Some(id)));
+                    }
+                }
+            });
     }
 
     let solid = panel.solid.get(model, body, selection).map(|status| {
