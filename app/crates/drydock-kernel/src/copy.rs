@@ -14,12 +14,14 @@ use glam::{DMat4, DVec3};
 use crate::component::unique_definition_name;
 use crate::explode::{ExplodeError, explode_inner};
 use crate::model::{
-    Body, BodyId, DefinitionId, DefinitionInfo, FaceMaterials, Instance, MaterialId, Model,
-    ModelEdit, ModelError, ModelRecord, ModelViolation, UndoStack,
+    Body, BodyId, DefinitionId, DefinitionInfo, FaceMaterials, Instance, InstanceId, MaterialId,
+    Model, ModelEdit, ModelError, ModelRecord, ModelViolation, UndoStack,
 };
 use crate::paint::unique_material_name;
 use crate::select::Entity;
-use crate::topology::{EdgeId, EdgeUse, Face, Loop, TopoError};
+use crate::topology::{
+    CurveId, EdgeId, EdgeUse, Face, FaceId, Loop, TopoError, VertexId, Violation,
+};
 
 /// Why a copy, extract or insert was refused. The model and the undo stack are unchanged.
 #[derive(Clone, Debug, PartialEq)]
@@ -32,7 +34,8 @@ pub enum CopyError {
     BadMatrix,
     /// The model refused a record (also: the body doesn't exist, or a cycle of instances).
     Model(ModelError),
-    /// The result would add these `Model::validate` violations.
+    /// The result would add these `Model::validate` violations (a source's own violations are
+    /// carried, not added).
     Invalid(Vec<ModelViolation>),
 }
 
@@ -342,6 +345,16 @@ fn mapped_materials(
     }
 }
 
+/// The ids `copy_body_into` gave the copies of a source body's entities.
+#[derive(Clone, Debug, Default)]
+struct BodyIds {
+    vertices: BTreeMap<VertexId, VertexId>,
+    edges: BTreeMap<EdgeId, EdgeId>,
+    faces: BTreeMap<FaceId, FaceId>,
+    curves: BTreeMap<CurveId, CurveId>,
+    instances: BTreeMap<InstanceId, InstanceId>,
+}
+
 fn copy_body_into(
     model: &mut Model,
     target: BodyId,
@@ -349,12 +362,14 @@ fn copy_body_into(
     definitions: &BTreeMap<DefinitionId, DefinitionId>,
     materials: &BTreeMap<MaterialId, MaterialId>,
     edit: &mut ModelEdit,
-) -> Result<(), ModelError> {
+) -> Result<BodyIds, ModelError> {
+    let source_curve_ids: Vec<CurveId> = source.geometry().curves().map(|(id, _)| id).collect();
     let source_curves: Vec<crate::curve::Curve> =
         source.geometry().curves().map(|(_, c)| c.clone()).collect();
     let mut vertex_map = BTreeMap::new();
     let mut edge_map = BTreeMap::new();
     let mut face_map = BTreeMap::new();
+    let mut curve_map = BTreeMap::new();
     topo(model.edit_geometry(target, edit, |ctx, log| {
         for (id, vertex) in source.geometry().vertices() {
             vertex_map.insert(id, ctx.insert_vertex(vertex.position, log));
@@ -368,13 +383,18 @@ fn copy_body_into(
             let new = ctx.insert_face(copy_face(face, &edge_map), log)?;
             face_map.insert(id, new);
         }
-        crate::curve::carry(
+        let carried = crate::curve::carry(
             ctx,
             &source_curves,
             DMat4::IDENTITY,
             |_, v| vertex_map.get(&v).copied(),
             log,
         );
+        for (id, new) in source_curve_ids.iter().zip(carried) {
+            if let Some(new) = new {
+                curve_map.insert(*id, new);
+            }
+        }
         Ok(())
     }))?;
 
@@ -387,7 +407,8 @@ fn copy_body_into(
             model.set_face_materials(target, new, face_materials, edit)?;
         }
     }
-    for (_, instance) in source.instances() {
+    let mut instance_map = BTreeMap::new();
+    for (id, instance) in source.instances() {
         let instance = Instance {
             definition: definitions
                 .get(&instance.definition)
@@ -399,9 +420,79 @@ fn copy_body_into(
                 .material
                 .map(|id| materials.get(&id).copied().unwrap_or(id)),
         };
-        model.add_instance(target, instance, edit)?;
+        let new = model.add_instance(target, instance, edit)?;
+        instance_map.insert(id, new);
     }
-    Ok(())
+    Ok(BodyIds {
+        vertices: vertex_map,
+        edges: edge_map,
+        faces: face_map,
+        curves: curve_map,
+        instances: instance_map,
+    })
+}
+
+fn map_violation(violation: &Violation, ids: &BodyIds) -> Option<Violation> {
+    let vertex = |id: &VertexId| ids.vertices.get(id).copied();
+    let edge = |id: &EdgeId| ids.edges.get(id).copied();
+    let face = |id: &FaceId| ids.faces.get(id).copied();
+    Some(match violation {
+        Violation::StrayVertex(v) => Violation::StrayVertex(vertex(v)?),
+        Violation::DuplicateVertex(a, b) => {
+            let a = vertex(a)?;
+            let b = vertex(b)?;
+            Violation::DuplicateVertex(a.min(b), a.max(b))
+        }
+        Violation::DuplicateEdge(a, b) => {
+            let a = edge(a)?;
+            let b = edge(b)?;
+            Violation::DuplicateEdge(a.min(b), a.max(b))
+        }
+        Violation::EdgesIntersect(a, b) => {
+            let a = edge(a)?;
+            let b = edge(b)?;
+            Violation::EdgesIntersect(a.min(b), a.max(b))
+        }
+        Violation::OpenLoop(f) => Violation::OpenLoop(face(f)?),
+        Violation::LoopNotSimple(f) => Violation::LoopNotSimple(face(f)?),
+        Violation::NonPlanarFace(f) => Violation::NonPlanarFace(face(f)?),
+        Violation::HoleOutside(f) => Violation::HoleOutside(face(f)?),
+        Violation::HolesTouch(f) => Violation::HolesTouch(face(f)?),
+        Violation::HoleWinding(f) => Violation::HoleWinding(face(f)?),
+        Violation::DuplicateFace(a, b) => {
+            let a = face(a)?;
+            let b = face(b)?;
+            Violation::DuplicateFace(a.min(b), a.max(b))
+        }
+        Violation::BadCurve(c) => Violation::BadCurve(*ids.curves.get(c)?),
+    })
+}
+
+fn map_body_violation(
+    violation: &ModelViolation,
+    body_map: &BTreeMap<BodyId, (BodyId, BodyIds)>,
+    definition_map: &BTreeMap<DefinitionId, DefinitionId>,
+) -> Option<ModelViolation> {
+    match violation {
+        ModelViolation::Geometry(body, violation) => {
+            let (body, ids) = body_map.get(body)?;
+            Some(ModelViolation::Geometry(
+                *body,
+                map_violation(violation, ids)?,
+            ))
+        }
+        ModelViolation::BadTransform(body, instance) => {
+            let (body, ids) = body_map.get(body)?;
+            Some(ModelViolation::BadTransform(
+                *body,
+                *ids.instances.get(instance)?,
+            ))
+        }
+        ModelViolation::GroupInstances(definition, n) => Some(ModelViolation::GroupInstances(
+            *definition_map.get(definition)?,
+            *n,
+        )),
+    }
 }
 
 fn map_explode(error: ExplodeError) -> CopyError {
@@ -603,8 +694,10 @@ pub fn copy_selection(
 /// `unique_definition_name` (blank = "Component"); points keep their coordinates. No
 /// instance is placed. Returns the new definition.
 ///
-/// `Err(Empty)` when `source`'s root has no edge, face or instance. On any error the model
-/// and the undo stack are unchanged. `source` is not changed.
+/// The source's own `validate` violations are carried along, in the copies of the bodies
+/// they were in; only violations the import itself adds refuse it. `Err(Empty)` when
+/// `source`'s root has no edge, face or instance. On any error the model and the undo stack
+/// are unchanged. `source` is not changed.
 pub fn import_component(
     model: &mut Model,
     source: &Model,
@@ -634,9 +727,11 @@ pub fn import_component(
         .collect();
     let clipboard = extract(source, BodyId::Root, &selection)?;
     let clip = clipboard.model();
+    let carried = clip.validate();
 
     let before = model.validate();
     let mut edit = ModelEdit::new();
+    let mut body_map: BTreeMap<BodyId, (BodyId, BodyIds)> = BTreeMap::new();
 
     let mut material_map = BTreeMap::new();
     for (id, material) in clip.materials() {
@@ -669,7 +764,7 @@ pub fn import_component(
             &mut edit,
         );
         definition_map.insert(definition, new);
-        if let Err(error) = copy_body_into(
+        let ids = match copy_body_into(
             model,
             BodyId::Definition(new),
             clip_body,
@@ -677,9 +772,16 @@ pub fn import_component(
             &material_map,
             &mut edit,
         ) {
-            rollback(model, &edit);
-            return Err(CopyError::Model(error));
-        }
+            Ok(ids) => ids,
+            Err(error) => {
+                rollback(model, &edit);
+                return Err(CopyError::Model(error));
+            }
+        };
+        body_map.insert(
+            BodyId::Definition(definition),
+            (BodyId::Definition(new), ids),
+        );
     }
 
     let component = model.add_definition(
@@ -689,7 +791,7 @@ pub fn import_component(
         },
         &mut edit,
     );
-    if let Err(error) = copy_body_into(
+    let ids = match copy_body_into(
         model,
         BodyId::Definition(component),
         clip.root(),
@@ -697,14 +799,22 @@ pub fn import_component(
         &material_map,
         &mut edit,
     ) {
-        rollback(model, &edit);
-        return Err(CopyError::Model(error));
-    }
+        Ok(ids) => ids,
+        Err(error) => {
+            rollback(model, &edit);
+            return Err(CopyError::Model(error));
+        }
+    };
+    body_map.insert(BodyId::Root, (BodyId::Definition(component), ids));
 
+    let carried: Vec<ModelViolation> = carried
+        .iter()
+        .filter_map(|violation| map_body_violation(violation, &body_map, &definition_map))
+        .collect();
     let added: Vec<ModelViolation> = model
         .validate()
         .into_iter()
-        .filter(|violation| !before.contains(violation))
+        .filter(|violation| !before.contains(violation) && !carried.contains(violation))
         .collect();
     if !added.is_empty() {
         rollback(model, &edit);
