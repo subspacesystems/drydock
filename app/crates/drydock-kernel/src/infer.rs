@@ -743,11 +743,8 @@ fn gather_flat_body(
     flat: &mut Flat,
 ) {
     gather_own_geometry(model, body, xform, owner, context, flat);
-    let Some(b) = model.body(body) else {
-        return;
-    };
 
-    for (id, inst) in b.instances() {
+    for (id, inst) in model.visible_instances(body) {
         if path.contains(&inst.definition) {
             continue;
         }
@@ -781,10 +778,7 @@ fn gather_flat_rest(
     flat: &mut Flat,
 ) {
     gather_own_geometry(model, body, xform, Owner::Rest, context, flat);
-    let Some(b) = model.body(body) else {
-        return;
-    };
-    for (_, inst) in b.instances() {
+    for (_, inst) in model.visible_instances(body) {
         if path.contains(&inst.definition) {
             continue;
         }
@@ -840,7 +834,7 @@ fn flatten_in(model: &Model, path: &EditPath, rest: bool) -> Option<Flat> {
             );
 
             let b = model.body(body)?;
-            for (id, inst) in b.instances() {
+            for (id, inst) in model.visible_instances(body) {
                 if id == step {
                     continue;
                 }
@@ -1152,7 +1146,7 @@ fn flat_point_categories(flat: &Flat, probe: &Probe, d: DVec3) -> Option<Hit> {
 ///
 /// Behaviour: `docs/specs/m2-pick-imported.md`.
 pub fn pick_model(model: &Model, probe: &Probe) -> Option<Entity> {
-    if model.root().instances().next().is_none() {
+    if model.visible_instances(BodyId::Root).next().is_none() {
         return pick(model.root().geometry(), probe);
     }
     let d = valid_probe(probe)?;
@@ -1183,7 +1177,7 @@ pub fn pick_model(model: &Model, probe: &Probe) -> Option<Entity> {
 ///
 /// Behaviour: `docs/specs/m2-pick-imported.md`.
 pub fn infer_model(model: &Model, probe: &Probe) -> Option<Inference> {
-    if model.root().instances().next().is_none() {
+    if model.visible_instances(BodyId::Root).next().is_none() {
         return infer(model.root().geometry(), probe);
     }
     let d = valid_probe(probe)?;
@@ -1325,10 +1319,7 @@ impl MaterialWalk<'_> {
     ) {
         self.faces(body, xform, inherited, context);
         let model = self.model;
-        let Some(b) = model.body(body) else {
-            return;
-        };
-        for (_id, instance) in b.instances() {
+        for (_id, instance) in model.visible_instances(body) {
             if def_path.contains(&instance.definition) {
                 continue;
             }
@@ -1363,7 +1354,7 @@ impl MaterialWalk<'_> {
         let Some(&open) = steps.get(step) else {
             return;
         };
-        for (id, instance) in b.instances() {
+        for (id, instance) in model.visible_instances(body) {
             if id == open {
                 continue;
             }
