@@ -29,15 +29,17 @@ pub enum PanelId {
     EntityInfo,
     Materials,
     Components,
+    Tags,
     Shadows,
     TexturePosition,
 }
 
 /// Every panel, in this order.
-pub const PANELS: [PanelId; 5] = [
+pub const PANELS: [PanelId; 6] = [
     PanelId::EntityInfo,
     PanelId::Materials,
     PanelId::Components,
+    PanelId::Tags,
     PanelId::Shadows,
     PanelId::TexturePosition,
 ];
@@ -479,6 +481,7 @@ pub fn title(id: PanelId) -> &'static str {
         PanelId::EntityInfo => "Entity Info",
         PanelId::Materials => "Materials",
         PanelId::Components => "Components",
+        PanelId::Tags => "Tags",
         PanelId::Shadows => "Shadows",
         PanelId::TexturePosition => "Texture Position",
     }
@@ -490,6 +493,7 @@ pub fn panel_key(id: PanelId) -> &'static str {
         PanelId::EntityInfo => "entity-info",
         PanelId::Materials => "materials",
         PanelId::Components => "components",
+        PanelId::Tags => "tags",
         PanelId::Shadows => "shadows",
         PanelId::TexturePosition => "texture-position",
     }
