@@ -346,6 +346,7 @@ Done when: Follow Me sweeps a face along an open and a closed path, and Offset i
 | `m10-ground-shadow-pass` | Feedback fix: with Shadows on Ground on, the ground is painted in the background color instead of the ground color, and when zoomed out the part nearer than the model (bottom of the viewport) drops its shadows and shows a different color; shade the model's ground color and intersect each pixel's ray from the eye, not the near plane | |
 | `m10-slider-visuals` | Feedback fix: sliders show a visible rail in Light and Dark, and the handle changes on hover like buttons do | |
 | `m10-button-text-center` | Feedback fix: button labels are centered vertically when the button is taller than its text (dialog buttons such as Model Info's Close sit 3 px high) | |
+| `m10-ground-pass-horizon` | Sign-off fix: with Show Shadows on, the ground pass paints the sky in the ground color when the eye is at or below ground level (Front/Back/Left/Right views zoomed out, or orbiting under the ground); draw the shadowed ground only where the eye is above it and the ray points down | `m10-ground-shadow-pass` |
 
 ## Future (unscheduled)
 
