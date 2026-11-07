@@ -238,6 +238,25 @@ pub fn style(theme: Theme) -> Style {
     style
 }
 
+/// Slider-only colours (`docs/specs/m10-slider-visuals.md`), applied to `visuals` (a copy of
+/// `style(theme).visuals`): egui paints a slider's rail with `widgets.inactive.bg_fill` and
+/// its handle with the `interact` state's `bg_fill` and `fg_stroke`. After this call the
+/// inactive `bg_fill` is `border_control` (rail and resting handle), hovered and active
+/// `bg_fill` are the opaque `accent`, and hovered and active `fg_stroke` are 2 points wide
+/// in `ink`; the resting `fg_stroke` stays `ink`, 1 point.
+pub fn slider_widgets(theme: Theme, visuals: &mut egui::Visuals) {
+    let _ = (theme, visuals);
+    unimplemented!("m10-slider-visuals")
+}
+
+/// Add `slider` to `ui` inside a scope whose visuals went through `slider_widgets`
+/// (theme from `theme_of(ui.visuals())`); the rest of `ui` keeps its style. Every slider in
+/// the app goes through this.
+pub fn slider(ui: &mut egui::Ui, slider: egui::Slider<'_>) -> egui::Response {
+    let _ = (ui, slider);
+    unimplemented!("m10-slider-visuals")
+}
+
 /// The viewport colours for `theme` (`docs/specs/m10-brand-viewport.md`): `background` =
 /// `viewport_bg`, `default_line` = `edge`, `default_face` = `face_front`, `default_back` =
 /// `Some(face_back)`; all opaque, sRGB 0..1 (byte / 255). `sun` is `None`.
