@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Subspace Systems
 
-//! Acceptance tests for `docs/specs/m10-brand-icons.md`: the 24 brand icons from
+//! Acceptance tests for `docs/specs/m10-brand-icons.md`: the 26 brand icons from
 //! `design/brand/icons/`, rasterised by egui_extras and tinted by the theme; the active
 //! tool's marker.
 
@@ -11,7 +11,7 @@ use drydock::look::{self, Theme};
 use eframe::egui::{self, Color32, Pos2, Rect, Shape, TextureId, load::SizeHint, vec2};
 use egui_kittest::Harness;
 
-const NAMES: [&str; 24] = [
+const NAMES: [&str; 26] = [
     "select",
     "line",
     "rectangle",
@@ -36,6 +36,8 @@ const NAMES: [&str; 24] = [
     "edit",
     "purge",
     "eyedropper",
+    "eye",
+    "eye-off",
 ];
 
 const THEMES: [Theme; 2] = [Theme::Light, Theme::Dark];
@@ -43,7 +45,7 @@ const THEMES: [Theme; 2] = [Theme::Light, Theme::Dark];
 #[test]
 fn every_icon_has_the_readme_name_in_order() {
     let all = icons::all();
-    assert_eq!(all.len(), 24);
+    assert_eq!(all.len(), 26);
     for (icon, want) in all.iter().zip(NAMES) {
         assert_eq!(icons::name(*icon), want, "{icon:?}");
     }
@@ -75,7 +77,7 @@ fn uris_are_distinct_svg_names() {
     assert!(uris.iter().all(|u| u.ends_with(".svg")));
     uris.sort();
     uris.dedup();
-    assert_eq!(uris.len(), 24);
+    assert_eq!(uris.len(), 26);
 }
 
 #[test]

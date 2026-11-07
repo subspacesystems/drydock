@@ -30,6 +30,10 @@ pub enum Icon {
     Purge,
     /// Materials panel: pick a material from the model.
     Eyedropper,
+    /// Tags panel: the tag is shown.
+    Eye,
+    /// Tags panel: the tag is hidden.
+    EyeOff,
 }
 
 /// Every tool, in `chrome::TOOL_BUTTONS` order.
@@ -54,7 +58,7 @@ pub const TOOLS: [Tool; 18] = [
     Tool::Zoom,
 ];
 
-/// Every icon: the tools in `TOOLS` order, then List, Tiles, New, Edit, Purge, Eyedropper.
+/// Every icon: the tools in `TOOLS` order, then List, Tiles, New, Edit, Purge, Eyedropper, Eye, EyeOff.
 pub fn all() -> Vec<Icon> {
     let mut icons: Vec<Icon> = TOOLS.iter().map(|tool| Icon::Tool(*tool)).collect();
     icons.extend([
@@ -64,6 +68,8 @@ pub fn all() -> Vec<Icon> {
         Icon::Edit,
         Icon::Purge,
         Icon::Eyedropper,
+        Icon::Eye,
+        Icon::EyeOff,
     ]);
     icons
 }
@@ -102,6 +108,8 @@ pub fn name(icon: Icon) -> &'static str {
         Icon::Edit => "edit",
         Icon::Purge => "purge",
         Icon::Eyedropper => "eyedropper",
+        Icon::Eye => "eye",
+        Icon::EyeOff => "eye-off",
     }
 }
 
@@ -138,6 +146,8 @@ pub fn svg(icon: Icon) -> &'static [u8] {
         Icon::Edit => include_bytes!("../../../../design/brand/icons/edit.svg"),
         Icon::Purge => include_bytes!("../../../../design/brand/icons/purge.svg"),
         Icon::Eyedropper => include_bytes!("../../../../design/brand/icons/eyedropper.svg"),
+        Icon::Eye => include_bytes!("../../../../design/brand/icons/eye.svg"),
+        Icon::EyeOff => include_bytes!("../../../../design/brand/icons/eye-off.svg"),
     }
 }
 

@@ -8,7 +8,7 @@ Drydock" issue.
 | Path | What |
 |---|---|
 | `tokens.json` | Every color (dark + light), type style, spacing and radius token. Color tokens may alias others as `"{name}"`. |
-| `icons/*.svg` | 24 icons: 18 tools + 6 materials-panel icons. 20×20 grid, white ink, meant to be tinted at runtime. |
+| `icons/*.svg` | 26 icons: 18 tools + 6 materials-panel icons + 2 Tags-panel icons (eye, eye-off). 20×20 grid, white ink, meant to be tinted at runtime. |
 | `icons/generate_icons.py` | The script that draws the icons (Python 3.12+). Edit it and rerun it; don't hand-edit the SVGs. |
 | `logo/drydock-app-icon.svg` | App icon tile, 1000×1000 (window icon, `.ico`, Linux hicolor, `assets/drydock-256.png`). |
 | `logo/drydock-favicon.svg` | Simplified icon for 16 and 32 px. |
@@ -19,11 +19,13 @@ Drydock" issue.
 - One file per `Tool` variant (`select`, `line`, `rectangle`, `circle`, `arc`,
   `arc3`, `pushpull`, `offset`, `followme`, `move`, `rotate`, `scale`, `tape`,
   `erase`, `paint`, `orbit`, `pan`, `zoom`) and per panel `Icon` (`list`,
-  `tiles`, `new`, `edit`, `purge`, `eyedropper`).
+  `tiles`, `new`, `edit`, `purge`, `eyedropper`, `eye`, `eye-off`).
 - Drawn at 20×20 with a 1.75 px stroke and mitred joins. Drawing tools mark the
   point they act on with a small **ring node**, the Subspace logo's motif.
 - White ink (`#FFFFFF`) so a runtime tint gives the theme's color. Fills at 35%
   opacity are intentional.
+- `eye` (almond from two arcs, the iris is the ring node) and `eye-off` (the same eye
+  with a slash; the lines are knocked out around the slash like around a ring).
 - The paint bucket pours to the left, as Tyrel asked.
 
 ## Colors in the app

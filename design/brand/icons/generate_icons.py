@@ -13,17 +13,18 @@ def chevron(tip, frm, size=3.2):
     ux,uy=tip[0]-frm[0],tip[1]-frm[1]; L=math.hypot(ux,uy); ux/=L; uy/=L; px,py=-uy,ux
     b=(tip[0]-ux*size, tip[1]-uy*size)
     return pl([(b[0]+px*size*0.75,b[1]+py*size*0.75), tip, (b[0]-px*size*0.75,b[1]-py*size*0.75)])
-def svg(name, strokes=(), fills=(), lights=(), rings=(), dots=()):
+def svg(name, strokes=(), fills=(), lights=(), rings=(), dots=(), cuts=(), top=(), raw=''):
     # strokes: path d strings; lights: filled at 35% opacity; rings: (x,y[,r]) ring nodes that knock out lines
     m=''
-    if rings:
-        m='<mask id="k" maskUnits="userSpaceOnUse" x="0" y="0" width="20" height="20"><rect width="20" height="20" fill="#fff"/>'+''.join(f'<circle cx="{r[0]}" cy="{r[1]}" r="{(r[2] if len(r)>2 else RR)+1.0:.2f}" fill="#000"/>' for r in rings)+'</mask>'
+    if rings or cuts:
+        m='<mask id="k" maskUnits="userSpaceOnUse" x="0" y="0" width="20" height="20"><rect width="20" height="20" fill="#fff"/>'+''.join(f'<circle cx="{r[0]}" cy="{r[1]}" r="{(r[2] if len(r)>2 else RR)+1.0:.2f}" fill="#000"/>' for r in rings)+''.join(f'<path d="{d}" fill="none" stroke="#000" stroke-width="{SW+2.5}"/>' for d in cuts)+'</mask>'
     g=''.join(f'<path d="{d}" fill="{INK}" fill-opacity=".35"/>' for d in lights)
     g+=''.join(f'<path d="{d}" fill="{INK}"/>' for d in fills)
     g+=''.join(f'<path d="{d}"/>' for d in strokes)
-    g+=''.join(f'<circle cx="{x}" cy="{y}" r="{r}" fill="{INK}" stroke="none"/>' for x,y,r in dots)
-    body=f'<g fill="none" stroke="{INK}" stroke-width="{SW}" stroke-linecap="butt" stroke-linejoin="miter" stroke-miterlimit="6"{" mask=\"url(#k)\"" if rings else ""}>{g}</g>'
+    g+=''.join(f'<circle cx="{x}" cy="{y}" r="{r}" fill="{INK}" stroke="none"/>' for x,y,r in dots)+raw
+    body=f'<g fill="none" stroke="{INK}" stroke-width="{SW}" stroke-linecap="butt" stroke-linejoin="miter" stroke-miterlimit="6"{" mask=\"url(#k)\"" if (rings or cuts) else ""}>{g}</g>'
     body+=''.join(f'<circle cx="{r[0]}" cy="{r[1]}" r="{r[2] if len(r)>2 else RR}" fill="none" stroke="{INK}" stroke-width="1.5"/>' for r in rings)
+    body+=''.join(f'<g fill="none" stroke="{INK}" stroke-width="{SW}" stroke-linecap="butt"><path d="{d}"/></g>' for d in top)
     s=f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="20" height="20">{m}{body}</svg>\n'
     open(os.path.join(os.path.dirname(os.path.abspath(__file__)), f'{name}.svg'),'w').write(s)
 
@@ -64,4 +65,9 @@ P=[(13.5,2.5),(17.5,6.5),(7,17),(2.5,17.5),(3,13)]
 svg('edit', strokes=[pl(P,True), pl([(11,5),(15,9)])])
 svg('purge', strokes=[pl([(2.5,5),(17.5,5)]), pl([(7.5,5),(7.5,2.5),(12.5,2.5),(12.5,5)]), pl([(4.5,7.5),(5.5,17.5),(14.5,17.5),(15.5,7.5)]), pl([(8.25,9),(8.5,15)]), pl([(11.75,9),(11.5,15)])])
 svg('eyedropper', fills=['M13.2 2.6 A3 3 0 0 1 17.4 6.8 L15.6 8.6 L11.4 4.4 Z'], strokes=[pl([(10.4,5.4),(14.6,9.6)]), pl([(12.4,7.6),(4.6,15.4),(3,17),(4.6,15.4)]), pl([(12.4,7.6),(5,15),(2.5,17.5)])])
+# eye: almond from two arcs meeting in mitred corners at x=2 and x=18; iris is the ring node (no pupil: at 20 px it only clutters)
+EYE='M2 10 A8.9 8.9 0 0 1 18 10 A8.9 8.9 0 0 1 2 10 Z'
+IRIS='<circle cx="10" cy="10" r="2.5" stroke-width="1.5"/>'
+svg('eye', strokes=[EYE], rings=[(10,10,2.5)])
+svg('eye-off', strokes=[EYE], cuts=[pl([(3,17),(17,3)])], raw=IRIS, top=[pl([(3,17),(17,3)])])
 print('wrote', len([f for f in os.listdir(os.path.dirname(os.path.abspath(__file__))) if f.endswith('.svg')]), 'icons')
