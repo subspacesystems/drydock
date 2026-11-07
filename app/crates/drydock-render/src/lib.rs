@@ -146,6 +146,9 @@ struct CameraUniform {
     sun_dir: [f32; 4],
     sun_params: [f32; 4],
     background: [f32; 4],
+    sky: [f32; 4],
+    ground_color: [f32; 4],
+    horizon: [f32; 4],
     parallel: u32,
     _pad: [u32; 3],
 }
@@ -212,6 +215,7 @@ pub struct Renderer {
     extra_line_pipeline: wgpu::RenderPipeline,
     shadow_pipeline: wgpu::RenderPipeline,
     ground_pipeline: wgpu::RenderPipeline,
+    sky_pipeline: wgpu::RenderPipeline,
     sampler: wgpu::Sampler,
     shadow_sampler: wgpu::Sampler,
     white_view: wgpu::TextureView,
@@ -652,6 +656,41 @@ impl Renderer {
             multiview_mask: None,
             cache: None,
         });
+        let sky_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("drydock-render sky ground"),
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs_ground"),
+                compilation_options: Default::default(),
+                buffers: &[],
+            },
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                cull_mode: None,
+                ..Default::default()
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: DEPTH_FORMAT,
+                depth_write_enabled: Some(false),
+                depth_compare: Some(wgpu::CompareFunction::Always),
+                stencil: Default::default(),
+                bias: Default::default(),
+            }),
+            multisample: wgpu::MultisampleState {
+                count: SAMPLE_COUNT,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("fs_sky"),
+                compilation_options: Default::default(),
+                targets: &targets,
+            }),
+            multiview_mask: None,
+            cache: None,
+        });
 
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("drydock-render texture"),
@@ -732,6 +771,7 @@ impl Renderer {
             extra_line_pipeline,
             shadow_pipeline,
             ground_pipeline,
+            sky_pipeline,
             sampler,
             shadow_sampler,
             white_view,
@@ -1026,9 +1066,17 @@ impl Renderer {
         let view = camera.view_matrix();
         let projection = camera.projection_matrix(aspect, scene.sphere);
         let view_proj = (projection * view).as_mat4();
-        let (forward, _, _) = camera.basis();
+        let (forward, _, up) = camera.basis();
         let eye = camera.eye();
         let background = linear_color(style.background);
+        let sky = style.sky.map(linear_color);
+        let ground_color = style.ground.map(linear_color);
+        let horizon = [
+            forward.z as f32,
+            ((camera.fov_y / 2.0).tan() * up.z) as f32,
+            0.0,
+            0.0,
+        ];
         let sun = style.sun;
         let sun_dir = sun
             .map(|sun| {
@@ -1069,6 +1117,9 @@ impl Renderer {
             ],
             sun_params: [sun_light, sun_dark, ground_factor, 0.0],
             background,
+            sky: sky.map_or([0.0; 4], |c| [c[0], c[1], c[2], 1.0]),
+            ground_color: ground_color.map_or([0.0; 4], |c| [c[0], c[1], c[2], 1.0]),
+            horizon,
             parallel: u32::from(camera.projection == Projection::Parallel),
             _pad: [0; 3],
         };
@@ -1207,6 +1258,9 @@ impl Renderer {
                     sun_dir: [0.0; 4],
                     sun_params: [0.0; 4],
                     background: [0.0; 4],
+                    sky: [0.0; 4],
+                    ground_color: [0.0; 4],
+                    horizon: [0.0; 4],
                     parallel: 1,
                     _pad: [0; 3],
                 };
@@ -1275,6 +1329,22 @@ impl Renderer {
             });
             pass.set_bind_group(0, &camera_bind_group, &[]);
             pass.set_bind_group(2, &shadow_bind_group, &[]);
+
+            if style.sky.is_some() || style.ground.is_some() {
+                let sky_material = self.material_bind_group(
+                    device,
+                    scene,
+                    GpuMaterial {
+                        color: [1.0; 4],
+                        opacity: 1.0,
+                        unlit: true,
+                        texture: None,
+                    },
+                );
+                pass.set_pipeline(&self.sky_pipeline);
+                pass.set_bind_group(1, &sky_material, &[]);
+                pass.draw(0..3, 0..1);
+            }
 
             if draw_ground {
                 pass.set_pipeline(&self.ground_pipeline);
