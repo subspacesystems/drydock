@@ -179,19 +179,28 @@ fn fs_ground(in: GroundOut) -> @location(0) vec4<f32> {
     let far4 = camera.inv_view_proj * vec4<f32>(in.ndc, 1.0, 1.0);
     let near = near4.xyz / near4.w;
     let far = far4.xyz / far4.w;
-    let ray = far - near;
+    var origin: vec3<f32>;
+    var ray: vec3<f32>;
+    if (camera.parallel != 0u) {
+        origin = near;
+        ray = far - near;
+    } else {
+        origin = camera.eye.xyz;
+        ray = far - origin;
+    }
     if (abs(ray.z) < 1e-12) {
         discard;
     }
-    let t = -near.z / ray.z;
-    if (t <= 0.0) {
+    let t = -origin.z / ray.z;
+    if (camera.parallel == 0u && t <= 0.0) {
         discard;
     }
-    let world = near + ray * t;
+    let world = origin + ray * t;
     let lit = sun_visibility(world, vec3<f32>(0.0, 0.0, 1.0));
     let ground = camera.sun_params.z;
     let shade = mix(ground, 1.0, lit);
-    return vec4<f32>(camera.background.rgb * shade, camera.background.a);
+    let base = select(camera.background, camera.ground_color, camera.ground_color.w >= 0.5);
+    return vec4<f32>(base.rgb * shade, base.a);
 }
 
 @fragment
