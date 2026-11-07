@@ -10,6 +10,7 @@
 pub mod background_ui;
 pub mod chrome;
 pub mod clearance_offset;
+pub mod color_ui;
 pub mod components_panel;
 pub mod desktop_entry;
 pub mod dialog;
