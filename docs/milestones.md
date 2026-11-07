@@ -336,6 +336,12 @@ Done when: Follow Me sweeps a face along an open and a closed path, and Offset i
 | `m10-import-component-tolerant` | Sign-off fix: importing a DAE as a component is refused when the file already has intersecting edges (corpus models); refuse only problems the import itself adds, and say why | |
 | `m10-tags-row-layout` | Sign-off fix: since the rename-width fix the tag name sits right-aligned next to Assign, far from its eye; name (or rename box) left next to the eye, Assign and delete at the right edge | `m10-tags-rename-width` |
 | `m10-entity-info-tag-width` | Sign-off fix: a long tag name in Entity Info's Tag box widens the right-hand dock for good; keep the box inside the panel's width (name truncated), label on the left like the other rows | |
+| `m10-start-state` | Feedback fix: the app opens on a new empty model, as after File > New, and Select is the starting tool (was Orbit) | |
+| `m10-theme-linux-portal` | Feedback fix: on Linux, read the desktop's light/dark setting (freedesktop portal `color-scheme`) at start and follow changes while running; GNOME "Default" is Light; Dark only when the desktop has no setting | |
+| `m10-tags-eye-icon` | Feedback fix: an eye and a hidden-eye icon in the brand icon set (`generate_icons.py`), drawn by the Tags panel instead of the circle | |
+| `m10-background-kernel` | Feedback: the model's background settings (background color, sky on/off and color, ground on/off and color; new models: light blue sky, neutral grey ground), undoable, saved in the native format (v8) | |
+| `m10-sky-ground-render` | Feedback: the renderer draws the sky above the horizon and the ground below it, or the plain background | |
+| `m10-background-model-info` | Feedback: a Background section in Model Info edits those settings; the viewport takes its background, sky, ground, edge and face colors from the model, not the OS theme | `m10-background-kernel`, `m10-sky-ground-render` |
 
 ## Future (unscheduled)
 
