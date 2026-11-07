@@ -13,6 +13,7 @@ use std::path::Path;
 
 use glam::{DMat4, DVec2};
 
+use crate::background::Background;
 use crate::curve::Curve;
 use crate::model::{
     Body, BodyId, DefinitionId, DefinitionInfo, FaceMaterials, Instance, InstanceId, Material,
@@ -28,7 +29,7 @@ use crate::topology::{
 use crate::units::{LengthFormat, Unit};
 
 /// The version this code writes, and the newest it reads.
-pub const FORMAT_VERSION: u32 = 7;
+pub const FORMAT_VERSION: u32 = 8;
 
 /// Why a model can't be written. Nothing was written.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -300,7 +301,10 @@ pub fn to_text(model: &Model) -> Result<String, WriteError> {
     let has_units = model.length_format() != LengthFormat::default();
     let has_curves = bodies().any(|body| body.geometry().curve_count() > 0);
     let has_tags = !model.tags().is_empty();
-    let version = if has_tags {
+    let has_background = model.background() != Background::default();
+    let version = if has_background {
+        8
+    } else if has_tags {
         7
     } else if has_curves {
         6
@@ -365,6 +369,25 @@ pub fn to_text(model: &Model) -> Result<String, WriteError> {
                 out.push_str(&format!("units architectural {denominator}\n"));
             }
         }
+    }
+
+    if has_background {
+        let b = model.background();
+        let flag = |on: bool| if on { "on" } else { "off" };
+        out.push_str(&format!(
+            "background {} {} {} {} {} {} {} {} {} {} {}\n",
+            b.color[0],
+            b.color[1],
+            b.color[2],
+            flag(b.sky),
+            b.sky_color[0],
+            b.sky_color[1],
+            b.sky_color[2],
+            flag(b.ground),
+            b.ground_color[0],
+            b.ground_color[1],
+            b.ground_color[2]
+        ));
     }
 
     for (id, material) in model.materials() {
@@ -1074,6 +1097,42 @@ fn apply_line(
             let from = model.length_format();
             model
                 .apply(&ModelRecord::SetLengthFormat { from, to: format })
+                .map_err(rejected)?;
+            Ok(false)
+        }
+        "background" => {
+            if version < 8 {
+                return Err(ReadErrorKind::UnknownRecord);
+            }
+            if !settings_seen.insert("background") {
+                return Err(ReadErrorKind::BadField);
+            }
+            expect_count(tokens, 12)?;
+            let background = Background {
+                color: [
+                    parse_f32(&tokens[1])?,
+                    parse_f32(&tokens[2])?,
+                    parse_f32(&tokens[3])?,
+                ],
+                sky: parse_flag(&tokens[4])?,
+                sky_color: [
+                    parse_f32(&tokens[5])?,
+                    parse_f32(&tokens[6])?,
+                    parse_f32(&tokens[7])?,
+                ],
+                ground: parse_flag(&tokens[8])?,
+                ground_color: [
+                    parse_f32(&tokens[9])?,
+                    parse_f32(&tokens[10])?,
+                    parse_f32(&tokens[11])?,
+                ],
+            };
+            let from = model.background();
+            model
+                .apply(&ModelRecord::SetBackground {
+                    from,
+                    to: background,
+                })
                 .map_err(rejected)?;
             Ok(false)
         }
