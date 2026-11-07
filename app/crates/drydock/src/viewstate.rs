@@ -162,11 +162,11 @@ fn height_and_aspect(viewport_px: (f64, f64)) -> (f64, f64) {
 }
 
 impl ViewState {
-    /// Default camera, Orbit tool, no model.
+    /// Default camera, Select tool, no model.
     pub fn new() -> ViewState {
         ViewState {
             camera: Camera::default(),
-            tool: Tool::Orbit,
+            tool: Tool::Select,
             bounds: None,
             pivot: None,
             zoom_pivot: None,

@@ -17,10 +17,10 @@ fn bounds() -> Bounds {
 }
 
 #[test]
-fn new_uses_default_camera_and_orbit_tool() {
+fn new_uses_default_camera_and_select_tool() {
     let s = ViewState::new();
     assert_eq!(s.camera, Camera::default());
-    assert_eq!(s.tool, Tool::Orbit);
+    assert_eq!(s.tool, Tool::Select);
     assert!(s.bounds.is_none());
 }
 
@@ -176,5 +176,5 @@ fn flip_is_passed_to_the_caller_untouched() {
         assert_eq!(s.apply(Action::Flip(axis), VP), Effect::Flip(axis));
     }
     assert_eq!(s.camera, before);
-    assert_eq!(s.tool, Tool::Orbit);
+    assert_eq!(s.tool, Tool::Select);
 }
