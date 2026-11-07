@@ -92,7 +92,8 @@ pub fn shadows_panel(ui: &mut egui::Ui, settings: &mut ShadowSettings) -> Shadow
 
     ui.horizontal(|ui| {
         let mut minutes = minutes_of_day(&settings.time);
-        let response = ui.add(
+        let response = crate::look::slider(
+            ui,
             egui::Slider::new(&mut minutes, 0..=1439)
                 .text("Time of Day")
                 .show_value(false),
@@ -106,7 +107,8 @@ pub fn shadows_panel(ui: &mut egui::Ui, settings: &mut ShadowSettings) -> Shadow
 
     ui.horizontal(|ui| {
         let mut day = settings.time.day_of_year();
-        let response = ui.add(
+        let response = crate::look::slider(
+            ui,
             egui::Slider::new(&mut day, 1..=366)
                 .text("Date")
                 .show_value(false),
@@ -119,7 +121,8 @@ pub fn shadows_panel(ui: &mut egui::Ui, settings: &mut ShadowSettings) -> Shadow
     });
 
     ui.horizontal(|ui| {
-        let response = ui.add(
+        let response = crate::look::slider(
+            ui,
             egui::Slider::new(&mut settings.light, 0.0..=1.0)
                 .text("Light")
                 .show_value(false),
@@ -129,7 +132,8 @@ pub fn shadows_panel(ui: &mut egui::Ui, settings: &mut ShadowSettings) -> Shadow
     });
 
     ui.horizontal(|ui| {
-        let response = ui.add(
+        let response = crate::look::slider(
+            ui,
             egui::Slider::new(&mut settings.dark, 0.0..=1.0)
                 .text("Dark")
                 .show_value(false),
