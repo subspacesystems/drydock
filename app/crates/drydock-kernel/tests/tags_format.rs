@@ -52,8 +52,9 @@ fn small() -> Model {
 }
 
 #[test]
-fn the_format_version_is_seven() {
-    assert_eq!(FORMAT_VERSION, 7);
+fn the_format_version_holds_tags() {
+    // version 7 added tags; m10-background-kernel made it 8 (tests/background.rs)
+    const { assert!(FORMAT_VERSION >= 7) };
 }
 
 #[test]

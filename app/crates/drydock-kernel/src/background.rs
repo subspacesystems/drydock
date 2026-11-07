@@ -44,6 +44,11 @@ impl Background {
     /// Every channel of the three colors is finite and in `0..=1`. The on/off flags don't
     /// matter: a color that isn't drawn must still be valid.
     pub fn is_valid(&self) -> bool {
-        unimplemented!()
+        let good = |color: &[f32; 3]| {
+            color
+                .iter()
+                .all(|&channel| channel.is_finite() && (0.0..=1.0).contains(&channel))
+        };
+        good(&self.color) && good(&self.sky_color) && good(&self.ground_color)
     }
 }
