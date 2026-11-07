@@ -7,6 +7,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
+use drydock::background_ui;
 use drydock::chrome::{self, MenuState};
 use drydock::clearance_offset::selected_instances;
 use drydock::components_panel::{ComponentAction, ComponentsPanel, components_panel};
@@ -283,7 +284,7 @@ impl App {
             tags: TagsPanel::default(),
             shadows_preview: None,
             texture: TextureForm::default(),
-            style: look::viewport_style(look::theme_of(&cc.egui_ctx.global_style().visuals)),
+            style: look::model_style(None),
             gpu,
             model: None,
             editor: None,
@@ -2951,8 +2952,12 @@ impl eframe::App for App {
             }
             self.title_pending = false;
         }
-        let theme = look::theme_of(&ctx.global_style().visuals);
-        if look::apply_viewport_theme(&mut self.style, theme) {
+        let background = self
+            .model
+            .as_ref()
+            .and_then(|document| document.kernel.as_ref())
+            .map(Model::background);
+        if look::apply_model_style(&mut self.style, background.as_ref()) {
             self.dirty = true;
         }
         if ctx.input(|input| input.viewport().close_requested()) && !self.allow_close {
@@ -3126,6 +3131,7 @@ impl eframe::App for App {
             }
         }
         let mut picked_unit = None;
+        let mut picked_background = None;
         let mut geolocation = false;
         if let Some(model) = &self.model {
             let kernel = model.kernel.is_some();
@@ -3134,6 +3140,7 @@ impl eframe::App for App {
                 .as_ref()
                 .map(Model::length_format)
                 .unwrap_or_default();
+            let background = model.kernel.as_ref().map(Model::background);
             let mut lines = chrome::model_info_lines(&model.stats, kernel, format);
             if let Some(state) = frame.wgpu_render_state() {
                 let info = state.adapter.get_info();
@@ -3147,6 +3154,10 @@ impl eframe::App for App {
                 if kernel {
                     ui.separator();
                     picked_unit = units_ui::units_section(ui, format);
+                    if let Some(background) = background {
+                        ui.separator();
+                        picked_background = background_ui::background_section(ui, &background);
+                    }
                     ui.separator();
                 }
                 if ui
@@ -3169,6 +3180,17 @@ impl eframe::App for App {
                 && let Some(model) = document.kernel.as_mut()
             {
                 changed = editor.set_length_format(model, format);
+            }
+            if changed {
+                self.refresh_document(&ctx, frame);
+            }
+        }
+        if let Some(background) = picked_background {
+            let mut changed = false;
+            if let (Some(editor), Some(document)) = (&mut self.editor, &mut self.model)
+                && let Some(model) = document.kernel.as_mut()
+            {
+                changed = editor.set_background(model, background);
             }
             if changed {
                 self.refresh_document(&ctx, frame);
