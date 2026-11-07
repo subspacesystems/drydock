@@ -14,6 +14,8 @@ If the first click is on an edge, the second click places a guide line parallel 
 
 View > Model Info opens the Model Info panel. Its Units section has Unit (Millimeters, Centimeters, Meters, Inches, Feet, Architectural) and Precision (decimal places, or a fraction of an inch for Architectural). The choice is saved with the model, and every length and area in Drydock then uses it, including Entity Info and the measurements box. Changing it is one undo step ("Set Units").
 
+The Background section of Model Info sets the plain background color and, with their checkboxes, the sky and ground colors. They are saved with the model, and changing them is one undo step ("Set Background").
+
 ## Typing lengths
 
 A number typed while drawing or moving uses the model's unit unless you add one yourself, such as `10cm` or `1/2"`. Your own unit only applies to that value. This lets you work in a familiar unit even when the model is set to a different one.

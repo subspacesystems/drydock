@@ -11,6 +11,8 @@
 use drydock_kernel::background::Background;
 use eframe::egui;
 
+use crate::dialog::field_label;
+
 /// Draw the section into `ui`: a "Background" heading, a "Background:" row with a color
 /// button, then a "Sky" checkbox with a color button and a "Ground" checkbox with a color
 /// button (rows in that order; the checkbox labels are exactly "Sky" and "Ground"). `Some`
@@ -18,6 +20,40 @@ use eframe::egui;
 /// per frame); `None` otherwise. A color button is disabled-looking but still usable when
 /// its checkbox is off (the color is kept).
 pub fn background_section(ui: &mut egui::Ui, background: &Background) -> Option<Background> {
-    let _ = (ui, background);
-    unimplemented!()
+    let mut new = *background;
+    let mut picked = None;
+    ui.strong("Background");
+
+    ui.horizontal(|ui| {
+        ui.label(field_label("Background"));
+        let mut color = new.color;
+        if ui.color_edit_button_rgb(&mut color).changed() {
+            new.color = color;
+            picked = Some(new);
+        }
+    });
+
+    ui.horizontal(|ui| {
+        if ui.checkbox(&mut new.sky, "Sky").changed() {
+            picked = Some(new);
+        }
+        let mut color = new.sky_color;
+        if ui.color_edit_button_rgb(&mut color).changed() {
+            new.sky_color = color;
+            picked = Some(new);
+        }
+    });
+
+    ui.horizontal(|ui| {
+        if ui.checkbox(&mut new.ground, "Ground").changed() {
+            picked = Some(new);
+        }
+        let mut color = new.ground_color;
+        if ui.color_edit_button_rgb(&mut color).changed() {
+            new.ground_color = color;
+            picked = Some(new);
+        }
+    });
+
+    picked
 }

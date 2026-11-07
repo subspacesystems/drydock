@@ -270,8 +270,26 @@ pub fn viewport_style(theme: Theme) -> drydock_render::Style {
 pub fn model_style(
     background: Option<&drydock_kernel::background::Background>,
 ) -> drydock_render::Style {
-    let _ = background;
-    unimplemented!()
+    let background = background.copied().unwrap_or_default();
+    let light = palette(Theme::Light);
+    let color = |c: [f32; 3]| [c[0], c[1], c[2], 1.0];
+    let byte = |c: egui::Color32| {
+        [
+            f32::from(c.r()) / 255.0,
+            f32::from(c.g()) / 255.0,
+            f32::from(c.b()) / 255.0,
+            1.0,
+        ]
+    };
+    drydock_render::Style {
+        background: color(background.color),
+        default_line: byte(light.edge),
+        default_face: byte(light.face_front),
+        default_back: Some(byte(light.face_back)),
+        sun: None,
+        sky: background.sky.then(|| color(background.sky_color)),
+        ground: background.ground.then(|| color(background.ground_color)),
+    }
 }
 
 /// Set the colour fields of `style` (not `sun`) to those of `model_style(background)`; true
@@ -280,8 +298,22 @@ pub fn apply_model_style(
     style: &mut drydock_render::Style,
     background: Option<&drydock_kernel::background::Background>,
 ) -> bool {
-    let _ = (style, background);
-    unimplemented!()
+    let wanted = model_style(background);
+    let changed = style.background != wanted.background
+        || style.sky != wanted.sky
+        || style.ground != wanted.ground
+        || style.default_line != wanted.default_line
+        || style.default_face != wanted.default_face
+        || style.default_back != wanted.default_back;
+    if changed {
+        style.background = wanted.background;
+        style.default_line = wanted.default_line;
+        style.default_face = wanted.default_face;
+        style.default_back = wanted.default_back;
+        style.sky = wanted.sky;
+        style.ground = wanted.ground;
+    }
+    changed
 }
 
 /// Set the colour fields of `style` (not `sun`) to those of `viewport_style(theme)`; true

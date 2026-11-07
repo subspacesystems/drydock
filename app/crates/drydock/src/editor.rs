@@ -2906,8 +2906,20 @@ impl Editor {
         model: &mut Model,
         background: drydock_kernel::background::Background,
     ) -> bool {
-        let _ = (model, background);
-        unimplemented!()
+        let mut log = ModelEdit::new();
+        match model.set_background(background, &mut log) {
+            Ok(()) => {
+                if !log.records.is_empty() {
+                    self.undo.push("Set Background", log);
+                }
+                self.message = None;
+                true
+            }
+            Err(_) => {
+                self.message = Some("Can't use those colors".to_string());
+                false
+            }
+        }
     }
 
     /// Replace the model's length format as one undo step "Set Units" (none when nothing
