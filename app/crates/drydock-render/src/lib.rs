@@ -44,6 +44,12 @@ pub struct Style {
     /// `Some`: lit materials are shaded by the sun instead of a light at the viewer
     /// (`docs/specs/m5-render-sun.md`).
     pub sun: Option<SunLight>,
+    /// `Some`: the sky colour, sRGB RGBA 0..1, drawn where the view ray points above the
+    /// horizontal (`docs/specs/m10-sky-ground-render.md`). `None`: `background` shows there.
+    pub sky: Option<[f32; 4]>,
+    /// `Some`: the ground colour, sRGB RGBA 0..1, drawn where the view ray points below the
+    /// horizontal. `None`: `background` shows there.
+    pub ground: Option<[f32; 4]>,
 }
 
 /// Sunlight for [`Style::sun`].
@@ -70,6 +76,8 @@ impl Default for Style {
             default_back: None,
             default_line: [0.0, 0.0, 0.0, 1.0],
             sun: None,
+            sky: None,
+            ground: None,
         }
     }
 }

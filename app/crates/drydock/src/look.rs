@@ -257,6 +257,8 @@ pub fn viewport_style(theme: Theme) -> drydock_render::Style {
         default_face: color(palette.face_front),
         default_back: Some(color(palette.face_back)),
         sun: None,
+        sky: None,
+        ground: None,
     }
 }
 
