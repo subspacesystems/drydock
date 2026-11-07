@@ -233,6 +233,11 @@ pub enum ModelRecord {
     /// A change to the tags or to the tag an instance carries
     /// (`docs/specs/m10-tags-kernel.md`).
     Tag(TagRecord),
+    /// Behaviour: `docs/specs/m10-background-kernel.md`.
+    SetBackground {
+        from: crate::background::Background,
+        to: crate::background::Background,
+    },
 }
 
 impl ModelRecord {
@@ -296,6 +301,7 @@ impl ModelRecord {
                 to: *from,
             },
             ModelRecord::Tag(record) => ModelRecord::Tag(record.inverse()),
+            ModelRecord::SetBackground { .. } => unimplemented!(),
         }
     }
 }
@@ -473,6 +479,22 @@ impl Model {
     /// How the model shows lengths (`docs/specs/m6-units.md`).
     pub fn length_format(&self) -> LengthFormat {
         self.length_format
+    }
+
+    /// The model's background, sky and ground (`docs/specs/m10-background-kernel.md`).
+    pub fn background(&self) -> crate::background::Background {
+        unimplemented!()
+    }
+
+    /// Replace the background settings as one record in `log`; nothing when unchanged;
+    /// `BadSettings` (nothing changes) when not valid (`docs/specs/m10-background-kernel.md`).
+    pub fn set_background(
+        &mut self,
+        background: crate::background::Background,
+        log: &mut ModelEdit,
+    ) -> Result<(), ModelError> {
+        let _ = (background, log);
+        unimplemented!()
     }
 
     /// Replace the length format as one record in `log`; `BadSettings` (nothing changes)
@@ -1325,6 +1347,7 @@ impl Model {
                 Ok(())
             }
             ModelRecord::Tag(record) => self.apply_tag_record(record),
+            ModelRecord::SetBackground { .. } => unimplemented!(),
         }
     }
 

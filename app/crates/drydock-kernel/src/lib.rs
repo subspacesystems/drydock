@@ -20,8 +20,10 @@
 //! (solid check), `docs/specs/m7-solid-repair.md` (solid repair), `docs/specs/m7-curves.md`
 //! (arcs and circles kept as curves), `docs/specs/m7-clearance-offset.md` (grow and shrink
 //! by a clearance), `docs/specs/m9-sweep-path.md` (sweep paths for Follow Me),
-//! `docs/specs/m10-tags-kernel.md` (tags on groups and components).
+//! `docs/specs/m10-tags-kernel.md` (tags on groups and components),
+//! `docs/specs/m10-background-kernel.md` (background, sky and ground settings).
 
+pub mod background;
 pub mod click;
 pub mod component;
 pub mod copy;

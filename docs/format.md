@@ -1,9 +1,9 @@
-# Native model file, version 7
+# Native model file, version 8
 
 The native file stores a whole `Model` (`drydock-kernel`, `src/model.rs`): materials,
 definitions, and for the root and every definition its geometry (vertices, edges, faces,
 curves),
-face materials, instances and guides, plus the model's tags and which instances carry them, its geolocation, shadow settings and length format. Code: `drydock_kernel::format`. Owner: orchestrator.
+face materials, instances and guides, plus the model's tags and which instances carry them, its geolocation, shadow settings, length format and background. Code: `drydock_kernel::format`. Owner: orchestrator.
 
 Design goals: exact round trip (ids and every number come back bit for bit), readable and
 diffable, no dependencies, easy to extend. Lengths are meters.
@@ -53,6 +53,7 @@ Then, one per line:
 | `geolocation <latitude> <longitude> <north angle> <utc offset>` | (version 4) where the model is (`drydock_kernel::sun::Geolocation`): degrees north, degrees east, degrees from +Y to true north clockwise seen from above, hours ahead of UTC; at most once, anywhere before `end` |
 | `sun <year> <month> <day> <hour> <minute> <shadows> <sun shading> <light> <dark> <on ground>` | (version 4) the shadow settings (`ShadowSettings`): local date and time as integers, then `on`/`off`, `on`/`off`, two reals in 0..=1, `on`/`off`; at most once, anywhere before `end` |
 | `units decimal <unit> <decimals>` / `units architectural <denominator>` | (version 5) the model's length format (`drydock_kernel::units::LengthFormat`, `docs/specs/m6-units.md`): `<unit>` one of `mm cm m in ft`, `<decimals>` 0 to 6; or architectural with `<denominator>` one of 1 2 4 8 16 32 64; at most once, anywhere before `end` |
+| `background <r> <g> <b> <sky> <r> <g> <b> <ground> <r> <g> <b>` | (version 8) the model's background settings (`drydock_kernel::background::Background`, `docs/specs/m10-background-kernel.md`): the background color, then `on`/`off` and the color of the sky, then `on`/`off` and the color of the ground; colors are sRGB reals in 0..=1 like a `material`'s; at most once, anywhere before `end` |
 | `tag <id> <visible> <name>` | (version 7) a tag (`drydock_kernel::tags::Tag`, `docs/specs/m10-tags-kernel.md`): `visible` is `on` or `off`, `name` is a string; anywhere before `end`, inside or outside a body |
 | `tagged <instance id> <tag id>` | (version 7) the instance (in any body; instance ids are unique in the model) carries the tag; both must already exist; anywhere before `end` |
 | `end` | last record; after it only blank lines may follow |
@@ -63,7 +64,8 @@ vertices of an edge, the edges of a face, the face of a paint or texmap). Ids ke
 values. A `guide` record in a version 1 file is an unknown record; a `texmap` record in a
 version 1 or 2 file is too, a `geolocation` or `sun` record in a version 1 to 3 file, and a
 `units` record in a version 1 to 4 file, a `curve` record in a version 1 to 5 file, and a
-`tag` or `tagged` record in a version 1 to 6 file.
+`tag` or `tagged` record in a version 1 to 6 file, and a `background` record in a version 1
+to 7 file.
 A `curve` record needs at least 17 tokens, finite numbers and `u64` ids; its vertices must
 exist in the current body (else it is rejected with the first missing one), and the curve
 must fit them (`curve::fits`: vertices on the circle in order from `start` to `end`, each
@@ -75,8 +77,10 @@ or only whitespace, a `tagged` instance that doesn't exist yet and a tag that do
 yet are rejected (`IdInUse`, `BadTagName`, `UnknownInstance`, `MissingTag`).
 A second `geolocation`, `sun` or `units` record is a bad field; so is a `units` record with
 the wrong token count, an unknown kind or unit, or a number that isn't an unsigned integer.
-Values the model refuses (out of range, an invalid date, 7 decimals, a 1/3 fraction) are
-rejected with `BadSettings`.
+A `background` record has exactly 12 tokens, its flags are `on` or `off` and its numbers
+finite reals, else it is a bad field; a second one is a bad field too.
+Values the model refuses (out of range, an invalid date, 7 decimals, a 1/3 fraction, a
+color channel below 0 or above 1) are rejected with `BadSettings`.
 
 In versions 1 and 2 the material record has exactly 8 tokens and a texture's size reads as
 `1` by `1` meters. In version 3 a material with a texture has exactly 10 tokens; without
@@ -85,13 +89,15 @@ model refuses (non-finite or not positive) is rejected.
 
 ## What writers produce
 Exactly this order, one space between tokens, every line ending in `\n`:
-1. the header, with the lowest version that holds the model: `7` when the model has a tag;
+1. the header, with the lowest version that holds the model: `8` when the background
+   settings differ from their defaults; else `7` when the model has a tag;
    else `6` when a body has a curve;
    else `5` when the length format differs from its default (inches, 2 places); else `4` when the geolocation or
    the shadow settings differ from their defaults; else `3` when a material's texture
    size isn't exactly `1` by `1`, or an existing face has a stored texture map; else `2`
    when a body has guides; else `1`;
-2. `geolocation`, then `sun`, then `units`, each only when it differs from its default;
+2. `geolocation`, then `sun`, then `units`, then `background`, each only when it differs
+   from its default;
 3. `material` records, ascending id; in version 3 a texture also writes its width and
    height;
 4. `definition` records, ascending id;
@@ -120,5 +126,6 @@ the target. If anything fails, the temporary file is removed and the target is u
 - 5 (M6): adds the `units` record.
 - 6 (M7): adds `curve` records.
 - 7 (M10): adds `tag` and `tagged` records.
+- 8 (M10): adds the `background` record.
 
 A later version may add records; a reader for version N reads every version up to N.
