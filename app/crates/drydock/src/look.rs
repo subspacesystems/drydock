@@ -419,6 +419,13 @@ pub fn primary_button_sized(ui: &mut egui::Ui, text: &str, min_size: egui::Vec2)
     .inner
 }
 
+/// A plain button of at least `min_size` whose label is centered vertically (and
+/// horizontally) in its rect, whatever the surrounding layout. Use it instead of
+/// `egui::Button::new(text).min_size(..)`. See `docs/specs/m10-button-text-center.md`.
+pub fn sized_button(ui: &mut egui::Ui, text: &str, min_size: egui::Vec2) -> egui::Response {
+    ui.add(egui::Button::new(text).min_size(min_size))
+}
+
 /// The family for Roboto Medium (weight 500): buttons and panel headers (`style()`).
 pub fn medium() -> FontFamily {
     FontFamily::Name("medium".into())
