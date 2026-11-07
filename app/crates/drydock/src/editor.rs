@@ -480,10 +480,10 @@ fn box_edges(bounds: Bounds) -> Vec<(DVec3, DVec3)> {
 }
 
 impl Editor {
-    /// Orbit tool, nothing selected, empty undo stack.
+    /// Select tool, nothing selected, empty undo stack.
     pub fn new() -> Editor {
         Editor {
-            tool: Tool::Orbit,
+            tool: Tool::Select,
             selection: Vec::new(),
             undo: UndoStack::new(),
             typed: String::new(),
