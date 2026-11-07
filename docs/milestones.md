@@ -342,6 +342,7 @@ Done when: Follow Me sweeps a face along an open and a closed path, and Offset i
 | `m10-background-kernel` | Feedback: the model's background settings (background color, sky on/off and color, ground on/off and color; new models: light blue sky, neutral grey ground), undoable, saved in the native format (v8) | |
 | `m10-sky-ground-render` | Feedback: the renderer draws the sky above the horizon and the ground below it, or the plain background | |
 | `m10-background-model-info` | Feedback: a Background section in Model Info edits those settings; the viewport takes its background, sky, ground, edge and face colors from the model, not the OS theme | `m10-background-kernel`, `m10-sky-ground-render` |
+| `m10-color-picker-srgb` | Sign-off fix: the Model Info background and Materials color buttons treat the stored sRGB colors as linear, so the swatch and picker show a lighter color than the viewport draws (sky #A8C8E8 drawn, #D4E5F5 shown); edit them as sRGB | |
 
 ## Future (unscheduled)
 
