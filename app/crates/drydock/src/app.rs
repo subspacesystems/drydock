@@ -36,6 +36,7 @@ use drydock::model_source::{
 };
 use drydock::open_buttons::{self, OpenMode};
 use drydock::overlay::{self, Primitive};
+use drydock::portal;
 use drydock::print_setup::{
     self, FitReport, PrintSettings, PrintSetupEvent, PrintSetupTexts, PrintSetupView,
 };
@@ -228,6 +229,7 @@ pub struct App {
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>, file: Option<PathBuf>) -> App {
         look::apply(&cc.egui_ctx);
+        portal::watch(cc.egui_ctx.clone());
         icons::install(&cc.egui_ctx);
         let gpu = cc.wgpu_render_state.as_ref().map(|state| {
             let renderer = Renderer::new(&state.device);
