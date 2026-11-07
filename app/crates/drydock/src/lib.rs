@@ -31,6 +31,7 @@ pub mod mesh_import;
 pub mod model_source;
 pub mod open_buttons;
 pub mod overlay;
+pub mod portal;
 pub mod print_setup;
 pub mod recent;
 pub mod shading;

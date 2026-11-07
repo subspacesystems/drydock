@@ -387,6 +387,14 @@ pub fn font_definitions() -> FontDefinitions {
     fonts
 }
 
+/// Make egui draw in `theme` when the OS reports none (eframe passes no system theme on
+/// Linux, so this is what draws there), and ask for a repaint. Windows/macOS themes come
+/// from the OS and win over this.
+pub fn set_fallback_theme(ctx: &egui::Context, theme: Theme) {
+    let _ = (ctx, theme);
+    unimplemented!("m10-theme-linux-portal")
+}
+
 /// Installs the fonts and the style for the OS's theme, both the light and the dark one so
 /// a theme change in the OS applies at once. When the OS reports neither, the app draws in
 /// `theme_from(None)` (Dark) via egui's fallback theme.
