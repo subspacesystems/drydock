@@ -81,11 +81,21 @@ pub fn button_row(ui: &mut egui::Ui, buttons: &[DialogButton<'_>]) -> Option<usi
                     }
                 });
             } else {
-                let mut widget = egui::Button::new(button.label).min_size(min_size);
-                if button.default {
-                    widget = widget.fill(default_fill_over(ui.visuals()));
-                }
-                if ui.add_enabled(button.enabled, widget).clicked() {
+                let fill = button.default.then(|| default_fill_over(ui.visuals()));
+                let response = ui.add_enabled_ui(button.enabled, |ui| {
+                    if let Some(fill) = fill {
+                        let widgets = &mut ui.visuals_mut().widgets;
+                        for widget in [
+                            &mut widgets.inactive,
+                            &mut widgets.hovered,
+                            &mut widgets.active,
+                        ] {
+                            widget.weak_bg_fill = fill;
+                        }
+                    }
+                    look::sized_button(ui, button.label, min_size)
+                });
+                if response.inner.clicked() {
                     clicked = Some(index);
                 }
             }

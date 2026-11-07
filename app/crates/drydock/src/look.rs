@@ -414,8 +414,23 @@ pub fn primary_button_sized(ui: &mut egui::Ui, text: &str, min_size: egui::Vec2)
         ] {
             widget.fg_stroke.color = p.on_action;
         }
-        ui.add(egui::Button::new(text).min_size(min_size))
+        centered_button(ui, min_size, egui::Button::new(text).min_size(min_size))
     })
+    .inner
+}
+
+/// Add `button` in a region of `min_size` whose layout centers it on both axes, so a label
+/// stays centered even when the button is taller than its text in a top-aligned parent.
+fn centered_button(
+    ui: &mut egui::Ui,
+    min_size: egui::Vec2,
+    button: egui::Button<'_>,
+) -> egui::Response {
+    ui.allocate_ui_with_layout(
+        min_size,
+        egui::Layout::left_to_right(egui::Align::Center),
+        |ui| ui.add(button),
+    )
     .inner
 }
 
@@ -423,7 +438,7 @@ pub fn primary_button_sized(ui: &mut egui::Ui, text: &str, min_size: egui::Vec2)
 /// horizontally) in its rect, whatever the surrounding layout. Use it instead of
 /// `egui::Button::new(text).min_size(..)`. See `docs/specs/m10-button-text-center.md`.
 pub fn sized_button(ui: &mut egui::Ui, text: &str, min_size: egui::Vec2) -> egui::Response {
-    ui.add(egui::Button::new(text).min_size(min_size))
+    centered_button(ui, min_size, egui::Button::new(text).min_size(min_size))
 }
 
 /// The family for Roboto Medium (weight 500): buttons and panel headers (`style()`).
