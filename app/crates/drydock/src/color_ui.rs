@@ -11,20 +11,31 @@ use eframe::egui;
 
 /// Stored sRGB components (0..1) to 8-bit: `round(c * 255)`, clamped to 0..=255.
 pub fn srgb_to_bytes(color: [f32; 3]) -> [u8; 3] {
-    let _ = color;
-    unimplemented!("m10-color-picker-srgb")
+    [
+        (color[0] * 255.0).round().clamp(0.0, 255.0) as u8,
+        (color[1] * 255.0).round().clamp(0.0, 255.0) as u8,
+        (color[2] * 255.0).round().clamp(0.0, 255.0) as u8,
+    ]
 }
 
 /// 8-bit sRGB to stored components: `byte / 255`.
 pub fn bytes_to_srgb(bytes: [u8; 3]) -> [f32; 3] {
-    let _ = bytes;
-    unimplemented!("m10-color-picker-srgb")
+    [
+        bytes[0] as f32 / 255.0,
+        bytes[1] as f32 / 255.0,
+        bytes[2] as f32 / 255.0,
+    ]
 }
 
 /// A color button editing the stored sRGB `color`. Returns true, and updates `color`, only
 /// when the 8-bit triple the user picked differs from the one shown; otherwise `color`
 /// is left exactly as it was (no drift for colors that are not exact multiples of 1/255).
 pub fn srgb_color_button(ui: &mut egui::Ui, color: &mut [f32; 3]) -> bool {
-    let _ = (ui, color);
-    unimplemented!("m10-color-picker-srgb")
+    let shown = srgb_to_bytes(*color);
+    let mut bytes = shown;
+    if !ui.color_edit_button_srgb(&mut bytes).changed() || bytes == shown {
+        return false;
+    }
+    *color = bytes_to_srgb(bytes);
+    true
 }

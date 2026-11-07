@@ -11,6 +11,7 @@
 use drydock_kernel::background::Background;
 use eframe::egui;
 
+use crate::color_ui::srgb_color_button;
 use crate::dialog::field_label;
 
 /// Draw the section into `ui`: a "Background" heading, a "Background:" row with a color
@@ -26,9 +27,7 @@ pub fn background_section(ui: &mut egui::Ui, background: &Background) -> Option<
 
     ui.horizontal(|ui| {
         ui.label(field_label("Background"));
-        let mut color = new.color;
-        if ui.color_edit_button_rgb(&mut color).changed() {
-            new.color = color;
+        if srgb_color_button(ui, &mut new.color) {
             picked = Some(new);
         }
     });
@@ -37,9 +36,7 @@ pub fn background_section(ui: &mut egui::Ui, background: &Background) -> Option<
         if ui.checkbox(&mut new.sky, "Sky").changed() {
             picked = Some(new);
         }
-        let mut color = new.sky_color;
-        if ui.color_edit_button_rgb(&mut color).changed() {
-            new.sky_color = color;
+        if srgb_color_button(ui, &mut new.sky_color) {
             picked = Some(new);
         }
     });
@@ -48,9 +45,7 @@ pub fn background_section(ui: &mut egui::Ui, background: &Background) -> Option<
         if ui.checkbox(&mut new.ground, "Ground").changed() {
             picked = Some(new);
         }
-        let mut color = new.ground_color;
-        if ui.color_edit_button_rgb(&mut color).changed() {
-            new.ground_color = color;
+        if srgb_color_button(ui, &mut new.ground_color) {
             picked = Some(new);
         }
     });

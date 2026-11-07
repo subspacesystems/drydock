@@ -13,6 +13,7 @@ use drydock_kernel::paint;
 use eframe::egui::{self, Color32};
 use glam::DVec2;
 
+use crate::color_ui::srgb_color_button;
 use crate::dialog::{DialogButton, button_row, field_label};
 use crate::icons::{self, Icon};
 use crate::swatches::Swatches;
@@ -276,10 +277,7 @@ pub fn materials_panel(
 
                 ui.horizontal(|ui| {
                     ui.label(field_label("Color"));
-                    let mut color = form.color;
-                    if ui.color_edit_button_rgb(&mut color).changed() {
-                        form.color = color;
-                    }
+                    srgb_color_button(ui, &mut form.color);
                 });
 
                 ui.horizontal(|ui| {
