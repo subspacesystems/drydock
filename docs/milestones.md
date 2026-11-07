@@ -343,6 +343,9 @@ Done when: Follow Me sweeps a face along an open and a closed path, and Offset i
 | `m10-sky-ground-render` | Feedback: the renderer draws the sky above the horizon and the ground below it, or the plain background | |
 | `m10-background-model-info` | Feedback: a Background section in Model Info edits those settings; the viewport takes its background, sky, ground, edge and face colors from the model, not the OS theme | `m10-background-kernel`, `m10-sky-ground-render` |
 | `m10-color-picker-srgb` | Sign-off fix: the Model Info background and Materials color buttons treat the stored sRGB colors as linear, so the swatch and picker show a lighter color than the viewport draws (sky #A8C8E8 drawn, #D4E5F5 shown); edit them as sRGB | |
+| `m10-ground-shadow-pass` | Feedback fix: with Shadows on Ground on, the ground is painted in the background color instead of the ground color, and when zoomed out the part nearer than the model (bottom of the viewport) drops its shadows and shows a different color; shade the model's ground color and intersect each pixel's ray from the eye, not the near plane | |
+| `m10-slider-visuals` | Feedback fix: sliders show a visible rail in Light and Dark, and the handle changes on hover like buttons do | |
+| `m10-button-text-center` | Feedback fix: button labels are centered vertically when the button is taller than its text (dialog buttons such as Model Info's Close sit 3 px high) | |
 
 ## Future (unscheduled)
 
