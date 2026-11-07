@@ -3160,11 +3160,7 @@ impl eframe::App for App {
                     }
                     ui.separator();
                 }
-                if ui
-                    .add(
-                        egui::Button::new("Geolocation...")
-                            .min_size(drydock::dialog::BUTTON_MIN_SIZE),
-                    )
+                if look::sized_button(ui, "Geolocation...", drydock::dialog::BUTTON_MIN_SIZE)
                     .clicked()
                 {
                     geolocation = true;
