@@ -188,13 +188,13 @@ fn fs_ground(in: GroundOut) -> @location(0) vec4<f32> {
         origin = camera.eye.xyz;
         ray = far - origin;
     }
-    if (abs(ray.z) < 1e-12) {
+    if (ray.z >= 0.0) {
+        discard;
+    }
+    if (camera.parallel == 0u && camera.eye.z <= 0.0) {
         discard;
     }
     let t = -origin.z / ray.z;
-    if (camera.parallel == 0u && t <= 0.0) {
-        discard;
-    }
     let world = origin + ray * t;
     let lit = sun_visibility(world, vec3<f32>(0.0, 0.0, 1.0));
     let ground = camera.sun_params.z;
