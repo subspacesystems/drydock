@@ -245,16 +245,23 @@ pub fn style(theme: Theme) -> Style {
 /// `bg_fill` are the opaque `accent`, and hovered and active `fg_stroke` are 2 points wide
 /// in `ink`; the resting `fg_stroke` stays `ink`, 1 point.
 pub fn slider_widgets(theme: Theme, visuals: &mut egui::Visuals) {
-    let _ = (theme, visuals);
-    unimplemented!("m10-slider-visuals")
+    let p = palette(theme);
+    visuals.widgets.inactive.bg_fill = p.border_control;
+    for widget in [&mut visuals.widgets.hovered, &mut visuals.widgets.active] {
+        widget.bg_fill = p.accent;
+        widget.fg_stroke = egui::Stroke::new(2.0, p.ink);
+    }
 }
 
 /// Add `slider` to `ui` inside a scope whose visuals went through `slider_widgets`
 /// (theme from `theme_of(ui.visuals())`); the rest of `ui` keeps its style. Every slider in
 /// the app goes through this.
 pub fn slider(ui: &mut egui::Ui, slider: egui::Slider<'_>) -> egui::Response {
-    let _ = (ui, slider);
-    unimplemented!("m10-slider-visuals")
+    ui.scope(|ui| {
+        slider_widgets(theme_of(ui.visuals()), ui.visuals_mut());
+        ui.add(slider)
+    })
+    .inner
 }
 
 /// The viewport colours for `theme` (`docs/specs/m10-brand-viewport.md`): `background` =

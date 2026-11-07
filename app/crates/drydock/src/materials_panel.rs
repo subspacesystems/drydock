@@ -286,7 +286,7 @@ pub fn materials_panel(
                     let spacing = ui.spacing().item_spacing.x;
                     ui.spacing_mut().slider_width =
                         (ui.available_width() - value_width - spacing).max(20.0);
-                    ui.add(egui::Slider::new(&mut form.opacity, 0.0..=1.0));
+                    crate::look::slider(ui, egui::Slider::new(&mut form.opacity, 0.0..=1.0));
                 });
 
                 ui.label(field_label("Texture image"));
