@@ -9,6 +9,9 @@ struct Camera {
     sun_dir: vec4<f32>,
     sun_params: vec4<f32>,
     background: vec4<f32>,
+    sky: vec4<f32>,
+    ground_color: vec4<f32>,
+    horizon: vec4<f32>,
     parallel: u32,
     pad0: u32,
     pad1: u32,
@@ -189,6 +192,21 @@ fn fs_ground(in: GroundOut) -> @location(0) vec4<f32> {
     let ground = camera.sun_params.z;
     let shade = mix(ground, 1.0, lit);
     return vec4<f32>(camera.background.rgb * shade, camera.background.a);
+}
+
+@fragment
+fn fs_sky(in: GroundOut) -> @location(0) vec4<f32> {
+    let h = camera.horizon.x + in.ndc.y * camera.horizon.y;
+    if (h > 0.0) {
+        if (camera.sky.w < 0.5) {
+            discard;
+        }
+        return vec4<f32>(camera.sky.rgb, 1.0);
+    }
+    if (camera.ground_color.w < 0.5) {
+        discard;
+    }
+    return vec4<f32>(camera.ground_color.rgb, 1.0);
 }
 
 struct LineIn {
