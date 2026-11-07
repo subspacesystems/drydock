@@ -22,7 +22,17 @@ impl Fresh {
     /// `Document::new_empty()`, `Editor::new()` and a `ViewState::new()` whose bed, bed
     /// visibility and overhang angle come from `print`.
     pub fn new(print: &PrintSettings) -> Fresh {
-        let _ = print;
-        unimplemented!("m10-start-state")
+        let document = Document::new_empty();
+        let title = document.title();
+        let mut view = ViewState::new();
+        view.bed = print.bed;
+        view.bed_visible = print.show_bed;
+        view.overhang_degrees = print.overhang_degrees;
+        Fresh {
+            document,
+            editor: Editor::new(),
+            view,
+            title,
+        }
     }
 }

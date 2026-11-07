@@ -13,6 +13,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use glam::{DMat4, DVec2};
 
+use crate::background::Background;
 use crate::sun::{Geolocation, ShadowSettings};
 use crate::tags::{TagId, TagRecord, Tags};
 use crate::tape::{Guide, GuideId, Guides};
@@ -301,7 +302,10 @@ impl ModelRecord {
                 to: *from,
             },
             ModelRecord::Tag(record) => ModelRecord::Tag(record.inverse()),
-            ModelRecord::SetBackground { .. } => unimplemented!(),
+            ModelRecord::SetBackground { from, to } => ModelRecord::SetBackground {
+                from: *to,
+                to: *from,
+            },
         }
     }
 }
@@ -403,6 +407,7 @@ pub struct Model {
     shadows: ShadowSettings,
     length_format: LengthFormat,
     tags: Tags,
+    background: Background,
 }
 
 /// A process-unique identity; a clone takes a fresh one, so caches keyed on it never
@@ -433,6 +438,7 @@ impl PartialEq for Model {
             && self.shadows == other.shadows
             && self.length_format == other.length_format
             && self.tags == other.tags
+            && self.background == other.background
     }
 }
 
@@ -483,7 +489,7 @@ impl Model {
 
     /// The model's background, sky and ground (`docs/specs/m10-background-kernel.md`).
     pub fn background(&self) -> crate::background::Background {
-        unimplemented!()
+        self.background
     }
 
     /// Replace the background settings as one record in `log`; nothing when unchanged;
@@ -493,8 +499,19 @@ impl Model {
         background: crate::background::Background,
         log: &mut ModelEdit,
     ) -> Result<(), ModelError> {
-        let _ = (background, log);
-        unimplemented!()
+        if !background.is_valid() {
+            return Err(ModelError::BadSettings);
+        }
+        if background == self.background {
+            return Ok(());
+        }
+        let record = ModelRecord::SetBackground {
+            from: self.background,
+            to: background,
+        };
+        self.apply(&record)?;
+        log.records.push(record);
+        Ok(())
     }
 
     /// Replace the length format as one record in `log`; `BadSettings` (nothing changes)
@@ -1097,6 +1114,7 @@ impl Model {
             ModelRecord::SetGeolocation { .. }
                 | ModelRecord::SetShadows { .. }
                 | ModelRecord::SetLengthFormat { .. }
+                | ModelRecord::SetBackground { .. }
         ) {
             self.revision = self.revision.wrapping_add(1);
         }
@@ -1347,7 +1365,16 @@ impl Model {
                 Ok(())
             }
             ModelRecord::Tag(record) => self.apply_tag_record(record),
-            ModelRecord::SetBackground { .. } => unimplemented!(),
+            ModelRecord::SetBackground { from, to } => {
+                if !to.is_valid() {
+                    return Err(ModelError::BadSettings);
+                }
+                if *from != self.background {
+                    return Err(ModelError::Mismatch);
+                }
+                self.background = *to;
+                Ok(())
+            }
         }
     }
 

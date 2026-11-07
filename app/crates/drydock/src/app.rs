@@ -36,6 +36,7 @@ use drydock::model_source::{
 };
 use drydock::open_buttons::{self, OpenMode};
 use drydock::overlay::{self, Primitive};
+use drydock::portal;
 use drydock::print_setup::{
     self, FitReport, PrintSettings, PrintSetupEvent, PrintSetupTexts, PrintSetupView,
 };
@@ -43,6 +44,7 @@ use drydock::recent::{RecentFiles, recent_file};
 use drydock::shading;
 use drydock::shadows_panel::{self, ShadowsEvent};
 use drydock::solid_ui::{MarkTracker, mark_primitives, marked_scene, repair_message};
+use drydock::start::Fresh;
 use drydock::sun_windows::SunWindows;
 use drydock::tags_panel::{TagAction, TagsPanel, default_tag_name, tags_panel};
 use drydock::text_tool::{self, TextDialog, TextOptions, TextOutcome};
@@ -195,6 +197,8 @@ pub struct App {
     drag_start_px: Option<DVec2>,
     /// The rendered image is out of date.
     dirty: bool,
+    /// The window title still needs sending on the first frame.
+    title_pending: bool,
     /// The editor path the uploaded scene was built for.
     shown_path: EditPath,
     /// The problem marks of the selected group or component.
@@ -225,6 +229,7 @@ pub struct App {
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>, file: Option<PathBuf>) -> App {
         look::apply(&cc.egui_ctx);
+        portal::watch(cc.egui_ctx.clone());
         icons::install(&cc.egui_ctx);
         let gpu = cc.wgpu_render_state.as_ref().map(|state| {
             let renderer = Renderer::new(&state.device);
@@ -306,6 +311,7 @@ impl App {
             drag_start_ndc: DVec2::ZERO,
             drag_start_px: None,
             dirty: true,
+            title_pending: false,
             shown_path: EditPath::root(),
             solid_marks: MarkTracker::default(),
             repair_note: None,
@@ -327,6 +333,12 @@ impl App {
         }
         if let Some(path) = file {
             app.start_loading(&cc.egui_ctx, path);
+        } else {
+            let fresh = Fresh::new(&app.print_settings);
+            app.view = fresh.view;
+            app.editor = Some(fresh.editor);
+            app.model = Some(fresh.document);
+            app.title_pending = true;
         }
         app
     }
@@ -554,16 +566,12 @@ impl App {
 
     /// Replace the document with a new, empty one and a default view.
     fn new_document(&mut self, ctx: &egui::Context, frame: &eframe::Frame) {
-        let document = Document::new_empty();
-        let title = document.title();
+        let fresh = Fresh::new(&self.print_settings);
         self.fit = None;
         self.fit_note = None;
         self.print_report = None;
-        self.view = ViewState::new();
-        self.view.bed = self.print_settings.bed;
-        self.view.bed_visible = self.print_settings.show_bed;
-        self.view.overhang_degrees = self.print_settings.overhang_degrees;
-        self.editor = Some(Editor::new());
+        self.view = fresh.view;
+        self.editor = Some(fresh.editor);
         self.materials = MaterialsPanel::default();
         self.texture = TextureForm::default();
         self.shadows_preview = None;
@@ -573,10 +581,11 @@ impl App {
         self.saved = None;
         self.confirm = None;
         self.after_save = None;
-        self.model = Some(document);
+        self.model = Some(fresh.document);
         self.solid_marks.clear();
         self.show_scene(frame);
-        ctx.send_viewport_cmd(egui::ViewportCommand::Title(title));
+        ctx.send_viewport_cmd(egui::ViewportCommand::Title(fresh.title));
+        self.title_pending = false;
         self.dirty = true;
     }
 
@@ -2936,6 +2945,12 @@ enum PanelAction {
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+        if self.title_pending {
+            if let Some(document) = &self.model {
+                ctx.send_viewport_cmd(egui::ViewportCommand::Title(document.title()));
+            }
+            self.title_pending = false;
+        }
         let theme = look::theme_of(&ctx.global_style().visuals);
         if look::apply_viewport_theme(&mut self.style, theme) {
             self.dirty = true;

@@ -8,9 +8,10 @@
 //!
 //! Behaviour: `docs/specs/m10-tags-panel.md`.
 
+use crate::icons::{self, Icon};
 use drydock_kernel::model::Model;
 use drydock_kernel::tags::{TagId, tag_name_is_good};
-use eframe::egui::{self, Sense, Stroke, Vec2, vec2};
+use eframe::egui::{self, Sense, Vec2};
 
 /// What the panel remembers between frames.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -197,7 +198,8 @@ pub fn tags_panel(ui: &mut egui::Ui, panel: &mut TagsPanel, model: &Model) -> Op
     action
 }
 
-/// The eye toggle: an outline eye with a strike when hidden, in the text colour.
+/// The eye toggle: the `Eye` icon in the text colour when visible, `EyeOff` in the weak
+/// text colour when hidden.
 fn eye_toggle(ui: &mut egui::Ui, name: &str, visible: bool) -> egui::Response {
     let (rect, response) = ui.allocate_exact_size(Vec2::splat(20.0), Sense::click());
     let enabled = ui.is_enabled();
@@ -210,20 +212,11 @@ fn eye_toggle(ui: &mut egui::Ui, name: &str, visible: bool) -> egui::Response {
         )
     });
 
-    let color = ui.visuals().text_color();
-    let center = rect.center();
-    let radius = rect.width().min(rect.height()) * 0.3;
-    let painter = ui.painter();
-    painter.circle_stroke(center, radius, Stroke::new(1.5, color));
-    painter.circle_filled(center, radius * 0.35, color);
-    if !visible {
-        painter.line_segment(
-            [
-                rect.left_top() + vec2(3.0, 3.0),
-                rect.right_bottom() - vec2(3.0, 3.0),
-            ],
-            Stroke::new(1.5, color),
-        );
-    }
+    let (icon, color) = if visible {
+        (Icon::Eye, ui.visuals().text_color())
+    } else {
+        (Icon::EyeOff, ui.visuals().weak_text_color())
+    };
+    icons::paint(ui.painter(), rect, icon, color);
     response
 }

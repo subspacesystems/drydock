@@ -270,7 +270,7 @@ fn project_behind_a_perspective_camera_is_none() {
 #[test]
 fn new_editor_defaults() {
     let e = Editor::new();
-    assert_eq!(e.tool(), Tool::Orbit);
+    assert_eq!(e.tool(), Tool::Select);
     assert_eq!(Model::new().length_format().input_unit(), Unit::Inch);
     assert!(e.selection().is_empty());
     assert_eq!(e.undo_stack().undo_count(), 0);
@@ -280,7 +280,7 @@ fn new_editor_defaults() {
     assert!(e.preview().is_empty());
     assert_eq!(e.measurement(&Model::new()), None);
     assert_eq!(e.message(), None);
-    assert_eq!(Editor::default().tool(), Tool::Orbit);
+    assert_eq!(Editor::default().tool(), Tool::Select);
 }
 
 #[test]

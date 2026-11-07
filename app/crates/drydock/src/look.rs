@@ -415,8 +415,13 @@ pub fn font_definitions() -> FontDefinitions {
 /// Linux, so this is what draws there), and ask for a repaint. Windows/macOS themes come
 /// from the OS and win over this.
 pub fn set_fallback_theme(ctx: &egui::Context, theme: Theme) {
-    let _ = (ctx, theme);
-    unimplemented!("m10-theme-linux-portal")
+    ctx.options_mut(|o| {
+        o.fallback_theme = match theme {
+            Theme::Dark => egui::Theme::Dark,
+            Theme::Light => egui::Theme::Light,
+        };
+    });
+    ctx.request_repaint();
 }
 
 /// Installs the fonts and the style for the OS's theme, both the light and the dark one so
@@ -429,8 +434,13 @@ pub fn apply(ctx: &egui::Context) {
     light.visuals.text_options = dark.visuals.text_options;
     ctx.set_style_of(egui::Theme::Light, light);
     ctx.set_style_of(egui::Theme::Dark, dark);
+    let fallback = if cfg!(target_os = "linux") {
+        crate::portal::theme_for_scheme(crate::portal::read_scheme())
+    } else {
+        theme_from(None)
+    };
     ctx.options_mut(|o| {
-        o.fallback_theme = match theme_from(None) {
+        o.fallback_theme = match fallback {
             Theme::Dark => egui::Theme::Dark,
             Theme::Light => egui::Theme::Light,
         };
