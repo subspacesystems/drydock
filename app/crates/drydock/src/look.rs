@@ -262,6 +262,28 @@ pub fn viewport_style(theme: Theme) -> drydock_render::Style {
     }
 }
 
+/// The viewport style of a model (`docs/specs/m10-background-model-info.md`): `background`,
+/// `sky` and `ground` from `background` (sky/ground `Some` only when switched on, colors
+/// opaque, sRGB 0..1); edge, front face and back face colors from the Light palette whatever
+/// the OS theme; `sun` is `None`. `None` for `background` (no model yet) is the default
+/// `Background`.
+pub fn model_style(
+    background: Option<&drydock_kernel::background::Background>,
+) -> drydock_render::Style {
+    let _ = background;
+    unimplemented!()
+}
+
+/// Set the colour fields of `style` (not `sun`) to those of `model_style(background)`; true
+/// when anything changed, so the viewport must redraw.
+pub fn apply_model_style(
+    style: &mut drydock_render::Style,
+    background: Option<&drydock_kernel::background::Background>,
+) -> bool {
+    let _ = (style, background);
+    unimplemented!()
+}
+
 /// Set the colour fields of `style` (not `sun`) to those of `viewport_style(theme)`; true
 /// when anything changed, so the viewport must redraw.
 pub fn apply_viewport_theme(style: &mut drydock_render::Style, theme: Theme) -> bool {

@@ -7,6 +7,7 @@
 //! orbit, pan and zoom it. The window code lives in `app`; `input` and `document`
 //! hold the logic that tests exercise without a display.
 
+pub mod background_ui;
 pub mod chrome;
 pub mod clearance_offset;
 pub mod components_panel;

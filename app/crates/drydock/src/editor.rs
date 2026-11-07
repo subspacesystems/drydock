@@ -2898,6 +2898,18 @@ impl Editor {
         }
     }
 
+    /// Replace the model's background settings as one undo step "Set Background" (none when
+    /// nothing changes). True when accepted; false with a message when refused (a color
+    /// outside 0..=1). Behaviour: `docs/specs/m10-background-model-info.md`.
+    pub fn set_background(
+        &mut self,
+        model: &mut Model,
+        background: drydock_kernel::background::Background,
+    ) -> bool {
+        let _ = (model, background);
+        unimplemented!()
+    }
+
     /// Replace the model's length format as one undo step "Set Units" (none when nothing
     /// changes). True when accepted; false with a message when refused.
     /// Behaviour: `docs/specs/m6-units-ui.md`.
