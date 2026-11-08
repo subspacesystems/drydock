@@ -15,7 +15,8 @@ In build order. Each milestone ends when every listed task is merged and Tyrel's
 | M8 | Windows | Windows build and installer | M7 |
 | M9 | Medium priority | Follow Me, offset | M3 |
 | M10 | Low priority | Tags, model library hook | M4 |
-| M11 | Fixes and dialogs (being planned) | Materials form width; dialogs as OS windows if Tyrel picks it  | M10 |
+| M11 | Fixes and dialogs | Materials form width; dialogs and floating panels as their own OS windows, kept above the main window | M10 |
+| M12 | Pop-up menus | Menus as real pop-up windows that can reach past the main window's edge | M11 |
 
 MVP = M0 to M5 (all High features).
 
@@ -350,13 +351,21 @@ Done when: Follow Me sweeps a face along an open and a closed path, and Offset i
 | `m10-ground-pass-horizon` | Sign-off fix: with Show Shadows on, the ground pass paints the sky in the ground color when the eye is at or below ground level (Front/Back/Left/Right views zoomed out, or orbiting under the ground); draw the shadowed ground only where the eye is above it and the ray points down | `m10-ground-shadow-pass` |
 | `m10-menu-fit` | Feedback fix: in a short window, a long menu (Tools) moves up over the menu bar and its last items are cut off at the bottom; open every menu right below its title, never over the menu bar, and let a menu taller than the space below scroll | |
 
-## M11: Fixes and dialogs (being planned)
+## M11: Fixes and dialogs
 
-Scope waits on Tyrel's answer (dialogs and tool windows as real OS windows). Known fix so far:
+Tyrel agreed (2026-11-08): dialogs and tool windows become their own OS windows that belong to the main window (kept above it, opened over it, own title). Modeless ones leave the main window usable; prompts block it until answered. The windowing library gets a small local patch that tells the desktop which window a dialog belongs to (Wayland, X11, Windows).
 
 | Task | What | Needs |
 | --- | --- | --- |
 | `m11-materials-form-width` | Fix: opening the Materials "New Material" form widens the right dock a bit more with every click or scroll, and the Opacity number and Texture field run past its right edge; the form fits the dock's width and leaves it unchanged | |
+| `m11-winit-parent` | Local patch of the windowing layer: every dialog window names the main window as its parent (Wayland, X11 transient-for and dialog type, Windows owner), so the desktop keeps it above the main window and places it over it | |
+| `m11-dialog-window` | A dialog-window helper (own OS window, own title, opens centered over the main window where the platform allows, closes from its title bar; drawn inline in UI tests); Model Info and About move to it | `m11-winit-parent` |
+| `m11-dialog-sun` | Shadows and Geolocation open in their own windows | `m11-dialog-window` |
+| `m11-dialog-print-toolbars` | Print Setup and Customize Toolbars open in their own windows | `m11-dialog-window` |
+| `m11-winit-modal` | The windowing patch also marks a dialog window as modal (Wayland dialog hint, X11 modal state, Windows disables the owner) | `m11-winit-parent` |
+| `m11-modal-window` | Modal mode for the dialog-window helper: the main window ignores clicks and keys while it is open; the shared prompts and the Make Group/Component name prompt move to it | `m11-dialog-window`, `m11-winit-modal` |
+| `m11-modal-dialogs` | The remaining prompts (unsaved changes, 3D text, export options, mesh units, purge unused, Open and Save) open as modal windows | `m11-modal-window` |
+| `m11-floating-panels` | A floating dock panel (Materials, Entity Info and the rest) is its own window above the main window; docking it again closes that window | `m11-dialog-window` |
 
 ## Future (unscheduled)
 
