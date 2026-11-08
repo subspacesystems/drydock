@@ -241,7 +241,7 @@ pub fn system_picker_available() -> bool {
 
 #[cfg(target_os = "linux")]
 fn system_picker_available_linux() -> bool {
-    use std::time::{Duration, Instant};
+    use std::time::Duration;
 
     let args = [
         "introspect",
