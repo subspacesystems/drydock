@@ -43,6 +43,17 @@ use crate::window::{CustomCursor, CustomCursorSource, Theme, Window, WindowAttri
 pub struct EventLoop<T: 'static> {
     pub(crate) event_loop: platform_impl::EventLoop<T>,
     pub(crate) _marker: PhantomData<*mut ()>, // Not Send nor Sync
+    // Local patch (Drydock, PATCHES.md): allow a new event loop after this one is dropped, so
+    // separate tests in one test binary can each run an eframe application.
+    _recreation_guard: EventLoopRecreationGuard,
+}
+
+struct EventLoopRecreationGuard;
+
+impl Drop for EventLoopRecreationGuard {
+    fn drop(&mut self) {
+        EVENT_LOOP_CREATED.store(false, Ordering::Relaxed);
+    }
 }
 
 /// Target that associates windows with an [`EventLoop`].
@@ -124,6 +135,7 @@ impl<T> EventLoopBuilder<T> {
         Ok(EventLoop {
             event_loop: platform_impl::EventLoop::new(&mut self.platform_specific)?,
             _marker: PhantomData,
+            _recreation_guard: EventLoopRecreationGuard,
         })
     }
 
