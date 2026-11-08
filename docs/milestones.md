@@ -15,6 +15,7 @@ In build order. Each milestone ends when every listed task is merged and Tyrel's
 | M8 | Windows | Windows build and installer | M7 |
 | M9 | Medium priority | Follow Me, offset | M3 |
 | M10 | Low priority | Tags, model library hook | M4 |
+| M11 | Fixes and dialogs (being planned) | Materials form width; dialogs as OS windows if Tyrel picks it  | M10 |
 
 MVP = M0 to M5 (all High features).
 
@@ -348,6 +349,14 @@ Done when: Follow Me sweeps a face along an open and a closed path, and Offset i
 | `m10-button-text-center` | Feedback fix: button labels are centered vertically when the button is taller than its text (dialog buttons such as Model Info's Close sit 3 px high) | |
 | `m10-ground-pass-horizon` | Sign-off fix: with Show Shadows on, the ground pass paints the sky in the ground color when the eye is at or below ground level (Front/Back/Left/Right views zoomed out, or orbiting under the ground); draw the shadowed ground only where the eye is above it and the ray points down | `m10-ground-shadow-pass` |
 | `m10-menu-fit` | Feedback fix: in a short window, a long menu (Tools) moves up over the menu bar and its last items are cut off at the bottom; open every menu right below its title, never over the menu bar, and let a menu taller than the space below scroll | |
+
+## M11: Fixes and dialogs (being planned)
+
+Scope waits on Tyrel's answer (dialogs and tool windows as real OS windows). Known fix so far:
+
+| Task | What | Needs |
+| --- | --- | --- |
+| `m11-materials-form-width` | Fix: opening the Materials "New Material" form widens the right dock a bit more with every click or scroll, and the Opacity number and Texture field run past its right edge; the form fits the dock's width and leaves it unchanged | |
 
 ## Future (unscheduled)
 
