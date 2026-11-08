@@ -24,10 +24,12 @@ use smithay_client_toolkit::shm::{slot::SlotPool, Shm};
 use smithay_client_toolkit::subcompositor::SubcompositorState;
 use smithay_client_toolkit::subcompositor::SubsurfaceData;
 
-mod buttons;
+#[doc(hidden)]
+pub mod buttons;
 mod config;
 mod parts;
-mod pointer;
+#[doc(hidden)]
+pub mod pointer;
 mod shadow;
 pub mod theme;
 mod title;

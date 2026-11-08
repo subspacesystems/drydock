@@ -10,7 +10,7 @@ const BUTTON_MARGIN: f32 = 5.;
 const BUTTON_SPACING: f32 = 13.;
 
 #[derive(Debug)]
-pub(crate) struct Buttons {
+pub struct Buttons {
     // Sorted by order vec of buttons for the left and right sides
     buttons_left: Vec<Button>,
     buttons_right: Vec<Button>,
@@ -102,6 +102,32 @@ impl Buttons {
 
         self.buttons_left = buttons_left.into_iter().filter(is_supported).collect();
         self.buttons_right = buttons_right.into_iter().filter(is_supported).collect();
+    }
+
+    /// The window allows these buttons (Close is always allowed). A button is shown when the
+    /// layout has it, the compositor allows it and the window allows it.
+    /// Local patch (Drydock, PATCHES.md).
+    pub fn set_enabled(&mut self, _minimize: bool, _maximize: bool) {
+        todo!("m11-wayland-dialog-buttons")
+    }
+
+    /// A window that is not resizable has no Maximize button (separate from `set_enabled`).
+    /// Local patch (Drydock, PATCHES.md).
+    pub fn set_resizable(&mut self, _resizable: bool) {
+        todo!("m11-wayland-dialog-buttons")
+    }
+
+    /// True when a Maximize button may be shown or a title double-click may maximize:
+    /// the compositor, the window and resizability all allow it.
+    /// Local patch (Drydock, PATCHES.md).
+    pub fn allows_maximize(&self) -> bool {
+        todo!("m11-wayland-dialog-buttons")
+    }
+
+    /// The shown buttons of each side, left to right on screen: (left side, right side).
+    /// Local patch (Drydock, PATCHES.md).
+    pub fn layout(&self) -> (Vec<ButtonKind>, Vec<ButtonKind>) {
+        todo!("m11-wayland-dialog-buttons")
     }
 
     pub fn right_buttons_start_x(&self) -> Option<f32> {

@@ -16,7 +16,7 @@ const DOUBLE_CLICK_DURATION: Duration = Duration::from_millis(400);
 
 /// The state of the mouse input inside the decorations frame.
 #[derive(Debug, Default)]
-pub(crate) struct MouseState {
+pub struct MouseState {
     pub location: Location,
 
     /// The surface local location inside the surface.
