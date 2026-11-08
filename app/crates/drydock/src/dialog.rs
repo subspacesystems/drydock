@@ -24,6 +24,16 @@ pub struct DialogButton<'a> {
     pub enabled: bool,
 }
 
+/// Give a text field keyboard focus once its window has keyboard focus. Requesting focus
+/// before the window has focus would create the X11 input context first, and then the window
+/// never receives its focus event, so typing, Enter and Escape do nothing. In UI tests, where
+/// the window focus is not known (`None`), this is the same as [`egui::Response::request_focus`].
+pub fn focus_when_window_active(ui: &egui::Ui, response: &egui::Response) {
+    if !response.has_focus() && ui.input(|i| i.viewport().focused != Some(false)) {
+        response.request_focus();
+    }
+}
+
 /// `label` with trailing whitespace removed and a ":" at the end (unchanged if it already
 /// ends with one).
 pub fn field_label(label: &str) -> String {
@@ -179,7 +189,7 @@ pub fn name_dialog(
             let field = ui
                 .add(egui::TextEdit::singleline(name))
                 .labelled_by(label.id);
-            field.request_focus();
+            focus_when_window_active(ui, &field);
         });
         let enabled = !name.trim().is_empty();
         match button_row(

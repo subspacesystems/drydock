@@ -8,7 +8,8 @@
 //! Behaviour: `docs/specs/m3-app-ui.md`.
 
 use crate::dialog::{
-    DialogButton, DialogWindow, button_row, dialog_window, field_label, modal_dialog_window,
+    DialogButton, DialogWindow, button_row, dialog_window, field_label, focus_when_window_active,
+    modal_dialog_window,
 };
 use crate::dock::PanelId;
 use crate::document::Stats;
@@ -168,7 +169,7 @@ pub fn name_prompt(ctx: &eframe::egui::Context, prompt: &mut NamePrompt) -> Opti
         |ui| {
             ui.label(field_label("Name"));
             let field = ui.add(egui::TextEdit::singleline(&mut prompt.name));
-            field.request_focus();
+            focus_when_window_active(ui, &field);
             match button_row(
                 ui,
                 &[

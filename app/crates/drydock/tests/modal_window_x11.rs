@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Subspace Systems
 
 //! m11-modal-window, real windows: needs Xvfb (no window manager), xdotool, xprop and
-//! `MODELER_GUI_TESTS=1`; each test skips itself otherwise. The probe is
+//! `DRYDOCK_GUI_TESTS=1`; each test skips itself otherwise. The probe is
 //! `examples/modal_probe.rs`. See docs/specs/m11-modal-window.md.
 
 use std::path::PathBuf;
@@ -10,7 +10,17 @@ use std::process::{Child, Command, Output};
 use std::time::{Duration, Instant};
 
 fn gui_tests() -> bool {
-    std::env::var_os("MODELER_GUI_TESTS").is_some()
+    std::env::var_os("DRYDOCK_GUI_TESTS").is_some()
+}
+
+/// The tests here start their own windows and look them up by title, so only one may run at a
+/// time. (The probe and the app's test hook also share a display lock across test binaries.)
+static SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn serial() -> std::sync::MutexGuard<'static, ()> {
+    SERIAL
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 fn tool(cmd: &str, args: &[&str]) -> Output {
@@ -100,22 +110,25 @@ fn click_main(main: &str, x: &str, y: &str) {
 
 fn type_into(window: &str, keys: &str) {
     tool("xdotool", &["windowfocus", "--sync", window]);
+    // Give the window's text field a frame to take focus before the first key.
+    std::thread::sleep(Duration::from_millis(300));
     tool("xdotool", &["type", "--delay", "80", keys]);
 }
 
 #[test]
 fn a_modal_prompt_blocks_the_main_window_until_it_is_answered() {
     if !gui_tests() {
-        eprintln!("skipped: MODELER_GUI_TESTS is unset");
+        eprintln!("skipped: DRYDOCK_GUI_TESTS is unset");
         return;
     }
+    let _serial = serial();
     let _app = Kill(
         Command::new(probe_path())
             .arg("--modal")
             .spawn()
             .expect("modal_probe starts (cargo test builds the example)"),
     );
-    let main = the_window("^probe ");
+    let main = the_window("^probe clicks");
     let dialog = the_window("^Probe Name$");
     assert_ne!(main, dialog);
 
@@ -167,16 +180,17 @@ fn a_modal_prompt_blocks_the_main_window_until_it_is_answered() {
 #[test]
 fn escape_cancels_a_modal_prompt_and_unblocks_the_main_window() {
     if !gui_tests() {
-        eprintln!("skipped: MODELER_GUI_TESTS is unset");
+        eprintln!("skipped: DRYDOCK_GUI_TESTS is unset");
         return;
     }
+    let _serial = serial();
     let _app = Kill(
         Command::new(probe_path())
             .arg("--modal")
             .spawn()
             .expect("modal_probe starts"),
     );
-    let main = the_window("^probe ");
+    let main = the_window("^probe clicks");
     let dialog = the_window("^Probe Name$");
     tool("xdotool", &["windowfocus", "--sync", &dialog]);
     tool("xdotool", &["key", "Escape"]);
@@ -189,9 +203,10 @@ fn escape_cancels_a_modal_prompt_and_unblocks_the_main_window() {
 #[test]
 fn the_make_group_prompt_is_a_modal_window_of_the_app() {
     if !gui_tests() {
-        eprintln!("skipped: MODELER_GUI_TESTS is unset");
+        eprintln!("skipped: DRYDOCK_GUI_TESTS is unset");
         return;
     }
+    let _serial = serial();
     // DRYDOCK_OPEN_DIALOG=group opens the Make Group prompt as the app starts (test hook).
     let _app = Kill(
         Command::new(env!("CARGO_BIN_EXE_drydock"))

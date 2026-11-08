@@ -7,7 +7,9 @@
 //! (a Name box, OK and Cancel); `answer` becomes `ok:<name>` or `cancel`. Not part of the
 //! app: `tests/modal_window_x11.rs` starts it under Xvfb.
 
-use drydock::dialog::{DialogButton, DialogWindow, button_row, modal_dialog_window};
+use drydock::dialog::{
+    DialogButton, DialogWindow, button_row, focus_when_window_active, modal_dialog_window,
+};
 use eframe::egui;
 
 struct Probe {
@@ -22,7 +24,10 @@ impl eframe::App for Probe {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         egui::CentralPanel::default().show(ui, |ui| {
-            ui.text_edit_singleline(&mut self.typed).request_focus();
+            let field = ui.text_edit_singleline(&mut self.typed);
+            if !self.open {
+                focus_when_window_active(ui, &field);
+            }
             let size = ui.available_size();
             if ui.add_sized(size, egui::Button::new("Count")).clicked() {
                 self.clicks += 1;
@@ -40,7 +45,8 @@ impl eframe::App for Probe {
             &window,
             &mut open,
             |ui| {
-                ui.text_edit_singleline(&mut self.name).request_focus();
+                let field = ui.text_edit_singleline(&mut self.name);
+                focus_when_window_active(ui, &field);
                 match button_row(
                     ui,
                     &[
@@ -83,7 +89,32 @@ impl eframe::App for Probe {
     }
 }
 
+/// Holds the display while a probe runs, so the real-window tests do not put two probe
+/// windows on the same display at once. The app's dialog test hook uses the same name.
+#[cfg(target_os = "linux")]
+fn probe_lock() -> Option<std::os::unix::net::UnixListener> {
+    use std::os::linux::net::SocketAddrExt;
+    use std::time::{Duration, Instant};
+
+    let address =
+        std::os::unix::net::SocketAddr::from_abstract_name(b"drydock-dialog-test").ok()?;
+    let end = Instant::now() + Duration::from_secs(60);
+    loop {
+        match std::os::unix::net::UnixListener::bind_addr(&address) {
+            Ok(listener) => return Some(listener),
+            Err(err) if err.kind() == std::io::ErrorKind::AddrInUse && Instant::now() < end => {
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            Err(_) => return None,
+        }
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn probe_lock() {}
+
 fn main() -> eframe::Result {
+    let _lock = probe_lock();
     let open = std::env::args().any(|arg| arg == "--modal");
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
@@ -94,7 +125,8 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "modal-probe",
         options,
-        Box::new(move |_| {
+        Box::new(move |cc| {
+            drydock::look::apply(&cc.egui_ctx);
             Ok(Box::new(Probe {
                 clicks: 0,
                 typed: String::new(),
