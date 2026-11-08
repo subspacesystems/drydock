@@ -373,6 +373,8 @@ Tyrel agreed (2026-11-08): dialogs and tool windows become their own OS windows 
 | `m11-floating-panels` | A floating dock panel (Materials, Entity Info and the rest) is its own window above the main window; docking it again closes that window | `m11-dialog-window` |
 | `m11-dialog-fit-content` | Fix: dialog windows fit their content instead of a fixed size that cuts it off (Model Info hides Background, Geolocation... and Close; Customize Toolbars cuts its tool list; Export STL/3MF hides OK and Cancel); taller than the screen, they scroll | |
 | `m11-dialog-keep-position` | Fix: a dialog window opens centred over the main window but then stays where it is; moving the main window no longer pulls it back to the centre (Tyrel, Windows; same on Linux X11) | |
+| `m11-dialog-app-id` | Fix: dialog windows and floating panels carry Drydock's application id and icon, so the Linux desktop counts them as part of Drydock instead of separate unknown apps in the dock and window switcher (Tyrel, Ubuntu) | `m11-dialog-keep-position` |
+| `m11-wayland-dialog-buttons` | Fix: on GNOME Wayland, where Drydock draws its own title bars, dialog windows show only a close button (no minimize or maximize), as on Windows and X11 (Tyrel) | |
 
 ## Future (unscheduled)
 
