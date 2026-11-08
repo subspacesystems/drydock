@@ -263,7 +263,8 @@ impl App {
             .unwrap_or_default();
         let print_setup_texts =
             PrintSetupTexts::for_view(&print_settings.bed, print_settings.overhang_degrees);
-        let about_open = matches!(std::env::var("DRYDOCK_OPEN_DIALOG").as_deref(), Ok("about"));
+        let dialog_hook = std::env::var("DRYDOCK_OPEN_DIALOG").unwrap_or_default();
+        let about_open = dialog_hook == "about";
         let mut app = App {
             view: ViewState::new(),
             about_open,
@@ -329,6 +330,8 @@ impl App {
         app.view.bed = app.print_settings.bed;
         app.view.bed_visible = app.print_settings.show_bed;
         app.view.overhang_degrees = app.print_settings.overhang_degrees;
+        app.sun_windows.shadows_open = dialog_hook == "shadows";
+        app.sun_windows.geo_open = dialog_hook == "geolocation";
         if app.gpu.is_none() {
             app.error = Some("No wgpu render state: cannot draw the viewport".to_owned());
         }
@@ -341,7 +344,7 @@ impl App {
             app.model = Some(fresh.document);
             // The test hook leaves the main window titled "Drydock" (as main.rs makes it),
             // so the real-window test can find it next to the dialog.
-            app.title_pending = !about_open;
+            app.title_pending = dialog_hook.is_empty();
         }
         app
     }
