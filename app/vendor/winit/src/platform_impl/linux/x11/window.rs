@@ -436,6 +436,21 @@ impl UnownedWindow {
 
             leap!(window.set_window_types(window_types)).ignore_error();
 
+            // Local patch (Drydock, PATCHES.md): a modal dialog marks itself as such before
+            // mapping. The window manager reads `_NET_WM_STATE` from the property then; a
+            // client message only reaches windows that are already mapped.
+            if window_attrs.modal {
+                let atoms = xconn.atoms();
+                leap!(xconn.change_property(
+                    window.xwindow,
+                    atoms[_NET_WM_STATE],
+                    xproto::Atom::from(xproto::AtomEnum::ATOM),
+                    xproto::PropMode::APPEND,
+                    &[atoms[_NET_WM_STATE_MODAL]],
+                ))
+                .ignore_error();
+            }
+
             // Set size hints.
             let mut min_inner_size =
                 window_attrs.min_inner_size.map(|size| size.to_physical::<u32>(scale_factor));
