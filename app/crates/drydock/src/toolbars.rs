@@ -8,7 +8,7 @@
 //! Behaviour: `docs/specs/m6-toolbar-layout.md`.
 
 use crate::chrome::{TOOL_BUTTONS, menu_check_item, menu_item, tool_shortcut};
-use crate::dialog::{confirm_dialog, name_dialog};
+use crate::dialog::{DialogWindow, confirm_dialog, dialog_window, name_dialog};
 use crate::icons::{self, Icon};
 use crate::input::Tool;
 use eframe::egui;
@@ -976,12 +976,22 @@ pub fn customize_window(
     state: &mut CustomizeState,
 ) -> bool {
     let mut changed = false;
-    egui::Window::new("Customize Toolbars")
-        .id(egui::Id::new("customize_toolbars"))
-        .open(open)
-        .show(ctx, |ui| {
+    let prompt_open = state.prompt.is_some();
+    let mut dialog_open = *open;
+    dialog_window(
+        ctx,
+        &DialogWindow {
+            title: "Customize Toolbars",
+            size: egui::vec2(520.0, 480.0),
+        },
+        &mut dialog_open,
+        |ui| {
             changed = customize_panel(ui, layout, state);
-        });
+        },
+    );
+    if !prompt_open || dialog_open || !*open {
+        *open = dialog_open;
+    }
     changed
 }
 

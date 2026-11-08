@@ -25,7 +25,9 @@ belongs to (its transient parent, below).
 - `src/platform_impl/windows/window.rs` (`init`, `Drop for Window`): a modal window with an owner
   disables the owner (`EnableWindow`) when it is created and enables it again when it is dropped,
   before it is destroyed.
-- X11: modal not mapped yet.
+- X11: in `src/platform_impl/linux/x11/window.rs` (`UnownedWindow::new`) a modal window adds
+  `_NET_WM_STATE_MODAL` to the `_NET_WM_STATE` property before it is mapped; the atom is defined
+  in `src/platform_impl/linux/x11/atoms.rs`.
 
 ## Dialog parents
 
@@ -40,4 +42,5 @@ child window instead (and is unsupported on Wayland), so it is not reused for th
   first commit; otherwise a warning and no parent.
 - `src/platform_impl/windows/window.rs` (`init`): the transient parent becomes the owner window,
   as `WindowAttributesExtWindows::with_owner_window` does; an explicit owner wins.
-- X11: not mapped yet.
+- `src/platform_impl/linux/x11/window.rs` (`UnownedWindow::new`): `WM_TRANSIENT_FOR` is set to
+  the parent X window id, and a still-default `Normal` window type becomes `Dialog`.
