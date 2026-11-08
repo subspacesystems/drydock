@@ -124,9 +124,12 @@ pub fn confirm_dialog(
     action: &str,
 ) -> Option<bool> {
     let mut answer = None;
-    let response = egui::Modal::new(id).show(ctx, |ui| {
-        ui.set_width(360.0);
-        dialog_title(ui, title);
+    let mut open = true;
+    let window = DialogWindow {
+        title,
+        size: Vec2::new(380.0, 130.0),
+    };
+    modal_prompt_window(ctx, id, &window, &mut open, |ui| {
         ui.label(message);
         match button_row(
             ui,
@@ -148,7 +151,7 @@ pub fn confirm_dialog(
             _ => {}
         }
     });
-    if answer.is_none() && response.should_close() {
+    if answer.is_none() && !open {
         answer = Some(false);
     }
     answer
@@ -165,9 +168,12 @@ pub fn name_dialog(
     name: &mut String,
 ) -> Option<bool> {
     let mut answer = None;
-    let response = egui::Modal::new(id).show(ctx, |ui| {
-        ui.set_width(360.0);
-        dialog_title(ui, title);
+    let mut open = true;
+    let window = DialogWindow {
+        title,
+        size: Vec2::new(360.0, 120.0),
+    };
+    modal_prompt_window(ctx, id, &window, &mut open, |ui| {
         ui.horizontal(|ui| {
             let label = ui.label(field_label("Name"));
             let field = ui
@@ -196,7 +202,7 @@ pub fn name_dialog(
             _ => {}
         }
     });
-    if answer.is_none() && response.should_close() {
+    if answer.is_none() && !open {
         answer = Some(false);
     }
     answer
@@ -220,14 +226,16 @@ pub struct DialogWindow<'a> {
 /// Where a dialog of `size` goes so it is centered over `root_outer` (the main window's outer
 /// rectangle in screen points); each coordinate is at least 0.
 pub fn centered_position(root_outer: egui::Rect, size: Vec2) -> egui::Pos2 {
-    let _ = (root_outer, size);
-    unimplemented!("m11-dialog-window")
+    let offset = (root_outer.size() - size) * 0.5;
+    egui::pos2(
+        (root_outer.min.x + offset.x).max(0.0),
+        (root_outer.min.y + offset.y).max(0.0),
+    )
 }
 
 /// The viewport id of the dialog titled `title`; the same title always gives the same id.
 pub fn dialog_viewport_id(title: &str) -> egui::ViewportId {
-    let _ = title;
-    unimplemented!("m11-dialog-window")
+    egui::ViewportId::from_hash_of(("drydock-dialog-window", title))
 }
 
 /// Shows `content` as a dialog while `*open`. With `ctx.embed_viewports()` false it is its own
@@ -239,8 +247,7 @@ pub fn dialog_window(
     open: &mut bool,
     content: impl FnOnce(&mut egui::Ui),
 ) {
-    let _ = (ctx, window, open, content);
-    unimplemented!("m11-dialog-window")
+    dialog_window_impl(ctx, egui::Id::NULL, window, open, false, false, content);
 }
 
 /// Like [`dialog_window`], but modal (`docs/specs/m11-modal-window.md`): while `*open`, the
@@ -256,6 +263,113 @@ pub fn modal_dialog_window(
     open: &mut bool,
     content: impl FnOnce(&mut egui::Ui),
 ) {
-    let _ = (ctx, id, window, open, content);
-    unimplemented!("m11-modal-window")
+    dialog_window_impl(ctx, id, window, open, true, false, content);
+}
+
+/// A modal for the shared prompts: embedded, a click outside answers it too.
+pub(crate) fn modal_prompt_window(
+    ctx: &egui::Context,
+    id: egui::Id,
+    window: &DialogWindow<'_>,
+    open: &mut bool,
+    content: impl FnOnce(&mut egui::Ui),
+) {
+    dialog_window_impl(ctx, id, window, open, true, true, content);
+}
+
+/// The shared body of [`dialog_window`] and [`modal_dialog_window`].
+fn dialog_window_impl(
+    ctx: &egui::Context,
+    id: egui::Id,
+    window: &DialogWindow<'_>,
+    open: &mut bool,
+    modal: bool,
+    close_on_outside: bool,
+    content: impl FnOnce(&mut egui::Ui),
+) {
+    if !*open {
+        return;
+    }
+    let mut content = Some(content);
+    let mut close = false;
+
+    if ctx.embed_viewports() {
+        if modal {
+            let response = egui::Modal::new(id).show(ctx, |ui| {
+                ui.set_width(window.size.x);
+                dialog_title(ui, window.title);
+                if let Some(content) = content.take() {
+                    content(ui);
+                }
+            });
+            let should_close = if close_on_outside {
+                response.should_close()
+            } else {
+                response.is_top_modal
+                    && !response.any_popup_open
+                    && ctx.input_mut(|input| {
+                        input.consume_key(egui::Modifiers::NONE, egui::Key::Escape)
+                    })
+            };
+            if should_close {
+                close = true;
+            }
+        } else {
+            egui::Window::new(window.title)
+                .collapsible(false)
+                .resizable(false)
+                .default_size(window.size)
+                .open(open)
+                .show(ctx, |ui| {
+                    if let Some(content) = content.take() {
+                        content(ui);
+                    }
+                });
+            if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+                close = true;
+            }
+        }
+    } else {
+        if modal {
+            egui_winit::mark_modal_title(ctx, window.title);
+            let rect = ctx.content_rect();
+            let area = egui::Area::new(id.with("modal-blocker"))
+                .order(egui::Order::Foreground)
+                .fixed_pos(rect.min)
+                .interactable(true);
+            ctx.memory_mut(|memory| memory.set_modal_layer(area.layer()));
+            area.show(ctx, |ui| {
+                ui.allocate_rect(rect, egui::Sense::click_and_drag());
+            });
+        }
+
+        let root_outer = ctx.input(|i| i.viewport().outer_rect);
+        let mut builder = egui::ViewportBuilder::default()
+            .with_title(window.title)
+            .with_inner_size(window.size)
+            .with_resizable(false)
+            .with_minimize_button(false)
+            .with_maximize_button(false);
+        if let Some(root_outer) = root_outer {
+            builder = builder.with_position(centered_position(root_outer, window.size));
+        }
+        ctx.show_viewport_immediate(dialog_viewport_id(window.title), builder, |ui, _class| {
+            egui::CentralPanel::default().show(ui, |ui| {
+                if let Some(content) = content.take() {
+                    content(ui);
+                }
+            });
+            if ui.input(|i| i.viewport().close_requested() || i.key_pressed(egui::Key::Escape)) {
+                close = true;
+            }
+        });
+
+        if modal {
+            ctx.memory_mut(|memory| memory.stop_text_input());
+        }
+    }
+
+    if close {
+        *open = false;
+    }
 }

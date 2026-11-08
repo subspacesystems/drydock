@@ -263,6 +263,7 @@ impl App {
             .unwrap_or_default();
         let print_setup_texts =
             PrintSetupTexts::for_view(&print_settings.bed, print_settings.overhang_degrees);
+        let group_open = std::env::var("DRYDOCK_OPEN_DIALOG").as_deref() == Ok("group");
         let mut app = App {
             view: ViewState::new(),
             about_open: false,
@@ -273,7 +274,7 @@ impl App {
             print_setup_texts,
             print_report: None,
             sun_windows: SunWindows::new(),
-            name_prompt: None,
+            name_prompt: group_open.then(|| chrome::NamePrompt::new(true)),
             materials: MaterialsPanel::default(),
             dock,
             dock_file,
@@ -338,7 +339,9 @@ impl App {
             app.view = fresh.view;
             app.editor = Some(fresh.editor);
             app.model = Some(fresh.document);
-            app.title_pending = true;
+            // The test hook leaves the main window titled "Drydock" (as main.rs makes it),
+            // so the real-window test can find it next to the prompt.
+            app.title_pending = !group_open;
         }
         app
     }

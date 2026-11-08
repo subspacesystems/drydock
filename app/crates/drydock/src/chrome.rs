@@ -7,7 +7,7 @@
 //!
 //! Behaviour: `docs/specs/m3-app-ui.md`.
 
-use crate::dialog::{DialogButton, button_row, field_label};
+use crate::dialog::{DialogButton, DialogWindow, button_row, field_label, modal_dialog_window};
 use crate::dock::PanelId;
 use crate::document::Stats;
 use crate::icons::Icon;
@@ -145,7 +145,7 @@ pub fn clearance_field(
 /// The name prompt window; `Some` on the frame it is answered.
 /// Behaviour: `docs/specs/m4-app-components-ui.md`.
 pub fn name_prompt(ctx: &eframe::egui::Context, prompt: &mut NamePrompt) -> Option<PromptOutcome> {
-    use eframe::egui::{self, Key};
+    use eframe::egui::{self, Vec2};
 
     let title = if prompt.group {
         "Make Group"
@@ -154,12 +154,16 @@ pub fn name_prompt(ctx: &eframe::egui::Context, prompt: &mut NamePrompt) -> Opti
     };
     let mut open = true;
     let mut outcome = None;
-    egui::Window::new(title)
-        .id(egui::Id::new("name_prompt"))
-        .collapsible(false)
-        .resizable(false)
-        .open(&mut open)
-        .show(ctx, |ui| {
+    let window = DialogWindow {
+        title,
+        size: Vec2::new(340.0, 130.0),
+    };
+    modal_dialog_window(
+        ctx,
+        egui::Id::new("name_prompt"),
+        &window,
+        &mut open,
+        |ui| {
             ui.label(field_label("Name"));
             let field = ui.add(egui::TextEdit::singleline(&mut prompt.name));
             field.request_focus();
@@ -184,13 +188,11 @@ pub fn name_prompt(ctx: &eframe::egui::Context, prompt: &mut NamePrompt) -> Opti
                 Some(1) => outcome = Some(PromptOutcome::Cancel),
                 _ => {}
             }
-        });
+        },
+    );
 
-    if outcome.is_none() {
-        let escape = ctx.input(|i| i.key_pressed(Key::Escape));
-        if escape || !open {
-            outcome = Some(PromptOutcome::Cancel);
-        }
+    if outcome.is_none() && !open {
+        outcome = Some(PromptOutcome::Cancel);
     }
     outcome
 }

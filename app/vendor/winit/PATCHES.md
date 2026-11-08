@@ -25,7 +25,9 @@ belongs to (its transient parent, below).
 - `src/platform_impl/windows/window.rs` (`init`, `Drop for Window`): a modal window with an owner
   disables the owner (`EnableWindow`) when it is created and enables it again when it is dropped,
   before it is destroyed.
-- X11: modal not mapped yet.
+- X11: in `src/platform_impl/linux/x11/window.rs` (`UnownedWindow::new`) a modal window adds
+  `_NET_WM_STATE_MODAL` to the `_NET_WM_STATE` property before it is mapped; the atom is defined
+  in `src/platform_impl/linux/x11/atoms.rs`.
 
 ## Dialog parents
 
