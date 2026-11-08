@@ -7,8 +7,9 @@
 
 use std::path::{Path, PathBuf};
 
-use eframe::egui::{self, Color32};
+use eframe::egui::{self, Color32, Vec2};
 
+use crate::dialog::{DialogWindow, modal_dialog_window};
 use crate::document::{NATIVE_EXTENSION, is_openable_file, native_path};
 use crate::look;
 use crate::mesh_export::ExportOptions;
@@ -92,68 +93,78 @@ impl OpenDialog {
     pub fn show(&mut self, ctx: &egui::Context) -> DialogOutcome {
         let mut outcome = DialogOutcome::Pending;
         let mut enter = None;
-        let response = egui::Modal::new(egui::Id::new("open-dialog")).show(ctx, |ui| {
-            ui.set_width(520.0);
-            ui.heading(match self.mode {
-                OpenMode::Open => "Open model",
-                OpenMode::Component => "Import component",
-                OpenMode::Models => "Import into model",
-            });
-            ui.label(self.dir.display().to_string());
-            ui.separator();
-            egui::ScrollArea::vertical()
-                .max_height(320.0)
-                .auto_shrink([false, true])
-                .show(ui, |ui| {
-                    if let Some(parent) = self.dir.parent()
-                        && ui.selectable_label(false, "../").clicked()
-                    {
-                        enter = Some(parent.to_path_buf());
-                    }
-                    for (name, path, is_dir) in &self.entries {
-                        let text = if *is_dir {
-                            format!("{name}/")
-                        } else {
-                            name.clone()
-                        };
-                        if ui.selectable_label(false, text).clicked() {
-                            if *is_dir {
-                                enter = Some(path.clone());
+        let mut open = true;
+        let title = match self.mode {
+            OpenMode::Open => "Open model",
+            OpenMode::Component => "Import component",
+            OpenMode::Models => "Import into model",
+        };
+        let window = DialogWindow {
+            title,
+            size: Vec2::new(560.0, 480.0),
+        };
+        modal_dialog_window(
+            ctx,
+            egui::Id::new("open-dialog"),
+            &window,
+            &mut open,
+            |ui| {
+                ui.label(self.dir.display().to_string());
+                ui.separator();
+                egui::ScrollArea::vertical()
+                    .max_height(320.0)
+                    .auto_shrink([false, true])
+                    .show(ui, |ui| {
+                        if let Some(parent) = self.dir.parent()
+                            && ui.selectable_label(false, "../").clicked()
+                        {
+                            enter = Some(parent.to_path_buf());
+                        }
+                        for (name, path, is_dir) in &self.entries {
+                            let text = if *is_dir {
+                                format!("{name}/")
                             } else {
-                                outcome = DialogOutcome::Open(path.clone());
+                                name.clone()
+                            };
+                            if ui.selectable_label(false, text).clicked() {
+                                if *is_dir {
+                                    enter = Some(path.clone());
+                                } else {
+                                    outcome = DialogOutcome::Open(path.clone());
+                                }
                             }
                         }
-                    }
-                });
-            ui.separator();
-            let typed = ui.add(
-                egui::TextEdit::singleline(&mut self.path_text)
-                    .desired_width(f32::INFINITY)
-                    .hint_text("Path to a .dae, .modeler, .stl or .3mf file, or a folder"),
-            );
-            let submitted = typed.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
-            if let Some(error) = &self.error {
-                ui.colored_label(ERROR_COLOR, error);
-            }
-            let buttons = open_buttons::open_buttons(ui, self.mode);
-            if buttons.chosen || submitted {
-                let path = PathBuf::from(self.path_text.trim());
-                if path.is_dir() {
-                    enter = Some(path);
-                } else if path.is_file() {
-                    outcome = DialogOutcome::Open(path);
-                } else {
-                    self.error = Some(format!("{}: no such file", path.display()));
+                    });
+                ui.separator();
+                let typed = ui.add(
+                    egui::TextEdit::singleline(&mut self.path_text)
+                        .desired_width(f32::INFINITY)
+                        .hint_text("Path to a .dae, .modeler, .stl or .3mf file, or a folder"),
+                );
+                let submitted = typed.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+                if let Some(error) = &self.error {
+                    ui.colored_label(ERROR_COLOR, error);
                 }
-            }
-            if buttons.cancelled {
-                outcome = DialogOutcome::Cancel;
-            }
-        });
+                let buttons = open_buttons::open_buttons(ui, self.mode);
+                if buttons.chosen || submitted {
+                    let path = PathBuf::from(self.path_text.trim());
+                    if path.is_dir() {
+                        enter = Some(path);
+                    } else if path.is_file() {
+                        outcome = DialogOutcome::Open(path);
+                    } else {
+                        self.error = Some(format!("{}: no such file", path.display()));
+                    }
+                }
+                if buttons.cancelled {
+                    outcome = DialogOutcome::Cancel;
+                }
+            },
+        );
         if let Some(dir) = enter {
             self.enter(dir);
         }
-        if matches!(outcome, DialogOutcome::Pending) && response.should_close() {
+        if !open && matches!(outcome, DialogOutcome::Pending) {
             outcome = DialogOutcome::Cancel;
         }
         outcome
@@ -260,98 +271,107 @@ impl SaveDialog {
         let mut enter = None;
         // Cancel on the replace question goes back to the file name.
         let mut back = false;
-        let response = egui::Modal::new(egui::Id::new("save-dialog")).show(ctx, |ui| {
-            ui.set_width(520.0);
-            ui.heading(match self.mode {
-                SaveMode::Model => "Save model".to_string(),
-                SaveMode::Export(options) => {
-                    format!("Export {}", options.format.label())
-                }
-                SaveMode::ExportFolder(options) => {
-                    format!("Export {} to folder", options.format.label())
-                }
-            });
-            ui.label(self.dir.display().to_string());
-            ui.separator();
-            egui::ScrollArea::vertical()
-                .max_height(320.0)
-                .auto_shrink([false, true])
-                .show(ui, |ui| {
-                    if let Some(parent) = self.dir.parent()
-                        && ui.selectable_label(false, "../").clicked()
-                    {
-                        enter = Some(parent.to_path_buf());
-                    }
-                    for (name, path, is_dir) in &self.entries {
-                        let text = if *is_dir {
-                            format!("{name}/")
-                        } else {
-                            name.clone()
-                        };
-                        if ui.selectable_label(false, text).clicked() {
-                            if *is_dir {
-                                enter = Some(path.clone());
+        let mut open = true;
+        let title = match self.mode {
+            SaveMode::Model => "Save model".to_string(),
+            SaveMode::Export(options) => format!("Export {}", options.format.label()),
+            SaveMode::ExportFolder(options) => {
+                format!("Export {} to folder", options.format.label())
+            }
+        };
+        let window = DialogWindow {
+            title: &title,
+            size: Vec2::new(560.0, 480.0),
+        };
+        modal_dialog_window(
+            ctx,
+            egui::Id::new("save-dialog"),
+            &window,
+            &mut open,
+            |ui| {
+                ui.label(self.dir.display().to_string());
+                ui.separator();
+                egui::ScrollArea::vertical()
+                    .max_height(320.0)
+                    .auto_shrink([false, true])
+                    .show(ui, |ui| {
+                        if let Some(parent) = self.dir.parent()
+                            && ui.selectable_label(false, "../").clicked()
+                        {
+                            enter = Some(parent.to_path_buf());
+                        }
+                        for (name, path, is_dir) in &self.entries {
+                            let text = if *is_dir {
+                                format!("{name}/")
                             } else {
-                                self.name_text = name.clone();
-                                self.replacing = None;
+                                name.clone()
+                            };
+                            if ui.selectable_label(false, text).clicked() {
+                                if *is_dir {
+                                    enter = Some(path.clone());
+                                } else {
+                                    self.name_text = name.clone();
+                                    self.replacing = None;
+                                }
                             }
                         }
-                    }
-                });
-            ui.separator();
-            if let Some(target) = &self.replacing {
-                ui.label(format!("Replace {}?", file_name(target)));
-                ui.horizontal(|ui| {
-                    if look::primary_button(ui, "Replace").clicked() {
-                        outcome = SaveOutcome::Save(target.clone());
-                    }
-                    if ui.button("Cancel").clicked() {
-                        back = true;
-                    }
-                });
-            } else {
-                let hint = match self.mode {
-                    SaveMode::ExportFolder(_) => "Folder name",
-                    SaveMode::Model | SaveMode::Export(_) => "File name",
-                };
-                let name = ui.add(
-                    egui::TextEdit::singleline(&mut self.name_text)
-                        .desired_width(f32::INFINITY)
-                        .hint_text(hint),
-                );
-                let submitted = name.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
-                if let Some(error) = &self.error {
-                    ui.colored_label(ERROR_COLOR, error);
-                }
-                let choose = match self.mode {
-                    SaveMode::Model => "Save",
-                    SaveMode::Export(_) | SaveMode::ExportFolder(_) => "Export",
-                };
-                ui.horizontal(|ui| {
-                    if (look::primary_button(ui, choose).clicked() || submitted)
-                        && let Some(target) = self.target()
-                    {
-                        if matches!(self.mode, SaveMode::ExportFolder(_)) && target.is_dir() {
-                            outcome = SaveOutcome::Save(target);
-                        } else if target.exists() {
-                            self.replacing = Some(target);
-                        } else {
-                            outcome = SaveOutcome::Save(target);
+                    });
+                ui.separator();
+                if let Some(target) = &self.replacing {
+                    ui.label(format!("Replace {}?", file_name(target)));
+                    ui.horizontal(|ui| {
+                        if look::primary_button(ui, "Replace").clicked() {
+                            outcome = SaveOutcome::Save(target.clone());
                         }
+                        if ui.button("Cancel").clicked() {
+                            back = true;
+                        }
+                    });
+                } else {
+                    let hint = match self.mode {
+                        SaveMode::ExportFolder(_) => "Folder name",
+                        SaveMode::Model | SaveMode::Export(_) => "File name",
+                    };
+                    let name = ui.add(
+                        egui::TextEdit::singleline(&mut self.name_text)
+                            .desired_width(f32::INFINITY)
+                            .hint_text(hint),
+                    );
+                    let submitted =
+                        name.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+                    if let Some(error) = &self.error {
+                        ui.colored_label(ERROR_COLOR, error);
                     }
-                    if ui.button("Cancel").clicked() {
-                        outcome = SaveOutcome::Cancel;
-                    }
-                });
-            }
-        });
+                    let choose = match self.mode {
+                        SaveMode::Model => "Save",
+                        SaveMode::Export(_) | SaveMode::ExportFolder(_) => "Export",
+                    };
+                    ui.horizontal(|ui| {
+                        if (look::primary_button(ui, choose).clicked() || submitted)
+                            && let Some(target) = self.target()
+                        {
+                            if matches!(self.mode, SaveMode::ExportFolder(_)) && target.is_dir() {
+                                outcome = SaveOutcome::Save(target);
+                            } else if target.exists() {
+                                self.replacing = Some(target);
+                            } else {
+                                outcome = SaveOutcome::Save(target);
+                            }
+                        }
+                        if ui.button("Cancel").clicked() {
+                            outcome = SaveOutcome::Cancel;
+                        }
+                    });
+                }
+            },
+        );
         if back {
             self.replacing = None;
         }
         if let Some(dir) = enter {
             self.enter(dir);
         }
-        if matches!(outcome, SaveOutcome::Pending) && response.should_close() {
+        if !open && matches!(outcome, SaveOutcome::Pending) {
             outcome = SaveOutcome::Cancel;
         }
         outcome
