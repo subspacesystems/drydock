@@ -354,7 +354,7 @@ impl App {
             app.model = Some(fresh.document);
             // The test hook leaves the main window titled "Drydock" (as main.rs makes it),
             // so the real-window test can find it next to the dialog or prompt.
-            app.title_pending = dialog_hook.is_empty();
+            app.title_pending = startup_title_pending(!dialog_hook.is_empty());
         }
         app
     }
@@ -3646,6 +3646,13 @@ fn paint_primitives(
     }
 }
 
+/// Whether the first frame should send the fresh document's title. A `DRYDOCK_OPEN_DIALOG` test
+/// hook (About, Shadows, Geolocation) keeps the window at its bare creation title so the
+/// real-window tests can find it next to the dialog.
+fn startup_title_pending(dialog_hook: bool) -> bool {
+    !dialog_hook
+}
+
 /// The preview is dark; a non-ground draw plane tints it to show its normal.
 fn preview_color(plane: Option<DrawPlane>) -> Color32 {
     let Some(plane) = plane else {
@@ -3683,4 +3690,15 @@ fn file_name(path: &Path) -> String {
     path.file_name()
         .map(|name| name.to_string_lossy().into_owned())
         .unwrap_or_else(|| path.display().to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::startup_title_pending;
+
+    #[test]
+    fn the_first_frame_titles_the_fresh_document_unless_a_dialog_hook_is_on() {
+        assert!(startup_title_pending(false));
+        assert!(!startup_title_pending(true));
+    }
 }
