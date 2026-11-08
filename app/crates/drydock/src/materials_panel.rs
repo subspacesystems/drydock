@@ -14,7 +14,7 @@ use eframe::egui::{self, Color32};
 use glam::DVec2;
 
 use crate::color_ui::srgb_color_button;
-use crate::dialog::{DialogButton, button_row, field_label};
+use crate::dialog::{DialogButton, DialogWindow, button_row, field_label, modal_dialog_window};
 use crate::icons::{self, Icon};
 use crate::swatches::Swatches;
 use crate::units_ui::{length_drag, unit_abbrev};
@@ -373,58 +373,79 @@ pub fn materials_panel(
         let unused = paint::unused_materials(model);
         let mut purge = false;
         let mut close = false;
-        let response = egui::Modal::new(egui::Id::new("purge-unused")).show(ui.ctx(), |ui| {
-            ui.set_width(360.0);
-            if unused.is_empty() {
-                ui.label("No unused materials to remove.");
-                if button_row(
-                    ui,
-                    &[DialogButton {
-                        label: "OK",
-                        default: true,
-                        enabled: true,
-                    }],
-                ) == Some(0)
-                {
-                    close = true;
-                }
-            } else {
-                ui.label("The following unused materials will be removed from the model:");
-                egui::ScrollArea::vertical()
-                    .max_height(240.0)
-                    .auto_shrink([false, true])
-                    .show(ui, |ui| {
-                        for &id in &unused {
-                            if let Some(material) = model.material(id) {
-                                ui.label(&material.name);
-                            }
-                        }
-                    });
-                match button_row(
-                    ui,
-                    &[
-                        DialogButton {
-                            label: "Purge",
+        let mut open = true;
+        let window = DialogWindow {
+            title: "Purge Unused Materials",
+            size: egui::vec2(380.0, 300.0),
+        };
+        modal_dialog_window(
+            ui.ctx(),
+            egui::Id::new("purge-unused"),
+            &window,
+            &mut open,
+            |ui| {
+                if unused.is_empty() {
+                    ui.label("No unused materials to remove.");
+                    if button_row(
+                        ui,
+                        &[DialogButton {
+                            label: "OK",
                             default: true,
                             enabled: true,
-                        },
-                        DialogButton {
-                            label: "Cancel",
-                            default: false,
-                            enabled: true,
-                        },
-                    ],
-                ) {
-                    Some(0) => {
-                        purge = true;
+                        }],
+                    ) == Some(0)
+                    {
                         close = true;
                     }
-                    Some(1) => close = true,
-                    _ => {}
+                } else {
+                    if unused.len() == 1 {
+                        let name = unused
+                            .first()
+                            .and_then(|&id| model.material(id))
+                            .map(|material| material.name.as_str())
+                            .unwrap_or("it");
+                        ui.label(format!(
+                            "The unused material \"{name}\" will be removed from the model:"
+                        ));
+                    } else {
+                        ui.label("The following unused materials will be removed from the model:");
+                        egui::ScrollArea::vertical()
+                            .max_height(240.0)
+                            .auto_shrink([false, true])
+                            .show(ui, |ui| {
+                                for &id in &unused {
+                                    if let Some(material) = model.material(id) {
+                                        ui.label(&material.name);
+                                    }
+                                }
+                            });
+                    }
+                    match button_row(
+                        ui,
+                        &[
+                            DialogButton {
+                                label: "Purge",
+                                default: true,
+                                enabled: true,
+                            },
+                            DialogButton {
+                                label: "Cancel",
+                                default: false,
+                                enabled: true,
+                            },
+                        ],
+                    ) {
+                        Some(0) => {
+                            purge = true;
+                            close = true;
+                        }
+                        Some(1) => close = true,
+                        _ => {}
+                    }
                 }
-            }
-        });
-        if close || response.should_close() {
+            },
+        );
+        if close || !open {
             panel.purge_confirm = false;
         }
         if purge {

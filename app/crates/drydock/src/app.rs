@@ -44,6 +44,7 @@ use drydock::portal;
 use drydock::print_setup::{
     self, FitReport, PrintSettings, PrintSetupEvent, PrintSetupTexts, PrintSetupView,
 };
+use drydock::prompts::{self, UnsavedChoice};
 use drydock::recent::{RecentFiles, recent_file};
 use drydock::shading;
 use drydock::shadows_panel::{self, ShadowsEvent};
@@ -51,7 +52,7 @@ use drydock::solid_ui::{MarkTracker, mark_primitives, marked_scene, repair_messa
 use drydock::start::Fresh;
 use drydock::sun_windows::SunWindows;
 use drydock::tags_panel::{TagAction, TagsPanel, default_tag_name, tags_panel};
-use drydock::text_tool::{self, TextDialog, TextOptions, TextOutcome};
+use drydock::text_tool::{TextDialog, TextOptions, TextOutcome};
 use drydock::texture_handles;
 use drydock::texture_panel::{TextureForm, texture_position_section};
 use drydock::toolbars::{self, CustomizeState, Edge, Placement, ToolbarEvent, ToolbarLayout};
@@ -3324,16 +3325,8 @@ impl eframe::App for App {
             }
         }
         if let Some(prompt) = &mut self.units_prompt {
-            let mut outcome = None;
             let file = file_name(&prompt.path);
-            let response = egui::Modal::new(egui::Id::new("mesh-units")).show(&ctx, |ui| {
-                ui.set_width(320.0);
-                ui.heading("Mesh units");
-                outcome = mesh_import::units_choice(ui, &file, &mut prompt.unit);
-            });
-            if outcome.is_none() && response.should_close() {
-                outcome = Some(UnitsOutcome::Cancel);
-            }
+            let outcome = prompts::units_prompt(&ctx, &file, &mut prompt.unit);
             match outcome {
                 Some(UnitsOutcome::Ok) => {
                     let prompt = self.units_prompt.take().unwrap();
@@ -3358,15 +3351,7 @@ impl eframe::App for App {
                 .any(|entity| matches!(entity, Entity::Instance(_)))
         });
         if let Some(prompt) = &mut self.text_dialog {
-            let mut outcome = None;
-            let response = egui::Modal::new(egui::Id::new("text-dialog")).show(&ctx, |ui| {
-                ui.set_width(360.0);
-                ui.heading("3D Text");
-                outcome = text_tool::text_dialog(ui, &mut prompt.dialog);
-            });
-            if outcome.is_none() && response.should_close() {
-                outcome = Some(TextOutcome::Cancel);
-            }
+            let outcome = prompts::text_prompt(&ctx, &mut prompt.dialog);
             match outcome {
                 Some(TextOutcome::Ok) => {
                     let prompt = self.text_dialog.take().unwrap();
@@ -3385,15 +3370,7 @@ impl eframe::App for App {
             }
         }
         if let Some(prompt) = &mut self.export_dialog {
-            let mut outcome = None;
-            let response = egui::Modal::new(egui::Id::new("export-dialog")).show(&ctx, |ui| {
-                ui.set_width(360.0);
-                ui.heading(format!("Export {}", prompt.dialog.options.format.label()));
-                outcome = mesh_export::export_dialog(ui, &mut prompt.dialog, has_selection);
-            });
-            if outcome.is_none() && response.should_close() {
-                outcome = Some(ExportOutcome::Cancel);
-            }
+            let outcome = prompts::export_prompt(&ctx, &mut prompt.dialog, has_selection);
             match outcome {
                 Some(ExportOutcome::Ok) => {
                     let prompt = self.export_dialog.take().unwrap();
@@ -3433,7 +3410,7 @@ impl eframe::App for App {
                 .as_ref()
                 .map(|model| file_name(&model.path))
                 .unwrap_or_else(|| "this model".to_owned());
-            match unsaved_dialog(&ctx, &name) {
+            match prompts::unsaved_prompt(&ctx, &name) {
                 Some(UnsavedChoice::Save) => {
                     self.confirm = None;
                     self.save_before(&ctx, frame);
@@ -3485,38 +3462,6 @@ enum PendingAction {
 enum AppConfirm {
     ResetToolbars,
     ResetPanels,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum UnsavedChoice {
-    Save,
-    Discard,
-    Cancel,
-}
-
-fn unsaved_dialog(ctx: &egui::Context, name: &str) -> Option<UnsavedChoice> {
-    let mut choice = None;
-    let response = egui::Modal::new(egui::Id::new("unsaved-changes")).show(ctx, |ui| {
-        ui.set_width(360.0);
-        ui.heading("Unsaved changes");
-        ui.label(format!("Save changes to {name}?"));
-        ui.add_space(8.0);
-        ui.horizontal(|ui| {
-            if look::primary_button(ui, "Save").clicked() {
-                choice = Some(UnsavedChoice::Save);
-            }
-            if ui.button("Discard").clicked() {
-                choice = Some(UnsavedChoice::Discard);
-            }
-            if ui.button("Cancel").clicked() {
-                choice = Some(UnsavedChoice::Cancel);
-            }
-        });
-    });
-    if choice.is_none() && response.should_close() {
-        choice = Some(UnsavedChoice::Cancel);
-    }
-    choice
 }
 
 /// Stroke colour and width for an overlay primitive.
