@@ -2,8 +2,8 @@
 // Copyright (C) 2026 Subspace Systems
 
 //! Real-window probe for `modal_dialog_window` (`docs/specs/m11-modal-window.md`). The main
-//! window is one big button; its title reports what reached it:
-//! `probe clicks=N keys=N answer=A`. `--modal` opens a "Probe Name" prompt at startup
+//! window is a text box that asks for focus every frame above one big button; its title
+//! reports what reached it: `probe clicks=N typed=T answer=A`. `--modal` opens a "Probe Name" prompt at startup
 //! (a Name box, OK and Cancel); `answer` becomes `ok:<name>` or `cancel`. Not part of the
 //! app: `tests/modal_window_x11.rs` starts it under Xvfb.
 
@@ -12,7 +12,7 @@ use eframe::egui;
 
 struct Probe {
     clicks: u32,
-    keys: u32,
+    typed: String,
     answer: String,
     open: bool,
     name: String,
@@ -22,12 +22,12 @@ impl eframe::App for Probe {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         egui::CentralPanel::default().show(ui, |ui| {
+            ui.text_edit_singleline(&mut self.typed).request_focus();
             let size = ui.available_size();
             if ui.add_sized(size, egui::Button::new("Count")).clicked() {
                 self.clicks += 1;
             }
         });
-        self.keys += ctx.input(|i| i.key_pressed(egui::Key::Space)) as u32;
         let window = DialogWindow {
             title: "Probe Name",
             size: egui::vec2(320.0, 120.0),
@@ -71,9 +71,9 @@ impl eframe::App for Probe {
         }
         self.open = open;
         ctx.send_viewport_cmd(egui::ViewportCommand::Title(format!(
-            "probe clicks={} keys={} answer={}",
+            "probe clicks={} typed={} answer={}",
             self.clicks,
-            self.keys,
+            self.typed,
             if self.answer.is_empty() {
                 "none"
             } else {
@@ -97,7 +97,7 @@ fn main() -> eframe::Result {
         Box::new(move |_| {
             Ok(Box::new(Probe {
                 clicks: 0,
-                keys: 0,
+                typed: String::new(),
                 answer: String::new(),
                 open,
                 name: String::new(),
