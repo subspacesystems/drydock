@@ -63,7 +63,7 @@ the root, and `dialog_window` shows how to run a viewport callback with `FnOnce`
 - `every_panel_has_its_own_viewport_id`, `layout_and_screen_positions_*`: the pure functions.
 - Embedded: header, "Dock panel" row and content in that order; the rectangle reported in
   layout coordinates; Dock and Close reported once clicked; `raise_floating_panel` is safe.
-- Real window (Xvfb, xdotool, xprop, `MODELER_GUI_TESTS=1`; skips itself otherwise): writes
+- Real window (Xvfb, xdotool, xprop, `DRYDOCK_GUI_TESTS=1`; skips itself otherwise): writes
   a layout file with Materials floating in a temp `DRYDOCK_CONFIG_DIR`, starts the app, finds
   a second X window titled exactly "Materials" whose `WM_TRANSIENT_FOR` is the main window,
   moves it with `xdotool windowmove` and waits for the saved layout to follow (relative to
@@ -72,7 +72,7 @@ the root, and `dialog_window` shows how to run a viewport callback with `FnOnce`
 
 Existing dock tests (`dock_ui.rs`, `dock_layout.rs`, `materials_panel*.rs`, ...) must pass
 unchanged. Run `harness/bin/run-tests -p drydock` at the end with Xvfb and
-`MODELER_GUI_TESTS=1`.
+`DRYDOCK_GUI_TESTS=1`.
 
 ## Where to look
 

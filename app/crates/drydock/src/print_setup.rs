@@ -399,12 +399,17 @@ pub fn print_setup_window(
     view: &PrintSetupView<'_>,
 ) -> PrintSetupEvent {
     let mut event = PrintSetupEvent::None;
-    egui::Window::new("Print Setup")
-        .id(egui::Id::new("print_setup"))
-        .open(open)
-        .show(ctx, |ui| {
+    crate::dialog::dialog_window(
+        ctx,
+        &crate::dialog::DialogWindow {
+            title: "Print Setup",
+            size: egui::vec2(360.0, 420.0),
+        },
+        open,
+        |ui| {
             event = print_setup_ui(ui, texts, view);
-        });
+        },
+    );
     event
 }
 

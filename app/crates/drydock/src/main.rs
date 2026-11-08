@@ -125,6 +125,33 @@ fn screenshot(file: &Path, out: &Path) -> Result<(), String> {
         .map_err(|err| format!("{}: {err}", out.display()))
 }
 
+/// Holds the display while an app started by the dialog test hook runs, so GUI tests that open
+/// different dialogs at once do not both put a main window on the same display.
+#[cfg(target_os = "linux")]
+fn dialog_hook_lock() -> Option<std::os::unix::net::UnixListener> {
+    use std::os::linux::net::SocketAddrExt;
+    use std::time::{Duration, Instant};
+
+    std::env::var_os("DRYDOCK_OPEN_DIALOG")?;
+    let address =
+        std::os::unix::net::SocketAddr::from_abstract_name(b"drydock-dialog-test").ok()?;
+    let end = Instant::now() + Duration::from_secs(60);
+    loop {
+        match std::os::unix::net::UnixListener::bind_addr(&address) {
+            Ok(listener) => return Some(listener),
+            Err(err) if err.kind() == std::io::ErrorKind::AddrInUse && Instant::now() < end => {
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            Err(_) => return None,
+        }
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn dialog_hook_lock() -> Option<()> {
+    None
+}
+
 fn main() -> ExitCode {
     let args = match parse_args(std::env::args().skip(1)) {
         Parsed::Run(args) => args,
@@ -159,6 +186,7 @@ fn main() -> ExitCode {
             }
         };
     }
+    let _dialog_lock = dialog_hook_lock();
     drydock::desktop_entry::install_for_current_user();
     let options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()

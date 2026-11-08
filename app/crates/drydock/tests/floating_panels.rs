@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Subspace Systems
 
 //! m11-floating-panels: a floating dock panel is its own OS window. Unit and kittest parts run
-//! everywhere; the real-window part needs Xvfb, xdotool, xprop and MODELER_GUI_TESTS=1 and
+//! everywhere; the real-window part needs Xvfb, xdotool, xprop and DRYDOCK_GUI_TESTS=1 and
 //! skips itself otherwise. See docs/specs/m11-floating-panels.md.
 
 use std::cell::RefCell;
@@ -161,7 +161,7 @@ use std::time::{Duration, Instant};
 use drydock::dock::{DockLayout, Place, Side};
 
 fn gui_tests() -> bool {
-    std::env::var_os("MODELER_GUI_TESTS").is_some()
+    std::env::var_os("DRYDOCK_GUI_TESTS").is_some()
 }
 
 fn tool(cmd: &str, args: &[&str]) -> Output {
@@ -239,7 +239,7 @@ fn temp_config(name: &str) -> std::path::PathBuf {
 #[test]
 fn floating_panel_is_an_x_window_that_follows_moves_and_docks_from_its_button() {
     if !gui_tests() {
-        eprintln!("skipped: MODELER_GUI_TESTS is unset");
+        eprintln!("skipped: DRYDOCK_GUI_TESTS is unset");
         return;
     }
     let config = temp_config("floating-panel");
@@ -248,7 +248,7 @@ fn floating_panel_is_an_x_window_that_follows_moves_and_docks_from_its_button() 
         !windows("^Materials$").is_empty()
     });
     let panel = windows("^Materials$")[0].clone();
-    let main = windows("^Drydock$");
+    let main = windows("Drydock$");
     assert_eq!(main.len(), 1, "one main window: {main:?}");
     assert_ne!(main[0], panel);
 
@@ -295,7 +295,7 @@ fn floating_panel_is_an_x_window_that_follows_moves_and_docks_from_its_button() 
     wait_for("the Materials window to go", || {
         windows("^Materials$").is_empty()
     });
-    assert_eq!(windows("^Drydock$").len(), 1, "the main window stays");
+    assert_eq!(windows("Drydock$").len(), 1, "the main window stays");
     let saved = DockLayout::load(&config.join("panels"));
     assert!(saved.is_open(PanelId::Materials));
     assert!(matches!(
