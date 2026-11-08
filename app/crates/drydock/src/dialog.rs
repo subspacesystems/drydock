@@ -289,6 +289,28 @@ pub fn centered_position(root_outer: egui::Rect, size: Vec2) -> egui::Pos2 {
     )
 }
 
+/// Where the dialog window `viewport_id` of `size` was first placed: the stored position if
+/// there is one; else, when `root_outer` (the main window's outer rectangle) is known, its
+/// [`centered_position`], which is stored in `ctx` temp data under `viewport_id` and returned;
+/// else `None`. Later calls return the same position whatever `root_outer` is then, so the
+/// viewport builder does not change when the main window moves.
+pub fn opening_position(
+    ctx: &egui::Context,
+    viewport_id: egui::ViewportId,
+    root_outer: Option<egui::Rect>,
+    size: Vec2,
+) -> Option<egui::Pos2> {
+    let _ = (ctx, viewport_id, root_outer, size);
+    unimplemented!("m11-dialog-keep-position")
+}
+
+/// Forgets the position stored by [`opening_position`] for `viewport_id`, so the next opening
+/// is centred again. Does nothing when none is stored.
+pub fn forget_opening_position(ctx: &egui::Context, viewport_id: egui::ViewportId) {
+    let _ = (ctx, viewport_id);
+    unimplemented!("m11-dialog-keep-position")
+}
+
 /// The viewport id of the dialog titled `title`; the same title always gives the same id.
 pub fn dialog_viewport_id(title: &str) -> egui::ViewportId {
     egui::ViewportId::from_hash_of(("drydock-dialog-window", title))
