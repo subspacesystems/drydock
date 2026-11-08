@@ -390,6 +390,24 @@ pub fn window_pos(available: egui::Rect) -> egui::Pos2 {
     available.min + egui::vec2(WINDOW_MARGIN, WINDOW_MARGIN)
 }
 
+/// The Print Setup window (`docs/specs/m11-dialog-print-toolbars.md`): [`print_setup_ui`] in a
+/// window titled "Print Setup" while `*open`; its close button clears `open`.
+pub fn print_setup_window(
+    ctx: &egui::Context,
+    open: &mut bool,
+    texts: &mut PrintSetupTexts,
+    view: &PrintSetupView<'_>,
+) -> PrintSetupEvent {
+    let mut event = PrintSetupEvent::None;
+    egui::Window::new("Print Setup")
+        .id(egui::Id::new("print_setup"))
+        .open(open)
+        .show(ctx, |ui| {
+            event = print_setup_ui(ui, texts, view);
+        });
+    event
+}
+
 /// What the Print Setup window shows.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PrintSetupView<'a> {
