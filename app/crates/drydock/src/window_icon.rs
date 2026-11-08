@@ -32,3 +32,10 @@ pub fn window_icon() -> IconData {
         height,
     }
 }
+
+/// Gives `builder` Drydock's application id ([`APP_ID`]) and icon ([`window_icon`]). Every
+/// window Drydock opens (main window, dialog windows, floating panels) is built through this,
+/// so the desktop matches them all to the same application (`docs/specs/m11-dialog-app-id.md`).
+pub fn with_app_identity(builder: eframe::egui::ViewportBuilder) -> eframe::egui::ViewportBuilder {
+    builder.with_app_id(APP_ID).with_icon(window_icon())
+}
