@@ -207,3 +207,38 @@ fn dialog_title(ui: &mut egui::Ui, title: &str) {
     let size = ui.text_style_height(&egui::TextStyle::Body) + 3.0;
     ui.label(egui::RichText::new(title).strong().size(size));
 }
+
+/// How a dialog shows up in its own window (`docs/specs/m11-dialog-window.md`).
+#[derive(Clone, Copy, Debug)]
+pub struct DialogWindow<'a> {
+    /// The window's title; also its identity: two dialogs need two titles.
+    pub title: &'a str,
+    /// The initial inner size in points.
+    pub size: Vec2,
+}
+
+/// Where a dialog of `size` goes so it is centered over `root_outer` (the main window's outer
+/// rectangle in screen points); each coordinate is at least 0.
+pub fn centered_position(root_outer: egui::Rect, size: Vec2) -> egui::Pos2 {
+    let _ = (root_outer, size);
+    unimplemented!("m11-dialog-window")
+}
+
+/// The viewport id of the dialog titled `title`; the same title always gives the same id.
+pub fn dialog_viewport_id(title: &str) -> egui::ViewportId {
+    let _ = title;
+    unimplemented!("m11-dialog-window")
+}
+
+/// Shows `content` as a dialog while `*open`. With `ctx.embed_viewports()` false it is its own
+/// OS window (`show_viewport_immediate`); true, an `egui::Window` with the same title. The
+/// title bar's close, and Escape, clear `open`. Nothing is drawn when `!*open`.
+pub fn dialog_window(
+    ctx: &egui::Context,
+    window: &DialogWindow<'_>,
+    open: &mut bool,
+    content: impl FnOnce(&mut egui::Ui),
+) {
+    let _ = (ctx, window, open, content);
+    unimplemented!("m11-dialog-window")
+}
