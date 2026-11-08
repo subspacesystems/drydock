@@ -1032,43 +1032,58 @@ pub fn customize_panel(
     let mut dragging: Option<egui::Pos2> = None;
     let mut row_rects = Vec::new();
 
+    let list_height = 7.0 * (icons::BUTTON_SIZE + ui.spacing().item_spacing.y);
     let (on_rect, available_rect) = ui.columns(2, |columns| {
         let on_rect = {
             let ui = &mut columns[0];
-            ui.heading("On the toolbar");
-            for &tool in &tools {
-                let label = tool_label(tool);
-                let row = ui.horizontal(|ui| {
-                    let handle = customize_drag_handle(ui, tool, label);
-                    if handle.dragged() {
-                        dragging = handle.interact_pointer_pos();
+            let heading = ui.heading("On the toolbar");
+            let area = egui::ScrollArea::vertical()
+                .id_salt("customize-on-toolbar")
+                .max_height(list_height)
+                .auto_shrink([false, true])
+                .show(ui, |ui| {
+                    for &tool in &tools {
+                        let label = tool_label(tool);
+                        let row = ui.horizontal(|ui| {
+                            let handle = customize_drag_handle(ui, tool, label);
+                            if handle.dragged() {
+                                dragging = handle.interact_pointer_pos();
+                            }
+                            if handle.drag_stopped() {
+                                dropped = handle.interact_pointer_pos().map(|pos| (tool, pos));
+                            }
+                            ui.label(label);
+                        });
+                        row_rects.push(row.response.rect);
                     }
-                    if handle.drag_stopped() {
-                        dropped = handle.interact_pointer_pos().map(|pos| (tool, pos));
-                    }
-                    ui.label(label);
+                    ui.min_rect()
                 });
-                row_rects.push(row.response.rect);
-            }
-            ui.min_rect()
+            heading.rect.union(area.inner_rect.intersect(area.inner))
         };
         let available_rect = {
             let ui = &mut columns[1];
-            ui.heading("Available");
-            for &tool in &available {
-                let label = tool_label(tool);
-                ui.horizontal(|ui| {
-                    let handle = customize_drag_handle(ui, tool, label);
-                    if handle.dragged() {
-                        dragging = handle.interact_pointer_pos();
+            let heading = ui.heading("Available");
+            let area = egui::ScrollArea::vertical()
+                .id_salt("customize-available")
+                .max_height(list_height)
+                .auto_shrink([false, true])
+                .show(ui, |ui| {
+                    for &tool in &available {
+                        let label = tool_label(tool);
+                        ui.horizontal(|ui| {
+                            let handle = customize_drag_handle(ui, tool, label);
+                            if handle.dragged() {
+                                dragging = handle.interact_pointer_pos();
+                            }
+                            if handle.drag_stopped() {
+                                dropped = handle.interact_pointer_pos().map(|pos| (tool, pos));
+                            }
+                            ui.label(label);
+                        });
                     }
-                    if handle.drag_stopped() {
-                        dropped = handle.interact_pointer_pos().map(|pos| (tool, pos));
-                    }
-                    ui.label(label);
+                    ui.min_rect()
                 });
-            }
-            ui.min_rect()
+            heading.rect.union(area.inner_rect.intersect(area.inner))
         };
         (on_rect, available_rect)
     });

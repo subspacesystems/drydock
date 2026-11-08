@@ -257,15 +257,26 @@ pub struct DialogFit {
 /// above [`SCREEN_MARGIN`]) at most `monitor_height - SCREEN_MARGIN`, in which case `scroll`
 /// is true. Unknown or unusable monitor heights do not clamp.
 pub fn fit_height(content_height: f32, monitor_height: Option<f32>) -> DialogFit {
-    let _ = (content_height, monitor_height);
-    unimplemented!("m11-dialog-fit-content")
+    let height = content_height.max(0.0);
+    if let Some(monitor_height) = monitor_height
+        && monitor_height > SCREEN_MARGIN
+        && height > monitor_height - SCREEN_MARGIN
+    {
+        return DialogFit {
+            height: monitor_height - SCREEN_MARGIN,
+            scroll: true,
+        };
+    }
+    DialogFit {
+        height,
+        scroll: false,
+    }
 }
 
 /// Whether a window whose inner height is `current` should be sent `target`: only when they
 /// differ by more than 1 point, so a settled window is not resized every frame.
 pub fn needs_resize(current: f32, target: f32) -> bool {
-    let _ = (current, target);
-    unimplemented!("m11-dialog-fit-content")
+    (current - target).abs() > 1.0
 }
 
 /// Where a dialog of `size` goes so it is centered over `root_outer` (the main window's outer
@@ -375,6 +386,13 @@ fn dialog_window_impl(
             }
         }
     } else {
+        let viewport_id = dialog_viewport_id(window.title);
+        let shown_id = viewport_id.0.with("dialog-shown");
+        if !ctx.data_mut(|data| *data.get_temp_mut_or(shown_id, false)) {
+            ctx.data_mut(|data| data.insert_temp(shown_id, true));
+            ctx.request_repaint();
+            return;
+        }
         if modal {
             egui_winit::mark_modal_title(ctx, window.title);
             let rect = ctx.content_rect();
@@ -398,12 +416,51 @@ fn dialog_window_impl(
         if let Some(root_outer) = root_outer {
             builder = builder.with_position(centered_position(root_outer, window.size));
         }
-        ctx.show_viewport_immediate(dialog_viewport_id(window.title), builder, |ui, _class| {
-            egui::CentralPanel::default().show(ui, |ui| {
-                if let Some(content) = content.take() {
-                    content(ui);
+        let scroll_id = viewport_id.0.with("dialog-fit-scroll");
+        let mut scroll = ctx.data_mut(|data| *data.get_temp_mut_or(scroll_id, false));
+        ctx.show_viewport_immediate(viewport_id, builder, |ui, _class| {
+            let monitor_height = ui.input(|input| input.viewport().monitor_size.map(|size| size.y));
+            let frame = egui::Frame::central_panel(ui.style());
+            let margin_height = frame.total_margin().sum().y;
+            let panel = egui::CentralPanel::default().frame(frame).show(ui, |ui| {
+                if scroll {
+                    egui::ScrollArea::vertical()
+                        .auto_shrink([false, true])
+                        .show(ui, |ui| {
+                            if let Some(content) = content.take() {
+                                content(ui);
+                            }
+                        })
+                        .content_size
+                        .y
+                } else {
+                    ui.scope(|ui| {
+                        if let Some(content) = content.take() {
+                            content(ui);
+                        }
+                    })
+                    .response
+                    .rect
+                    .height()
                 }
             });
+            let content_height = panel.inner + margin_height;
+            let fit = fit_height(content_height, monitor_height);
+            if fit.scroll && !scroll {
+                scroll = true;
+                ctx.data_mut(|data| data.insert_temp(scroll_id, true));
+                ctx.request_repaint();
+            }
+            let current = ui
+                .input(|input| input.viewport().inner_rect)
+                .map_or(window.size.y, |rect| rect.height());
+            if needs_resize(current, fit.height) {
+                ctx.send_viewport_cmd_to(
+                    viewport_id,
+                    egui::ViewportCommand::InnerSize(egui::vec2(window.size.x, fit.height)),
+                );
+                ctx.request_repaint();
+            }
             if ui.input(|i| i.viewport().close_requested() || i.key_pressed(egui::Key::Escape)) {
                 close = true;
             }
