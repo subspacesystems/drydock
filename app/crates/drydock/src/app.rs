@@ -21,6 +21,7 @@ use drydock::editor::{Editor, TextureOp, Viewport as EditorViewport};
 use drydock::entity_info::{EntityInfoPanel, InfoAction, entity_info_panel};
 use drydock::file_dialogs::{DialogOutcome, OpenDialog, SaveDialog, SaveMode, SaveOutcome};
 use drydock::fit_check::{self, FitCheck, selected_pair};
+use drydock::floating::{floating_panel_window, raise_floating_panel};
 use drydock::guide_help::{self, SystemBrowser};
 use drydock::hints::hint_label;
 use drydock::icons::{self, Icon};
@@ -338,7 +339,7 @@ impl App {
             app.view = fresh.view;
             app.editor = Some(fresh.editor);
             app.model = Some(fresh.document);
-            app.title_pending = true;
+            app.title_pending = false;
         }
         app
     }
@@ -2410,10 +2411,7 @@ impl App {
     fn reveal_panel(&mut self, id: PanelId, ctx: &egui::Context) {
         self.dock.reveal(id);
         if matches!(self.dock.panel(id).place, dock::Place::Floating { .. }) {
-            ctx.move_to_top(egui::LayerId::new(
-                egui::Order::Middle,
-                egui::Id::new(("floating-panel", id)),
-            ));
+            raise_floating_panel(ctx, id);
         }
         self.save_panels();
     }
@@ -2538,30 +2536,20 @@ impl App {
             let dock::Place::Floating { x, y, w, h } = layout.panel(id).place else {
                 continue;
             };
-            let response = egui::Window::new(dock::title(id))
-                .id(egui::Id::new(("floating-panel", id)))
-                .title_bar(false)
-                .collapsible(false)
-                .movable(false)
-                .resizable(true)
-                .current_pos(pos2(x, y))
-                .default_size(egui::vec2(w, h))
-                .min_size(egui::vec2(dock::MIN_FLOAT_SIZE.0, dock::MIN_FLOAT_SIZE.1))
-                .show(ctx, |ui| {
-                    if let Some(event) = panel_header(ui, id, false, false) {
-                        events.push(event);
-                    }
-                    actions.extend(self.panel_body(ui, id));
-                });
-            if let Some(response) = response {
-                let rect = response.response.rect;
-                let stored = Rect::from_min_size(pos2(x, y), egui::vec2(w, h));
-                if (rect.min - stored.min).length() > 0.5
-                    || (rect.size() - stored.size()).length() > 0.5
-                {
-                    self.dock.float(id, rect);
-                    changed = true;
-                }
+            let stored = Rect::from_min_size(pos2(x, y), egui::vec2(w, h));
+            let outcome = floating_panel_window(ctx, id, stored, |ui| {
+                actions.extend(self.panel_body(ui, id));
+            });
+            events.extend(outcome.events);
+            if outcome.dock {
+                self.dock.dock(id, DockSide::Right, usize::MAX);
+                changed = true;
+            } else if let Some(rect) = outcome.rect
+                && ((rect.min - stored.min).length() > 0.5
+                    || (rect.size() - stored.size()).length() > 0.5)
+            {
+                self.dock.float(id, rect);
+                changed = true;
             }
         }
 
