@@ -83,6 +83,10 @@ pub(crate) struct Window {
 
     // The events loop proxy.
     thread_executor: event_loop::EventLoopThreadExecutor,
+
+    // Local patch (Drydock, PATCHES.md): the owner window a modal window disabled; enabled
+    // again on drop.
+    modal_owner: Option<HWND>,
 }
 
 impl Window {
@@ -1108,6 +1112,11 @@ impl Drop for Window {
     #[inline]
     fn drop(&mut self) {
         unsafe {
+            // Local patch (Drydock, PATCHES.md): enable the owner before the modal window goes,
+            // so the owner gets the focus back.
+            if let Some(owner) = self.modal_owner {
+                EnableWindow(owner, true.into());
+            }
             // The window must be destroyed from the same thread that created it, so we send a
             // custom message to be handled by our callback to do the actual work.
             PostMessageW(self.hwnd(), DESTROY_MSG_ID.get(), 0, 0);
@@ -1160,7 +1169,12 @@ impl InitData<'_> {
 
         unsafe { ImeContext::set_ime_allowed(window, false) };
 
-        Window { window, window_state, thread_executor: self.event_loop.create_thread_executor() }
+        Window {
+            window,
+            window_state,
+            thread_executor: self.event_loop.create_thread_executor(),
+            modal_owner: None,
+        }
     }
 
     unsafe fn create_window_data(&self, win: &Window) -> event_loop::WindowData {
@@ -1363,6 +1377,8 @@ unsafe fn init(
     let parent = fallback_parent();
 
     let menu = attributes.platform_specific.menu;
+    // Local patch (Drydock, PATCHES.md): see `WindowAttributes::with_modal`.
+    let modal = attributes.modal;
     let fullscreen = attributes.fullscreen.clone();
     let maximized = attributes.maximized;
     let mut initdata = InitData { event_loop, attributes, window_flags, window: None };
@@ -1396,7 +1412,14 @@ unsafe fn init(
 
     // If the handle is non-null, then window creation must have succeeded, which means
     // that we *must* have populated the `InitData.window` field.
-    let win = initdata.window.unwrap();
+    let mut win = initdata.window.unwrap();
+
+    // Local patch (Drydock, PATCHES.md): a modal window disables its owner while it exists, as
+    // native modal dialogs do; `Drop for Window` enables it again.
+    if let (true, Some(owner)) = (modal, owner) {
+        unsafe { EnableWindow(owner, false.into()) };
+        win.modal_owner = Some(owner);
+    }
 
     // Need to set FULLSCREEN or MAXIMIZED after CreateWindowEx
     // This is because if the size is changed in WM_CREATE, the restored size will be stored in that
