@@ -17,8 +17,8 @@ use crate::toolbars::{self, ToolbarLayout, ToolbarsMenuEvent};
 use drydock_kernel::units::{LengthFormat, format_with};
 use drydock_view::StandardView;
 use eframe::egui::{
-    Align2, InnerResponse, Label, Rect, Response, RichText, Sense, Shape, Stroke, TextStyle, Ui,
-    WidgetInfo, WidgetType, pos2, vec2,
+    Align2, Id, InnerResponse, Label, Rect, Response, RichText, ScrollArea, Sense, Shape, Stroke,
+    TextStyle, Ui, WidgetInfo, WidgetType, pos2, vec2,
 };
 use std::path::PathBuf;
 
@@ -738,6 +738,37 @@ pub fn menu_check_item(ui: &mut Ui, label: &str, checked: bool) -> Response {
     response
 }
 
+/// Room left between a menu's bottom and the window's bottom edge.
+const MENU_MARGIN: f32 = 8.0;
+
+/// The menu bar's bottom, put in the context for [`submenu_button`] to cap submenus.
+const MENU_BAR_BOTTOM: &str = "drydock_menu_bar_bottom";
+
+/// Wrap a menu's rows so content that doesn't fit scrolls inside the menu instead of
+/// overflowing the window.
+fn menu_scroll<R>(ui: &mut Ui, max_height: f32, add_contents: impl FnOnce(&mut Ui) -> R) -> R {
+    let max_height = max_height.max(0.0);
+    ui.set_max_height(max_height);
+    ScrollArea::vertical()
+        .auto_shrink([true, true])
+        .max_height(max_height)
+        .show(ui, add_contents)
+        .inner
+}
+
+/// A top-level menu button whose rows scroll when the menu is taller than the window.
+fn top_menu<R>(ui: &mut Ui, label: &str, add_contents: impl FnOnce(&mut Ui) -> R) {
+    ui.menu_button(label, |ui| {
+        let bar_bottom = ui
+            .ctx()
+            .data(|data| data.get_temp::<f32>(Id::new(MENU_BAR_BOTTOM)))
+            .unwrap_or_else(|| ui.cursor().top());
+        let frame = ui.spacing().menu_margin.sum().y;
+        let max_height = ui.ctx().content_rect().bottom() - bar_bottom - MENU_MARGIN - frame;
+        menu_scroll(ui, max_height, add_contents);
+    });
+}
+
 /// A submenu row with a drawn arrow; `add_contents` fills the submenu.
 pub fn submenu_button<R>(
     ui: &mut Ui,
@@ -786,7 +817,15 @@ pub fn submenu_button<R>(
         Stroke::NONE,
     ));
 
-    let popup = eframe::egui::containers::menu::SubMenu::new().show(ui, &response, add_contents);
+    let bar_bottom = ui
+        .ctx()
+        .data(|data| data.get_temp::<f32>(Id::new(MENU_BAR_BOTTOM)))
+        .unwrap_or_else(|| ui.max_rect().top());
+    let frame = ui.spacing().menu_margin.sum().y;
+    let max_height = ui.ctx().content_rect().bottom() - bar_bottom - MENU_MARGIN - frame;
+    let popup = eframe::egui::containers::menu::SubMenu::new().show(ui, &response, |ui| {
+        menu_scroll(ui, max_height, add_contents)
+    });
     InnerResponse::new(popup.map(|inner| inner.inner), response)
 }
 
@@ -827,7 +866,9 @@ fn menu_bar_inner(
     let mut customize_toolbars = false;
     let mut reset_toolbars = false;
     eframe::egui::MenuBar::new().ui(ui, |ui| {
-        ui.menu_button("File", |ui| {
+        ui.ctx()
+            .data_mut(|data| data.insert_temp(Id::new(MENU_BAR_BOTTOM), ui.min_rect().bottom()));
+        top_menu(ui, "File", |ui| {
             if menu_item(ui, None, "New", "Ctrl+N", false).clicked() {
                 chosen = Some(Action::New);
                 ui.close();
@@ -885,7 +926,7 @@ fn menu_bar_inner(
                 ui.close();
             }
         });
-        ui.menu_button("Edit", |ui| {
+        top_menu(ui, "Edit", |ui| {
             let undo_label = match state.undo {
                 Some(label) => format!("Undo {label}"),
                 None => "Undo".to_owned(),
@@ -995,7 +1036,7 @@ fn menu_bar_inner(
                 }
             }
         });
-        ui.menu_button("View", |ui| {
+        top_menu(ui, "View", |ui| {
             let projection = if state.parallel {
                 "Switch to Perspective"
             } else {
@@ -1100,7 +1141,7 @@ fn menu_bar_inner(
                 ui.close();
             }
         });
-        ui.menu_button("Tools", |ui| {
+        top_menu(ui, "Tools", |ui| {
             for (group_index, group) in TOOL_GROUPS.iter().enumerate() {
                 if group_index > 0 {
                     ui.separator();
@@ -1165,7 +1206,7 @@ fn menu_bar_inner(
                 ui.close();
             }
         });
-        ui.menu_button("Help", |ui| {
+        top_menu(ui, "Help", |ui| {
             if menu_item(ui, None, "User Guide", "F1", false).clicked() {
                 chosen = Some(Action::UserGuide);
                 ui.close();
