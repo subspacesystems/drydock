@@ -416,8 +416,25 @@ impl UnownedWindow {
                 flusher.ignore_error()
             }
 
-            leap!(window.set_window_types(window_attrs.platform_specific.x11.x11_window_types))
+            // Local patch (Drydock, PATCHES.md): a dialog names the window it belongs to.
+            let mut window_types = window_attrs.platform_specific.x11.x11_window_types;
+            if let Some(parent) = window_attrs.transient_parent {
+                let parent = u64::from(parent) as xproto::Window;
+                leap!(xconn.change_property(
+                    window.xwindow,
+                    xproto::Atom::from(xproto::AtomEnum::WM_TRANSIENT_FOR),
+                    xproto::Atom::from(xproto::AtomEnum::WINDOW),
+                    xproto::PropMode::REPLACE,
+                    &[parent],
+                ))
                 .ignore_error();
+
+                if window_types.as_slice() == [WindowType::Normal] {
+                    window_types = vec![WindowType::Dialog];
+                }
+            }
+
+            leap!(window.set_window_types(window_types)).ignore_error();
 
             // Local patch (Drydock, PATCHES.md): a modal dialog marks itself as such before
             // mapping. The window manager reads `_NET_WM_STATE` from the property then; a
