@@ -77,7 +77,6 @@ pub fn geo_fields(ui: &mut egui::Ui, form: &mut GeoForm) -> bool {
 /// The globe above [`geo_fields`] (the globe part of [`geo_panel_with_globe`]). True when
 /// Enter was pressed in a field.
 pub fn geo_fields_with_globe(ui: &mut egui::Ui, form: &mut GeoForm, view: &mut GlobeView) -> bool {
-    ui.heading("Geolocation");
     show_globe(ui, form, view);
     ui.label("Drag to turn, click to pick. UTC offset is estimated from longitude.");
     geo_inputs(ui, form)
