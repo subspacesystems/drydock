@@ -3,7 +3,7 @@
 
 //! m11-title-fresh-doc: the app opens on a fresh document and its window is titled with that
 //! document ("untitled.drydock - Drydock"), not the bare creation title "Drydock". Runs the
-//! real binary under Xvfb with xdotool and MODELER_GUI_TESTS=1; skips itself otherwise.
+//! real binary under Xvfb with xdotool and DRYDOCK_GUI_TESTS=1; skips itself otherwise.
 //! With the DRYDOCK_OPEN_DIALOG test hook the main window keeps the bare title (the
 //! real-window dialog tests look for it by that name).
 
@@ -52,8 +52,8 @@ fn wait_until(mut ready: impl FnMut() -> bool) -> bool {
 
 #[test]
 fn the_real_window_is_titled_with_the_fresh_document_after_startup() {
-    if std::env::var_os("MODELER_GUI_TESTS").is_none() {
-        eprintln!("skipped: MODELER_GUI_TESTS is unset");
+    if std::env::var_os("DRYDOCK_GUI_TESTS").is_none() {
+        eprintln!("skipped: DRYDOCK_GUI_TESTS is unset");
         return;
     }
     let _app = Kill(

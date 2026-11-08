@@ -26,7 +26,7 @@ its bare name. This task makes sure the normal start is right and keeps it right
 `tests/title_fresh_doc.rs`:
 - `a_fresh_document_has_the_untitled_title` (headless, always runs).
 - `the_real_window_is_titled_with_the_fresh_document_after_startup` (Xvfb + xdotool, needs
-  `MODELER_GUI_TESTS=1`).
+  `DRYDOCK_GUI_TESTS=1`).
 
 ## Where to look
 - `App::new`, `App::ui` (the `title_pending` block), `App::new_document` in `drydock/src/app.rs`
