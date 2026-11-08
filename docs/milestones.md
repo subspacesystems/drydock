@@ -353,7 +353,7 @@ Done when: Follow Me sweeps a face along an open and a closed path, and Offset i
 
 ## M11: Fixes and dialogs
 
-Tyrel agreed (2026-11-08): dialogs and tool windows become their own OS windows that belong to the main window (kept above it, opened over it, own title). Modeless ones leave the main window usable; prompts block it until answered. The windowing library gets a small local patch that tells the desktop which window a dialog belongs to (Wayland, X11, Windows).
+Tyrel agreed (2026-11-08): dialogs and tool windows become their own OS windows that belong to the main window (kept above it, opened over it, own title). Modeless ones leave the main window usable; prompts block it until answered. The windowing library gets a small local patch that tells the desktop which window a dialog belongs to (Wayland, X11, Windows). Open and Save use the system's file picker (Tyrel, 2026-11-08).
 
 | Task | What | Needs |
 | --- | --- | --- |
@@ -364,7 +364,8 @@ Tyrel agreed (2026-11-08): dialogs and tool windows become their own OS windows 
 | `m11-dialog-print-toolbars` | Print Setup and Customize Toolbars open in their own windows | `m11-dialog-window` |
 | `m11-winit-modal` | The windowing patch also marks a dialog window as modal (Wayland dialog hint, X11 modal state, Windows disables the owner) | `m11-winit-parent` |
 | `m11-modal-window` | Modal mode for the dialog-window helper: the main window ignores clicks and keys while it is open; the shared prompts and the Make Group/Component name prompt move to it | `m11-dialog-window`, `m11-winit-modal` |
-| `m11-modal-dialogs` | The remaining prompts (unsaved changes, 3D text, export options, mesh units, purge unused, Open and Save) open as modal windows | `m11-modal-window` |
+| `m11-modal-dialogs` | The remaining prompts (unsaved changes, 3D text, export options, mesh units, purge unused) open as modal windows | `m11-modal-window` |
+| `m11-native-file-dialogs` | Open, Import, Add Models, Save, Save As and Export (file and folder) use the system's own file picker (the desktop portal on Linux, the standard dialog on Windows), owned by the main window; our own picker stays only as the fallback when no system picker is available | |
 | `m11-floating-panels` | A floating dock panel (Materials, Entity Info and the rest) is its own window above the main window; docking it again closes that window | `m11-dialog-window` |
 
 ## Future (unscheduled)
