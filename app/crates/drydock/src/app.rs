@@ -21,6 +21,7 @@ use drydock::editor::{Editor, TextureOp, Viewport as EditorViewport};
 use drydock::entity_info::{EntityInfoPanel, InfoAction, entity_info_panel};
 use drydock::file_dialogs::{DialogOutcome, OpenDialog, SaveDialog, SaveMode, SaveOutcome};
 use drydock::fit_check::{self, FitCheck, selected_pair};
+use drydock::floating::{floating_panel_window, raise_floating_panel};
 use drydock::guide_help::{self, SystemBrowser};
 use drydock::hints::hint_label;
 use drydock::icons::{self, Icon};
@@ -36,6 +37,9 @@ use drydock::model_source::{
 };
 use drydock::open_buttons::OpenMode;
 use drydock::overlay::{self, Primitive};
+use drydock::picker::{
+    PickPurpose, PickRequest, Picker, Started, choose_backend, system_picker_available,
+};
 use drydock::portal;
 use drydock::print_setup::{
     self, FitReport, PrintSettings, PrintSetupEvent, PrintSetupTexts, PrintSetupView,
@@ -167,6 +171,7 @@ pub struct App {
     /// "Saved <file name>" until the next open or save.
     saved: Option<String>,
     warnings: Vec<String>,
+    picker: Picker,
     dialog: Option<OpenDialog>,
     /// The units choice shown before opening or importing an STL.
     units_prompt: Option<UnitsPrompt>,
@@ -263,9 +268,12 @@ impl App {
             .unwrap_or_default();
         let print_setup_texts =
             PrintSetupTexts::for_view(&print_settings.bed, print_settings.overhang_degrees);
+        let dialog_hook = std::env::var("DRYDOCK_OPEN_DIALOG").unwrap_or_default();
+        let about_open = dialog_hook == "about";
+        let group_open = dialog_hook == "group";
         let mut app = App {
             view: ViewState::new(),
-            about_open: false,
+            about_open,
             model_info_open: false,
             print_setup_open: false,
             print_settings,
@@ -273,7 +281,7 @@ impl App {
             print_setup_texts,
             print_report: None,
             sun_windows: SunWindows::new(),
-            name_prompt: None,
+            name_prompt: group_open.then(|| chrome::NamePrompt::new(true)),
             materials: MaterialsPanel::default(),
             dock,
             dock_file,
@@ -294,6 +302,10 @@ impl App {
             error: None,
             saved: None,
             warnings: Vec::new(),
+            picker: Picker::new(choose_backend(
+                std::env::var("DRYDOCK_FILE_PICKER").ok().as_deref(),
+                system_picker_available(),
+            )),
             dialog: None,
             units_prompt: None,
             mesh_unit: MeshUnit::default(),
@@ -328,6 +340,8 @@ impl App {
         app.view.bed = app.print_settings.bed;
         app.view.bed_visible = app.print_settings.show_bed;
         app.view.overhang_degrees = app.print_settings.overhang_degrees;
+        app.sun_windows.shadows_open = dialog_hook == "shadows";
+        app.sun_windows.geo_open = dialog_hook == "geolocation";
         if app.gpu.is_none() {
             app.error = Some("No wgpu render state: cannot draw the viewport".to_owned());
         }
@@ -338,7 +352,9 @@ impl App {
             app.view = fresh.view;
             app.editor = Some(fresh.editor);
             app.model = Some(fresh.document);
-            app.title_pending = true;
+            // The test hook leaves the main window titled "Drydock" (as main.rs makes it),
+            // so the real-window test can find it next to the dialog or prompt.
+            app.title_pending = startup_title_pending(!dialog_hook.is_empty());
         }
         app
     }
@@ -589,16 +605,28 @@ impl App {
         self.dirty = true;
     }
 
-    fn open_dialog(&mut self) {
-        self.dialog = Some(OpenDialog::new(self.open_folder()));
+    fn open_dialog(&mut self, ctx: &egui::Context, frame: &eframe::Frame) {
+        let dir = self.open_folder();
+        let request = PickRequest::open(OpenMode::Open, dir.clone());
+        if self.picker.start(ctx, Some(frame), request) == Started::Builtin {
+            self.dialog = Some(OpenDialog::new(dir));
+        }
     }
 
-    fn open_import_dialog(&mut self) {
-        self.dialog = Some(OpenDialog::import(self.open_folder()));
+    fn open_import_dialog(&mut self, ctx: &egui::Context, frame: &eframe::Frame) {
+        let dir = self.open_folder();
+        let request = PickRequest::open(OpenMode::Component, dir.clone());
+        if self.picker.start(ctx, Some(frame), request) == Started::Builtin {
+            self.dialog = Some(OpenDialog::import(dir));
+        }
     }
 
-    fn open_models_dialog(&mut self) {
-        self.dialog = Some(OpenDialog::models(self.open_folder()));
+    fn open_models_dialog(&mut self, ctx: &egui::Context, frame: &eframe::Frame) {
+        let dir = self.open_folder();
+        let request = PickRequest::open(OpenMode::Models, dir.clone());
+        if self.picker.start(ctx, Some(frame), request) == Started::Builtin {
+            self.dialog = Some(OpenDialog::models(dir));
+        }
     }
 
     fn open_user_guide(&mut self) {
@@ -676,7 +704,7 @@ impl App {
         }
     }
 
-    fn open_save_dialog(&mut self) {
+    fn open_save_dialog(&mut self, ctx: &egui::Context, frame: &eframe::Frame) {
         let Some(document) = &self.model else {
             return;
         };
@@ -691,11 +719,19 @@ impl App {
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_else(|| "model.drydock".to_owned());
-        self.save_dialog = Some(SaveDialog::new(dir, name));
+        let request = PickRequest::save(SaveMode::Model, dir.clone(), name.clone());
+        if self.picker.start(ctx, Some(frame), request) == Started::Builtin {
+            self.save_dialog = Some(SaveDialog::new(dir, name));
+        }
     }
 
     /// Open the save dialog for an export, with a name from the document and the format.
-    fn open_export_save_dialog(&mut self, options: ExportOptions) {
+    fn open_export_save_dialog(
+        &mut self,
+        ctx: &egui::Context,
+        frame: &eframe::Frame,
+        options: ExportOptions,
+    ) {
         let Some(document) = &self.model else {
             return;
         };
@@ -714,7 +750,10 @@ impl App {
         } else {
             SaveMode::Export(options)
         };
-        self.save_dialog = Some(SaveDialog::with_mode(dir, name, mode));
+        let request = PickRequest::save(mode, dir.clone(), name.clone());
+        if self.picker.start(ctx, Some(frame), request) == Started::Builtin {
+            self.save_dialog = Some(SaveDialog::with_mode(dir, name, mode));
+        }
     }
 
     /// Write an export with the open document's kernel and the editor's selection.
@@ -743,6 +782,66 @@ impl App {
         }
     }
 
+    /// Carry out an open request once a path is chosen, from our dialog or the picker.
+    fn finish_open(
+        &mut self,
+        mode: OpenMode,
+        path: PathBuf,
+        ctx: &egui::Context,
+        frame: &eframe::Frame,
+    ) {
+        match mode {
+            OpenMode::Component => self.import_component_file(ctx, frame, &path),
+            OpenMode::Models => {
+                if mesh_import::needs_units(&path) {
+                    self.units_prompt = Some(UnitsPrompt {
+                        path,
+                        purpose: UnitsPurpose::Import,
+                        unit: self.mesh_unit,
+                    });
+                } else {
+                    self.import_mesh_file(ctx, frame, &path, MeshUnit::default());
+                }
+            }
+            OpenMode::Open => self.request(PendingAction::Open(Some(path)), ctx, frame),
+        }
+    }
+
+    /// Carry out a save request once a path is chosen, from our dialog or the picker.
+    fn finish_save(
+        &mut self,
+        mode: SaveMode,
+        path: PathBuf,
+        ctx: &egui::Context,
+        frame: &eframe::Frame,
+    ) {
+        match mode {
+            SaveMode::Model => {
+                let state = self.undo_state();
+                let result = self.model.as_mut().map(|document| document.save_as(&path));
+                match result {
+                    Some(Ok(written)) => {
+                        if let Some(document) = &mut self.model {
+                            document.mark_saved_at(state);
+                        }
+                        self.error = None;
+                        self.saved = Some(file_name(&written));
+                        self.remember_recent(&written);
+                        self.saved_now(ctx, frame);
+                    }
+                    Some(Err(message)) => {
+                        self.error = Some(message);
+                        self.after_save = None;
+                    }
+                    None => {}
+                }
+            }
+            SaveMode::Export(options) | SaveMode::ExportFolder(options) => {
+                self.export_to(&path, options);
+            }
+        }
+    }
+
     /// Save the open document, asking for a file name when it has none (or is a DAE).
     fn save(&mut self, ctx: &egui::Context, frame: &eframe::Frame) {
         if self.loading.is_some() {
@@ -754,7 +853,7 @@ impl App {
         self.error = None;
         self.saved = None;
         if document.untitled || document.kind == FileKind::Dae {
-            self.open_save_dialog();
+            self.open_save_dialog(ctx, frame);
             return;
         }
         let result = self.model.as_mut().map(Document::save);
@@ -801,7 +900,7 @@ impl App {
     fn perform(&mut self, action: PendingAction, ctx: &egui::Context, frame: &eframe::Frame) {
         match action {
             PendingAction::New => self.new_document(ctx, frame),
-            PendingAction::Open(None) => self.open_dialog(),
+            PendingAction::Open(None) => self.open_dialog(ctx, frame),
             PendingAction::Open(Some(path)) => {
                 if mesh_import::needs_units(&path) {
                     self.units_prompt = Some(UnitsPrompt {
@@ -1160,7 +1259,7 @@ impl App {
             Effect::OpenDialog => self.request(PendingAction::Open(None), ctx, frame),
             Effect::ImportDialog => {
                 if self.model.is_some() {
-                    self.open_models_dialog();
+                    self.open_models_dialog(ctx, frame);
                 }
             }
             Effect::ExportDialog(format) => {
@@ -1177,7 +1276,7 @@ impl App {
                 }
             }
             Effect::Save => self.save(ctx, frame),
-            Effect::SaveAsDialog => self.open_save_dialog(),
+            Effect::SaveAsDialog => self.open_save_dialog(ctx, frame),
             Effect::Edit(key) => self.edit(key, ctx, frame),
             Effect::About => self.about_open = true,
             Effect::UserGuide => self.open_user_guide(),
@@ -2410,10 +2509,7 @@ impl App {
     fn reveal_panel(&mut self, id: PanelId, ctx: &egui::Context) {
         self.dock.reveal(id);
         if matches!(self.dock.panel(id).place, dock::Place::Floating { .. }) {
-            ctx.move_to_top(egui::LayerId::new(
-                egui::Order::Middle,
-                egui::Id::new(("floating-panel", id)),
-            ));
+            raise_floating_panel(ctx, id);
         }
         self.save_panels();
     }
@@ -2538,30 +2634,20 @@ impl App {
             let dock::Place::Floating { x, y, w, h } = layout.panel(id).place else {
                 continue;
             };
-            let response = egui::Window::new(dock::title(id))
-                .id(egui::Id::new(("floating-panel", id)))
-                .title_bar(false)
-                .collapsible(false)
-                .movable(false)
-                .resizable(true)
-                .current_pos(pos2(x, y))
-                .default_size(egui::vec2(w, h))
-                .min_size(egui::vec2(dock::MIN_FLOAT_SIZE.0, dock::MIN_FLOAT_SIZE.1))
-                .show(ctx, |ui| {
-                    if let Some(event) = panel_header(ui, id, false, false) {
-                        events.push(event);
-                    }
-                    actions.extend(self.panel_body(ui, id));
-                });
-            if let Some(response) = response {
-                let rect = response.response.rect;
-                let stored = Rect::from_min_size(pos2(x, y), egui::vec2(w, h));
-                if (rect.min - stored.min).length() > 0.5
-                    || (rect.size() - stored.size()).length() > 0.5
-                {
-                    self.dock.float(id, rect);
-                    changed = true;
-                }
+            let stored = Rect::from_min_size(pos2(x, y), egui::vec2(w, h));
+            let outcome = floating_panel_window(ctx, id, stored, |ui| {
+                actions.extend(self.panel_body(ui, id));
+            });
+            events.extend(outcome.events);
+            if outcome.dock {
+                self.dock.dock(id, DockSide::Right, usize::MAX);
+                changed = true;
+            } else if let Some(rect) = outcome.rect
+                && ((rect.min - stored.min).length() > 0.5
+                    || (rect.size() - stored.size()).length() > 0.5)
+            {
+                self.dock.float(id, rect);
+                changed = true;
             }
         }
 
@@ -2602,7 +2688,9 @@ impl App {
             match action {
                 PanelAction::Info(action) => self.apply_info_action(action, ctx, frame),
                 PanelAction::Material(action) => self.apply_material_action(action, ctx, frame),
-                PanelAction::Component(ComponentAction::Import) => self.open_import_dialog(),
+                PanelAction::Component(ComponentAction::Import) => {
+                    self.open_import_dialog(ctx, frame)
+                }
                 PanelAction::Component(ComponentAction::Place(id)) => {
                     let started =
                         if let (Some(editor), Some(document)) = (&mut self.editor, &self.model) {
@@ -2952,7 +3040,11 @@ impl eframe::App for App {
             let modified = self.model.as_ref().is_some_and(|model| model.modified);
             if modified {
                 ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
-                if self.confirm.is_none() && self.dialog.is_none() && self.save_dialog.is_none() {
+                if self.confirm.is_none()
+                    && !self.picker.is_busy()
+                    && self.dialog.is_none()
+                    && self.save_dialog.is_none()
+                {
                     self.confirm = Some(PendingAction::Close);
                 }
             } else {
@@ -3011,7 +3103,8 @@ impl eframe::App for App {
 
         self.draw_panels(ui, &ctx, frame);
 
-        let dialog_open = self.dialog.is_some()
+        let dialog_open = self.picker.is_busy()
+            || self.dialog.is_some()
             || self.units_prompt.is_some()
             || self.export_dialog.is_some()
             || self.text_dialog.is_some()
@@ -3206,28 +3299,25 @@ impl eframe::App for App {
                 None => {}
             }
         }
+        if let Some(picked) = self.picker.poll() {
+            match picked.path {
+                None => {
+                    if matches!(picked.purpose, PickPurpose::Save(_)) {
+                        self.after_save = None;
+                    }
+                }
+                Some(path) => match picked.purpose {
+                    PickPurpose::Open(mode) => self.finish_open(mode, path, &ctx, frame),
+                    PickPurpose::Save(mode) => self.finish_save(mode, path, &ctx, frame),
+                },
+            }
+        }
         if let Some(dialog) = &mut self.dialog {
             match dialog.show(&ctx) {
                 DialogOutcome::Open(path) => {
                     let mode = dialog.mode;
                     self.dialog = None;
-                    match mode {
-                        OpenMode::Component => self.import_component_file(&ctx, frame, &path),
-                        OpenMode::Models => {
-                            if mesh_import::needs_units(&path) {
-                                self.units_prompt = Some(UnitsPrompt {
-                                    path,
-                                    purpose: UnitsPurpose::Import,
-                                    unit: self.mesh_unit,
-                                });
-                            } else {
-                                self.import_mesh_file(&ctx, frame, &path, MeshUnit::default());
-                            }
-                        }
-                        OpenMode::Open => {
-                            self.request(PendingAction::Open(Some(path)), &ctx, frame)
-                        }
-                    }
+                    self.finish_open(mode, path, &ctx, frame);
                 }
                 DialogOutcome::Cancel => self.dialog = None,
                 DialogOutcome::Pending => {}
@@ -3317,7 +3407,7 @@ impl eframe::App for App {
                     } else {
                         self.export_options.push(options);
                     }
-                    self.open_export_save_dialog(options);
+                    self.open_export_save_dialog(&ctx, frame, options);
                 }
                 Some(ExportOutcome::Cancel) => self.export_dialog = None,
                 None => {}
@@ -3328,32 +3418,7 @@ impl eframe::App for App {
                 SaveOutcome::Save(path) => {
                     let mode = dialog.mode;
                     self.save_dialog = None;
-                    match mode {
-                        SaveMode::Model => {
-                            let state = self.undo_state();
-                            let result =
-                                self.model.as_mut().map(|document| document.save_as(&path));
-                            match result {
-                                Some(Ok(written)) => {
-                                    if let Some(document) = &mut self.model {
-                                        document.mark_saved_at(state);
-                                    }
-                                    self.error = None;
-                                    self.saved = Some(file_name(&written));
-                                    self.remember_recent(&written);
-                                    self.saved_now(&ctx, frame);
-                                }
-                                Some(Err(message)) => {
-                                    self.error = Some(message);
-                                    self.after_save = None;
-                                }
-                                None => {}
-                            }
-                        }
-                        SaveMode::Export(options) | SaveMode::ExportFolder(options) => {
-                            self.export_to(&path, options);
-                        }
-                    }
+                    self.finish_save(mode, path, &ctx, frame);
                 }
                 SaveOutcome::Cancel => {
                     self.save_dialog = None;
@@ -3581,6 +3646,13 @@ fn paint_primitives(
     }
 }
 
+/// Whether the first frame should send the fresh document's title. A `DRYDOCK_OPEN_DIALOG` test
+/// hook (About, Shadows, Geolocation) keeps the window at its bare creation title so the
+/// real-window tests can find it next to the dialog.
+fn startup_title_pending(dialog_hook: bool) -> bool {
+    !dialog_hook
+}
+
 /// The preview is dark; a non-ground draw plane tints it to show its normal.
 fn preview_color(plane: Option<DrawPlane>) -> Color32 {
     let Some(plane) = plane else {
@@ -3618,4 +3690,15 @@ fn file_name(path: &Path) -> String {
     path.file_name()
         .map(|name| name.to_string_lossy().into_owned())
         .unwrap_or_else(|| path.display().to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::startup_title_pending;
+
+    #[test]
+    fn the_first_frame_titles_the_fresh_document_unless_a_dialog_hook_is_on() {
+        assert!(startup_title_pending(false));
+        assert!(!startup_title_pending(true));
+    }
 }

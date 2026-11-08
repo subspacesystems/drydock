@@ -14,7 +14,7 @@ The menus along the top hold the commands that are not tied to a single click in
 
 ## Toolbars and panels
 
-The toolbars hold the tools you click to draw, select, move and measure. Point at a button and its name appears, so you can explore without fear. Panels are the small windows that show details about your design. They include Entity Info, Materials, Components and Shadows, among others. You open and close them from the View menu. Panels can be moved around, and if your screen ever gets crowded you can choose Reset Panels from the View menu to put them back where they started. Closing a panel never changes your design; it only hides the panel from view.
+The toolbars hold the tools you click to draw, select, move and measure. Point at a button and its name appears, so you can explore without fear. Panels are the small windows that show details about your design. They include Entity Info, Materials, Components and Shadows, among others. You open and close them from the View menu. Panels can be moved around, and if your screen ever gets crowded you can choose Reset Panels from the View menu to put them back where they started. A panel that is floating in its own window docks again with its Dock panel button; dragging that window back over the main window cannot dock it. Closing a panel never changes your design; it only hides the panel from view.
 
 ## The measurements box
 

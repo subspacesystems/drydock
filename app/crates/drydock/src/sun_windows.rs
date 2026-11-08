@@ -12,7 +12,7 @@ use drydock_kernel::sun::ShadowSettings;
 use drydock_render::SunLight;
 use eframe::egui;
 
-use crate::dialog::{DialogButton, button_row};
+use crate::dialog::{DialogButton, DialogWindow, button_row, dialog_window};
 use crate::editor::Editor;
 use crate::geo_panel::{self, GeoForm};
 use crate::globe::GlobeView;
@@ -85,24 +85,25 @@ impl SunWindows {
             let mut event = ShadowsEvent::None;
             let mut open = self.shadows_open;
             let mut close = false;
-            egui::Window::new("Shadows")
-                .collapsible(false)
-                .resizable(false)
-                .open(&mut open)
-                .show(ctx, |ui| {
-                    event = shadows_panel::shadows_panel(ui, &mut settings);
-                    if button_row(
-                        ui,
-                        &[DialogButton {
-                            label: "Close",
-                            default: false,
-                            enabled: true,
-                        }],
-                    ) == Some(0)
-                    {
-                        close = true;
-                    }
-                });
+            let window = DialogWindow {
+                title: "Shadows",
+                size: egui::vec2(360.0, 280.0),
+            };
+            dialog_window(ctx, &window, &mut open, |ui| {
+                event = shadows_panel::shadows_panel(ui, &mut settings);
+                if button_row(
+                    ui,
+                    &[DialogButton {
+                        label: "Close",
+                        default: false,
+                        enabled: true,
+                    }],
+                ) == Some(0)
+                {
+                    close = true;
+                }
+            });
+            self.shadows_open = open;
             if !open || close {
                 self.shadows_open = false;
                 self.preview = None;
@@ -123,37 +124,38 @@ impl SunWindows {
             let mut open = self.geo_open;
             let mut close = false;
             let mut applied = None;
-            egui::Window::new("Geolocation")
-                .collapsible(false)
-                .resizable(false)
-                .open(&mut open)
-                .show(ctx, |ui| {
-                    if let (Some(form), Some(globe)) = (&mut self.form, &mut self.globe) {
-                        let submitted = geo_panel::geo_fields_with_globe(ui, form, globe);
-                        let parsed = geo_panel::parse_geolocation(form);
-                        let clicked = button_row(
-                            ui,
-                            &[
-                                DialogButton {
-                                    label: "Apply",
-                                    default: true,
-                                    enabled: parsed.is_ok(),
-                                },
-                                DialogButton {
-                                    label: "Close",
-                                    default: false,
-                                    enabled: true,
-                                },
-                            ],
-                        );
-                        if parsed.is_ok() && (submitted || clicked == Some(0)) {
-                            applied = parsed.ok();
-                        }
-                        if clicked == Some(1) {
-                            close = true;
-                        }
+            let window = DialogWindow {
+                title: "Geolocation",
+                size: egui::vec2(340.0, 520.0),
+            };
+            dialog_window(ctx, &window, &mut open, |ui| {
+                if let (Some(form), Some(globe)) = (&mut self.form, &mut self.globe) {
+                    let submitted = geo_panel::geo_fields_with_globe(ui, form, globe);
+                    let parsed = geo_panel::parse_geolocation(form);
+                    let clicked = button_row(
+                        ui,
+                        &[
+                            DialogButton {
+                                label: "Apply",
+                                default: true,
+                                enabled: parsed.is_ok(),
+                            },
+                            DialogButton {
+                                label: "Close",
+                                default: false,
+                                enabled: true,
+                            },
+                        ],
+                    );
+                    if parsed.is_ok() && (submitted || clicked == Some(0)) {
+                        applied = parsed.ok();
                     }
-                });
+                    if clicked == Some(1) {
+                        close = true;
+                    }
+                }
+            });
+            self.geo_open = open;
             if !open || close {
                 self.geo_open = false;
                 self.form = None;
