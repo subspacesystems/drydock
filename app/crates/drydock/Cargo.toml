@@ -17,6 +17,7 @@ glam.workspace = true
 image.workspace = true
 eframe.workspace = true
 egui-wgpu.workspace = true
+egui-winit.workspace = true
 egui_extras.workspace = true
 wgpu.workspace = true
 

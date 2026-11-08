@@ -1065,19 +1065,14 @@ impl App {
         ))
     }
 
-    fn print_setup_window(
-        &mut self,
-        ctx: &egui::Context,
-        frame: &eframe::Frame,
-        free_area: egui::Rect,
-    ) {
+    fn print_setup_window(&mut self, ctx: &egui::Context, frame: &eframe::Frame) {
         if !self.print_setup_open {
             return;
         }
         self.sync_print_report();
         let mut texts = std::mem::take(&mut self.print_setup_texts);
         let mut open = self.print_setup_open;
-        let mut event = PrintSetupEvent::None;
+        let event;
         {
             let view = PrintSetupView {
                 bed: self.view.bed,
@@ -1091,13 +1086,7 @@ impl App {
                 }),
                 report: self.current_print_report(),
             };
-            egui::Window::new("Print Setup")
-                .default_pos(print_setup::window_pos(free_area))
-                .id(egui::Id::new("print_setup"))
-                .open(&mut open)
-                .show(ctx, |ui| {
-                    event = print_setup::print_setup_ui(ui, &mut texts, &view);
-                });
+            event = print_setup::print_setup_window(ctx, &mut open, &mut texts, &view);
         }
         self.print_setup_texts = texts;
         self.print_setup_open = open;
@@ -3065,11 +3054,9 @@ impl eframe::App for App {
             self.dirty = true;
         }
         egui::Panel::bottom("status").show(ui, |ui| self.status_bar(ui, frame));
-        let mut free_area = egui::Rect::NOTHING;
         egui::CentralPanel::no_frame().show(ui, |ui| {
             let (rect, response) =
                 ui.allocate_exact_size(ui.available_size(), Sense::click_and_drag());
-            free_area = rect;
             self.viewport_pt = (f64::from(rect.width()), f64::from(rect.height()));
             if !dialog_open {
                 self.viewport_input(&ctx, frame, ui, rect, &response);
@@ -3081,18 +3068,16 @@ impl eframe::App for App {
             self.paint_viewport(ui, frame, rect);
             self.paint_overlays(ui, rect);
         });
-        self.print_setup_window(&ctx, frame, free_area);
+        self.print_setup_window(&ctx, frame);
         chrome::about_window(&ctx, &mut self.about_open);
         if self.customize_open {
             let mut open = true;
-            let mut changed = false;
-            egui::Window::new("Customize Toolbars")
-                .id(egui::Id::new("customize_toolbars"))
-                .open(&mut open)
-                .show(&ctx, |ui| {
-                    changed =
-                        toolbars::customize_panel(ui, &mut self.toolbars, &mut self.customize);
-                });
+            let changed = toolbars::customize_window(
+                &ctx,
+                &mut open,
+                &mut self.toolbars,
+                &mut self.customize,
+            );
             self.customize_open = open;
             if changed {
                 self.save_toolbars();

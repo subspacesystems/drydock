@@ -11,6 +11,7 @@ use sctk::reexports::client::{Proxy, QueueHandle};
 
 use sctk::compositor::{CompositorState, Region, SurfaceData};
 use sctk::reexports::protocols::xdg::activation::v1::client::xdg_activation_v1::XdgActivationV1;
+use sctk::reexports::protocols::xdg::dialog::v1::client::xdg_dialog_v1::XdgDialogV1;
 use sctk::shell::xdg::window::{Window as SctkWindow, WindowDecorations};
 use sctk::shell::WaylandSurface;
 
@@ -61,6 +62,9 @@ pub struct Window {
 
     /// The state of the requested attention from the `xdg_activation`.
     attention_requested: Arc<AtomicBool>,
+
+    /// Local patch (Drydock, PATCHES.md): the xdg-dialog-v1 object of a modal window.
+    xdg_dialog: Option<XdgDialogV1>,
 
     /// Handle to the main queue to perform requests.
     queue_handle: QueueHandle<WinitState>,
@@ -187,6 +191,15 @@ impl Window {
             }
         }
 
+        // Local patch (Drydock, PATCHES.md): a modal dialog says so when the compositor offers
+        // xdg-dialog-v1; otherwise the hint is dropped.
+        let xdg_dialog = match (attributes.modal, state.xdg_dialog.as_ref()) {
+            (true, Some(dialogs)) => {
+                Some(dialogs.modal_dialog(window.xdg_toplevel(), &queue_handle))
+            },
+            _ => None,
+        };
+
         // XXX Do initial commit.
         window.commit();
 
@@ -234,6 +247,7 @@ impl Window {
             queue_handle,
             xdg_activation,
             attention_requested: Arc::new(AtomicBool::new(false)),
+            xdg_dialog,
             event_loop_awakener,
             window_requests,
             window_events_sink,
@@ -725,6 +739,10 @@ impl Window {
 
 impl Drop for Window {
     fn drop(&mut self) {
+        // Local patch (Drydock, PATCHES.md): drop the modal hint before the toplevel goes.
+        if let Some(dialog) = self.xdg_dialog.take() {
+            dialog.destroy();
+        }
         self.window_requests.closed.store(true, Ordering::Relaxed);
         self.event_loop_awakener.ping();
     }

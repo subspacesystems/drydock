@@ -966,6 +966,25 @@ fn customize_drag_handle(ui: &mut egui::Ui, tool: Tool, label: &str) -> egui::Re
     response.on_hover_cursor(egui::CursorIcon::Grab)
 }
 
+/// The Customize Toolbars window (`docs/specs/m11-dialog-print-toolbars.md`):
+/// [`customize_panel`] in a window titled "Customize Toolbars" while `*open`; its close
+/// button clears `open`. Returns true when the layout changed.
+pub fn customize_window(
+    ctx: &egui::Context,
+    open: &mut bool,
+    layout: &mut ToolbarLayout,
+    state: &mut CustomizeState,
+) -> bool {
+    let mut changed = false;
+    egui::Window::new("Customize Toolbars")
+        .id(egui::Id::new("customize_toolbars"))
+        .open(open)
+        .show(ctx, |ui| {
+            changed = customize_panel(ui, layout, state);
+        });
+    changed
+}
+
 /// The contents of the Customize window. Returns true when the layout changed.
 /// Behaviour: `docs/specs/m6-toolbar-customize-2.md`.
 pub fn customize_panel(
