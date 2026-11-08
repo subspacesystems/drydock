@@ -94,11 +94,13 @@ pub fn floating_panel_window(
     let root_inner = ctx.input(|input| input.viewport().inner_rect);
     let viewport_id = floating_viewport_id(id);
     let known = ctx.input(|input| input.raw.viewports.contains_key(&viewport_id));
-    let mut builder = egui::ViewportBuilder::default()
-        .with_title(dock::title(id))
-        .with_visible(known)
-        .with_resizable(true)
-        .with_min_inner_size(Vec2::new(dock::MIN_FLOAT_SIZE.0, dock::MIN_FLOAT_SIZE.1));
+    let mut builder = crate::window_icon::with_app_identity(
+        egui::ViewportBuilder::default()
+            .with_title(dock::title(id))
+            .with_visible(known)
+            .with_resizable(true)
+            .with_min_inner_size(Vec2::new(dock::MIN_FLOAT_SIZE.0, dock::MIN_FLOAT_SIZE.1)),
+    );
     if !known {
         builder = builder.with_inner_size(rect.size());
         if let Some(root_inner) = root_inner {

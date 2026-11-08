@@ -436,12 +436,14 @@ fn dialog_window_impl(
         }
 
         let root_outer = ctx.input(|i| i.viewport().outer_rect);
-        let mut builder = egui::ViewportBuilder::default()
-            .with_title(window.title)
-            .with_inner_size(window.size)
-            .with_resizable(false)
-            .with_minimize_button(false)
-            .with_maximize_button(false);
+        let mut builder = crate::window_icon::with_app_identity(
+            egui::ViewportBuilder::default()
+                .with_title(window.title)
+                .with_inner_size(window.size)
+                .with_resizable(false)
+                .with_minimize_button(false)
+                .with_maximize_button(false),
+        );
         if let Some(position) = opening_position(ctx, viewport_id, root_outer, window.size) {
             builder = builder.with_position(position);
         }

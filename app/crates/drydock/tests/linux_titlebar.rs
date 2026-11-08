@@ -148,12 +148,13 @@ fn icon_png_is_the_256_frame_of_the_ico() {
 fn the_window_is_built_with_the_app_id_and_our_icon() {
     let main = read("src/main.rs");
     assert!(
-        main.contains(".with_app_id(") && main.contains("APP_ID"),
-        "main.rs sets the app id"
+        main.contains("with_app_identity("),
+        "main.rs uses the app identity helper"
     );
+    let helper = read("src/window_icon.rs");
     assert!(
-        main.contains(".with_icon(") && main.contains("window_icon()"),
-        "main.rs sets our icon"
+        helper.contains(".with_app_id(APP_ID)") && helper.contains(".with_icon(window_icon())"),
+        "the helper sets the app id and our icon"
     );
 }
 
