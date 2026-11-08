@@ -9,11 +9,12 @@
 //! with given paths so tests can check what the app asked for.
 
 use std::path::PathBuf;
-use std::sync::mpsc::Receiver;
+use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::sync::{Arc, Mutex};
 
 use eframe::egui;
 
+use crate::document::{NATIVE_EXTENSION, OPEN_EXTENSIONS, native_path};
 use crate::file_dialogs::SaveMode;
 use crate::open_buttons::OpenMode;
 
@@ -63,8 +64,25 @@ impl PickRequest {
     /// - Kind `OpenFile`; one filter labeled "Models" with `document::OPEN_EXTENSIONS` in
     ///   that order; empty name.
     pub fn open(mode: OpenMode, dir: PathBuf) -> PickRequest {
-        let _ = (mode, dir);
-        unimplemented!("m11-native-file-dialogs")
+        let title = match mode {
+            OpenMode::Open => "Open model",
+            OpenMode::Component => "Import component",
+            OpenMode::Models => "Import into model",
+        };
+        PickRequest {
+            purpose: PickPurpose::Open(mode),
+            kind: PickKind::OpenFile,
+            title: title.to_owned(),
+            filters: vec![PickFilter {
+                label: "Models".to_owned(),
+                extensions: OPEN_EXTENSIONS
+                    .iter()
+                    .map(|extension| (*extension).to_owned())
+                    .collect(),
+            }],
+            dir,
+            name: String::new(),
+        }
     }
 
     /// A request for `mode` starting in `dir`, suggesting `name`.
@@ -75,8 +93,38 @@ impl PickRequest {
     /// - `ExportFolder(options)`: title `"Export {format label} to folder"`, kind `Folder`, no
     ///   filters, empty name (a folder picker has no name box).
     pub fn save(mode: SaveMode, dir: PathBuf, name: String) -> PickRequest {
-        let _ = (mode, dir, name);
-        unimplemented!("m11-native-file-dialogs")
+        match mode {
+            SaveMode::Model => PickRequest {
+                purpose: PickPurpose::Save(mode),
+                kind: PickKind::SaveFile,
+                title: "Save model".to_owned(),
+                filters: vec![PickFilter {
+                    label: "Drydock model".to_owned(),
+                    extensions: vec![NATIVE_EXTENSION.to_owned()],
+                }],
+                dir,
+                name,
+            },
+            SaveMode::Export(options) => PickRequest {
+                purpose: PickPurpose::Save(mode),
+                kind: PickKind::SaveFile,
+                title: format!("Export {}", options.format.label()),
+                filters: vec![PickFilter {
+                    label: options.format.label().to_owned(),
+                    extensions: vec![options.format.extension().to_owned()],
+                }],
+                dir,
+                name,
+            },
+            SaveMode::ExportFolder(options) => PickRequest {
+                purpose: PickPurpose::Save(mode),
+                kind: PickKind::Folder,
+                title: format!("Export {} to folder", options.format.label()),
+                filters: Vec::new(),
+                dir,
+                name: String::new(),
+            },
+        }
     }
 }
 
@@ -87,8 +135,17 @@ impl PickRequest {
 /// - `Save(Export(options))`: unchanged when it has an extension, else the format's extension
 ///   added.
 pub fn finish_path(purpose: PickPurpose, path: PathBuf) -> PathBuf {
-    let _ = (purpose, path);
-    unimplemented!("m11-native-file-dialogs")
+    match purpose {
+        PickPurpose::Open(_) | PickPurpose::Save(SaveMode::ExportFolder(_)) => path,
+        PickPurpose::Save(SaveMode::Model) => native_path(&path),
+        PickPurpose::Save(SaveMode::Export(options)) => {
+            if path.extension().is_some() {
+                path
+            } else {
+                path.with_extension(options.format.extension())
+            }
+        }
+    }
 }
 
 /// A test double for the system picker: queued answers out, requests recorded. Clones share
@@ -136,23 +193,105 @@ pub enum Backend {
 /// `DRYDOCK_FILE_PICKER`: `"builtin"` Builtin, `"system"` System (even when `available` is
 /// false), anything else or `None` System when `available`, else Builtin.
 pub fn choose_backend(setting: Option<&str>, available: bool) -> Backend {
-    let _ = (setting, available);
-    unimplemented!("m11-native-file-dialogs")
+    match setting {
+        Some("builtin") => Backend::Builtin,
+        Some("system") => Backend::System,
+        _ if available => Backend::System,
+        _ => Backend::Builtin,
+    }
 }
 
 /// True when the text `gdbus introspect --session --dest org.freedesktop.portal.Desktop
 /// --object-path /org/freedesktop/portal/desktop` prints lists the interface
 /// `org.freedesktop.portal.FileChooser`.
 pub fn lists_file_chooser(introspection: &str) -> bool {
-    let _ = introspection;
-    unimplemented!("m11-native-file-dialogs")
+    const INTERFACE: &str = "org.freedesktop.portal.FileChooser";
+    let mut rest = introspection;
+    while let Some(index) = rest.find(INTERFACE) {
+        let after = &rest[index + INTERFACE.len()..];
+        if !after
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_alphanumeric() || c == '_')
+        {
+            return true;
+        }
+        rest = after;
+    }
+    false
 }
 
 /// Whether the system picker can be used here. Windows: always true. Linux: runs that
 /// `gdbus introspect` (about 2 seconds at most, like `portal::read_scheme`) and checks it with
 /// [`lists_file_chooser`]; false when `gdbus` is missing or fails. Other systems: false.
 pub fn system_picker_available() -> bool {
-    unimplemented!("m11-native-file-dialogs")
+    #[cfg(target_os = "windows")]
+    {
+        true
+    }
+    #[cfg(target_os = "linux")]
+    {
+        system_picker_available_linux()
+    }
+    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+    {
+        false
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn system_picker_available_linux() -> bool {
+    use std::time::{Duration, Instant};
+
+    let args = [
+        "introspect",
+        "--session",
+        "--dest",
+        "org.freedesktop.portal.Desktop",
+        "--object-path",
+        "/org/freedesktop/portal/desktop",
+    ];
+    gdbus_output(&args, Duration::from_secs(2)).is_some_and(|text| lists_file_chooser(&text))
+}
+
+#[cfg(target_os = "linux")]
+fn gdbus_output(args: &[&str], timeout: std::time::Duration) -> Option<String> {
+    use std::io::Read;
+    use std::process::{Command, Stdio};
+    use std::time::Instant;
+
+    let mut child = Command::new("gdbus")
+        .args(args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
+    let deadline = Instant::now() + timeout;
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                if !status.success() {
+                    return None;
+                }
+                let mut text = String::new();
+                child.stdout.take()?.read_to_string(&mut text).ok()?;
+                return Some(text);
+            }
+            Ok(None) => {
+                if Instant::now() >= deadline {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return None;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            Err(_) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return None;
+            }
+        }
+    }
 }
 
 /// What [`Picker::start`] did with a request.
@@ -212,12 +351,72 @@ impl Picker {
         parent: Option<&eframe::Frame>,
         request: PickRequest,
     ) -> Started {
-        let _ = (ctx, parent, request);
-        unimplemented!("m11-native-file-dialogs")
+        if self.pending.is_some() {
+            return Started::Native;
+        }
+        match &self.backend {
+            Backend::Builtin => return Started::Builtin,
+            Backend::Stub(stub) => {
+                let (sender, receiver) = mpsc::channel();
+                {
+                    let mut state = stub.state.lock().unwrap();
+                    state.requests.push(request.clone());
+                    let answer = if state.answers.is_empty() {
+                        None
+                    } else {
+                        state.answers.remove(0)
+                    };
+                    let _ = sender.send(answer);
+                }
+                self.pending = Some((request.purpose, receiver));
+                ctx.request_repaint();
+            }
+            Backend::System => {
+                let mut dialog = rfd::FileDialog::new()
+                    .set_title(request.title.clone())
+                    .set_directory(request.dir.clone());
+                for filter in &request.filters {
+                    dialog = dialog.add_filter(&filter.label, &filter.extensions);
+                }
+                if !request.name.is_empty() {
+                    dialog = dialog.set_file_name(request.name.clone());
+                }
+                if let Some(parent) = parent {
+                    dialog = dialog.set_parent(parent);
+                }
+                let (sender, receiver) = mpsc::channel();
+                let ctx = ctx.clone();
+                let kind = request.kind;
+                std::thread::spawn(move || {
+                    let path = match kind {
+                        PickKind::OpenFile => dialog.pick_file(),
+                        PickKind::SaveFile => dialog.save_file(),
+                        PickKind::Folder => dialog.pick_folder(),
+                    };
+                    let _ = sender.send(path);
+                    ctx.request_repaint();
+                });
+                self.pending = Some((request.purpose, receiver));
+            }
+        }
+        Started::Native
     }
 
     /// The answer, once, when it has arrived; never blocks.
     pub fn poll(&mut self) -> Option<Picked> {
-        unimplemented!("m11-native-file-dialogs")
+        let (purpose, result) = {
+            let (purpose, receiver) = self.pending.as_ref()?;
+            (*purpose, receiver.try_recv())
+        };
+        let path = match result {
+            Ok(path) => path,
+            Err(TryRecvError::Empty) => return None,
+            Err(TryRecvError::Disconnected) => None,
+        };
+        self.pending = None;
+        Some(Picked {
+            purpose,
+            path: path.map(|path| finish_path(purpose, path)),
+        })
     }
 }
