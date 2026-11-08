@@ -1975,14 +1975,21 @@ pub fn create_window(
 
     // Local patch (Drydock, PATCHES.md): the first window made for a context is the root
     // viewport's (eframe creates it first); every later one is a dialog or tool window that
-    // names the root window as its transient parent.
+    // names the root window as its transient parent. A window whose title was marked with
+    // `mark_modal_title` is also modal.
     let root = root_window_id(egui_ctx);
+    let modal = root.is_some()
+        && viewport_builder
+            .title
+            .as_deref()
+            .is_some_and(|title| is_modal_title(egui_ctx, title));
     let window_attributes = apply_monitor_to_window_attributes(
         create_winit_window_attributes(egui_ctx, viewport_builder.clone()),
         viewport_builder,
         event_loop,
     )
-    .with_transient_parent(root);
+    .with_transient_parent(root)
+    .with_modal(modal);
 
     let window = event_loop.create_window(window_attributes)?;
     if root.is_none() {
@@ -2004,6 +2011,37 @@ pub fn root_window_id(egui_ctx: &egui::Context) -> Option<winit::window::WindowI
     egui_ctx
         .data(|data| data.get_temp::<u64>(root_window_key()))
         .map(winit::window::WindowId::from)
+}
+
+/// Local patch (Drydock, PATCHES.md): where [`mark_modal_title`] keeps the marked titles.
+fn modal_titles_key() -> egui::Id {
+    egui::Id::new("egui_winit_modal_titles")
+}
+
+/// Local patch (Drydock, PATCHES.md): every window [`create_window`] makes from now on for a
+/// viewport titled exactly `title` (its [`ViewportBuilder::with_title`]) is modal for the main
+/// window (winit's `WindowAttributes::with_modal`): the desktop treats it as a prompt that has
+/// to be answered first. Call it before the viewport is first shown; a window that already
+/// exists does not change. The root viewport is never modal. The application still has to
+/// ignore input to the main window while the prompt is open.
+///
+/// egui's [`ViewportBuilder`] has no modal flag and eframe does not pass the
+/// [`egui::ViewportId`] to [`create_window`], so the title is the key.
+pub fn mark_modal_title(egui_ctx: &egui::Context, title: &str) {
+    egui_ctx.data_mut(|data| {
+        let titles = data.get_temp_mut_or_default::<Vec<String>>(modal_titles_key());
+        if !titles.iter().any(|known| known == title) {
+            titles.push(title.to_owned());
+        }
+    });
+}
+
+/// Local patch (Drydock, PATCHES.md): whether `title` was marked with [`mark_modal_title`].
+pub fn is_modal_title(egui_ctx: &egui::Context, title: &str) -> bool {
+    egui_ctx.data(|data| {
+        data.get_temp::<Vec<String>>(modal_titles_key())
+            .is_some_and(|titles| titles.iter().any(|known| known == title))
+    })
 }
 
 /// Apply [`ViewportBuilder::with_monitor`] to freshly-built [`winit::window::WindowAttributes`].

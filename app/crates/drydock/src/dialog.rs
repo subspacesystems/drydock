@@ -242,3 +242,20 @@ pub fn dialog_window(
     let _ = (ctx, window, open, content);
     unimplemented!("m11-dialog-window")
 }
+
+/// Like [`dialog_window`], but modal (`docs/specs/m11-modal-window.md`): while `*open`, the
+/// window that called it ignores clicks and keys until the dialog is answered. Real window:
+/// the viewport title is marked with `egui_winit::mark_modal_title` before the viewport is
+/// first shown, and an invisible layer over the calling viewport blocks its input. Embedded
+/// (`ctx.embed_viewports()`): an `egui::Modal` with id `id` showing the title, then `content`.
+/// Escape and the title bar's close clear `open`; so does the caller's own flag in `content`.
+pub fn modal_dialog_window(
+    ctx: &egui::Context,
+    id: egui::Id,
+    window: &DialogWindow<'_>,
+    open: &mut bool,
+    content: impl FnOnce(&mut egui::Ui),
+) {
+    let _ = (ctx, id, window, open, content);
+    unimplemented!("m11-modal-window")
+}
