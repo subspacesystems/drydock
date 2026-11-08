@@ -368,6 +368,8 @@ Tyrel agreed (2026-11-08): dialogs and tool windows become their own OS windows 
 | `m11-gui-env-rename` | Fix: the real-window tests for dialog windows and the startup title read the renamed GUI-tests variable, so they run in the gate, and what they then find is fixed | `m11-title-fresh-doc` |
 | `m11-modal-dialogs` | The remaining prompts (unsaved changes, 3D text, export options, mesh units, purge unused) open as modal windows | `m11-modal-window` |
 | `m11-native-file-dialogs` | Open, Import, Add Models, Save, Save As and Export (file and folder) use the system's own file picker (the desktop portal on Linux, the standard dialog on Windows), owned by the main window; our own picker stays only as the fallback when no system picker is available | |
+| `m11-title-fresh-doc` | Fix: the window title for a fresh, unsaved document | |
+| `m11-modal-file-dialogs` | Open and Save dialogs (our fallback picker) show through the modal dialog window | `m11-modal-window` |
 | `m11-floating-panels` | A floating dock panel (Materials, Entity Info and the rest) is its own window above the main window; docking it again closes that window | `m11-dialog-window` |
 
 ## Future (unscheduled)
