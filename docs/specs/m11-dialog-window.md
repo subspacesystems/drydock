@@ -47,12 +47,12 @@ transient parent, so the helper only has to create the viewport.
 `tests/dialog_window.rs` (do not edit):
 - `centered_*`, `viewport_id_follows_the_title`: the pure functions.
 - Embedded: titled window with content; nothing drawn while closed; Escape clears `open`.
-- Real window (needs Xvfb, xdotool, xprop and `MODELER_GUI_TESTS=1`; skips itself otherwise):
+- Real window (needs Xvfb, xdotool, xprop and `DRYDOCK_GUI_TESTS=1`; skips itself otherwise):
   starts the app with `DRYDOCK_OPEN_DIALOG=about`, finds a second X window titled
   "About Drydock", checks its `WM_TRANSIENT_FOR` is the main window, presses Escape with the
   dialog focused and checks it disappears while the main window stays.
 
-Run `harness/bin/run-tests -p drydock` at the end, with Xvfb and `MODELER_GUI_TESTS=1`.
+Run `harness/bin/run-tests -p drydock` at the end, with Xvfb and `DRYDOCK_GUI_TESTS=1`.
 
 ## Where to look
 

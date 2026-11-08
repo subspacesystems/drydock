@@ -167,9 +167,10 @@ pub fn name_prompt(ctx: &eframe::egui::Context, prompt: &mut NamePrompt) -> Opti
         &window,
         &mut open,
         |ui| {
+            let field_id = egui::Id::new("name_prompt_field");
+            focus_when_window_active(ui, field_id);
             ui.label(field_label("Name"));
-            let field = ui.add(egui::TextEdit::singleline(&mut prompt.name));
-            focus_when_window_active(ui, &field);
+            ui.add(egui::TextEdit::singleline(&mut prompt.name).id(field_id));
             match button_row(
                 ui,
                 &[

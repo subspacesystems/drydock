@@ -13,16 +13,6 @@ fn gui_tests() -> bool {
     std::env::var_os("DRYDOCK_GUI_TESTS").is_some()
 }
 
-/// The tests here start their own windows and look them up by title, so only one may run at a
-/// time. (The probe and the app's test hook also share a display lock across test binaries.)
-static SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-fn serial() -> std::sync::MutexGuard<'static, ()> {
-    SERIAL
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-}
-
 fn tool(cmd: &str, args: &[&str]) -> Output {
     Command::new(cmd)
         .args(args)
@@ -75,7 +65,24 @@ fn probe_path() -> PathBuf {
     // target/<profile>/deps/<this test> -> target/<profile>/examples/modal_probe
     let exe = std::env::current_exe().unwrap();
     let profile = exe.parent().unwrap().parent().unwrap();
-    profile.join("examples").join("modal_probe")
+    let path = profile.join("examples").join("modal_probe");
+    if !path.exists() {
+        // A test filter does not build the examples; build the probe into the same target
+        // directory so the test works from a clean `cargo test -p drydock --test`.
+        let mut build = Command::new("cargo");
+        build
+            .args(["build", "-p", "drydock", "--examples", "--manifest-path"])
+            .arg(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml"))
+            .env("CARGO_TARGET_DIR", profile.parent().unwrap());
+        if profile.file_name().and_then(|name| name.to_str()) == Some("release") {
+            build.arg("--release");
+        }
+        let status = build
+            .status()
+            .expect("cargo build -p drydock --examples runs");
+        assert!(status.success(), "building the modal_probe example failed");
+    }
+    path
 }
 
 fn property(id: &str, name: &str) -> String {
@@ -110,8 +117,6 @@ fn click_main(main: &str, x: &str, y: &str) {
 
 fn type_into(window: &str, keys: &str) {
     tool("xdotool", &["windowfocus", "--sync", window]);
-    // Give the window's text field a frame to take focus before the first key.
-    std::thread::sleep(Duration::from_millis(300));
     tool("xdotool", &["type", "--delay", "80", keys]);
 }
 
@@ -121,7 +126,6 @@ fn a_modal_prompt_blocks_the_main_window_until_it_is_answered() {
         eprintln!("skipped: DRYDOCK_GUI_TESTS is unset");
         return;
     }
-    let _serial = serial();
     let _app = Kill(
         Command::new(probe_path())
             .arg("--modal")
@@ -183,7 +187,6 @@ fn escape_cancels_a_modal_prompt_and_unblocks_the_main_window() {
         eprintln!("skipped: DRYDOCK_GUI_TESTS is unset");
         return;
     }
-    let _serial = serial();
     let _app = Kill(
         Command::new(probe_path())
             .arg("--modal")
@@ -206,7 +209,6 @@ fn the_make_group_prompt_is_a_modal_window_of_the_app() {
         eprintln!("skipped: DRYDOCK_GUI_TESTS is unset");
         return;
     }
-    let _serial = serial();
     // DRYDOCK_OPEN_DIALOG=group opens the Make Group prompt as the app starts (test hook).
     let _app = Kill(
         Command::new(env!("CARGO_BIN_EXE_drydock"))

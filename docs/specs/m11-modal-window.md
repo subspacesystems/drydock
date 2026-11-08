@@ -67,14 +67,14 @@ clearing keyboard focus each frame); the Xvfb test decides.
   clicks inside work, Escape clears `open`; `confirm_dialog` and `name_dialog` keep their
   answers (Enter/Escape/OK).
 - `tests/modal_window_x11.rs` (Xvfb, no window manager, xdotool, xprop,
-  `MODELER_GUI_TESTS=1`; skips itself otherwise): the probe with `--modal` has a "Probe Name"
+  `DRYDOCK_GUI_TESTS=1`; skips itself otherwise): the probe with `--modal` has a "Probe Name"
   window that is transient for the main window and has `_NET_WM_STATE_MODAL`; a click and typed
   keys in the main window while it is open change nothing; typing and Enter in the prompt
   answers `ok:box` and closes it; afterwards the main window takes a click and keys again;
   Escape cancels; and the app started with `DRYDOCK_OPEN_DIALOG=group` has a "Make Group"
   window that is transient for "Drydock", modal, and closes on Escape.
 
-Run `harness/bin/run-tests -p drydock` at the end, with Xvfb and `MODELER_GUI_TESTS=1`.
+Run `harness/bin/run-tests -p drydock` at the end, with Xvfb and `DRYDOCK_GUI_TESTS=1`.
 Take a `gui-session` style look if you can: the prompt should open centered over the main window.
 
 ## Where to look

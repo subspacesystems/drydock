@@ -24,10 +24,9 @@ impl eframe::App for Probe {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         egui::CentralPanel::default().show(ui, |ui| {
-            let field = ui.text_edit_singleline(&mut self.typed);
-            if !self.open {
-                focus_when_window_active(ui, &field);
-            }
+            let field_id = egui::Id::new("probe-main-field");
+            focus_when_window_active(ui, field_id);
+            ui.add(egui::TextEdit::singleline(&mut self.typed).id(field_id));
             let size = ui.available_size();
             if ui.add_sized(size, egui::Button::new("Count")).clicked() {
                 self.clicks += 1;
@@ -45,8 +44,9 @@ impl eframe::App for Probe {
             &window,
             &mut open,
             |ui| {
-                let field = ui.text_edit_singleline(&mut self.name);
-                focus_when_window_active(ui, &field);
+                let field_id = egui::Id::new("probe-name-field");
+                focus_when_window_active(ui, field_id);
+                ui.add(egui::TextEdit::singleline(&mut self.name).id(field_id));
                 match button_row(
                     ui,
                     &[
@@ -89,32 +89,7 @@ impl eframe::App for Probe {
     }
 }
 
-/// Holds the display while a probe runs, so the real-window tests do not put two probe
-/// windows on the same display at once. The app's dialog test hook uses the same name.
-#[cfg(target_os = "linux")]
-fn probe_lock() -> Option<std::os::unix::net::UnixListener> {
-    use std::os::linux::net::SocketAddrExt;
-    use std::time::{Duration, Instant};
-
-    let address =
-        std::os::unix::net::SocketAddr::from_abstract_name(b"drydock-dialog-test").ok()?;
-    let end = Instant::now() + Duration::from_secs(60);
-    loop {
-        match std::os::unix::net::UnixListener::bind_addr(&address) {
-            Ok(listener) => return Some(listener),
-            Err(err) if err.kind() == std::io::ErrorKind::AddrInUse && Instant::now() < end => {
-                std::thread::sleep(Duration::from_millis(100));
-            }
-            Err(_) => return None,
-        }
-    }
-}
-
-#[cfg(not(target_os = "linux"))]
-fn probe_lock() {}
-
 fn main() -> eframe::Result {
-    let _lock = probe_lock();
     let open = std::env::args().any(|arg| arg == "--modal");
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
@@ -126,6 +101,8 @@ fn main() -> eframe::Result {
         "modal-probe",
         options,
         Box::new(move |cc| {
+            // The workspace ships no egui default fonts; use the app's, or text cannot lay
+            // out and typed characters land at a clamped cursor (in reverse).
             drydock::look::apply(&cc.egui_ctx);
             Ok(Box::new(Probe {
                 clicks: 0,
