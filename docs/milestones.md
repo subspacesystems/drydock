@@ -347,6 +347,7 @@ Done when: Follow Me sweeps a face along an open and a closed path, and Offset i
 | `m10-slider-visuals` | Feedback fix: sliders show a visible rail in Light and Dark, and the handle changes on hover like buttons do | |
 | `m10-button-text-center` | Feedback fix: button labels are centered vertically when the button is taller than its text (dialog buttons such as Model Info's Close sit 3 px high) | |
 | `m10-ground-pass-horizon` | Sign-off fix: with Show Shadows on, the ground pass paints the sky in the ground color when the eye is at or below ground level (Front/Back/Left/Right views zoomed out, or orbiting under the ground); draw the shadowed ground only where the eye is above it and the ray points down | `m10-ground-shadow-pass` |
+| `m10-menu-fit` | Feedback fix: in a short window, a long menu (Tools) moves up over the menu bar and its last items are cut off at the bottom; open every menu right below its title, never over the menu bar, and let a menu taller than the space below scroll | |
 
 ## Future (unscheduled)
 
