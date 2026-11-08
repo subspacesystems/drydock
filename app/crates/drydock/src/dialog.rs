@@ -246,6 +246,7 @@ pub fn dialog_window(
     }
     let mut content = Some(content);
     let mut close = false;
+
     if ctx.embed_viewports() {
         egui::Window::new(window.title)
             .collapsible(false)
@@ -282,6 +283,7 @@ pub fn dialog_window(
             }
         });
     }
+
     if close {
         *open = false;
     }
