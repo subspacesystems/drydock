@@ -7,7 +7,8 @@ changes below differ from the published crate; each is marked
 `Local patch (Drydock, PATCHES.md)` in the source. Keep this list complete when you change
 anything here, and carry it forward when winit is upgraded.
 
-Three groups of changes: modal dialogs, dialog parents, then event loop recreation.
+Four groups of changes: modal dialogs, dialog parents, event loop recreation, then enabled
+title-bar buttons.
 
 ## Modal dialogs
 
@@ -54,3 +55,19 @@ once at a time.
 - `src/event_loop.rs`: `EventLoop` holds an `EventLoopRecreationGuard` whose `Drop` clears
   `EVENT_LOOP_CREATED`, so a later `EventLoopBuilder::build` succeeds once the previous event
   loop is gone.
+
+## Enabled title-bar buttons
+
+Goal: a window can ask for no Minimize/Maximize button. On GNOME Wayland the client-side
+Adwaita frame draws the title bar, and winit previously ignored `WindowAttributes::enabled_buttons`
+and left the `Window::set_enabled_buttons`/`enabled_buttons` methods as TODO no-ops.
+
+- `src/platform_impl/linux/wayland/window/state.rs`: `WindowState` stores `enabled_buttons:
+  WindowButtons` (default all) with `enabled_buttons` and `set_enabled_buttons`; the setter
+  updates the Adwaita frame and returns whether it changed. When the frame is created on
+  configure, the stored resizable and button state are applied to it.
+- `src/platform_impl/linux/wayland/window/mod.rs` (`Window::new`): applies
+  `attributes.enabled_buttons` before the first frame draw.
+  `Window::set_enabled_buttons` stores the value, updates the frame and requests a redraw when
+  it changed; `Window::enabled_buttons` returns the stored value.
+- X11 is unchanged: Mutter draws those frames and drops the buttons for DIALOG-typed windows.

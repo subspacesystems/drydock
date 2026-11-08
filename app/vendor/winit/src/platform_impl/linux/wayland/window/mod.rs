@@ -146,6 +146,10 @@ impl Window {
         // Non-resizable implies that the min and max sizes are set to the same value.
         window_state.set_resizable(attributes.resizable);
 
+        // Local patch (Drydock, PATCHES.md): apply the requested title-bar buttons before the
+        // first frame draw.
+        window_state.set_enabled_buttons(attributes.enabled_buttons);
+
         // Set startup mode.
         match attributes.fullscreen.map(Into::into) {
             Some(Fullscreen::Exclusive(_)) => {
@@ -418,14 +422,17 @@ impl Window {
     }
 
     #[inline]
-    pub fn set_enabled_buttons(&self, _buttons: WindowButtons) {
-        // TODO(kchibisov) v5 of the xdg_shell allows that.
+    pub fn set_enabled_buttons(&self, buttons: WindowButtons) {
+        // Local patch (Drydock, PATCHES.md): store the choice and redraw when it changed.
+        if self.window_state.lock().unwrap().set_enabled_buttons(buttons) {
+            self.request_redraw();
+        }
     }
 
     #[inline]
     pub fn enabled_buttons(&self) -> WindowButtons {
-        // TODO(kchibisov) v5 of the xdg_shell allows that.
-        WindowButtons::all()
+        // Local patch (Drydock, PATCHES.md).
+        self.window_state.lock().unwrap().enabled_buttons()
     }
 
     #[inline]

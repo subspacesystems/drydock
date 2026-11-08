@@ -37,7 +37,9 @@ use crate::platform_impl::wayland::logical_to_physical_rounded;
 use crate::platform_impl::wayland::types::cursor::{CustomCursor, SelectedCursor};
 use crate::platform_impl::wayland::types::kwin_blur::KWinBlurManager;
 use crate::platform_impl::{PlatformCustomCursor, WindowId};
-use crate::window::{CursorGrabMode, CursorIcon, ImePurpose, ResizeDirection, Theme};
+use crate::window::{
+    CursorGrabMode, CursorIcon, ImePurpose, ResizeDirection, Theme, WindowButtons,
+};
 
 use crate::platform_impl::wayland::seat::{
     PointerConstraintsState, WinitPointerData, WinitPointerDataExt, ZwpTextInputV3Ext,
@@ -88,6 +90,9 @@ pub struct WindowState {
 
     /// Whether the frame is resizable.
     resizable: bool,
+
+    /// Local patch (Drydock, PATCHES.md): the title-bar buttons the window allows.
+    enabled_buttons: WindowButtons,
 
     // NOTE: we can't use simple counter, since it's racy when seat getting destroyed and new
     // is created, since add/removed stuff could be delivered a bit out of order.
@@ -208,6 +213,7 @@ impl WindowState {
             pointers: Default::default(),
             queue_handle: queue_handle.clone(),
             resizable: true,
+            enabled_buttons: WindowButtons::all(),
             scale_factor: 1.,
             shm: winit_state.shm.wl_shm().clone(),
             custom_cursor_pool: winit_state.custom_cursor_pool.clone(),
@@ -295,6 +301,14 @@ impl WindowState {
                     frame.set_scaling_factor(self.scale_factor);
                     // Hide the frame if we were asked to not decorate.
                     frame.set_hidden(!self.decorate);
+                    // Local patch (Drydock, PATCHES.md): apply the stored resizable and button
+                    // state now that the frame exists.
+                    frame.set_resizable(self.resizable);
+                    #[cfg(feature = "sctk-adwaita")]
+                    frame.set_enabled_buttons(
+                        self.enabled_buttons.contains(WindowButtons::MINIMIZE),
+                        self.enabled_buttons.contains(WindowButtons::MAXIMIZE),
+                    );
                     self.frame = Some(frame);
                 },
                 Err(err) => {
@@ -555,6 +569,37 @@ impl WindowState {
         // Reload the state on the frame as well.
         if let Some(frame) = self.frame.as_mut() {
             frame.set_resizable(resizable);
+        }
+
+        true
+    }
+
+    /// Get the stored enabled title-bar buttons.
+    /// Local patch (Drydock, PATCHES.md).
+    #[inline]
+    pub fn enabled_buttons(&self) -> WindowButtons {
+        self.enabled_buttons
+    }
+
+    /// Set the enabled title-bar buttons.
+    ///
+    /// Returns `true` when the state was applied.
+    /// Local patch (Drydock, PATCHES.md).
+    #[inline]
+    pub fn set_enabled_buttons(&mut self, buttons: WindowButtons) -> bool {
+        if self.enabled_buttons == buttons {
+            return false;
+        }
+
+        self.enabled_buttons = buttons;
+
+        // Reload the state on the frame as well.
+        #[cfg(feature = "sctk-adwaita")]
+        if let Some(frame) = self.frame.as_mut() {
+            frame.set_enabled_buttons(
+                buttons.contains(WindowButtons::MINIMIZE),
+                buttons.contains(WindowButtons::MAXIMIZE),
+            );
         }
 
         true
