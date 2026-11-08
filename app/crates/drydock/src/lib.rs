@@ -35,6 +35,7 @@ pub mod open_buttons;
 pub mod overlay;
 pub mod portal;
 pub mod print_setup;
+pub mod prompts;
 pub mod recent;
 pub mod shading;
 pub mod shadows_panel;
