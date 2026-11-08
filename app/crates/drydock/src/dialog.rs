@@ -242,6 +242,32 @@ pub struct DialogWindow<'a> {
     pub size: Vec2,
 }
 
+/// Space kept free of a dialog window's height on the monitor (title bar, panels), in points.
+pub const SCREEN_MARGIN: f32 = 80.0;
+
+/// A dialog window's height and whether its content scrolls (`docs/specs/m11-dialog-fit-content.md`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct DialogFit {
+    pub height: f32,
+    pub scroll: bool,
+}
+
+/// The window height for content that needs `content_height` points (panel margins
+/// included): the content's height, never below 0; but when `monitor_height` is known (and
+/// above [`SCREEN_MARGIN`]) at most `monitor_height - SCREEN_MARGIN`, in which case `scroll`
+/// is true. Unknown or unusable monitor heights do not clamp.
+pub fn fit_height(content_height: f32, monitor_height: Option<f32>) -> DialogFit {
+    let _ = (content_height, monitor_height);
+    unimplemented!("m11-dialog-fit-content")
+}
+
+/// Whether a window whose inner height is `current` should be sent `target`: only when they
+/// differ by more than 1 point, so a settled window is not resized every frame.
+pub fn needs_resize(current: f32, target: f32) -> bool {
+    let _ = (current, target);
+    unimplemented!("m11-dialog-fit-content")
+}
+
 /// Where a dialog of `size` goes so it is centered over `root_outer` (the main window's outer
 /// rectangle in screen points); each coordinate is at least 0.
 pub fn centered_position(root_outer: egui::Rect, size: Vec2) -> egui::Pos2 {

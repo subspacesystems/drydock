@@ -343,6 +343,8 @@ impl App {
         app.view.overhang_degrees = app.print_settings.overhang_degrees;
         app.sun_windows.shadows_open = dialog_hook == "shadows";
         app.sun_windows.geo_open = dialog_hook == "geolocation";
+        app.model_info_open = dialog_hook == "model-info";
+        app.customize_open = dialog_hook == "customize";
         if app.gpu.is_none() {
             app.error = Some("No wgpu render state: cannot draw the viewport".to_owned());
         }
@@ -3592,7 +3594,7 @@ fn paint_primitives(
 }
 
 /// Whether the first frame should send the fresh document's title. A `DRYDOCK_OPEN_DIALOG` test
-/// hook (About, Shadows, Geolocation) keeps the window at its bare creation title so the
+/// hook (About, Shadows, Geolocation, Model Info, Customize Toolbars) keeps the window at its bare creation title so the
 /// real-window tests can find it next to the dialog.
 fn startup_title_pending(dialog_hook: bool) -> bool {
     !dialog_hook
