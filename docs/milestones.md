@@ -371,6 +371,7 @@ Tyrel agreed (2026-11-08): dialogs and tool windows become their own OS windows 
 | `m11-title-fresh-doc` | Fix: the window title for a fresh, unsaved document | |
 | `m11-modal-file-dialogs` | Open and Save dialogs (our fallback picker) show through the modal dialog window | `m11-modal-window` |
 | `m11-floating-panels` | A floating dock panel (Materials, Entity Info and the rest) is its own window above the main window; docking it again closes that window | `m11-dialog-window` |
+| `m11-dialog-fit-content` | Fix: dialog windows fit their content instead of a fixed size that cuts it off (Model Info hides Background, Geolocation... and Close; Customize Toolbars cuts its tool list; Export STL/3MF hides OK and Cancel); taller than the screen, they scroll | |
 
 ## Future (unscheduled)
 
