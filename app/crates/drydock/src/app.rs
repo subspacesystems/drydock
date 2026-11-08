@@ -264,9 +264,10 @@ impl App {
             .unwrap_or_default();
         let print_setup_texts =
             PrintSetupTexts::for_view(&print_settings.bed, print_settings.overhang_degrees);
+        let about_open = matches!(std::env::var("DRYDOCK_OPEN_DIALOG").as_deref(), Ok("about"));
         let mut app = App {
             view: ViewState::new(),
-            about_open: false,
+            about_open,
             model_info_open: false,
             print_setup_open: false,
             print_settings,
@@ -339,7 +340,9 @@ impl App {
             app.view = fresh.view;
             app.editor = Some(fresh.editor);
             app.model = Some(fresh.document);
-            app.title_pending = true;
+            // The test hook leaves the main window titled "Drydock" (as main.rs makes it),
+            // so the real-window test can find it next to the dialog.
+            app.title_pending = !about_open;
         }
         app
     }

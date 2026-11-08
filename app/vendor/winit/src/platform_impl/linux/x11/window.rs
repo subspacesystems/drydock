@@ -416,8 +416,26 @@ impl UnownedWindow {
                 flusher.ignore_error()
             }
 
-            leap!(window.set_window_types(window_attrs.platform_specific.x11.x11_window_types))
+            // Local patch (Drydock, PATCHES.md): a dialog or tool window names its parent
+            // through WM_TRANSIENT_FOR, and an otherwise Normal window becomes a Dialog.
+            if let Some(parent) = window_attrs.transient_parent {
+                let parent = u64::from(parent) as xproto::Window;
+                leap!(xconn.change_property(
+                    window.xwindow,
+                    xproto::Atom::from(xproto::AtomEnum::WM_TRANSIENT_FOR),
+                    xproto::Atom::from(xproto::AtomEnum::WINDOW),
+                    xproto::PropMode::REPLACE,
+                    &[parent],
+                ))
                 .ignore_error();
+            }
+            let mut window_types = window_attrs.platform_specific.x11.x11_window_types;
+            if window_attrs.transient_parent.is_some()
+                && window_types == [WindowType::Normal]
+            {
+                window_types = vec![WindowType::Dialog];
+            }
+            leap!(window.set_window_types(window_types)).ignore_error();
 
             // Set size hints.
             let mut min_inner_size =
