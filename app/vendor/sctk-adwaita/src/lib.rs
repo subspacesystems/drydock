@@ -145,6 +145,15 @@ where
         self.dirty = true;
     }
 
+    /// Local patch (Drydock, PATCHES.md): tell the frame which buttons the window allows.
+    pub fn set_enabled_buttons(&mut self, minimize: bool, maximize: bool) {
+        let before = self.buttons.layout();
+        self.buttons.set_enabled(minimize, maximize);
+        if self.buttons.layout() != before {
+            self.dirty = true;
+        }
+    }
+
     fn precise_location(
         &self,
         location: Location,
@@ -418,6 +427,8 @@ where
     fn set_resizable(&mut self, resizable: bool) {
         self.dirty |= self.resizable != resizable;
         self.resizable = resizable;
+        // Local patch (Drydock, PATCHES.md): a not-resizable window has no Maximize button.
+        self.buttons.set_resizable(resizable);
     }
 
     fn resize(&mut self, width: NonZeroU32, height: NonZeroU32) {
@@ -485,13 +496,22 @@ where
         pressed: bool,
     ) -> Option<FrameAction> {
         match click {
-            FrameClick::Normal => self.mouse.click(
-                timestamp,
-                pressed,
-                self.resizable,
-                &self.state,
-                &self.wm_capabilities,
-            ),
+            FrameClick::Normal => {
+                // Local patch (Drydock, PATCHES.md): a double-click must not maximize a window
+                // without a Maximize button.
+                let wm_capabilities = if self.buttons.allows_maximize() {
+                    self.wm_capabilities
+                } else {
+                    self.wm_capabilities - WindowManagerCapabilities::MAXIMIZE
+                };
+                self.mouse.click(
+                    timestamp,
+                    pressed,
+                    self.resizable,
+                    &self.state,
+                    &wm_capabilities,
+                )
+            }
             FrameClick::Alternate => self.mouse.alternate_click(pressed, &self.wm_capabilities),
             _ => None,
         }

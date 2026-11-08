@@ -15,6 +15,13 @@ pub struct Buttons {
     buttons_left: Vec<Button>,
     buttons_right: Vec<Button>,
     layout_config: Option<(String, String)>,
+    // Local patch (Drydock, PATCHES.md): compositor and window limits are kept separately.
+    compositor_minimize: bool,
+    compositor_maximize: bool,
+    enabled_minimize: bool,
+    enabled_maximize: bool,
+    resizable: bool,
+    last_arrange: Option<(u32, f32)>,
 }
 
 type ButtonLayout = (Vec<Button>, Vec<Button>);
@@ -27,6 +34,12 @@ impl Default for Buttons {
             buttons_left,
             buttons_right,
             layout_config: None,
+            compositor_minimize: true,
+            compositor_maximize: true,
+            enabled_minimize: true,
+            enabled_maximize: true,
+            resizable: true,
+            last_arrange: None,
         }
     }
 }
@@ -38,6 +51,7 @@ impl Buttons {
                 buttons_left,
                 buttons_right,
                 layout_config,
+                ..Self::default()
             },
             _ => Self::default(),
         }
@@ -45,6 +59,10 @@ impl Buttons {
 
     /// Rearrange the buttons with the new width.
     pub fn arrange(&mut self, width: u32, margin_h: f32) {
+        // Local patch (Drydock, PATCHES.md): remember the arguments so a filter change re-places
+        // the remaining buttons instead of leaving stale offsets.
+        self.last_arrange = Some((width, margin_h));
+
         let mut left_x = BUTTON_MARGIN + margin_h;
         let mut right_x = width as f32 - BUTTON_MARGIN;
 
@@ -90,6 +108,20 @@ impl Buttons {
     }
 
     pub fn update_buttons(&mut self, supports_maximize: bool, supports_minimize: bool) {
+        // Local patch (Drydock, PATCHES.md): these are the compositor's limits; keep them apart
+        // from what the window allows.
+        self.compositor_maximize = supports_maximize;
+        self.compositor_minimize = supports_minimize;
+        self.refresh();
+    }
+
+    // Local patch (Drydock, PATCHES.md): re-filter the layout for all conditions and re-place the
+    // remaining buttons with the last arrange arguments.
+    fn refresh(&mut self) {
+        let supports_minimize = self.compositor_minimize && self.enabled_minimize;
+        let supports_maximize =
+            self.compositor_maximize && self.enabled_maximize && self.resizable;
+
         let is_supported = |button: &Button| match button.kind {
             ButtonKind::Close => true,
             ButtonKind::Maximize => supports_maximize,
@@ -100,34 +132,48 @@ impl Buttons {
             Buttons::parse_button_layout(self.layout_config.clone())
                 .unwrap_or_else(Buttons::get_default_buttons_layout);
 
-        self.buttons_left = buttons_left.into_iter().filter(is_supported).collect();
-        self.buttons_right = buttons_right.into_iter().filter(is_supported).collect();
+        self.buttons_left = buttons_left.into_iter().filter(|b| is_supported(b)).collect();
+        self.buttons_right = buttons_right.into_iter().filter(|b| is_supported(b)).collect();
+
+        if let Some((width, margin_h)) = self.last_arrange {
+            self.arrange(width, margin_h);
+        }
     }
 
     /// The window allows these buttons (Close is always allowed). A button is shown when the
     /// layout has it, the compositor allows it and the window allows it.
     /// Local patch (Drydock, PATCHES.md).
-    pub fn set_enabled(&mut self, _minimize: bool, _maximize: bool) {
-        todo!("m11-wayland-dialog-buttons")
+    pub fn set_enabled(&mut self, minimize: bool, maximize: bool) {
+        self.enabled_minimize = minimize;
+        self.enabled_maximize = maximize;
+        self.refresh();
     }
 
     /// A window that is not resizable has no Maximize button (separate from `set_enabled`).
     /// Local patch (Drydock, PATCHES.md).
-    pub fn set_resizable(&mut self, _resizable: bool) {
-        todo!("m11-wayland-dialog-buttons")
+    pub fn set_resizable(&mut self, resizable: bool) {
+        self.resizable = resizable;
+        self.refresh();
     }
 
     /// True when a Maximize button may be shown or a title double-click may maximize:
     /// the compositor, the window and resizability all allow it.
     /// Local patch (Drydock, PATCHES.md).
     pub fn allows_maximize(&self) -> bool {
-        todo!("m11-wayland-dialog-buttons")
+        self.compositor_maximize && self.enabled_maximize && self.resizable
     }
 
     /// The shown buttons of each side, left to right on screen: (left side, right side).
     /// Local patch (Drydock, PATCHES.md).
     pub fn layout(&self) -> (Vec<ButtonKind>, Vec<ButtonKind>) {
-        todo!("m11-wayland-dialog-buttons")
+        (
+            self.buttons_left.iter().map(|button| button.kind).collect(),
+            self.buttons_right
+                .iter()
+                .rev()
+                .map(|button| button.kind)
+                .collect(),
+        )
     }
 
     pub fn right_buttons_start_x(&self) -> Option<f32> {
