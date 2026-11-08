@@ -282,10 +282,12 @@ pub fn materials_panel(
 
                 ui.horizontal(|ui| {
                     ui.label(field_label("Opacity"));
-                    let value_width = ui.spacing().interact_size.x;
                     let spacing = ui.spacing().item_spacing.x;
+                    let padding = ui.spacing().button_padding.x;
+                    let scroll = ui.spacing().scroll.allocated_width();
+                    let value_width = ui.spacing().interact_size.x + 2.0 * padding;
                     ui.spacing_mut().slider_width =
-                        (ui.available_width() - value_width - spacing).max(20.0);
+                        (ui.available_width() - value_width - 3.0 * spacing - scroll).max(20.0);
                     crate::look::slider(ui, egui::Slider::new(&mut form.opacity, 0.0..=1.0));
                 });
 
