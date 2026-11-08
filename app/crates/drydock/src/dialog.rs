@@ -220,14 +220,16 @@ pub struct DialogWindow<'a> {
 /// Where a dialog of `size` goes so it is centered over `root_outer` (the main window's outer
 /// rectangle in screen points); each coordinate is at least 0.
 pub fn centered_position(root_outer: egui::Rect, size: Vec2) -> egui::Pos2 {
-    let _ = (root_outer, size);
-    unimplemented!("m11-dialog-window")
+    let offset = (root_outer.size() - size) * 0.5;
+    egui::pos2(
+        (root_outer.min.x + offset.x).max(0.0),
+        (root_outer.min.y + offset.y).max(0.0),
+    )
 }
 
 /// The viewport id of the dialog titled `title`; the same title always gives the same id.
 pub fn dialog_viewport_id(title: &str) -> egui::ViewportId {
-    let _ = title;
-    unimplemented!("m11-dialog-window")
+    egui::ViewportId::from_hash_of(("drydock-dialog-window", title))
 }
 
 /// Shows `content` as a dialog while `*open`. With `ctx.embed_viewports()` false it is its own
@@ -239,8 +241,52 @@ pub fn dialog_window(
     open: &mut bool,
     content: impl FnOnce(&mut egui::Ui),
 ) {
-    let _ = (ctx, window, open, content);
-    unimplemented!("m11-dialog-window")
+    if !*open {
+        return;
+    }
+    let mut content = Some(content);
+    let mut close = false;
+
+    if ctx.embed_viewports() {
+        egui::Window::new(window.title)
+            .collapsible(false)
+            .resizable(false)
+            .default_size(window.size)
+            .open(open)
+            .show(ctx, |ui| {
+                if let Some(content) = content.take() {
+                    content(ui);
+                }
+            });
+        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            close = true;
+        }
+    } else {
+        let root_outer = ctx.input(|i| i.viewport().outer_rect);
+        let mut builder = egui::ViewportBuilder::default()
+            .with_title(window.title)
+            .with_inner_size(window.size)
+            .with_resizable(false)
+            .with_minimize_button(false)
+            .with_maximize_button(false);
+        if let Some(root_outer) = root_outer {
+            builder = builder.with_position(centered_position(root_outer, window.size));
+        }
+        ctx.show_viewport_immediate(dialog_viewport_id(window.title), builder, |ui, _class| {
+            egui::CentralPanel::default().show(ui, |ui| {
+                if let Some(content) = content.take() {
+                    content(ui);
+                }
+            });
+            if ui.input(|i| i.viewport().close_requested() || i.key_pressed(egui::Key::Escape)) {
+                close = true;
+            }
+        });
+    }
+
+    if close {
+        *open = false;
+    }
 }
 
 /// Like [`dialog_window`], but modal (`docs/specs/m11-modal-window.md`): while `*open`, the
