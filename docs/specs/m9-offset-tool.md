@@ -106,7 +106,7 @@ All on the root body of the edit context, like Push/Pull (`self.body(model)`).
    `docs/guide/shortcuts.md` next to Extrude. `guide_coverage.rs` checks both.
 
 Run `harness/bin/run-tests -p drydock` at the end; the window tests need Xvfb and
-`MODELER_GUI_TESTS=1` as usual.
+`DRYDOCK_GUI_TESTS=1` as usual.
 
 ## Where to look
 

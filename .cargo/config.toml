@@ -9,3 +9,9 @@
 sctk-adwaita = { path = "app/vendor/sctk-adwaita" }
 winit = { path = "app/vendor/winit" }
 egui-winit = { path = "app/vendor/egui-winit" }
+
+# The real-window tests under Xvfb share window names and the one X display, so they must
+# not run at the same time as another test in their binary. Run test binaries one test at
+# a time; test binaries themselves already run one after another.
+[env]
+RUST_TEST_THREADS = { value = "1", force = true }

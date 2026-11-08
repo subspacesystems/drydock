@@ -32,13 +32,13 @@ About to it. This task does the same for the two sun windows in `sun_windows.rs`
 - Embedded: Shadows shows a window titled "Shadows" with its panel; Escape closes it and
   drops the preview; Geolocation likewise, and its form is rebuilt from the model when
   reopened.
-- Real window (Xvfb, xdotool, xprop, `MODELER_GUI_TESTS=1`; skips itself otherwise): starts
+- Real window (Xvfb, xdotool, xprop, `DRYDOCK_GUI_TESTS=1`; skips itself otherwise): starts
   the app with `DRYDOCK_OPEN_DIALOG=shadows` (then `geolocation`), finds a second X window with
   that title whose `WM_TRANSIENT_FOR` is the main window, checks the main window is still
   there, presses Escape in the dialog and checks it goes.
 
 The existing kittest tests (`sun_windows.rs`, `dialogs.rs`, `geo_globe.rs`) must pass unchanged.
-Run `harness/bin/run-tests -p drydock` at the end with Xvfb and `MODELER_GUI_TESTS=1`.
+Run `harness/bin/run-tests -p drydock` at the end with Xvfb and `DRYDOCK_GUI_TESTS=1`.
 
 ## Where to look
 

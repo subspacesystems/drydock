@@ -9,6 +9,25 @@ use eframe::egui::{self, Color32, Vec2};
 
 use crate::look;
 
+/// Focus the text field `id` once its window has the keyboard, so an X11 input context is
+/// not created for a window that does not have focus yet (which would stop the window from
+/// ever getting its focus event). Call it before adding the field, so a key that arrives in
+/// the frame the window gains focus is not dropped. Before the window reports focus (`None`,
+/// as in UI tests and inline dialogs) this behaves like
+/// [`egui::Memory::request_focus`].
+pub fn focus_when_window_active(ui: &mut egui::Ui, id: egui::Id) {
+    if ui.memory(|memory| memory.has_focus(id)) {
+        return;
+    }
+    if !ui.memory(|memory| memory.allows_interaction(ui.layer_id())) {
+        return;
+    }
+    let window_active = ui.ctx().input(|i| i.viewport().focused != Some(false));
+    if window_active {
+        ui.memory_mut(|memory| memory.request_focus(id));
+    }
+}
+
 /// Smallest size of a dialog button, in points.
 pub const BUTTON_MIN_SIZE: Vec2 = Vec2::new(88.0, 28.0);
 
@@ -175,11 +194,11 @@ pub fn name_dialog(
     };
     modal_prompt_window(ctx, id, &window, &mut open, |ui| {
         ui.horizontal(|ui| {
+            let field_id = id.with("name");
+            focus_when_window_active(ui, field_id);
             let label = ui.label(field_label("Name"));
-            let field = ui
-                .add(egui::TextEdit::singleline(name))
+            ui.add(egui::TextEdit::singleline(name).id(field_id))
                 .labelled_by(label.id);
-            field.request_focus();
         });
         let enabled = !name.trim().is_empty();
         match button_row(
