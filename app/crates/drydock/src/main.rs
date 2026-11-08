@@ -148,7 +148,9 @@ fn dialog_hook_lock() -> Option<std::os::unix::net::UnixListener> {
 }
 
 #[cfg(not(target_os = "linux"))]
-fn dialog_hook_lock() {}
+fn dialog_hook_lock() -> Option<()> {
+    None
+}
 
 fn main() -> ExitCode {
     let args = match parse_args(std::env::args().skip(1)) {
