@@ -257,15 +257,26 @@ pub struct DialogFit {
 /// above [`SCREEN_MARGIN`]) at most `monitor_height - SCREEN_MARGIN`, in which case `scroll`
 /// is true. Unknown or unusable monitor heights do not clamp.
 pub fn fit_height(content_height: f32, monitor_height: Option<f32>) -> DialogFit {
-    let _ = (content_height, monitor_height);
-    unimplemented!("m11-dialog-fit-content")
+    let height = content_height.max(0.0);
+    if let Some(monitor_height) = monitor_height
+        && monitor_height > SCREEN_MARGIN
+        && height > monitor_height - SCREEN_MARGIN
+    {
+        return DialogFit {
+            height: monitor_height - SCREEN_MARGIN,
+            scroll: true,
+        };
+    }
+    DialogFit {
+        height,
+        scroll: false,
+    }
 }
 
 /// Whether a window whose inner height is `current` should be sent `target`: only when they
 /// differ by more than 1 point, so a settled window is not resized every frame.
 pub fn needs_resize(current: f32, target: f32) -> bool {
-    let _ = (current, target);
-    unimplemented!("m11-dialog-fit-content")
+    (current - target).abs() > 1.0
 }
 
 /// Where a dialog of `size` goes so it is centered over `root_outer` (the main window's outer
