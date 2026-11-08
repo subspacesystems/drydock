@@ -7,7 +7,9 @@
 //!
 //! Behaviour: `docs/specs/m3-app-ui.md`.
 
-use crate::dialog::{DialogButton, DialogWindow, button_row, field_label, modal_dialog_window};
+use crate::dialog::{
+    DialogButton, DialogWindow, button_row, dialog_window, field_label, modal_dialog_window,
+};
 use crate::dock::PanelId;
 use crate::document::Stats;
 use crate::icons::Icon;
@@ -423,32 +425,32 @@ pub fn about_window(ctx: &eframe::egui::Context, open: &mut bool) {
     }
     install_lockups(ctx);
     let mut close = false;
-    eframe::egui::Window::new("About Drydock")
-        .collapsible(false)
-        .resizable(false)
-        .open(open)
-        .show(ctx, |ui| {
-            let dark = ui.visuals().dark_mode;
-            ui.add(
-                eframe::egui::Image::new(lockup_uri(dark))
-                    .fit_to_exact_size(vec2(LOCKUP_WIDTH, LOCKUP_WIDTH * 748.0 / 3410.0))
-                    .alt_text("Subspace Drydock"),
-            );
-            for line in about_lines() {
-                ui.label(line);
-            }
-            if button_row(
-                ui,
-                &[DialogButton {
-                    label: "Close",
-                    default: false,
-                    enabled: true,
-                }],
-            ) == Some(0)
-            {
-                close = true;
-            }
-        });
+    let window = DialogWindow {
+        title: "About Drydock",
+        size: vec2(380.0, 440.0),
+    };
+    dialog_window(ctx, &window, open, |ui| {
+        let dark = ui.visuals().dark_mode;
+        ui.add(
+            eframe::egui::Image::new(lockup_uri(dark))
+                .fit_to_exact_size(vec2(LOCKUP_WIDTH, LOCKUP_WIDTH * 748.0 / 3410.0))
+                .alt_text("Subspace Drydock"),
+        );
+        for line in about_lines() {
+            ui.label(line);
+        }
+        if button_row(
+            ui,
+            &[DialogButton {
+                label: "Close",
+                default: false,
+                enabled: true,
+            }],
+        ) == Some(0)
+        {
+            close = true;
+        }
+    });
     if close {
         *open = false;
     }
@@ -510,27 +512,27 @@ pub fn model_info_window_with(
         return;
     }
     let mut close = false;
-    eframe::egui::Window::new("Model Info")
-        .collapsible(false)
-        .resizable(false)
-        .open(open)
-        .show(ctx, |ui| {
-            for line in lines {
-                ui.label(line);
-            }
-            extra(ui);
-            if button_row(
-                ui,
-                &[DialogButton {
-                    label: "Close",
-                    default: false,
-                    enabled: true,
-                }],
-            ) == Some(0)
-            {
-                close = true;
-            }
-        });
+    let window = DialogWindow {
+        title: "Model Info",
+        size: vec2(360.0, 300.0),
+    };
+    dialog_window(ctx, &window, open, |ui| {
+        for line in lines {
+            ui.label(line);
+        }
+        extra(ui);
+        if button_row(
+            ui,
+            &[DialogButton {
+                label: "Close",
+                default: false,
+                enabled: true,
+            }],
+        ) == Some(0)
+        {
+            close = true;
+        }
+    });
     if close {
         *open = false;
     }
