@@ -7,7 +7,7 @@ changes below differ from the published crate; each is marked
 `Local patch (Drydock, PATCHES.md)` in the source. Keep this list complete when you change
 anything here, and carry it forward when winit is upgraded.
 
-Two groups of changes: modal dialogs, then dialog parents.
+Three groups of changes: modal dialogs, dialog parents, then event loop recreation.
 
 ## Modal dialogs
 
@@ -44,3 +44,13 @@ child window instead (and is unsupported on Wayland), so it is not reused for th
   as `WindowAttributesExtWindows::with_owner_window` does; an explicit owner wins.
 - `src/platform_impl/linux/x11/window.rs` (`UnownedWindow::new`): `WM_TRANSIENT_FOR` is set to
   the parent X window id, and a still-default `Normal` window type becomes `Dialog`.
+
+## Event loop recreation
+
+Goal: a test binary can run more than one real-window test, each starting its own eframe
+application after the previous one has finished. The event loop can still only be created
+once at a time.
+
+- `src/event_loop.rs`: `EventLoop` holds an `EventLoopRecreationGuard` whose `Drop` clears
+  `EVENT_LOOP_CREATED`, so a later `EventLoopBuilder::build` succeeds once the previous event
+  loop is gone.
