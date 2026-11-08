@@ -114,8 +114,8 @@ impl Drop for Kill {
 }
 
 fn own_window_test(hook: &str, title: &str) {
-    if std::env::var_os("MODELER_GUI_TESTS").is_none() {
-        eprintln!("skipped: MODELER_GUI_TESTS is unset");
+    if std::env::var_os("DRYDOCK_GUI_TESTS").is_none() {
+        eprintln!("skipped: DRYDOCK_GUI_TESTS is unset");
         return;
     }
     let _app = Kill(
