@@ -300,15 +300,21 @@ pub fn opening_position(
     root_outer: Option<egui::Rect>,
     size: Vec2,
 ) -> Option<egui::Pos2> {
-    let _ = (ctx, viewport_id, root_outer, size);
-    unimplemented!("m11-dialog-keep-position")
+    let key = viewport_id.0.with("dialog-opening-position");
+    if let Some(position) = ctx.data(|data| data.get_temp::<egui::Pos2>(key)) {
+        return Some(position);
+    }
+    let root_outer = root_outer?;
+    let position = centered_position(root_outer, size);
+    ctx.data_mut(|data| data.insert_temp(key, position));
+    Some(position)
 }
 
 /// Forgets the position stored by [`opening_position`] for `viewport_id`, so the next opening
 /// is centred again. Does nothing when none is stored.
 pub fn forget_opening_position(ctx: &egui::Context, viewport_id: egui::ViewportId) {
-    let _ = (ctx, viewport_id);
-    unimplemented!("m11-dialog-keep-position")
+    let key = viewport_id.0.with("dialog-opening-position");
+    ctx.data_mut(|data| data.remove_temp::<egui::Pos2>(key));
 }
 
 /// The viewport id of the dialog titled `title`; the same title always gives the same id.
@@ -365,7 +371,9 @@ fn dialog_window_impl(
     close_on_outside: bool,
     content: impl FnOnce(&mut egui::Ui),
 ) {
+    let viewport_id = dialog_viewport_id(window.title);
     if !*open {
+        forget_opening_position(ctx, viewport_id);
         return;
     }
     let mut content = Some(content);
@@ -408,7 +416,6 @@ fn dialog_window_impl(
             }
         }
     } else {
-        let viewport_id = dialog_viewport_id(window.title);
         let shown_id = viewport_id.0.with("dialog-shown");
         if !ctx.data_mut(|data| *data.get_temp_mut_or(shown_id, false)) {
             ctx.data_mut(|data| data.insert_temp(shown_id, true));
@@ -435,8 +442,8 @@ fn dialog_window_impl(
             .with_resizable(false)
             .with_minimize_button(false)
             .with_maximize_button(false);
-        if let Some(root_outer) = root_outer {
-            builder = builder.with_position(centered_position(root_outer, window.size));
+        if let Some(position) = opening_position(ctx, viewport_id, root_outer, window.size) {
+            builder = builder.with_position(position);
         }
         let scroll_id = viewport_id.0.with("dialog-fit-scroll");
         let mut scroll = ctx.data_mut(|data| *data.get_temp_mut_or(scroll_id, false));
@@ -494,6 +501,7 @@ fn dialog_window_impl(
     }
 
     if close {
+        forget_opening_position(ctx, viewport_id);
         *open = false;
     }
 }
