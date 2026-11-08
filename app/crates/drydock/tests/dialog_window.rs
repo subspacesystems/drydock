@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Subspace Systems
 
 //! m11-dialog-window: the dialog-window helper. Unit and kittest parts run everywhere; the
-//! real-window part needs Xvfb, xdotool, xprop and MODELER_GUI_TESTS=1 and skips itself
+//! real-window part needs Xvfb, xdotool, xprop and DRYDOCK_GUI_TESTS=1 and skips itself
 //! otherwise. See docs/specs/m11-dialog-window.md.
 
 use std::cell::RefCell;
@@ -95,7 +95,7 @@ use std::process::{Child, Command, Output};
 use std::time::{Duration, Instant};
 
 fn gui_tests() -> bool {
-    std::env::var_os("MODELER_GUI_TESTS").is_some()
+    std::env::var_os("DRYDOCK_GUI_TESTS").is_some()
 }
 
 fn tool(cmd: &str, args: &[&str]) -> Output {
@@ -136,7 +136,7 @@ impl Drop for Kill {
 #[test]
 fn about_opens_in_its_own_x_window_and_escape_closes_it() {
     if !gui_tests() {
-        eprintln!("skipped: MODELER_GUI_TESTS is unset");
+        eprintln!("skipped: DRYDOCK_GUI_TESTS is unset");
         return;
     }
     // DRYDOCK_OPEN_DIALOG=about opens the About dialog as the app starts (test hook).
