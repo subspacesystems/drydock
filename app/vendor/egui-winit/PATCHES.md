@@ -15,3 +15,8 @@ is upgraded.
   `vendor/winit/PATCHES.md`), so dialog and tool viewports belong to the main window.
   New public function `root_window_id`. eframe's glow backend builds its windows without
   `create_window` and is not covered; Drydock uses the wgpu backend.
+- `src/lib.rs` (`create_window`): new public functions `mark_modal_title` and `is_modal_title`.
+  A window made for a viewport whose title was marked (in the context's temporary data) gets
+  winit's `WindowAttributes::with_modal(true)`; the root window never does. The title is the key
+  because egui's `ViewportBuilder` has no modal flag and eframe does not pass the `ViewportId`
+  to `create_window`.

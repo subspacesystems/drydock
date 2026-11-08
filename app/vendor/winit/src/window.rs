@@ -125,6 +125,8 @@ pub struct WindowAttributes {
     pub(crate) parent_window: Option<SendSyncRawWindowHandle>,
     // Local patch (Drydock, PATCHES.md): see `with_transient_parent`.
     pub(crate) transient_parent: Option<WindowId>,
+    // Local patch (Drydock, PATCHES.md): see `with_modal`.
+    pub(crate) modal: bool,
     pub fullscreen: Option<Fullscreen>,
     // Platform-specific configuration.
     #[allow(dead_code)]
@@ -157,6 +159,7 @@ impl Default for WindowAttributes {
             #[cfg(feature = "rwh_06")]
             parent_window: None,
             transient_parent: None,
+            modal: false,
             active: true,
             platform_specific: Default::default(),
         }
@@ -508,6 +511,33 @@ impl WindowAttributes {
     #[inline]
     pub fn transient_parent(&self) -> Option<WindowId> {
         self.transient_parent
+    }
+
+    /// Local patch (Drydock, PATCHES.md): marks the window as modal for the window it belongs
+    /// to (see [`with_transient_parent`](Self::with_transient_parent)): the user has to answer
+    /// it before going back to that window. The application still has to ignore input meant for
+    /// the parent window itself; this only tells the desktop.
+    ///
+    /// The default is `false`.
+    ///
+    /// ## Platform-specific
+    ///
+    /// - **Wayland:** `xdg_dialog_v1.set_modal` (xdg-dialog-v1), when the compositor offers
+    ///   `xdg_wm_dialog_v1`; otherwise ignored.
+    /// - **X11:** `_NET_WM_STATE_MODAL` in the window's `_NET_WM_STATE` before it is mapped.
+    /// - **Windows:** the owner window is disabled while this window exists and enabled again
+    ///   when it is dropped, as native modal dialogs do. Ignored without an owner.
+    /// - **Other platforms:** ignored.
+    #[inline]
+    pub fn with_modal(mut self, modal: bool) -> Self {
+        self.modal = modal;
+        self
+    }
+
+    /// Local patch (Drydock, PATCHES.md): whether [`with_modal`](Self::with_modal) was set.
+    #[inline]
+    pub fn modal(&self) -> bool {
+        self.modal
     }
 }
 
