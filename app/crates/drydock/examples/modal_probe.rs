@@ -7,7 +7,9 @@
 //! (a Name box, OK and Cancel); `answer` becomes `ok:<name>` or `cancel`. Not part of the
 //! app: `tests/modal_window_x11.rs` starts it under Xvfb.
 
-use drydock::dialog::{DialogButton, DialogWindow, button_row, modal_dialog_window};
+use drydock::dialog::{
+    DialogButton, DialogWindow, button_row, focus_when_window_active, modal_dialog_window,
+};
 use eframe::egui;
 
 struct Probe {
@@ -22,7 +24,9 @@ impl eframe::App for Probe {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         egui::CentralPanel::default().show(ui, |ui| {
-            ui.text_edit_singleline(&mut self.typed).request_focus();
+            let field_id = egui::Id::new("probe-main-field");
+            focus_when_window_active(ui, field_id);
+            ui.add(egui::TextEdit::singleline(&mut self.typed).id(field_id));
             let size = ui.available_size();
             if ui.add_sized(size, egui::Button::new("Count")).clicked() {
                 self.clicks += 1;
@@ -40,7 +44,9 @@ impl eframe::App for Probe {
             &window,
             &mut open,
             |ui| {
-                ui.text_edit_singleline(&mut self.name).request_focus();
+                let field_id = egui::Id::new("probe-name-field");
+                focus_when_window_active(ui, field_id);
+                ui.add(egui::TextEdit::singleline(&mut self.name).id(field_id));
                 match button_row(
                     ui,
                     &[
@@ -94,7 +100,10 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "modal-probe",
         options,
-        Box::new(move |_| {
+        Box::new(move |cc| {
+            // The workspace ships no egui default fonts; use the app's, or text cannot lay
+            // out and typed characters land at a clamped cursor (in reverse).
+            drydock::look::apply(&cc.egui_ctx);
             Ok(Box::new(Probe {
                 clicks: 0,
                 typed: String::new(),
