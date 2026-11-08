@@ -19,3 +19,11 @@ Third-party material distributed with this software:
 - sctk-adwaita 0.10.1 (vendor/sctk-adwaita), Copyright (c) 2022 Bartłomiej Maryńczak.
   Licensed under the MIT License (vendor/sctk-adwaita/LICENSE). Patched for Drydock:
   the title is drawn with skrifa, and the bundled Cantarell font is left out.
+- winit 0.30.13 (vendor/winit), Copyright the winit contributors
+  (https://github.com/rust-windowing/winit). Licensed under the Apache License 2.0
+  (vendor/winit/LICENSE). Patched for Drydock: a window can name the window it belongs
+  to (vendor/winit/PATCHES.md).
+- egui-winit 0.36.2 (vendor/egui-winit), Copyright (c) 2018-2021 Emil Ernerfeldt
+  (https://github.com/emilk/egui). Licensed under the MIT License or the Apache License 2.0
+  (vendor/egui-winit/LICENSE-MIT, LICENSE-APACHE). Patched for Drydock: every viewport
+  window after the main one names the main window as its parent (vendor/egui-winit/PATCHES.md).

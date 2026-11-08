@@ -1,5 +1,11 @@
 # Local sctk-adwaita 0.10.1 with a skrifa title renderer: winit 0.30 asks for
 # sctk-adwaita's ab_glyph feature, which would pull the unmaintained ttf-parser
 # crate (RUSTSEC-2026-0192). Keep winit's GNOME title bar and avoid it.
+# Local winit 0.30.13 and egui-winit 0.36.2: every egui viewport other than the
+# root names the main window as its parent, so the desktop keeps dialogs above it
+# (Wayland xdg_toplevel parent, X11 WM_TRANSIENT_FOR, Windows owner window).
+# The changes are listed in each crate's PATCHES.md.
 [patch.crates-io]
 sctk-adwaita = { path = "vendor/sctk-adwaita" }
+winit = { path = "vendor/winit" }
+egui-winit = { path = "vendor/egui-winit" }
