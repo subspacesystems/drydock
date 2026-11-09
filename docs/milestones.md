@@ -380,7 +380,7 @@ Tyrel agreed (2026-11-08): dialogs and tool windows become their own OS windows 
 
 ## M12: Pop-up menus and tool cursors
 
-Menus become real pop-up windows that can reach past the main window's edge. Every tool gets its own cursor (Tyrel 2026-10-29, raised again 2026-11-09): the arrow only for Select; the drawing tools a pencil whose tip sits on the drawn point; the other tools their toolbar icon, with the hotspot on the working point (Paint Bucket: the bottom of the pouring paint); the bucket mirrored left-to-right everywhere it appears. All cursor art is our own. Task rows for menus and cursors come with M12's planning.
+Menus become real pop-up windows that can reach past the main window's edge. Every tool gets its own cursor (Tyrel 2026-10-29, raised again 2026-11-09): the arrow only for Select; the drawing tools a pencil whose tip sits on the drawn point; the other tools their toolbar icon, with the hotspot on the working point (Paint Bucket: the bottom of the pouring paint); the bucket mirrored left-to-right everywhere it appears. Hotspots (Tyrel, 2026-11-09): most brand icons carry a small ring (the `rings` in `design/brand/icons/generate_icons.py`: line, rectangle, circle, arc, arc3, offset, followme, move, rotate, scale), and the ring's center is the cursor's clicking point; so the drawing tools use their own icon with the ring on the point instead of a pencil. Icons without a ring use their working point: Push/Pull and Orbit their dot, Paint Bucket the drip, Eyedropper the tip; Tape, Eraser, Pan and Zoom get a point chosen at planning. Cursors need a dark outline so the white ink shows on light backgrounds. All cursor art is our own. Task rows for menus and cursors come with M12's planning.
 
 | Task | What | Needs |
 | --- | --- | --- |
