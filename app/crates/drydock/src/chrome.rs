@@ -762,6 +762,30 @@ fn menu_scroll<R>(ui: &mut Ui, max_height: f32, add_contents: impl FnOnce(&mut U
         .inner
 }
 
+/// The pop-up title (and viewport name) of the top-level menu labelled `label`, e.g. "File":
+/// distinct per label, never empty (`docs/specs/m12-menu-popups.md`).
+pub fn menu_popup_title(_label: &str) -> String {
+    unimplemented!("m12-menu-popups")
+}
+
+/// Where a top-level menu's pop-up goes: the left edge and bottom of its title button
+/// (`title`, in the calling viewport's points) in screen points, i.e. plus `root_inner.min`
+/// when that is known.
+pub fn menu_popup_position(_root_inner: Option<Rect>, _title: Rect) -> eframe::egui::Pos2 {
+    unimplemented!("m12-menu-popups")
+}
+
+/// The label of the top-level menu that is open now, if any.
+pub fn open_menu(_ctx: &eframe::egui::Context) -> Option<String> {
+    unimplemented!("m12-menu-popups")
+}
+
+/// Opens the top-level menu labelled `label` as if its title had been clicked (an unknown
+/// label opens nothing). The next `menu_bar` call shows it.
+pub fn request_menu(_ctx: &eframe::egui::Context, _label: &str) {
+    unimplemented!("m12-menu-popups")
+}
+
 /// A top-level menu button whose rows scroll when the menu is taller than the window.
 fn top_menu<R>(ui: &mut Ui, label: &str, add_contents: impl FnOnce(&mut Ui) -> R) {
     ui.menu_button(label, |ui| {
