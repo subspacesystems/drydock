@@ -1,5 +1,6 @@
 # Drydock icon set: 20x20 grid, 1.75 stroke, mitred joins, white ink (tint at runtime).
 # Regenerate: python3 generate_icons.py  (Python 3.12+; writes the .svg files next to this script)
+# Also writes cursors/<tool>.svg (32x32, dark outline) for every tool but select; the PNGs in app/crates/drydock/assets/cursors come from them (ignored test write_cursor_pngs).
 import math, os
 SW=1.75; INK='#FFFFFF'; RR=2.25  # ring radius
 def arcpts(cx,cy,r,a0,a1,n=24):
@@ -13,20 +14,41 @@ def chevron(tip, frm, size=3.2):
     ux,uy=tip[0]-frm[0],tip[1]-frm[1]; L=math.hypot(ux,uy); ux/=L; uy/=L; px,py=-uy,ux
     b=(tip[0]-ux*size, tip[1]-uy*size)
     return pl([(b[0]+px*size*0.75,b[1]+py*size*0.75), tip, (b[0]-px*size*0.75,b[1]-py*size*0.75)])
+OUT='#0B1620'; OL=1.6  # cursor outline colour and extra stroke width (0.8 units each side)
+TOOLS={'select','eyedropper','line','rectangle','circle','arc','arc3','pushpull','offset','followme','move','rotate','scale','tape','erase','paint','orbit','pan','zoom'}
+CURSORS={'select'}  # tools without a cursor image keep the OS arrow
+def layer(strokes,fills,lights,rings,dots,cuts,top,raw,ink,e):
+    # one drawing pass: e=0 is the icon itself, e=OL the dark outline pass (everything solid ink, strokes widened by e)
+    g=''
+    if e:
+        sol=f' fill="{ink}" stroke="{ink}" stroke-width="{e}" stroke-linejoin="round"'
+        g+=''.join(f'<path d="{d}"{sol}/>' for d in lights+fills)
+    else:
+        g+=''.join(f'<path d="{d}" fill="{ink}" fill-opacity=".35"/>' for d in lights)
+        g+=''.join(f'<path d="{d}" fill="{ink}"/>' for d in fills)
+    g+=''.join(f'<path d="{d}"/>' for d in strokes)
+    g+=''.join(f'<circle cx="{x}" cy="{y}" r="{r+e/2}" fill="{ink}" stroke="none"/>' for x,y,r in dots)+(raw if not e else '')
+    m=' mask="url(#k)"' if (rings or cuts) else ''
+    body=f'<g fill="none" stroke="{ink}" stroke-width="{SW+e}" stroke-linecap="butt" stroke-linejoin="miter" stroke-miterlimit="6"{m}>{g}</g>'
+    body+=''.join(f'<circle cx="{r[0]}" cy="{r[1]}" r="{r[2] if len(r)>2 else RR}" fill="none" stroke="{ink}" stroke-width="{1.5+e}"/>' for r in rings)
+    body+=''.join(f'<g fill="none" stroke="{ink}" stroke-width="{SW+e}" stroke-linecap="butt"><path d="{d}"/></g>' for d in top)
+    return body
 def svg(name, strokes=(), fills=(), lights=(), rings=(), dots=(), cuts=(), top=(), raw=''):
     # strokes: path d strings; lights: filled at 35% opacity; rings: (x,y[,r]) ring nodes that knock out lines
+    strokes,fills,lights,rings,dots,cuts,top=map(list,(strokes,fills,lights,rings,dots,cuts,top))
     m=''
     if rings or cuts:
         m='<mask id="k" maskUnits="userSpaceOnUse" x="0" y="0" width="20" height="20"><rect width="20" height="20" fill="#fff"/>'+''.join(f'<circle cx="{r[0]}" cy="{r[1]}" r="{(r[2] if len(r)>2 else RR)+1.0:.2f}" fill="#000"/>' for r in rings)+''.join(f'<path d="{d}" fill="none" stroke="#000" stroke-width="{SW+2.5}"/>' for d in cuts)+'</mask>'
-    g=''.join(f'<path d="{d}" fill="{INK}" fill-opacity=".35"/>' for d in lights)
-    g+=''.join(f'<path d="{d}" fill="{INK}"/>' for d in fills)
-    g+=''.join(f'<path d="{d}"/>' for d in strokes)
-    g+=''.join(f'<circle cx="{x}" cy="{y}" r="{r}" fill="{INK}" stroke="none"/>' for x,y,r in dots)+raw
-    body=f'<g fill="none" stroke="{INK}" stroke-width="{SW}" stroke-linecap="butt" stroke-linejoin="miter" stroke-miterlimit="6"{" mask=\"url(#k)\"" if (rings or cuts) else ""}>{g}</g>'
-    body+=''.join(f'<circle cx="{r[0]}" cy="{r[1]}" r="{r[2] if len(r)>2 else RR}" fill="none" stroke="{INK}" stroke-width="1.5"/>' for r in rings)
-    body+=''.join(f'<g fill="none" stroke="{INK}" stroke-width="{SW}" stroke-linecap="butt"><path d="{d}"/></g>' for d in top)
+    here=os.path.dirname(os.path.abspath(__file__))
+    args=(strokes,fills,lights,rings,dots,cuts,top,raw)
+    body=layer(*args,INK,0)
     s=f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="20" height="20">{m}{body}</svg>\n'
-    open(os.path.join(os.path.dirname(os.path.abspath(__file__)), f'{name}.svg'),'w').write(s)
+    open(os.path.join(here, f'{name}.svg'),'w').write(s)
+    if name in TOOLS and name not in CURSORS:
+        # cursor: 32x32 image of the same drawing over a dark outline of it (white ink shows on light backgrounds)
+        os.makedirs(os.path.join(here,'cursors'),exist_ok=True)
+        c=f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="32" height="32">{m}{layer(*args,OUT,OL)}{layer(*args,INK,0)}</svg>\n'
+        open(os.path.join(here,'cursors',f'{name}.svg'),'w').write(c)
 
 # --- tools ---
 svg('select', strokes=[pl([(5,2.5),(15.5,11),(10.6,11.6),(13.3,17),(11.2,18),(8.6,12.7),(5,15.8)],True)])
