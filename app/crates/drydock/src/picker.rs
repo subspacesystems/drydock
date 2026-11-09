@@ -498,6 +498,14 @@ impl Picker {
 
 /// Make sure the main window accepts input: Windows `EnableWindow(hwnd, TRUE)` on the frame's
 /// window handle; nothing on other systems. Harmless when it is enabled already.
-pub fn enable_main_window(_frame: &eframe::Frame) {
-    // Windows: EnableWindow(main, TRUE) via a small cfg(windows) block (m11-picker-after-prompt).
+#[cfg(windows)]
+pub fn enable_main_window(frame: &eframe::Frame) {
+    use winit::platform::windows::WindowExtWindows;
+    if let Some(window) = frame.winit_window() {
+        window.set_enable(true);
+    }
 }
+
+/// Nothing: only Windows keeps the owner disabled after a picker closes.
+#[cfg(not(windows))]
+pub fn enable_main_window(_frame: &eframe::Frame) {}

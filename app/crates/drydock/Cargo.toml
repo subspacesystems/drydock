@@ -30,6 +30,10 @@ wgpu.workspace = true
 [target.'cfg(target_os = "linux")'.dependencies]
 winit = { version = "0.30", default-features = false, features = ["wayland-csd-adwaita"] }
 
+# Windows only: WindowExtWindows::set_enable re-enables a modal dialog's owner.
+[target.'cfg(windows)'.dependencies]
+winit = { version = "0.30", default-features = false }
+
 [build-dependencies]
 drydock-guide.workspace = true
 winresource.workspace = true
