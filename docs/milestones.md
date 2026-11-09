@@ -384,7 +384,7 @@ Menus become real pop-up windows that can reach past the main window's edge. Eve
 
 | Task | What | Needs |
 | --- | --- | --- |
-| `m12-version` | Fix: a plain build's Help > About still said 0.9.0 (Tyrel); the workspace version becomes 0.11.0 now that M11 is accepted, and the version test accepts any later version so future bumps don't break it | |
+| `m12-version` (done directly, no task) | Fix: a plain build's Help > About still said 0.9.0 (Tyrel); the workspace version becomes 0.11.0 now that M11 is accepted, and the version test accepts any later version so future bumps don't break it | |
 
 ## Future (unscheduled)
 
