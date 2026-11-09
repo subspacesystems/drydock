@@ -79,10 +79,17 @@ fn the_build_version_is_the_one_build_rs_emitted() {
 #[test]
 fn plain_builds_are_not_0_0_1() {
     let text = std::fs::read_to_string(crate_dir().join("../../Cargo.toml")).unwrap();
-    assert!(
-        text.contains("version = \"0.9."),
-        "workspace version is 0.9.x"
-    );
+    let version = text
+        .lines()
+        .find_map(|l| l.strip_prefix("version = \""))
+        .and_then(|l| l.split('"').next())
+        .expect("workspace version");
+    let minor: u32 = version
+        .split('.')
+        .nth(1)
+        .and_then(|m| m.parse().ok())
+        .expect("minor number");
+    assert!(minor >= 11, "workspace version {version} is at least 0.11");
     assert!(!VERSION.starts_with("0.0."), "{VERSION}");
 }
 
