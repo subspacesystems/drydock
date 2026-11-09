@@ -38,7 +38,8 @@ use drydock::model_source::{
 use drydock::open_buttons::OpenMode;
 use drydock::overlay::{self, Primitive};
 use drydock::picker::{
-    PickPurpose, PickRequest, Picker, Started, choose_backend, system_picker_available,
+    ModalGate, PickPurpose, PickRequest, Picker, Started, choose_backend, enable_main_window,
+    system_picker_available,
 };
 use drydock::portal;
 use drydock::print_setup::{
@@ -173,6 +174,8 @@ pub struct App {
     saved: Option<String>,
     warnings: Vec<String>,
     picker: Picker,
+    /// Counts frames without a modal prompt so a queued picker starts after it is gone.
+    modal_gate: ModalGate,
     dialog: Option<OpenDialog>,
     /// The units choice shown before opening or importing an STL.
     units_prompt: Option<UnitsPrompt>,
@@ -307,6 +310,7 @@ impl App {
                 std::env::var("DRYDOCK_FILE_PICKER").ok().as_deref(),
                 system_picker_available(),
             )),
+            modal_gate: ModalGate::new(),
             dialog: None,
             units_prompt: None,
             mesh_unit: MeshUnit::default(),
@@ -608,27 +612,31 @@ impl App {
         self.dirty = true;
     }
 
-    fn open_dialog(&mut self, ctx: &egui::Context, frame: &eframe::Frame) {
+    fn open_dialog(&mut self, _ctx: &egui::Context, _frame: &eframe::Frame) {
         let dir = self.open_folder();
-        let request = PickRequest::open(OpenMode::Open, dir.clone());
-        if self.picker.start(ctx, Some(frame), request) == Started::Builtin {
-            self.dialog = Some(OpenDialog::new(dir));
-        }
+        self.picker.queue(PickRequest::open(OpenMode::Open, dir));
     }
 
-    fn open_import_dialog(&mut self, ctx: &egui::Context, frame: &eframe::Frame) {
+    fn open_import_dialog(&mut self, _ctx: &egui::Context, _frame: &eframe::Frame) {
         let dir = self.open_folder();
-        let request = PickRequest::open(OpenMode::Component, dir.clone());
-        if self.picker.start(ctx, Some(frame), request) == Started::Builtin {
-            self.dialog = Some(OpenDialog::import(dir));
-        }
+        self.picker
+            .queue(PickRequest::open(OpenMode::Component, dir));
     }
 
-    fn open_models_dialog(&mut self, ctx: &egui::Context, frame: &eframe::Frame) {
+    fn open_models_dialog(&mut self, _ctx: &egui::Context, _frame: &eframe::Frame) {
         let dir = self.open_folder();
-        let request = PickRequest::open(OpenMode::Models, dir.clone());
-        if self.picker.start(ctx, Some(frame), request) == Started::Builtin {
-            self.dialog = Some(OpenDialog::models(dir));
+        self.picker.queue(PickRequest::open(OpenMode::Models, dir));
+    }
+
+    /// Open our own dialog for a request the builtin backend could not show.
+    fn open_builtin_dialog(&mut self, request: PickRequest) {
+        match request.purpose {
+            PickPurpose::Open(mode) => {
+                self.dialog = Some(OpenDialog::with_mode(request.dir, mode));
+            }
+            PickPurpose::Save(mode) => {
+                self.save_dialog = Some(SaveDialog::with_mode(request.dir, request.name, mode));
+            }
         }
     }
 
@@ -707,7 +715,7 @@ impl App {
         }
     }
 
-    fn open_save_dialog(&mut self, ctx: &egui::Context, frame: &eframe::Frame) {
+    fn open_save_dialog(&mut self, _ctx: &egui::Context, _frame: &eframe::Frame) {
         let Some(document) = &self.model else {
             return;
         };
@@ -722,17 +730,15 @@ impl App {
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_else(|| "model.drydock".to_owned());
-        let request = PickRequest::save(SaveMode::Model, dir.clone(), name.clone());
-        if self.picker.start(ctx, Some(frame), request) == Started::Builtin {
-            self.save_dialog = Some(SaveDialog::new(dir, name));
-        }
+        self.picker
+            .queue(PickRequest::save(SaveMode::Model, dir, name));
     }
 
     /// Open the save dialog for an export, with a name from the document and the format.
     fn open_export_save_dialog(
         &mut self,
-        ctx: &egui::Context,
-        frame: &eframe::Frame,
+        _ctx: &egui::Context,
+        _frame: &eframe::Frame,
         options: ExportOptions,
     ) {
         let Some(document) = &self.model else {
@@ -753,10 +759,7 @@ impl App {
         } else {
             SaveMode::Export(options)
         };
-        let request = PickRequest::save(mode, dir.clone(), name.clone());
-        if self.picker.start(ctx, Some(frame), request) == Started::Builtin {
-            self.save_dialog = Some(SaveDialog::with_mode(dir, name, mode));
-        }
+        self.picker.queue(PickRequest::save(mode, dir, name));
     }
 
     /// Write an export with the open document's kernel and the editor's selection.
@@ -3025,6 +3028,24 @@ enum PanelAction {
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+        let modal_open = self.confirm.is_some()
+            || self.name_prompt.is_some()
+            || self.text_dialog.is_some()
+            || self.export_dialog.is_some()
+            || self.units_prompt.is_some()
+            || self.dialog.is_some()
+            || self.save_dialog.is_some()
+            || self.app_confirm.is_some()
+            || self.materials.confirming()
+            || self.customize.prompt.is_some();
+        let may_start_picker = self.modal_gate.frame(modal_open);
+        if let Some((started, request)) =
+            self.picker
+                .start_queued(&ctx, Some(frame), may_start_picker)
+            && started == Started::Builtin
+        {
+            self.open_builtin_dialog(request);
+        }
         if self.title_pending {
             if let Some(document) = &self.model {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Title(document.title()));
@@ -3302,7 +3323,10 @@ impl eframe::App for App {
                 None => {}
             }
         }
-        if let Some(picked) = self.picker.poll() {
+        if let Some(picked) = self
+            .picker
+            .poll_releasing(modal_open, || enable_main_window(frame))
+        {
             match picked.path {
                 None => {
                     if matches!(picked.purpose, PickPurpose::Save(_)) {
@@ -3424,6 +3448,9 @@ impl eframe::App for App {
                 Some(UnsavedChoice::Cancel) => self.confirm = None,
                 None => {}
             }
+        }
+        if self.picker.has_queued() {
+            ctx.request_repaint();
         }
     }
 }

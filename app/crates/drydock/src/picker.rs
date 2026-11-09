@@ -340,9 +340,14 @@ impl ModalGate {
     /// frame. `true` resets the count and returns `false`; `false` adds one and returns
     /// whether [`QUIET_FRAMES`] quiet frames in a row have now passed (stays `true` while
     /// quiet).
-    pub fn frame(&mut self, _modal_open: bool) -> bool {
-        let _ = self.quiet;
-        unimplemented!("m11-picker-after-prompt")
+    pub fn frame(&mut self, modal_open: bool) -> bool {
+        if modal_open {
+            self.quiet = 0;
+            false
+        } else {
+            self.quiet = self.quiet.saturating_add(1);
+            self.quiet >= QUIET_FRAMES
+        }
     }
 }
 
@@ -357,8 +362,8 @@ impl Picker {
 
     /// Ask for `request` to be started by a later [`Picker::start_queued`]. A request queued
     /// earlier and not yet started is replaced. Nothing reaches the backend yet.
-    pub fn queue(&mut self, _request: PickRequest) {
-        unimplemented!("m11-picker-after-prompt")
+    pub fn queue(&mut self, request: PickRequest) {
+        self.queued = Some(request);
     }
 
     /// True while a request is queued and not yet started.
@@ -372,19 +377,28 @@ impl Picker {
     /// queued. If a request is already out it stays queued until that one is answered.
     pub fn start_queued(
         &mut self,
-        _ctx: &egui::Context,
-        _parent: Option<&eframe::Frame>,
-        _may_start: bool,
+        ctx: &egui::Context,
+        parent: Option<&eframe::Frame>,
+        may_start: bool,
     ) -> Option<(Started, PickRequest)> {
-        unimplemented!("m11-picker-after-prompt")
+        if !may_start || self.pending.is_some() {
+            return None;
+        }
+        let request = self.queued.take()?;
+        let started = self.start(ctx, parent, request.clone());
+        Some((started, request))
     }
 
     /// Like [`Picker::poll`]. When it returns an answer (path, cancel or error alike) and
     /// `modal_open` is false, `release` is called once before returning, so the app can make
     /// sure the main window is enabled (Windows restores a disabled owner when a picker
     /// closes). No answer, or a prompt of ours open: `release` is not called.
-    pub fn poll_releasing(&mut self, _modal_open: bool, _release: impl FnOnce()) -> Option<Picked> {
-        unimplemented!("m11-picker-after-prompt")
+    pub fn poll_releasing(&mut self, modal_open: bool, release: impl FnOnce()) -> Option<Picked> {
+        let picked = self.poll()?;
+        if !modal_open {
+            release();
+        }
+        Some(picked)
     }
 
     /// The backend requests go to.
@@ -484,6 +498,14 @@ impl Picker {
 
 /// Make sure the main window accepts input: Windows `EnableWindow(hwnd, TRUE)` on the frame's
 /// window handle; nothing on other systems. Harmless when it is enabled already.
-pub fn enable_main_window(_frame: &eframe::Frame) {
-    // Windows: EnableWindow(main, TRUE) via a small cfg(windows) block (m11-picker-after-prompt).
+#[cfg(windows)]
+pub fn enable_main_window(frame: &eframe::Frame) {
+    use winit::platform::windows::WindowExtWindows;
+    if let Some(window) = frame.winit_window() {
+        window.set_enable(true);
+    }
 }
+
+/// Nothing: only Windows keeps the owner disabled after a picker closes.
+#[cfg(not(windows))]
+pub fn enable_main_window(_frame: &eframe::Frame) {}
