@@ -3438,7 +3438,6 @@ impl eframe::App for App {
                 .unwrap_or_else(|| "this model".to_owned());
             match prompts::unsaved_prompt(&ctx, &name) {
                 Some(UnsavedChoice::Save) => {
-                    self.confirm = None;
                     self.save_before(&ctx, frame);
                 }
                 Some(UnsavedChoice::Discard) => {
