@@ -38,6 +38,7 @@ pub mod model_source;
 pub mod open_buttons;
 pub mod overlay;
 pub mod picker;
+pub mod popup;
 pub mod portal;
 pub mod print_setup;
 pub mod prompts;
