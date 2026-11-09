@@ -316,6 +316,34 @@ pub struct Picked {
 pub struct Picker {
     backend: Backend,
     pending: Option<(PickPurpose, Receiver<Option<PathBuf>>)>,
+    /// A request waiting for [`Picker::start_queued`].
+    queued: Option<PickRequest>,
+}
+
+/// Frames in a row with no modal prompt window before a queued picker may start. A prompt's
+/// OS window is dropped (and its owner enabled again) at the end of the frame that stopped
+/// drawing it or a little later, so the picker waits this many quiet frames.
+pub const QUIET_FRAMES: u8 = 2;
+
+/// Counts frames without a modal prompt window (m11-picker-after-prompt).
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ModalGate {
+    quiet: u8,
+}
+
+impl ModalGate {
+    pub fn new() -> ModalGate {
+        ModalGate::default()
+    }
+
+    /// Call once per frame with whether any of our modal prompts is open or was drawn this
+    /// frame. `true` resets the count and returns `false`; `false` adds one and returns
+    /// whether [`QUIET_FRAMES`] quiet frames in a row have now passed (stays `true` while
+    /// quiet).
+    pub fn frame(&mut self, _modal_open: bool) -> bool {
+        let _ = self.quiet;
+        unimplemented!("m11-picker-after-prompt")
+    }
 }
 
 impl Picker {
@@ -323,7 +351,40 @@ impl Picker {
         Picker {
             backend,
             pending: None,
+            queued: None,
         }
+    }
+
+    /// Ask for `request` to be started by a later [`Picker::start_queued`]. A request queued
+    /// earlier and not yet started is replaced. Nothing reaches the backend yet.
+    pub fn queue(&mut self, _request: PickRequest) {
+        unimplemented!("m11-picker-after-prompt")
+    }
+
+    /// True while a request is queued and not yet started.
+    pub fn has_queued(&self) -> bool {
+        self.queued.is_some()
+    }
+
+    /// When a request is queued and `may_start` (a [`ModalGate::frame`] result): take it and
+    /// [`Picker::start`] it, returning what start answered and the request, so the caller can
+    /// open its own dialog on `Started::Builtin`. Otherwise `None` and the request stays
+    /// queued. If a request is already out it stays queued until that one is answered.
+    pub fn start_queued(
+        &mut self,
+        _ctx: &egui::Context,
+        _parent: Option<&eframe::Frame>,
+        _may_start: bool,
+    ) -> Option<(Started, PickRequest)> {
+        unimplemented!("m11-picker-after-prompt")
+    }
+
+    /// Like [`Picker::poll`]. When it returns an answer (path, cancel or error alike) and
+    /// `modal_open` is false, `release` is called once before returning, so the app can make
+    /// sure the main window is enabled (Windows restores a disabled owner when a picker
+    /// closes). No answer, or a prompt of ours open: `release` is not called.
+    pub fn poll_releasing(&mut self, _modal_open: bool, _release: impl FnOnce()) -> Option<Picked> {
+        unimplemented!("m11-picker-after-prompt")
     }
 
     /// The backend requests go to.
@@ -331,9 +392,9 @@ impl Picker {
         &self.backend
     }
 
-    /// True while a request is out and not yet answered by [`Picker::poll`].
+    /// True while a request is out and not yet answered by [`Picker::poll`], or queued.
     pub fn is_busy(&self) -> bool {
-        self.pending.is_some()
+        self.pending.is_some() || self.queued.is_some()
     }
 
     /// Start `request`.
@@ -419,4 +480,10 @@ impl Picker {
             path: path.map(|path| finish_path(purpose, path)),
         })
     }
+}
+
+/// Make sure the main window accepts input: Windows `EnableWindow(hwnd, TRUE)` on the frame's
+/// window handle; nothing on other systems. Harmless when it is enabled already.
+pub fn enable_main_window(_frame: &eframe::Frame) {
+    // Windows: EnableWindow(main, TRUE) via a small cfg(windows) block (m11-picker-after-prompt).
 }
