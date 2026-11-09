@@ -16,7 +16,7 @@ In build order. Each milestone ends when every listed task is merged and Tyrel's
 | M9 | Medium priority | Follow Me, offset | M3 |
 | M10 | Low priority | Tags, model library hook | M4 |
 | M11 | Fixes and dialogs | Materials form width; dialogs and floating panels as their own OS windows, kept above the main window | M10 |
-| M12 | Pop-up menus | Menus as real pop-up windows that can reach past the main window's edge | M11 |
+| M12 | Pop-up menus and tool cursors | Menus as real pop-up windows that can reach past the main window's edge; a drawn cursor for every tool | M11 |
 
 MVP = M0 to M5 (all High features).
 
@@ -378,9 +378,16 @@ Tyrel agreed (2026-11-08): dialogs and tool windows become their own OS windows 
 | `m11-picker-after-prompt` | Fix: on Windows, cancelling the system Save picker opened from Export STL's options left the main window disabled for good (Tyrel); the system picker starts only once the prompt window that asked for it is gone, and the main window is enabled again whenever the picker returns with no prompt of ours open | |
 | `m11-unsaved-save` | Fix: Save in the unsaved-changes prompt (File > New, File > Open, closing the window) only closed the prompt; it now saves (asking for a name through the file picker when the model has none) and then goes on with New, Open or closing, and does nothing more when the picker is cancelled | |
 
+## M12: Pop-up menus and tool cursors
+
+Menus become real pop-up windows that can reach past the main window's edge. Every tool gets its own cursor (Tyrel 2026-10-29, raised again 2026-11-09): the arrow only for Select; the drawing tools a pencil whose tip sits on the drawn point; the other tools their toolbar icon, with the hotspot on the working point (Paint Bucket: the bottom of the pouring paint); the bucket mirrored left-to-right everywhere it appears. All cursor art is our own. Task rows for menus and cursors come with M12's planning.
+
+| Task | What | Needs |
+| --- | --- | --- |
+| `m12-version` | Fix: a plain build's Help > About still said 0.9.0 (Tyrel); the workspace version becomes 0.11.0 now that M11 is accepted, and the version test accepts any later version so future bumps don't break it | |
+
 ## Future (unscheduled)
 
 Ideas parked (woodworking, drawings, CNC export, plugin API, design library and more). Nothing there is planned until Tyrel opens its own issue or asks for it to be scheduled.
 
 - Auto-update for the Windows build (Tyrel: wanted eventually; M8 ships a plain installer first).
-- Tool cursors (Tyrel 2026-10-29: "for some time later"): every tool gets its own drawn cursor, arrow only for Select; drawing tools a pencil with its tip on the drawn point; the rest their toolbar icon with a hotspot on the working point (Paint Bucket: the bottom of the pouring paint); the bucket mirrored left-to-right everywhere it appears. Schedule with Tyrel after M7; stays open as its source.
