@@ -1324,7 +1324,10 @@ unsafe fn init(
     unsafe { register_window_class(&class_name) };
 
     let mut window_flags = WindowFlags::empty();
-    window_flags.set(WindowFlags::MARKER_DECORATIONS, attributes.decorations);
+    // Local patch (Drydock, PATCHES.md): a pop-up has no caption, border or thick frame.
+    let popup = attributes.popup;
+    window_flags.set(WindowFlags::MARKER_DECORATIONS, attributes.decorations && !popup);
+    window_flags.set(WindowFlags::POPUP_MENU, popup);
     window_flags.set(
         WindowFlags::MARKER_UNDECORATED_SHADOW,
         attributes.platform_specific.decoration_shadow,

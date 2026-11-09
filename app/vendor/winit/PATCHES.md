@@ -7,8 +7,8 @@ changes below differ from the published crate; each is marked
 `Local patch (Drydock, PATCHES.md)` in the source. Keep this list complete when you change
 anything here, and carry it forward when winit is upgraded.
 
-Four groups of changes: modal dialogs, dialog parents, event loop recreation, then enabled
-title-bar buttons.
+Five groups of changes: modal dialogs, dialog parents, pop-up windows, event loop recreation,
+then enabled title-bar buttons.
 
 ## Modal dialogs
 
@@ -45,6 +45,23 @@ child window instead (and is unsupported on Wayland), so it is not reused for th
   as `WindowAttributesExtWindows::with_owner_window` does; an explicit owner wins.
 - `src/platform_impl/linux/x11/window.rs` (`UnownedWindow::new`): `WM_TRANSIENT_FOR` is set to
   the parent X window id, and a still-default `Normal` window type becomes `Dialog`.
+
+## Pop-up windows
+
+Goal: a menu is a real OS window that can reach past the main window's edge.
+
+- `src/window.rs`: `WindowAttributes` gets a `popup: bool` field,
+  `WindowAttributes::with_popup` and the getter `WindowAttributes::popup`.
+- X11: in `src/platform_impl/linux/x11/window.rs` (`UnownedWindow::new`) a pop-up gets the
+  `PopupMenu` window type (unless the caller chose another one), `_NET_WM_STATE_SKIP_TASKBAR`
+  and `_NET_WM_STATE_SKIP_PAGER` before mapping, and no decorations; the two state atoms are
+  defined in `src/platform_impl/linux/x11/atoms.rs`.
+- `src/platform_impl/windows/window.rs` (`init`) and
+  `src/platform_impl/windows/window_state.rs` (`WindowFlags::to_window_styles`): a pop-up gets
+  `WS_POPUP` without caption, border or thick frame, plus
+  `WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE`; the owner comes from the transient parent.
+- `src/platform_impl/linux/wayland/window/mod.rs` (`Window::new`): a pop-up logs a warning once
+  and is created as a normal undecorated toplevel (no `xdg_popup` yet).
 
 ## Event loop recreation
 

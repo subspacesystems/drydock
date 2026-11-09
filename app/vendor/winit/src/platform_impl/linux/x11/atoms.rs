@@ -56,6 +56,8 @@ atom_manager! {
     _NET_WM_STATE_MAXIMIZED_HORZ,
     _NET_WM_STATE_MAXIMIZED_VERT,
     _NET_WM_STATE_MODAL,
+    _NET_WM_STATE_SKIP_PAGER,
+    _NET_WM_STATE_SKIP_TASKBAR,
     _NET_WM_WINDOW_TYPE,
 
     // Activation atoms.
