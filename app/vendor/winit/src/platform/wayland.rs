@@ -129,3 +129,66 @@ impl MonitorHandleExtWayland for MonitorHandle {
         self.inner.native_identifier()
     }
 }
+
+/// Local patch (Drydock, PATCHES.md): a rectangle in logical pixels (`x`, `y` is the top-left
+/// corner), used for pop-up placement.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PopupRect {
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
+}
+
+/// Local patch (Drydock, PATCHES.md): the `xdg_positioner` constraint-adjustment flags a pop-up
+/// asks for (the protocol's `constraint_adjustment` bits, as separate booleans).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct PopupAdjustment {
+    pub slide_x: bool,
+    pub slide_y: bool,
+    pub flip_x: bool,
+    pub flip_y: bool,
+}
+
+/// Local patch (Drydock, PATCHES.md): what winit sends to `xdg_positioner` for a pop-up
+/// window. The anchor is always the anchor rect's top-left corner and the gravity bottom-right
+/// (the pop-up's top-left corner sits on the anchor point and it grows right and down).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PopupPositioner {
+    /// `set_size`: the pop-up's size (logical pixels).
+    pub size: (i32, i32),
+    /// `set_anchor_rect`: relative to the parent's window geometry (frame included).
+    pub anchor_rect: PopupRect,
+    /// `set_offset`.
+    pub offset: (i32, i32),
+    /// `set_constraint_adjustment`.
+    pub adjustment: PopupAdjustment,
+}
+
+/// Local patch (Drydock, PATCHES.md): the positioner for a pop-up whose top-left corner is
+/// wanted at `requested` (logical pixels from the top-left of the parent's *content area*, the
+/// meaning of `WindowAttributes::with_position` for a Wayland pop-up) with the given `size`.
+/// `content_offset` is where the parent's content area starts inside its window geometry
+/// (the client-side title bar's height as `(0, height)`; `(0, 0)` without one).
+///
+/// Pure function; this is what `Window::new` feeds to the compositor.
+pub fn popup_positioner(
+    _content_offset: (i32, i32),
+    _requested: (i32, i32),
+    _size: (i32, i32),
+) -> PopupPositioner {
+    unimplemented!("m12-winit-popup-wayland")
+}
+
+/// Local patch (Drydock, PATCHES.md): a model of the compositor's placement, following the
+/// `xdg_positioner` rules, used only to test the flags (a compositor does the real work).
+/// `parent_origin` is the parent's window-geometry top-left on the output and `bounds` the
+/// region the pop-up must stay inside, both in output coordinates. Returns the pop-up's
+/// top-left corner in output coordinates.
+pub fn resolve_popup_position(
+    _positioner: &PopupPositioner,
+    _parent_origin: (i32, i32),
+    _bounds: PopupRect,
+) -> (i32, i32) {
+    unimplemented!("m12-winit-popup-wayland")
+}

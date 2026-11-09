@@ -127,6 +127,8 @@ pub struct WindowAttributes {
     pub(crate) transient_parent: Option<WindowId>,
     // Local patch (Drydock, PATCHES.md): see `with_modal`.
     pub(crate) modal: bool,
+    // Local patch (Drydock, PATCHES.md): see `with_popup`.
+    pub(crate) popup: bool,
     pub fullscreen: Option<Fullscreen>,
     // Platform-specific configuration.
     #[allow(dead_code)]
@@ -160,6 +162,7 @@ impl Default for WindowAttributes {
             parent_window: None,
             transient_parent: None,
             modal: false,
+            popup: false,
             active: true,
             platform_specific: Default::default(),
         }
@@ -538,6 +541,33 @@ impl WindowAttributes {
     #[inline]
     pub fn modal(&self) -> bool {
         self.modal
+    }
+
+    /// Local patch (Drydock, PATCHES.md): makes the window a pop-up (a menu): no title bar or
+    /// frame, no taskbar or pager entry, kept above the window it belongs to (see
+    /// [`with_transient_parent`](Self::with_transient_parent)) and opened at the position given
+    /// with [`with_position`](Self::with_position), which may lie outside the parent. The
+    /// application closes it when it loses focus (`WindowEvent::Focused(false)`) or on Escape.
+    ///
+    /// The default is `false`.
+    ///
+    /// ## Platform-specific
+    ///
+    /// - **X11:** window type `_NET_WM_WINDOW_TYPE_POPUP_MENU`, `_NET_WM_STATE_SKIP_TASKBAR` and
+    ///   `_NET_WM_STATE_SKIP_PAGER`, no decorations, `WM_TRANSIENT_FOR` the parent.
+    /// - **Windows:** `WS_POPUP` with `WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE`, owned by the parent.
+    /// - **Wayland:** not supported yet: a warning, and a normal undecorated window.
+    /// - **Other platforms:** ignored.
+    #[inline]
+    pub fn with_popup(mut self, popup: bool) -> Self {
+        self.popup = popup;
+        self
+    }
+
+    /// Local patch (Drydock, PATCHES.md): whether [`with_popup`](Self::with_popup) was set.
+    #[inline]
+    pub fn popup(&self) -> bool {
+        self.popup
     }
 }
 

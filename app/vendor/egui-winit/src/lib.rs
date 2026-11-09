@@ -2044,6 +2044,19 @@ pub fn is_modal_title(egui_ctx: &egui::Context, title: &str) -> bool {
     })
 }
 
+/// Local patch (Drydock, PATCHES.md): every window [`create_window`] makes from now on for a
+/// viewport titled exactly `title` is a pop-up (winit's `WindowAttributes::with_popup`). Call
+/// it before the viewport is first shown. The root viewport is never a pop-up. Like
+/// [`mark_modal_title`], the title is the key.
+pub fn mark_popup_title(_egui_ctx: &egui::Context, _title: &str) {
+    unimplemented!("m12-winit-popup")
+}
+
+/// Local patch (Drydock, PATCHES.md): whether `title` was marked with [`mark_popup_title`].
+pub fn is_popup_title(_egui_ctx: &egui::Context, _title: &str) -> bool {
+    unimplemented!("m12-winit-popup")
+}
+
 /// Apply [`ViewportBuilder::with_monitor`] to freshly-built [`winit::window::WindowAttributes`].
 ///
 /// Resolve the target monitor index → `MonitorHandle` and request borderless
