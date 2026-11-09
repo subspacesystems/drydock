@@ -376,6 +376,7 @@ Tyrel agreed (2026-11-08): dialogs and tool windows become their own OS windows 
 | `m11-dialog-app-id` | Fix: dialog windows and floating panels carry Drydock's application id and icon, so the Linux desktop counts them as part of Drydock instead of separate unknown apps in the dock and window switcher (Tyrel, Ubuntu) | `m11-dialog-keep-position` |
 | `m11-wayland-dialog-buttons` | Fix: on GNOME Wayland, where Drydock draws its own title bars, dialog windows show only a close button (no minimize or maximize), as on Windows and X11 (Tyrel) | |
 | `m11-picker-after-prompt` | Fix: on Windows, cancelling the system Save picker opened from Export STL's options left the main window disabled for good (Tyrel); the system picker starts only once the prompt window that asked for it is gone, and the main window is enabled again whenever the picker returns with no prompt of ours open | |
+| `m11-unsaved-save` | Fix: Save in the unsaved-changes prompt (File > New, File > Open, closing the window) only closed the prompt; it now saves (asking for a name through the file picker when the model has none) and then goes on with New, Open or closing, and does nothing more when the picker is cancelled | |
 
 ## Future (unscheduled)
 
