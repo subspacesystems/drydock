@@ -16,6 +16,7 @@ use sctk::output::{OutputHandler, OutputState};
 use sctk::registry::{ProvidesRegistryState, RegistryState};
 use sctk::seat::pointer::ThemedPointer;
 use sctk::seat::SeatState;
+use sctk::shell::xdg::popup::{Popup, PopupConfigure, PopupHandler};
 use sctk::shell::xdg::window::{Window, WindowConfigure, WindowHandler};
 use sctk::shell::xdg::XdgShell;
 use sctk::shell::WaylandSurface;
@@ -23,6 +24,7 @@ use sctk::shm::slot::SlotPool;
 use sctk::shm::{Shm, ShmHandler};
 use sctk::subcompositor::SubcompositorState;
 
+use crate::event::WindowEvent;
 use crate::platform_impl::wayland::event_loop::sink::EventSink;
 use crate::platform_impl::wayland::output::MonitorHandle;
 use crate::platform_impl::wayland::seat::{
@@ -311,6 +313,59 @@ impl WindowHandler for WinitState {
     }
 }
 
+impl PopupHandler for WinitState {
+    fn configure(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        popup: &Popup,
+        configure: PopupConfigure,
+    ) {
+        let window_id = super::make_wid(popup.wl_surface());
+
+        let pos = if let Some(pos) =
+            self.window_compositor_updates.iter().position(|update| update.window_id == window_id)
+        {
+            pos
+        } else {
+            self.window_compositor_updates.push(WindowCompositorUpdate::new(window_id));
+            self.window_compositor_updates.len() - 1
+        };
+
+        // Apply the size the compositor chose.
+        self.window_compositor_updates[pos].resized |= self
+            .windows
+            .get_mut()
+            .get_mut(&window_id)
+            .map(|window| {
+                window.lock().unwrap().configure_popup(configure.width, configure.height)
+            })
+            .unwrap_or(false);
+
+        if let Some(requests) = self.window_requests.get_mut().get_mut(&window_id) {
+            requests.redraw_requested.store(true, Ordering::Relaxed);
+        }
+
+        self.dispatched_events = true;
+    }
+
+    fn done(&mut self, _: &Connection, _: &QueueHandle<Self>, popup: &Popup) {
+        let window_id = super::make_wid(popup.wl_surface());
+
+        // Give the application the same focus-loss and close it gets on X11.
+        let mut sink = self.window_events_sink.lock().unwrap();
+        sink.push_window_event(WindowEvent::Focused(false), window_id);
+        sink.push_window_event(WindowEvent::CloseRequested, window_id);
+        drop(sink);
+
+        if let Some(requests) = self.window_requests.get_mut().get_mut(&window_id) {
+            requests.closed.store(true, Ordering::Relaxed);
+        }
+
+        self.dispatched_events = true;
+    }
+}
+
 impl OutputHandler for WinitState {
     fn output_state(&mut self) -> &mut OutputState {
         &mut self.output_state
@@ -438,3 +493,4 @@ sctk::delegate_registry!(WinitState);
 sctk::delegate_shm!(WinitState);
 sctk::delegate_xdg_shell!(WinitState);
 sctk::delegate_xdg_window!(WinitState);
+sctk::delegate_xdg_popup!(WinitState);
