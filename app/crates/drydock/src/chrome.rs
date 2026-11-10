@@ -786,6 +786,32 @@ pub fn request_menu(_ctx: &eframe::egui::Context, _label: &str) {
     unimplemented!("m12-menu-popups")
 }
 
+/// The pop-up title (and viewport name) of the submenu labelled `label` (e.g. "Toolbars"):
+/// distinct per label and from every [`menu_popup_title`] (`docs/specs/m12-submenu-popups.md`).
+pub fn submenu_popup_title(_label: &str) -> String {
+    unimplemented!("m12-submenu-popups")
+}
+
+/// Where a submenu's pop-up of size `size` goes, in screen points. `row` is the submenu's
+/// row in the calling viewport's points. Preferred: its top-left at the row's right edge and
+/// top, plus `root_inner.min` when known. When `monitor` (the monitor size) is known and the
+/// pop-up would pass its right edge, its right edge goes at the row's left edge instead; when
+/// it would pass the bottom, it moves up until its bottom is at the monitor's bottom. Never
+/// left of or above 0 in either direction.
+pub fn submenu_popup_position(
+    _root_inner: Option<Rect>,
+    _row: Rect,
+    _size: eframe::egui::Vec2,
+    _monitor: Option<eframe::egui::Vec2>,
+) -> eframe::egui::Pos2 {
+    unimplemented!("m12-submenu-popups")
+}
+
+/// The label of the submenu that is open now, if any (at most one at a time).
+pub fn open_submenu(_ctx: &eframe::egui::Context) -> Option<String> {
+    unimplemented!("m12-submenu-popups")
+}
+
 /// A top-level menu button whose rows scroll when the menu is taller than the window.
 fn top_menu<R>(ui: &mut Ui, label: &str, add_contents: impl FnOnce(&mut Ui) -> R) {
     ui.menu_button(label, |ui| {

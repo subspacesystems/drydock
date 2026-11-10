@@ -4,3 +4,4 @@
 - `drydock.ico`: the Windows app icon, our own artwork from `design/brand/logo` (the app icon and favicon SVGs), embedded in `drydock.exe` by `build.rs`. Holds PNG frames at 16, 32, 48 and 256 px.
 - `drydock-256.png`: the 256 px app icon as a PNG, the Linux window icon (`window_icon.rs`) and the source of the Linux hicolor icons.
 - The icon files are written by the ignored test `write_icon_files` in `tests/app_icon.rs`: `cargo test -p drydock --test app_icon -- --ignored write_icon_files`.
+- `cursors/`: the tool cursor images, our own art from `design/brand/icons/cursors`, written by the ignored test `write_cursor_pngs` in `tests/cursor_art.rs`: `cargo test -p drydock --test cursor_art -- --ignored write_cursor_pngs`.
