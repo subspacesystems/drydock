@@ -157,6 +157,7 @@ fn forget_state(ctx: &egui::Context, viewport_id: egui::ViewportId) {
         data.remove_temp::<Vec2>(viewport_id.0.with("popup-size"));
         data.remove_temp::<bool>(viewport_id.0.with("popup-shown"));
         data.remove_temp::<bool>(viewport_id.0.with("popup-focused"));
+        data.remove_temp::<bool>(viewport_id.0.with("popup-has-focus"));
     });
 }
 
@@ -222,6 +223,9 @@ fn popup_window_window(
             ctx.request_repaint();
         }
         let focused = ui.input(|input| input.viewport().focused);
+        ctx.data_mut(|data| {
+            data.insert_temp(viewport_id.0.with("popup-has-focus"), focused == Some(true));
+        });
         if ctx.data(|data| data.get_temp::<bool>(focus_id).unwrap_or(false))
             && focused == Some(false)
         {
@@ -229,6 +233,20 @@ fn popup_window_window(
         }
         if focused == Some(true) {
             ctx.data_mut(|data| data.insert_temp(focus_id, true));
+            let step = if ui
+                .input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowRight))
+            {
+                Some(1)
+            } else if ui
+                .input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowLeft))
+            {
+                Some(-1)
+            } else {
+                None
+            };
+            if let Some(step) = step {
+                crate::chrome::request_menu_step(ctx, step);
+            }
         }
         if ui.input(|i| i.viewport().close_requested() || i.key_pressed(egui::Key::Escape)) {
             close = true;

@@ -777,6 +777,18 @@ const IN_SUBMENU: &str = "drydock_in_submenu";
 /// A top-level menu title's rectangle, kept for [`request_menu`].
 const MENU_TITLE: &str = "drydock_menu_title";
 
+/// A menu step requested by a focused pop-up window, waiting for the next `menu_bar`.
+const MENU_STEP: &str = "drydock_menu_step";
+
+/// When the root viewport lost focus, for [`close_menus_from_root`]'s grace time.
+const ROOT_UNFOCUSED_SINCE: &str = "drydock_root_unfocused_since";
+
+/// The root viewport's focus state on the previous frame.
+const ROOT_FOCUSED_LAST: &str = "drydock_root_focused_last";
+
+/// The frame time of the last [`close_menus_from_root`] call.
+const ROOT_CLOSE_TIME: &str = "drydock_root_close_time";
+
 /// A menu that closed because its pop-up lost focus, and when (to keep the title click that
 /// caused the loss from reopening it).
 const MENU_CLOSED: &str = "drydock_menu_closed";
@@ -988,8 +1000,25 @@ pub struct RootInput<'a> {
 /// `Submenu` when a submenu is open, else `All`; a primary press not on any title gives
 /// `All` (on a title: `Nothing`, the title's own click handles it).
 pub fn root_close(input: &RootInput<'_>) -> RootClose {
-    let _ = input;
-    unimplemented!("m12-menu-close-outside")
+    if !input.menu_open {
+        return RootClose::Nothing;
+    }
+    if !input.popup_has_focus && input.unfocused_for.is_some_and(|secs| secs >= FOCUS_GRACE) {
+        return RootClose::All;
+    }
+    if input.escape {
+        return if input.submenu_open {
+            RootClose::Submenu
+        } else {
+            RootClose::All
+        };
+    }
+    if let Some(press) = input.press
+        && !input.titles.iter().any(|title| title.contains(press))
+    {
+        return RootClose::All;
+    }
+    RootClose::Nothing
 }
 
 /// Applies [`root_close`] to the main window's input. Does nothing unless `mode` is
@@ -997,16 +1026,132 @@ pub fn root_close(input: &RootInput<'_>) -> RootClose {
 /// ROOT viewport's input, consumes the Escape it acts on, records unfocused time and the
 /// pop-up windows' focus, and returns whether it closed anything. Call it from `menu_bar`.
 pub fn close_menus_from_root(ctx: &eframe::egui::Context, mode: PopupMode) -> bool {
-    let _ = (ctx, mode);
-    unimplemented!("m12-menu-close-outside")
+    if mode != PopupMode::Window {
+        return false;
+    }
+    let embedded = ctx.embed_viewports();
+    let now = ctx.input_for(eframe::egui::ViewportId::ROOT, |input| input.time);
+    let first_call = ctx.data_mut(|data| {
+        let id = Id::new(ROOT_CLOSE_TIME);
+        let first = data.get_temp::<f64>(id) != Some(now);
+        if first {
+            data.insert_temp(id, now);
+        }
+        first
+    });
+    if embedded && !first_call {
+        let Some(_) = open_menu(ctx) else {
+            return false;
+        };
+        let escape = ctx.input_for(eframe::egui::ViewportId::ROOT, |input| {
+            input.key_pressed(eframe::egui::Key::Escape)
+        });
+        if escape {
+            ctx.input_mut_for(eframe::egui::ViewportId::ROOT, |input| {
+                input.consume_key(eframe::egui::Modifiers::NONE, eframe::egui::Key::Escape);
+            });
+        }
+        clear_submenu(ctx);
+        set_open_menu(ctx, None);
+        return true;
+    }
+    let Some(menu_label) = open_menu(ctx) else {
+        return false;
+    };
+    let submenu_label = open_submenu(ctx);
+    let (now, focused, press, escape) = ctx.input_for(eframe::egui::ViewportId::ROOT, |input| {
+        let press = input
+            .pointer
+            .button_pressed(eframe::egui::PointerButton::Primary)
+            .then(|| input.pointer.interact_pos())
+            .flatten();
+        (
+            input.time,
+            input.viewport().focused,
+            press,
+            input.key_pressed(eframe::egui::Key::Escape),
+        )
+    });
+
+    let unfocused_for = ctx.data_mut(|data| {
+        let last_id = Id::new(ROOT_FOCUSED_LAST);
+        let since_id = Id::new(ROOT_UNFOCUSED_SINCE);
+        match focused {
+            Some(true) => {
+                data.remove_temp::<f64>(since_id);
+                data.insert_temp(last_id, Some(true));
+                None
+            }
+            Some(false) => {
+                if data.get_temp::<Option<bool>>(last_id).flatten() == Some(true) {
+                    data.insert_temp(since_id, now);
+                }
+                data.insert_temp(last_id, Some(false));
+                data.get_temp::<f64>(since_id).map(|since| now - since)
+            }
+            None => {
+                data.insert_temp(last_id, None::<bool>);
+                data.remove_temp::<f64>(since_id);
+                None
+            }
+        }
+    });
+
+    let titles: Vec<Rect> = ctx.data(|data| {
+        MENU_LABELS
+            .iter()
+            .filter_map(|label| data.get_temp::<Rect>(Id::new((MENU_TITLE, *label))))
+            .collect()
+    });
+    let popup_titles = [
+        Some(menu_popup_title(&menu_label)),
+        submenu_label.as_deref().map(submenu_popup_title),
+    ];
+    let popup_has_focus = ctx.data(|data| {
+        popup_titles.into_iter().flatten().any(|title| {
+            data.get_temp::<bool>(
+                crate::popup::popup_viewport_id(&title)
+                    .0
+                    .with("popup-has-focus"),
+            )
+            .unwrap_or(false)
+        })
+    });
+
+    let input = RootInput {
+        menu_open: true,
+        submenu_open: submenu_label.is_some(),
+        press,
+        escape,
+        titles: &titles,
+        unfocused_for,
+        popup_has_focus,
+    };
+    let close = root_close(&input);
+    if close == RootClose::Nothing {
+        return false;
+    }
+    if escape {
+        ctx.input_mut_for(eframe::egui::ViewportId::ROOT, |input| {
+            input.consume_key(eframe::egui::Modifiers::NONE, eframe::egui::Key::Escape);
+        });
+    }
+    match close {
+        RootClose::Submenu => clear_submenu(ctx),
+        RootClose::All => {
+            clear_submenu(ctx);
+            set_open_menu(ctx, None);
+        }
+        RootClose::Nothing => {}
+    }
+    !embedded
 }
 
 /// Asks the menu bar to move the open menu `step` titles along (wrapping), as the arrow
 /// keys do; for a pop-up window that has the keyboard focus. The next `menu_bar` call
 /// applies it; with no menu open it does nothing.
 pub fn request_menu_step(ctx: &eframe::egui::Context, step: i32) {
-    let _ = (ctx, step);
-    unimplemented!("m12-menu-close-outside")
+    ctx.data_mut(|data| data.insert_temp(Id::new(MENU_STEP), step));
 }
 
 /// A top-level menu title whose rows open in a pop-up and scroll when taller than the window.
@@ -1285,11 +1430,19 @@ fn menu_bar_inner(
     ui.ctx()
         .data_mut(|data| data.insert_temp(Id::new(ROOT_INNER), root_inner));
 
+    let mode = popup_mode(ui.ctx().embed_viewports(), popup_supported());
+    close_menus_from_root(ui.ctx(), mode);
+    let requested_step = ui
+        .ctx()
+        .data_mut(|data| data.remove_temp::<i32>(Id::new(MENU_STEP)));
+
     if open_submenu(ui.ctx()).is_none()
         && let Some(label) = open_menu(ui.ctx())
         && let Some(index) = MENU_LABELS.iter().position(|known| *known == label)
     {
-        let step = if ui.ctx().input_mut(|input| {
+        let step = if let Some(step) = requested_step {
+            Some(step as isize)
+        } else if ui.ctx().input_mut(|input| {
             input.consume_key(eframe::egui::Modifiers::NONE, eframe::egui::Key::ArrowRight)
         }) {
             Some(1)
