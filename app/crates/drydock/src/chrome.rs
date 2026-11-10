@@ -16,12 +16,13 @@ use crate::document::Stats;
 use crate::icons::Icon;
 use crate::input::{Action, EditKey, Tool};
 use crate::mesh_export::ExportFormat;
+use crate::popup::{PopupMode, PopupWindow, popup_mode, popup_supported, popup_window};
 use crate::toolbars::{self, ToolbarLayout, ToolbarsMenuEvent};
 use drydock_kernel::units::{LengthFormat, format_with};
 use drydock_view::StandardView;
 use eframe::egui::{
     Align2, Id, InnerResponse, Label, Rect, Response, RichText, ScrollArea, Sense, Shape, Stroke,
-    TextStyle, Ui, WidgetInfo, WidgetType, pos2, vec2,
+    TextStyle, Ui, UiBuilder, WidgetInfo, WidgetType, pos2, vec2,
 };
 use std::path::PathBuf;
 
@@ -720,7 +721,15 @@ pub fn menu_check_item(ui: &mut Ui, label: &str, checked: bool) -> Response {
 
     let layout = menu_item_layout(row, true, 0.0);
     let enabled = ui.is_enabled();
-    response.widget_info(|| WidgetInfo::selected(WidgetType::Checkbox, enabled, checked, label));
+    let in_submenu = ui
+        .ctx()
+        .data(|data| data.get_temp::<bool>(Id::new(IN_SUBMENU)).unwrap_or(false));
+    let role = if open_submenu(ui.ctx()).is_some() && !in_submenu {
+        WidgetType::Button
+    } else {
+        WidgetType::Checkbox
+    };
+    response.widget_info(|| WidgetInfo::selected(role, enabled, checked, label));
 
     let visuals = ui.style().interact(&response);
     let painter = ui.painter().clone();
@@ -745,10 +754,38 @@ pub fn menu_check_item(ui: &mut Ui, label: &str, checked: bool) -> Response {
 }
 
 /// Room left between a menu's bottom and the window's bottom edge.
-const MENU_MARGIN: f32 = 8.0;
+pub(crate) const MENU_MARGIN: f32 = 8.0;
 
 /// The menu bar's bottom, put in the context for [`submenu_button`] to cap submenus.
 const MENU_BAR_BOTTOM: &str = "drydock_menu_bar_bottom";
+
+/// The label of the top-level menu that is open now.
+const OPEN_MENU: &str = "drydock_open_menu";
+
+/// The label of the submenu that is open now.
+const OPEN_SUBMENU: &str = "drydock_open_submenu";
+
+/// The submenu row's rectangle, for placing its pop-up.
+const SUBMENU_ROW: &str = "drydock_submenu_row";
+
+/// The submenu pop-up's last content size.
+const SUBMENU_SIZE: &str = "drydock_submenu_size";
+
+/// Whether the rows being drawn are the open submenu's (so its check items stay check boxes).
+const IN_SUBMENU: &str = "drydock_in_submenu";
+
+/// A top-level menu title's rectangle, kept for [`request_menu`].
+const MENU_TITLE: &str = "drydock_menu_title";
+
+/// A menu that closed because its pop-up lost focus, and when (to keep the title click that
+/// caused the loss from reopening it).
+const MENU_CLOSED: &str = "drydock_menu_closed";
+
+/// The root viewport's inner rectangle (a pop-up's own `inner_rect` is its window's).
+const ROOT_INNER: &str = "drydock_root_inner";
+
+/// The labels of the menu bar's menus, in order.
+const MENU_LABELS: [&str; 5] = ["File", "Edit", "View", "Tools", "Help"];
 
 /// Wrap a menu's rows so content that doesn't fit scrolls inside the menu instead of
 /// overflowing the window.
@@ -762,34 +799,110 @@ fn menu_scroll<R>(ui: &mut Ui, max_height: f32, add_contents: impl FnOnce(&mut U
         .inner
 }
 
+/// A menu's rows in a scope that [`Ui::close`] can close. Returns the rows' result and
+/// whether they asked to close.
+pub(crate) fn popup_rows<R>(
+    ui: &mut Ui,
+    max_height: f32,
+    add_contents: impl FnOnce(&mut Ui) -> R,
+) -> (R, bool) {
+    ui.scope_builder(UiBuilder::new().closable(), |ui| {
+        let inner = menu_scroll(ui, max_height, add_contents);
+        (inner, ui.should_close())
+    })
+    .inner
+}
+
+/// The height cap for a pop-up menu's rows.
+pub(crate) fn popup_max_height(
+    ui: &Ui,
+    mode: PopupMode,
+    popup_y: f32,
+    inline_bar_bottom: f32,
+) -> f32 {
+    let frame = ui.spacing().menu_margin.sum().y;
+    let inline = ui.ctx().content_rect().bottom() - inline_bar_bottom - MENU_MARGIN - frame;
+    match mode {
+        PopupMode::Window => ui
+            .ctx()
+            .input(|input| input.viewport().monitor_size)
+            .map(|monitor| monitor.y - popup_y - MENU_MARGIN - frame)
+            .unwrap_or(inline),
+        PopupMode::Inline => inline,
+    }
+}
+
+/// Clears the open submenu.
+fn clear_submenu(ctx: &eframe::egui::Context) {
+    let label = open_submenu(ctx);
+    ctx.data_mut(|data| {
+        data.remove_temp::<String>(Id::new(OPEN_SUBMENU));
+        data.remove::<Rect>(Id::new(SUBMENU_ROW));
+        data.remove_temp::<eframe::egui::Vec2>(Id::new(SUBMENU_SIZE));
+    });
+    if let Some(label) = label
+        && popup_mode(ctx.embed_viewports(), popup_supported()) == PopupMode::Window
+    {
+        let title = submenu_popup_title(&label);
+        ctx.send_viewport_cmd_to(
+            crate::popup::popup_viewport_id(&title),
+            eframe::egui::ViewportCommand::Close,
+        );
+    }
+}
+
+/// Puts back the window flags of a pop-up whose focus-loss close we ignored (its submenu
+/// has the focus).
+fn restore_popup_window_state(ctx: &eframe::egui::Context, title: &str) {
+    let viewport_id = crate::popup::popup_viewport_id(title);
+    ctx.data_mut(|data| {
+        data.insert_temp(viewport_id.0.with("popup-shown"), true);
+        data.insert_temp(viewport_id.0.with("popup-focused"), true);
+    });
+}
+
 /// The pop-up title (and viewport name) of the top-level menu labelled `label`, e.g. "File":
 /// distinct per label, never empty (`docs/specs/m12-menu-popups.md`).
-pub fn menu_popup_title(_label: &str) -> String {
-    unimplemented!("m12-menu-popups")
+pub fn menu_popup_title(label: &str) -> String {
+    format!("drydock-menu-{label}")
 }
 
 /// Where a top-level menu's pop-up goes: the left edge and bottom of its title button
 /// (`title`, in the calling viewport's points) in screen points, i.e. plus `root_inner.min`
 /// when that is known.
-pub fn menu_popup_position(_root_inner: Option<Rect>, _title: Rect) -> eframe::egui::Pos2 {
-    unimplemented!("m12-menu-popups")
+pub fn menu_popup_position(root_inner: Option<Rect>, title: Rect) -> eframe::egui::Pos2 {
+    let position = title.left_bottom();
+    root_inner.map_or(position, |root| position + root.min.to_vec2())
 }
 
 /// The label of the top-level menu that is open now, if any.
-pub fn open_menu(_ctx: &eframe::egui::Context) -> Option<String> {
-    unimplemented!("m12-menu-popups")
+pub fn open_menu(ctx: &eframe::egui::Context) -> Option<String> {
+    ctx.data(|data| data.get_temp::<String>(Id::new(OPEN_MENU)))
+}
+
+/// Sets (or clears) the open top-level menu.
+fn set_open_menu(ctx: &eframe::egui::Context, label: Option<&str>) {
+    ctx.data_mut(|data| {
+        if let Some(label) = label {
+            data.insert_temp(Id::new(OPEN_MENU), label.to_owned());
+        } else {
+            data.remove_temp::<String>(Id::new(OPEN_MENU));
+        }
+    });
 }
 
 /// Opens the top-level menu labelled `label` as if its title had been clicked (an unknown
 /// label opens nothing). The next `menu_bar` call shows it.
-pub fn request_menu(_ctx: &eframe::egui::Context, _label: &str) {
-    unimplemented!("m12-menu-popups")
+pub fn request_menu(ctx: &eframe::egui::Context, label: &str) {
+    if MENU_LABELS.contains(&label) {
+        set_open_menu(ctx, Some(label));
+    }
 }
 
 /// The pop-up title (and viewport name) of the submenu labelled `label` (e.g. "Toolbars"):
 /// distinct per label and from every [`menu_popup_title`] (`docs/specs/m12-submenu-popups.md`).
-pub fn submenu_popup_title(_label: &str) -> String {
-    unimplemented!("m12-submenu-popups")
+pub fn submenu_popup_title(label: &str) -> String {
+    format!("drydock-submenu-{label}")
 }
 
 /// Where a submenu's pop-up of size `size` goes, in screen points. `row` is the submenu's
@@ -799,30 +912,123 @@ pub fn submenu_popup_title(_label: &str) -> String {
 /// it would pass the bottom, it moves up until its bottom is at the monitor's bottom. Never
 /// left of or above 0 in either direction.
 pub fn submenu_popup_position(
-    _root_inner: Option<Rect>,
-    _row: Rect,
-    _size: eframe::egui::Vec2,
-    _monitor: Option<eframe::egui::Vec2>,
+    root_inner: Option<Rect>,
+    row: Rect,
+    size: eframe::egui::Vec2,
+    monitor: Option<eframe::egui::Vec2>,
 ) -> eframe::egui::Pos2 {
-    unimplemented!("m12-submenu-popups")
+    let offset = root_inner.map_or(eframe::egui::Vec2::ZERO, |root| root.min.to_vec2());
+    let mut x = row.right() + offset.x;
+    let mut y = row.top() + offset.y;
+    if let Some(monitor) = monitor {
+        if x + size.x > monitor.x {
+            x = row.left() + offset.x - size.x;
+        }
+        if y + size.y > monitor.y {
+            y = monitor.y - size.y;
+        }
+    }
+    pos2(x.max(0.0), y.max(0.0))
 }
 
 /// The label of the submenu that is open now, if any (at most one at a time).
-pub fn open_submenu(_ctx: &eframe::egui::Context) -> Option<String> {
-    unimplemented!("m12-submenu-popups")
+pub fn open_submenu(ctx: &eframe::egui::Context) -> Option<String> {
+    ctx.data(|data| data.get_temp::<String>(Id::new(OPEN_SUBMENU)))
+}
+
+/// Sets (or clears) the open submenu.
+fn set_open_submenu(ctx: &eframe::egui::Context, label: Option<&str>) {
+    ctx.data_mut(|data| {
+        if let Some(label) = label {
+            data.insert_temp(Id::new(OPEN_SUBMENU), label.to_owned());
+        } else {
+            data.remove_temp::<String>(Id::new(OPEN_SUBMENU));
+        }
+    });
 }
 
 /// A top-level menu button whose rows scroll when the menu is taller than the window.
 fn top_menu<R>(ui: &mut Ui, label: &str, add_contents: impl FnOnce(&mut Ui) -> R) {
-    ui.menu_button(label, |ui| {
-        let bar_bottom = ui
-            .ctx()
-            .data(|data| data.get_temp::<f32>(Id::new(MENU_BAR_BOTTOM)))
-            .unwrap_or_else(|| ui.cursor().top());
-        let frame = ui.spacing().menu_margin.sum().y;
-        let max_height = ui.ctx().content_rect().bottom() - bar_bottom - MENU_MARGIN - frame;
-        menu_scroll(ui, max_height, add_contents);
+    let ctx = ui.ctx().clone();
+    let is_open = open_menu(&ctx).as_deref() == Some(label);
+    let response = ui.add(eframe::egui::Button::new(label).selected(is_open));
+    ctx.data_mut(|data| data.insert_temp(Id::new((MENU_TITLE, label)), response.rect));
+
+    if response.clicked() {
+        let now = ctx.input(|input| input.time);
+        let recently_closed = ctx.data(|data| {
+            data.get_temp::<(String, f64)>(Id::new(MENU_CLOSED))
+                .is_some_and(|(closed, at)| closed == label && now - at < 0.3)
+        });
+        if is_open {
+            set_open_menu(&ctx, None);
+            clear_submenu(&ctx);
+        } else if !recently_closed {
+            set_open_menu(&ctx, Some(label));
+            clear_submenu(&ctx);
+        }
+    }
+
+    let hovered = response.hovered()
+        || ctx
+            .pointer_hover_pos()
+            .is_some_and(|pos| response.rect.contains(pos));
+    let pointer_moved = ctx.input(|input| input.pointer.delta() != eframe::egui::Vec2::ZERO);
+    let open_before = open_menu(&ctx);
+    if open_before.is_some()
+        && !response.clicked()
+        && hovered
+        && pointer_moved
+        && open_before.as_deref() != Some(label)
+    {
+        set_open_menu(&ctx, Some(label));
+        clear_submenu(&ctx);
+    }
+
+    if open_menu(&ctx).as_deref() != Some(label) {
+        return;
+    }
+
+    let title = menu_popup_title(label);
+    let root_inner = ctx
+        .data(|data| data.get_temp::<Option<Rect>>(Id::new(ROOT_INNER)))
+        .flatten()
+        .or_else(|| ctx.input(|input| input.viewport().inner_rect));
+    let position = menu_popup_position(root_inner, response.rect);
+    let mode = popup_mode(ctx.embed_viewports(), popup_supported());
+    let bar_bottom = ctx
+        .data(|data| data.get_temp::<f32>(Id::new(MENU_BAR_BOTTOM)))
+        .unwrap_or_else(|| response.rect.bottom());
+    let max_height = popup_max_height(ui, mode, position.y, bar_bottom);
+    let popup = PopupWindow {
+        title: &title,
+        position,
+    };
+    let mut shown = true;
+    let mut closed = false;
+    let mut content = Some(add_contents);
+    popup_window(&ctx, &popup, &mut shown, |ui| {
+        if let Some(content) = content.take() {
+            let (_, asked_to_close) = popup_rows(ui, max_height, content);
+            closed = asked_to_close;
+        }
     });
+
+    if closed || open_menu(&ctx).as_deref() != Some(label) {
+        set_open_menu(&ctx, None);
+        clear_submenu(&ctx);
+    } else if !shown {
+        if open_submenu(&ctx).is_some() {
+            restore_popup_window_state(&ctx, &title);
+        } else {
+            set_open_menu(&ctx, None);
+            clear_submenu(&ctx);
+            let now = ctx.input(|input| input.time);
+            ctx.data_mut(|data| {
+                data.insert_temp(Id::new(MENU_CLOSED), (label.to_owned(), now));
+            });
+        }
+    }
 }
 
 /// A submenu row with a drawn arrow; `add_contents` fills the submenu.
@@ -831,6 +1037,7 @@ pub fn submenu_button<R>(
     label: &str,
     add_contents: impl FnOnce(&mut Ui) -> R,
 ) -> InnerResponse<Option<R>> {
+    let ctx = ui.ctx().clone();
     let font_id = TextStyle::Body.resolve(ui.style());
     let text_color = ui.visuals().text_color();
     let label_galley = ui
@@ -848,9 +1055,10 @@ pub fn submenu_button<R>(
     let enabled = ui.is_enabled();
     response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, enabled, label));
 
+    let is_open = open_submenu(&ctx).as_deref() == Some(label);
     let visuals = ui.style().interact(&response);
     let painter = ui.painter().clone();
-    if response.hovered() {
+    if response.hovered() || is_open {
         painter.rect_filled(row, 4.0, visuals.weak_bg_fill);
     }
     let color = visuals.fg_stroke.color;
@@ -873,16 +1081,106 @@ pub fn submenu_button<R>(
         Stroke::NONE,
     ));
 
-    let bar_bottom = ui
-        .ctx()
+    let viewport_inner = ctx.input(|input| input.viewport().inner_rect);
+    let root_inner = ctx
+        .data(|data| data.get_temp::<Option<Rect>>(Id::new(ROOT_INNER)))
+        .flatten()
+        .or(viewport_inner);
+    let row_in_root = match (viewport_inner, root_inner) {
+        (Some(viewport), Some(root)) => row.translate(viewport.min - root.min),
+        _ => row,
+    };
+
+    if response.clicked() {
+        if is_open {
+            set_open_submenu(&ctx, None);
+        } else {
+            set_open_submenu(&ctx, Some(label));
+            ctx.data_mut(|data| data.insert_temp(Id::new(SUBMENU_ROW), row_in_root));
+        }
+    }
+
+    let open_label = open_submenu(&ctx);
+    if open_label.as_deref() != Some(label) || open_menu(&ctx).is_none() {
+        return InnerResponse::new(None, response);
+    }
+
+    let row_rect = ctx
+        .data(|data| data.get_temp::<Rect>(Id::new(SUBMENU_ROW)))
+        .unwrap_or(row_in_root);
+    let size = ctx
+        .data(|data| data.get_temp::<eframe::egui::Vec2>(Id::new(SUBMENU_SIZE)))
+        .unwrap_or_else(|| row.size());
+    let monitor = ctx.input(|input| input.viewport().monitor_size);
+    let mut position = submenu_popup_position(root_inner, row_rect, size, monitor);
+    let title = submenu_popup_title(label);
+    let mode = popup_mode(ctx.embed_viewports(), popup_supported());
+    if mode == PopupMode::Window
+        && let (Some(viewport), Some(root)) = (viewport_inner, root_inner)
+        && (position.x - (row_rect.right() + root.min.x)).abs() < 0.5
+    {
+        position.x = position.x.max(viewport.right());
+    }
+    let bar_bottom = ctx
         .data(|data| data.get_temp::<f32>(Id::new(MENU_BAR_BOTTOM)))
         .unwrap_or_else(|| ui.max_rect().top());
-    let frame = ui.spacing().menu_margin.sum().y;
-    let max_height = ui.ctx().content_rect().bottom() - bar_bottom - MENU_MARGIN - frame;
-    let popup = eframe::egui::containers::menu::SubMenu::new().show(ui, &response, |ui| {
-        menu_scroll(ui, max_height, add_contents)
+    let max_height = popup_max_height(ui, mode, position.y, bar_bottom);
+    let popup = PopupWindow {
+        title: &title,
+        position,
+    };
+    let mut shown = true;
+    let mut content = Some(add_contents);
+    let mut content_size = size;
+    let mut closed = false;
+    let mut escaped = false;
+    let mut result = None;
+    ctx.data_mut(|data| data.insert_temp(Id::new(IN_SUBMENU), true));
+    popup_window(&ctx, &popup, &mut shown, |ui| {
+        escaped = ui.input(|input| input.key_pressed(eframe::egui::Key::Escape));
+        let start = ui.min_rect().min;
+        if let Some(content) = content.take() {
+            let (inner, asked_to_close) = popup_rows(ui, max_height, content);
+            result = Some(inner);
+            closed = asked_to_close;
+        }
+        content_size = ui.min_rect().max - start;
     });
-    InnerResponse::new(popup.map(|inner| inner.inner), response)
+    ctx.data_mut(|data| data.remove_temp::<bool>(Id::new(IN_SUBMENU)));
+    ctx.data_mut(|data| data.insert_temp(Id::new(SUBMENU_SIZE), content_size));
+
+    if escaped || closed {
+        clear_submenu(&ctx);
+        set_open_menu(&ctx, None);
+    } else if !shown && open_submenu(&ctx).as_deref() == Some(label) {
+        clear_submenu(&ctx);
+    }
+
+    InnerResponse::new(result, response)
+}
+
+/// The View > Toolbars submenu, keeping its parent menu's outcome up to date.
+fn toolbars_submenu(
+    ui: &mut Ui,
+    layout: &mut ToolbarLayout,
+    toolbars_changed: &mut bool,
+    customize_toolbars: &mut bool,
+    reset_toolbars: &mut bool,
+) {
+    submenu_button(ui, "Toolbars", |ui| {
+        match toolbars::toolbars_menu(ui, layout) {
+            Some(ToolbarsMenuEvent::Changed) => *toolbars_changed = true,
+            Some(ToolbarsMenuEvent::Customize) => {
+                *customize_toolbars = true;
+                ui.close();
+            }
+            Some(ToolbarsMenuEvent::Reset) => {
+                *reset_toolbars = true;
+                ui.close();
+            }
+            None => {}
+        }
+    });
 }
 
 /// What the menu bar did this frame.
@@ -921,6 +1219,40 @@ fn menu_bar_inner(
     let mut toolbars_changed = false;
     let mut customize_toolbars = false;
     let mut reset_toolbars = false;
+    let root_inner = ui.ctx().input(|input| input.viewport().inner_rect);
+    ui.ctx()
+        .data_mut(|data| data.insert_temp(Id::new(ROOT_INNER), root_inner));
+
+    eprintln!(
+        "ARROW start open={:?} sub={:?} right={} left={}",
+        open_menu(ui.ctx()),
+        open_submenu(ui.ctx()),
+        ui.ctx()
+            .input(|i| i.key_pressed(eframe::egui::Key::ArrowRight)),
+        ui.ctx()
+            .input(|i| i.key_pressed(eframe::egui::Key::ArrowLeft))
+    );
+    if open_submenu(ui.ctx()).is_none()
+        && let Some(label) = open_menu(ui.ctx())
+        && let Some(index) = MENU_LABELS.iter().position(|known| *known == label)
+    {
+        let step = if ui.ctx().input_mut(|input| {
+            input.consume_key(eframe::egui::Modifiers::NONE, eframe::egui::Key::ArrowRight)
+        }) {
+            Some(1)
+        } else if ui.ctx().input_mut(|input| {
+            input.consume_key(eframe::egui::Modifiers::NONE, eframe::egui::Key::ArrowLeft)
+        }) {
+            Some(-1)
+        } else {
+            None
+        };
+        if let Some(step) = step {
+            let next = (index as isize + step).rem_euclid(MENU_LABELS.len() as isize) as usize;
+            set_open_menu(ui.ctx(), Some(MENU_LABELS[next]));
+        }
+    }
+
     eframe::egui::MenuBar::new().ui(ui, |ui| {
         ui.ctx()
             .data_mut(|data| data.insert_temp(Id::new(MENU_BAR_BOTTOM), ui.min_rect().bottom()));
@@ -1172,20 +1504,13 @@ fn menu_bar_inner(
             }
             if let Some(layout) = toolbars {
                 ui.separator();
-                submenu_button(ui, "Toolbars", |ui| {
-                    match toolbars::toolbars_menu(ui, layout) {
-                        Some(ToolbarsMenuEvent::Changed) => toolbars_changed = true,
-                        Some(ToolbarsMenuEvent::Customize) => {
-                            customize_toolbars = true;
-                            ui.close();
-                        }
-                        Some(ToolbarsMenuEvent::Reset) => {
-                            reset_toolbars = true;
-                            ui.close();
-                        }
-                        None => {}
-                    }
-                });
+                toolbars_submenu(
+                    ui,
+                    layout,
+                    &mut toolbars_changed,
+                    &mut customize_toolbars,
+                    &mut reset_toolbars,
+                );
             }
             if menu_item(ui, None, "Reset Panels...", "", false).clicked() {
                 chosen = Some(Action::ResetPanels);
@@ -1273,6 +1598,10 @@ fn menu_bar_inner(
             }
         });
     });
+
+    if open_menu(ui.ctx()).is_none() {
+        clear_submenu(ui.ctx());
+    }
 
     MenuOutcome {
         action: chosen,
