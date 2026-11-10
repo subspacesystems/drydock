@@ -7,10 +7,20 @@
 
 use std::path::PathBuf;
 use std::process::{Child, Command, Output};
+use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
+
+/// The probes share window titles, so only one test may drive this display at a time.
+static DISPLAY_LOCK: Mutex<()> = Mutex::new(());
 
 fn gui_tests() -> bool {
     std::env::var_os("DRYDOCK_GUI_TESTS").is_some()
+}
+
+fn serialize() -> MutexGuard<'static, ()> {
+    DISPLAY_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 fn tool(cmd: &str, args: &[&str]) -> Output {
@@ -126,6 +136,7 @@ fn a_modal_prompt_blocks_the_main_window_until_it_is_answered() {
         eprintln!("skipped: DRYDOCK_GUI_TESTS is unset");
         return;
     }
+    let _serial = serialize();
     let _app = Kill(
         Command::new(probe_path())
             .arg("--modal")
@@ -187,6 +198,7 @@ fn escape_cancels_a_modal_prompt_and_unblocks_the_main_window() {
         eprintln!("skipped: DRYDOCK_GUI_TESTS is unset");
         return;
     }
+    let _serial = serialize();
     let _app = Kill(
         Command::new(probe_path())
             .arg("--modal")
@@ -210,6 +222,7 @@ fn the_make_group_prompt_is_a_modal_window_of_the_app() {
         return;
     }
     // DRYDOCK_OPEN_DIALOG=group opens the Make Group prompt as the app starts (test hook).
+    let _serial = serialize();
     let _app = Kill(
         Command::new(env!("CARGO_BIN_EXE_drydock"))
             .env("DRYDOCK_OPEN_DIALOG", "group")
