@@ -393,6 +393,8 @@ Menus become real pop-up windows that can reach past the main window's edge. Eve
 | `m12-popup-window` | A pop-up helper in the app (own OS window at a given screen position sized to its content; inline in UI tests; falls back to an in-window area when the platform cannot) | `m12-winit-popup` |
 | `m12-menu-popups` | File, Edit, View, Camera, Draw, Tools, Window and Help menus open as pop-up windows below their title, past the window edge when needed; hover-switching between titles keeps working | `m12-popup-window` |
 | `m12-submenu-popups` | Submenus (View > Toolbars and the others) and context menus open as pop-up windows to the side; the M10 scroll-to-fit stays as the fallback | `m12-menu-popups` |
+| `m12-menu-close-outside` | Fix (sign-off): an open pop-up menu closes on a click in the main window, on Escape there and when Drydock loses focus, even though the pop-up itself never has keyboard focus (Windows pop-ups never take it); arrow keys switch menus from either window | `m12-submenu-popups` |
+| `m12-popup-wayland-on` | Fix (sign-off): turn the pop-up windows on for Wayland now that the winit patch makes them `xdg_popup`s, placed relative to the main window's content | `m12-menu-close-outside` |
 
 ## Future (unscheduled)
 
