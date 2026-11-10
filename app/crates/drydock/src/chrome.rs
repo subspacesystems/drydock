@@ -947,6 +947,68 @@ fn set_open_submenu(ctx: &eframe::egui::Context, label: Option<&str>) {
     });
 }
 
+/// What the main window's input does to the open menus while they are OS pop-up windows
+/// (`m12-menu-close-outside`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RootClose {
+    /// Leave everything open.
+    Nothing,
+    /// Close the open submenu only.
+    Submenu,
+    /// Close the submenu and the menu.
+    All,
+}
+
+/// How long (seconds) the main window must have been unfocused, with no pop-up focused,
+/// before the menus close: focus moving from the main window to the pop-up takes a moment.
+pub const FOCUS_GRACE: f64 = 0.25;
+
+/// What the main window saw this frame.
+#[derive(Clone, Copy, Debug)]
+pub struct RootInput<'a> {
+    /// A top-level menu is open.
+    pub menu_open: bool,
+    /// A submenu is open.
+    pub submenu_open: bool,
+    /// Where a primary press happened this frame in the main window, if one did.
+    pub press: Option<eframe::egui::Pos2>,
+    /// Escape was pressed this frame in the main window.
+    pub escape: bool,
+    /// The menu-bar title rectangles (main window coordinates).
+    pub titles: &'a [Rect],
+    /// Seconds the main window has been unfocused after having had focus; `None` while it
+    /// has focus or never had it.
+    pub unfocused_for: Option<f64>,
+    /// Some pop-up window has focus.
+    pub popup_has_focus: bool,
+}
+
+/// The rules: nothing open gives `Nothing`. Otherwise, in this order: the main window
+/// unfocused for at least [`FOCUS_GRACE`] with no pop-up focused gives `All`; Escape gives
+/// `Submenu` when a submenu is open, else `All`; a primary press not on any title gives
+/// `All` (on a title: `Nothing`, the title's own click handles it).
+pub fn root_close(input: &RootInput<'_>) -> RootClose {
+    let _ = input;
+    unimplemented!("m12-menu-close-outside")
+}
+
+/// Applies [`root_close`] to the main window's input. Does nothing unless `mode` is
+/// `PopupMode::Window` and a menu is open (inline pop-ups close themselves). Reads the
+/// ROOT viewport's input, consumes the Escape it acts on, records unfocused time and the
+/// pop-up windows' focus, and returns whether it closed anything. Call it from `menu_bar`.
+pub fn close_menus_from_root(ctx: &eframe::egui::Context, mode: PopupMode) -> bool {
+    let _ = (ctx, mode);
+    unimplemented!("m12-menu-close-outside")
+}
+
+/// Asks the menu bar to move the open menu `step` titles along (wrapping), as the arrow
+/// keys do; for a pop-up window that has the keyboard focus. The next `menu_bar` call
+/// applies it; with no menu open it does nothing.
+pub fn request_menu_step(ctx: &eframe::egui::Context, step: i32) {
+    let _ = (ctx, step);
+    unimplemented!("m12-menu-close-outside")
+}
+
 /// A top-level menu title whose rows open in a pop-up and scroll when taller than the window.
 fn top_menu<R>(ui: &mut Ui, label: &str, add_contents: impl FnOnce(&mut Ui) -> R) {
     let ctx = ui.ctx().clone();
