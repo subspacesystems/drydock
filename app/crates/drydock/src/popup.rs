@@ -44,14 +44,9 @@ pub fn popup_viewport_id(title: &str) -> egui::ViewportId {
 }
 
 /// Whether `os` (`std::env::consts::OS` values) can make pop-up windows: "windows" yes;
-/// "linux" yes on X11 (`wayland` false) and no on Wayland until m12-winit-popup-wayland;
-/// anything else no.
-pub fn popup_supported_on(os: &str, wayland: bool) -> bool {
-    match os {
-        "windows" => true,
-        "linux" => !wayland,
-        _ => false,
-    }
+/// "linux" yes on both X11 and Wayland (`wayland` makes no difference there); anything else no.
+pub fn popup_supported_on(os: &str, _wayland: bool) -> bool {
+    matches!(os, "windows" | "linux")
 }
 
 /// The root window's inner rectangle as pop-up positions must see it: on Wayland always `None`
@@ -59,16 +54,19 @@ pub fn popup_supported_on(os: &str, wayland: bool) -> bool {
 /// the platform reports one at all, must not be added); elsewhere `root_inner` unchanged.
 /// The menu, submenu and context-menu position functions take this as their `root_inner`.
 pub fn popup_root_inner(root_inner: Option<Rect>, wayland: bool) -> Option<Rect> {
-    let _ = (root_inner, wayland);
-    unimplemented!("m12-popup-wayland-on")
+    if wayland { None } else { root_inner }
 }
 
-/// [`popup_supported_on`] for this machine: `std::env::consts::OS`, and Wayland when
-/// `WAYLAND_DISPLAY` is non-empty and `WINIT_UNIX_BACKEND` is not "x11".
+/// Whether this session is Wayland: `WAYLAND_DISPLAY` is non-empty and `WINIT_UNIX_BACKEND`
+/// is not "x11".
+pub fn wayland_session() -> bool {
+    std::env::var_os("WAYLAND_DISPLAY").is_some_and(|v| !v.is_empty())
+        && std::env::var_os("WINIT_UNIX_BACKEND").is_none_or(|backend| backend != "x11")
+}
+
+/// [`popup_supported_on`] for this machine: `std::env::consts::OS` and [`wayland_session`].
 pub fn popup_supported() -> bool {
-    let wayland = std::env::var_os("WAYLAND_DISPLAY").is_some_and(|v| !v.is_empty())
-        && std::env::var_os("WINIT_UNIX_BACKEND").is_none_or(|backend| backend != "x11");
-    popup_supported_on(std::env::consts::OS, wayland)
+    popup_supported_on(std::env::consts::OS, wayland_session())
 }
 
 /// `Window` only when the viewports are real (`!embed_viewports`) and the platform

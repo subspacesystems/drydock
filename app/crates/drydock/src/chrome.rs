@@ -16,7 +16,10 @@ use crate::document::Stats;
 use crate::icons::Icon;
 use crate::input::{Action, EditKey, Tool};
 use crate::mesh_export::ExportFormat;
-use crate::popup::{PopupMode, PopupWindow, popup_mode, popup_supported, popup_window};
+use crate::popup::{
+    PopupMode, PopupWindow, popup_mode, popup_root_inner, popup_supported, popup_window,
+    wayland_session,
+};
 use crate::toolbars::{self, ToolbarLayout, ToolbarsMenuEvent};
 use drydock_kernel::units::{LengthFormat, format_with};
 use drydock_view::StandardView;
@@ -1201,7 +1204,10 @@ fn top_menu<R>(ui: &mut Ui, label: &str, add_contents: impl FnOnce(&mut Ui) -> R
         .data(|data| data.get_temp::<Option<Rect>>(Id::new(ROOT_INNER)))
         .flatten()
         .or_else(|| ctx.input(|input| input.viewport().inner_rect));
-    let position = menu_popup_position(root_inner, response.rect);
+    let position = menu_popup_position(
+        popup_root_inner(root_inner, wayland_session()),
+        response.rect,
+    );
     let mode = popup_mode(ctx.embed_viewports(), popup_supported());
     let bar_bottom = ctx
         .data(|data| data.get_temp::<f32>(Id::new(MENU_BAR_BOTTOM)))
@@ -1319,7 +1325,12 @@ pub fn submenu_button<R>(
         .data(|data| data.get_temp::<eframe::egui::Vec2>(Id::new(SUBMENU_SIZE)))
         .unwrap_or_else(|| row.size());
     let monitor = ctx.input(|input| input.viewport().monitor_size);
-    let mut position = submenu_popup_position(root_inner, row_rect, size, monitor);
+    let mut position = submenu_popup_position(
+        popup_root_inner(root_inner, wayland_session()),
+        row_rect,
+        size,
+        monitor,
+    );
     let title = submenu_popup_title(label);
     let mode = popup_mode(ctx.embed_viewports(), popup_supported());
     if mode == PopupMode::Window

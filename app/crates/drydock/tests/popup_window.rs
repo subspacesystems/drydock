@@ -29,7 +29,7 @@ fn viewport_id_follows_the_title() {
 fn platform_support() {
     assert!(popup_supported_on("windows", false));
     assert!(popup_supported_on("linux", false), "X11");
-    assert!(!popup_supported_on("linux", true), "Wayland falls back");
+    assert!(popup_supported_on("linux", true), "Wayland: xdg_popup");
     assert!(!popup_supported_on("macos", false));
 }
 
