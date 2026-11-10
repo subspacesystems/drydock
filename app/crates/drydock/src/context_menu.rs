@@ -6,7 +6,9 @@
 //! (`popup_window`), inline otherwise. Nothing in the app uses one yet; this is the helper.
 
 use crate::chrome::{popup_max_height, popup_rows};
-use crate::popup::{PopupWindow, popup_mode, popup_supported, popup_window};
+use crate::popup::{
+    PopupWindow, popup_mode, popup_root_inner, popup_supported, popup_window, wayland_session,
+};
 use eframe::egui::{self, Id, Pos2, Rect};
 
 /// The pop-up title (and viewport name) of the context menu named `id`: distinct per `id`
@@ -35,7 +37,7 @@ pub fn context_menu_open(ctx: &egui::Context, id: &str) -> Option<Pos2> {
 /// had been right-clicked there.
 pub fn open_context_menu(ctx: &egui::Context, id: &str, click: Pos2) {
     let root_inner = ctx.input(|input| input.viewport().inner_rect);
-    let position = context_popup_position(root_inner, click);
+    let position = context_popup_position(popup_root_inner(root_inner, wayland_session()), click);
     ctx.data_mut(|data| data.insert_temp(open_id(id), position));
 }
 
