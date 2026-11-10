@@ -54,6 +54,15 @@ pub fn popup_supported_on(os: &str, wayland: bool) -> bool {
     }
 }
 
+/// The root window's inner rectangle as pop-up positions must see it: on Wayland always `None`
+/// (a pop-up is placed relative to the parent's content area, so the root's position, when
+/// the platform reports one at all, must not be added); elsewhere `root_inner` unchanged.
+/// The menu, submenu and context-menu position functions take this as their `root_inner`.
+pub fn popup_root_inner(root_inner: Option<Rect>, wayland: bool) -> Option<Rect> {
+    let _ = (root_inner, wayland);
+    unimplemented!("m12-popup-wayland-on")
+}
+
 /// [`popup_supported_on`] for this machine: `std::env::consts::OS`, and Wayland when
 /// `WAYLAND_DISPLAY` is non-empty and `WINIT_UNIX_BACKEND` is not "x11".
 pub fn popup_supported() -> bool {
