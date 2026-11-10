@@ -20,3 +20,6 @@ is upgraded.
   winit's `WindowAttributes::with_modal(true)`; the root window never does. The title is the key
   because egui's `ViewportBuilder` has no modal flag and eframe does not pass the `ViewportId`
   to `create_window`.
+- `src/lib.rs` (`create_window`): new public functions `mark_popup_title` and `is_popup_title`,
+  with their own temporary-data key. A window made for a viewport whose title was marked gets
+  winit's `WindowAttributes::with_popup(true)`; the root window never does.

@@ -173,11 +173,26 @@ pub struct PopupPositioner {
 ///
 /// Pure function; this is what `Window::new` feeds to the compositor.
 pub fn popup_positioner(
-    _content_offset: (i32, i32),
-    _requested: (i32, i32),
-    _size: (i32, i32),
+    content_offset: (i32, i32),
+    requested: (i32, i32),
+    size: (i32, i32),
 ) -> PopupPositioner {
-    unimplemented!("m12-winit-popup-wayland")
+    PopupPositioner {
+        size,
+        anchor_rect: PopupRect {
+            x: content_offset.0 + requested.0,
+            y: content_offset.1 + requested.1,
+            width: 1,
+            height: 1,
+        },
+        offset: (0, 0),
+        adjustment: PopupAdjustment {
+            slide_x: true,
+            slide_y: true,
+            flip_x: true,
+            flip_y: true,
+        },
+    }
 }
 
 /// Local patch (Drydock, PATCHES.md): a model of the compositor's placement, following the
@@ -186,9 +201,68 @@ pub fn popup_positioner(
 /// region the pop-up must stay inside, both in output coordinates. Returns the pop-up's
 /// top-left corner in output coordinates.
 pub fn resolve_popup_position(
-    _positioner: &PopupPositioner,
-    _parent_origin: (i32, i32),
-    _bounds: PopupRect,
+    positioner: &PopupPositioner,
+    parent_origin: (i32, i32),
+    bounds: PopupRect,
 ) -> (i32, i32) {
-    unimplemented!("m12-winit-popup-wayland")
+    fn resolve_axis(
+        parent: i32,
+        anchor: i32,
+        anchor_size: i32,
+        offset: i32,
+        size: i32,
+        bounds_start: i32,
+        bounds_size: i32,
+        flip: bool,
+        slide: bool,
+    ) -> i32 {
+        let bounds_end = bounds_start + bounds_size;
+        let position = parent + anchor + offset;
+        let inside = |position: i32| position >= bounds_start && position + size <= bounds_end;
+
+        if inside(position) {
+            return position;
+        }
+
+        if flip {
+            let flipped = parent + anchor + anchor_size - size + offset;
+            if inside(flipped) {
+                return flipped;
+            }
+        }
+
+        if slide {
+            if position < bounds_start || size >= bounds_size {
+                return bounds_start;
+            }
+            return bounds_end - size;
+        }
+
+        position
+    }
+
+    let x = resolve_axis(
+        parent_origin.0,
+        positioner.anchor_rect.x,
+        positioner.anchor_rect.width,
+        positioner.offset.0,
+        positioner.size.0,
+        bounds.x,
+        bounds.width,
+        positioner.adjustment.flip_x,
+        positioner.adjustment.slide_x,
+    );
+    let y = resolve_axis(
+        parent_origin.1,
+        positioner.anchor_rect.y,
+        positioner.anchor_rect.height,
+        positioner.offset.1,
+        positioner.size.1,
+        bounds.y,
+        bounds.height,
+        positioner.adjustment.flip_y,
+        positioner.adjustment.slide_y,
+    );
+
+    (x, y)
 }
