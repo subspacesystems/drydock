@@ -947,7 +947,7 @@ fn set_open_submenu(ctx: &eframe::egui::Context, label: Option<&str>) {
     });
 }
 
-/// A top-level menu button whose rows scroll when the menu is taller than the window.
+/// A top-level menu title whose rows open in a pop-up and scroll when taller than the window.
 fn top_menu<R>(ui: &mut Ui, label: &str, add_contents: impl FnOnce(&mut Ui) -> R) {
     let ctx = ui.ctx().clone();
     let is_open = open_menu(&ctx).as_deref() == Some(label);
@@ -1223,15 +1223,6 @@ fn menu_bar_inner(
     ui.ctx()
         .data_mut(|data| data.insert_temp(Id::new(ROOT_INNER), root_inner));
 
-    eprintln!(
-        "ARROW start open={:?} sub={:?} right={} left={}",
-        open_menu(ui.ctx()),
-        open_submenu(ui.ctx()),
-        ui.ctx()
-            .input(|i| i.key_pressed(eframe::egui::Key::ArrowRight)),
-        ui.ctx()
-            .input(|i| i.key_pressed(eframe::egui::Key::ArrowLeft))
-    );
     if open_submenu(ui.ctx()).is_none()
         && let Some(label) = open_menu(ui.ctx())
         && let Some(index) = MENU_LABELS.iter().position(|known| *known == label)
