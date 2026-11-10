@@ -7,10 +7,20 @@
 
 use std::path::PathBuf;
 use std::process::{Child, Command, Output};
+use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
+
+/// The probes share window titles, so only one test may drive this display at a time.
+static DISPLAY_LOCK: Mutex<()> = Mutex::new(());
 
 fn gui_tests() -> bool {
     std::env::var_os("DRYDOCK_GUI_TESTS").is_some()
+}
+
+fn serialize() -> MutexGuard<'static, ()> {
+    DISPLAY_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 fn tool(cmd: &str, args: &[&str]) -> Output {
@@ -58,6 +68,26 @@ impl Drop for Kill {
     fn drop(&mut self) {
         let _ = self.0.kill();
         let _ = self.0.wait();
+    }
+}
+
+/// Starts the app with `start` and waits for the single window matching `name`. The display
+/// lets go of its state when its last client leaves (as the previous test's app is killed), and
+/// an app that connects at that moment exits at once (`XOpenDisplayFailed`), so an app that
+/// exits before its window appears is started again.
+fn launch(start: impl Fn() -> Command, name: &str) -> (Kill, String) {
+    let spawn = || Kill(start().spawn().expect("the app under test starts"));
+    let mut app = spawn();
+    let end = Instant::now() + Duration::from_secs(40);
+    loop {
+        if let [id] = windows(name).as_slice() {
+            return (app, id.clone());
+        }
+        assert!(Instant::now() < end, "timed out waiting for {name}");
+        if matches!(app.0.try_wait(), Ok(Some(_))) {
+            app = spawn();
+        }
+        std::thread::sleep(Duration::from_millis(300));
     }
 }
 
@@ -126,13 +156,16 @@ fn a_modal_prompt_blocks_the_main_window_until_it_is_answered() {
         eprintln!("skipped: DRYDOCK_GUI_TESTS is unset");
         return;
     }
-    let _app = Kill(
-        Command::new(probe_path())
-            .arg("--modal")
-            .spawn()
-            .expect("modal_probe starts (cargo test builds the example)"),
+    let _serial = serialize();
+    let probe = probe_path();
+    let (_app, main) = launch(
+        || {
+            let mut command = Command::new(&probe);
+            command.arg("--modal");
+            command
+        },
+        "^probe clicks",
     );
-    let main = the_window("^probe clicks");
     let dialog = the_window("^Probe Name$");
     assert_ne!(main, dialog);
 
@@ -187,13 +220,16 @@ fn escape_cancels_a_modal_prompt_and_unblocks_the_main_window() {
         eprintln!("skipped: DRYDOCK_GUI_TESTS is unset");
         return;
     }
-    let _app = Kill(
-        Command::new(probe_path())
-            .arg("--modal")
-            .spawn()
-            .expect("modal_probe starts"),
+    let _serial = serialize();
+    let probe = probe_path();
+    let (_app, main) = launch(
+        || {
+            let mut command = Command::new(&probe);
+            command.arg("--modal");
+            command
+        },
+        "^probe clicks",
     );
-    let main = the_window("^probe clicks");
     let dialog = the_window("^Probe Name$");
     tool("xdotool", &["windowfocus", "--sync", &dialog]);
     tool("xdotool", &["key", "Escape"]);
@@ -210,13 +246,15 @@ fn the_make_group_prompt_is_a_modal_window_of_the_app() {
         return;
     }
     // DRYDOCK_OPEN_DIALOG=group opens the Make Group prompt as the app starts (test hook).
-    let _app = Kill(
-        Command::new(env!("CARGO_BIN_EXE_drydock"))
-            .env("DRYDOCK_OPEN_DIALOG", "group")
-            .spawn()
-            .expect("drydock starts"),
+    let _serial = serialize();
+    let (_app, prompt) = launch(
+        || {
+            let mut command = Command::new(env!("CARGO_BIN_EXE_drydock"));
+            command.env("DRYDOCK_OPEN_DIALOG", "group");
+            command
+        },
+        "^Make Group$",
     );
-    let prompt = the_window("^Make Group$");
     let main = windows("^Drydock$");
     assert_eq!(main.len(), 1, "one main window: {main:?}");
     assert_transient_for(&prompt, &main[0]);

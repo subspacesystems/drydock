@@ -28,6 +28,7 @@ use eframe::egui::{
     TextStyle, Ui, UiBuilder, WidgetInfo, WidgetType, pos2, vec2,
 };
 use std::path::PathBuf;
+use std::time::Duration;
 
 /// What the menus need to know about the editor.
 #[derive(Clone, Copy, Debug, Default)]
@@ -783,6 +784,9 @@ const MENU_TITLE: &str = "drydock_menu_title";
 /// A menu step requested by a focused pop-up window, waiting for the next `menu_bar`.
 const MENU_STEP: &str = "drydock_menu_step";
 
+/// The menu a step moved to and when, while its pop-up is still due to take focus.
+const MENU_STEP_FOCUS: &str = "drydock_menu_step_focus";
+
 /// When the root viewport lost focus, for [`close_menus_from_root`]'s grace time.
 const ROOT_UNFOCUSED_SINCE: &str = "drydock_root_unfocused_since";
 
@@ -1033,8 +1037,13 @@ pub const STEP_FOCUS_WINDOW: f64 = 0.5;
 /// window is unfocused (`unfocused_for` is `Some` and below the grace), and no pop-up has
 /// focus; `None` in every other case (including when the grace has already passed).
 pub fn root_close_repaint_after(input: &RootInput<'_>) -> Option<f64> {
-    let _ = input;
-    unimplemented!("m12-menu-focus-loss")
+    if !input.menu_open || input.popup_has_focus {
+        return None;
+    }
+    match input.unfocused_for {
+        Some(secs) if secs < FOCUS_GRACE => Some(FOCUS_GRACE - secs),
+        _ => None,
+    }
 }
 
 /// Applies [`root_close`] to the main window's input. Does nothing unless `mode` is
@@ -1072,6 +1081,7 @@ pub fn close_menus_from_root(ctx: &eframe::egui::Context, mode: PopupMode) -> bo
         return true;
     }
     let Some(menu_label) = open_menu(ctx) else {
+        ctx.data_mut(|data| data.remove_temp::<(String, f64)>(Id::new(MENU_STEP_FOCUS)));
         return false;
     };
     let submenu_label = open_submenu(ctx);
@@ -1133,6 +1143,35 @@ pub fn close_menus_from_root(ctx: &eframe::egui::Context, mode: PopupMode) -> bo
             .unwrap_or(false)
         })
     });
+    let step_focus_pending = ctx.data_mut(|data| {
+        let id = Id::new(MENU_STEP_FOCUS);
+        let Some((label, since)) = data.get_temp::<(String, f64)>(id) else {
+            return false;
+        };
+        if label != menu_label {
+            data.remove_temp::<(String, f64)>(id);
+            return false;
+        }
+        let focused = data
+            .get_temp::<bool>(
+                crate::popup::popup_viewport_id(&menu_popup_title(&label))
+                    .0
+                    .with("popup-has-focus"),
+            )
+            .unwrap_or(false);
+        if focused || now - since >= STEP_FOCUS_WINDOW {
+            data.remove_temp::<(String, f64)>(id);
+            false
+        } else {
+            true
+        }
+    });
+    if step_focus_pending {
+        // Frames keep coming while the step waits, so `menu_bar` resends the focus request
+        // once the new pop-up exists and the marker is dropped when the window passes.
+        ctx.request_repaint_after_for(Duration::from_millis(50), eframe::egui::ViewportId::ROOT);
+    }
+    let popup_has_focus = popup_has_focus || step_focus_pending;
 
     let input = RootInput {
         menu_open: true,
@@ -1143,6 +1182,12 @@ pub fn close_menus_from_root(ctx: &eframe::egui::Context, mode: PopupMode) -> bo
         unfocused_for,
         popup_has_focus,
     };
+    if let Some(secs) = root_close_repaint_after(&input) {
+        ctx.request_repaint_after_for(
+            Duration::from_secs_f64(secs),
+            eframe::egui::ViewportId::ROOT,
+        );
+    }
     let close = root_close(&input);
     if close == RootClose::Nothing {
         return false;
@@ -1157,6 +1202,7 @@ pub fn close_menus_from_root(ctx: &eframe::egui::Context, mode: PopupMode) -> bo
         RootClose::All => {
             clear_submenu(ctx);
             set_open_menu(ctx, None);
+            ctx.data_mut(|data| data.remove_temp::<(String, f64)>(Id::new(MENU_STEP_FOCUS)));
         }
         RootClose::Nothing => {}
     }
@@ -1479,8 +1525,25 @@ fn menu_bar_inner(
         };
         if let Some(step) = step {
             let next = (index as isize + step).rem_euclid(MENU_LABELS.len() as isize) as usize;
-            set_open_menu(ui.ctx(), Some(MENU_LABELS[next]));
+            let label = MENU_LABELS[next];
+            set_open_menu(ui.ctx(), Some(label));
+            if requested_step.is_some() {
+                let now = ui.ctx().input(|input| input.time);
+                ui.ctx().data_mut(|data| {
+                    data.insert_temp(Id::new(MENU_STEP_FOCUS), (label.to_owned(), now));
+                });
+            }
         }
+    }
+    if let Some((label, _)) = ui
+        .ctx()
+        .data(|data| data.get_temp::<(String, f64)>(Id::new(MENU_STEP_FOCUS)))
+        && open_menu(ui.ctx()).as_deref() == Some(label.as_str())
+    {
+        ui.ctx().send_viewport_cmd_to(
+            crate::popup::popup_viewport_id(&menu_popup_title(&label)),
+            eframe::egui::ViewportCommand::Focus,
+        );
     }
 
     eframe::egui::MenuBar::new().ui(ui, |ui| {
