@@ -16,12 +16,14 @@ use crate::document::Stats;
 use crate::icons::Icon;
 use crate::input::{Action, EditKey, Tool};
 use crate::mesh_export::ExportFormat;
+use crate::popup::{PopupMode, PopupWindow, popup_mode, popup_supported, popup_window};
 use crate::toolbars::{self, ToolbarLayout, ToolbarsMenuEvent};
 use drydock_kernel::units::{LengthFormat, format_with};
 use drydock_view::StandardView;
 use eframe::egui::{
-    Align2, Id, InnerResponse, Label, Rect, Response, RichText, ScrollArea, Sense, Shape, Stroke,
-    TextStyle, Ui, WidgetInfo, WidgetType, pos2, vec2,
+    Align2, Button, Id, InnerResponse, Key, Label, Modifiers, Rect, Response, RichText, ScrollArea,
+    Sense, Shape, Stroke, TextStyle, Ui, UiBuilder, UiKind, UiStackInfo, WidgetInfo, WidgetType,
+    containers::menu::MenuConfig, pos2, vec2,
 };
 use std::path::PathBuf;
 
@@ -750,6 +752,57 @@ const MENU_MARGIN: f32 = 8.0;
 /// The menu bar's bottom, put in the context for [`submenu_button`] to cap submenus.
 const MENU_BAR_BOTTOM: &str = "drydock_menu_bar_bottom";
 
+/// The top-level menus, left to right.
+const TOP_MENUS: [&str; 5] = ["File", "Edit", "View", "Tools", "Help"];
+
+fn menu_open_id() -> Id {
+    Id::new("drydock_menu_open")
+}
+
+fn menu_title_rect_id(label: &str) -> Id {
+    Id::new(("drydock_menu_title_rect", label))
+}
+
+fn menu_last_closed_id() -> Id {
+    Id::new("drydock_menu_last_closed")
+}
+
+fn menu_window_popup_id() -> Id {
+    Id::new("drydock_menu_window_popup")
+}
+
+fn menu_submenu_expanded_id() -> Id {
+    Id::new("drydock_menu_submenu_expanded")
+}
+
+fn is_known_menu(label: &str) -> bool {
+    TOP_MENUS.contains(&label)
+}
+
+fn set_open_menu(ctx: &eframe::egui::Context, label: Option<&str>) {
+    ctx.data_mut(|data| {
+        data.remove_temp::<String>(menu_submenu_expanded_id());
+        match label {
+            Some(label) => {
+                data.insert_temp(menu_open_id(), label.to_owned());
+            }
+            None => {
+                data.remove_temp::<String>(menu_open_id());
+            }
+        }
+    });
+}
+
+fn remember_menu_closed(ctx: &eframe::egui::Context, label: &str) {
+    let now = ctx.input(|input| input.time);
+    ctx.data_mut(|data| data.insert_temp(menu_last_closed_id(), (label.to_owned(), now)));
+}
+
+fn menu_was_just_closed(ctx: &eframe::egui::Context, label: &str) -> bool {
+    ctx.data(|data| data.get_temp::<(String, f64)>(menu_last_closed_id()))
+        .is_some_and(|(closed, at)| closed == label && ctx.input(|input| input.time) - at < 0.3)
+}
+
 /// Wrap a menu's rows so content that doesn't fit scrolls inside the menu instead of
 /// overflowing the window.
 fn menu_scroll<R>(ui: &mut Ui, max_height: f32, add_contents: impl FnOnce(&mut Ui) -> R) -> R {
@@ -764,26 +817,29 @@ fn menu_scroll<R>(ui: &mut Ui, max_height: f32, add_contents: impl FnOnce(&mut U
 
 /// The pop-up title (and viewport name) of the top-level menu labelled `label`, e.g. "File":
 /// distinct per label, never empty (`docs/specs/m12-menu-popups.md`).
-pub fn menu_popup_title(_label: &str) -> String {
-    unimplemented!("m12-menu-popups")
+pub fn menu_popup_title(label: &str) -> String {
+    format!("drydock-menu-{label}")
 }
 
 /// Where a top-level menu's pop-up goes: the left edge and bottom of its title button
 /// (`title`, in the calling viewport's points) in screen points, i.e. plus `root_inner.min`
 /// when that is known.
-pub fn menu_popup_position(_root_inner: Option<Rect>, _title: Rect) -> eframe::egui::Pos2 {
-    unimplemented!("m12-menu-popups")
+pub fn menu_popup_position(root_inner: Option<Rect>, title: Rect) -> eframe::egui::Pos2 {
+    let position = title.left_bottom();
+    root_inner.map_or(position, |root| position + root.min.to_vec2())
 }
 
 /// The label of the top-level menu that is open now, if any.
-pub fn open_menu(_ctx: &eframe::egui::Context) -> Option<String> {
-    unimplemented!("m12-menu-popups")
+pub fn open_menu(ctx: &eframe::egui::Context) -> Option<String> {
+    ctx.data(|data| data.get_temp::<String>(menu_open_id()))
 }
 
 /// Opens the top-level menu labelled `label` as if its title had been clicked (an unknown
 /// label opens nothing). The next `menu_bar` call shows it.
-pub fn request_menu(_ctx: &eframe::egui::Context, _label: &str) {
-    unimplemented!("m12-menu-popups")
+pub fn request_menu(ctx: &eframe::egui::Context, label: &str) {
+    if is_known_menu(label) {
+        set_open_menu(ctx, Some(label));
+    }
 }
 
 /// The pop-up title (and viewport name) of the submenu labelled `label` (e.g. "Toolbars"):
@@ -812,17 +868,90 @@ pub fn open_submenu(_ctx: &eframe::egui::Context) -> Option<String> {
     unimplemented!("m12-submenu-popups")
 }
 
-/// A top-level menu button whose rows scroll when the menu is taller than the window.
+/// A top-level menu title whose rows open in a pop-up and scroll when taller than the window.
 fn top_menu<R>(ui: &mut Ui, label: &str, add_contents: impl FnOnce(&mut Ui) -> R) {
-    ui.menu_button(label, |ui| {
-        let bar_bottom = ui
-            .ctx()
-            .data(|data| data.get_temp::<f32>(Id::new(MENU_BAR_BOTTOM)))
-            .unwrap_or_else(|| ui.cursor().top());
-        let frame = ui.spacing().menu_margin.sum().y;
-        let max_height = ui.ctx().content_rect().bottom() - bar_bottom - MENU_MARGIN - frame;
-        menu_scroll(ui, max_height, add_contents);
+    let ctx = ui.ctx().clone();
+    let mut current = open_menu(&ctx);
+
+    let response = ui.add(Button::new(label).selected(current.as_deref() == Some(label)));
+    response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, ui.is_enabled(), label));
+    ctx.data_mut(|data| data.insert_temp(menu_title_rect_id(label), response.rect));
+
+    let was_open = current.as_deref() == Some(label);
+    if response.clicked() {
+        if was_open {
+            set_open_menu(&ctx, None);
+            current = None;
+        } else if !menu_was_just_closed(&ctx, label) {
+            set_open_menu(&ctx, Some(label));
+            current = Some(label.to_owned());
+        }
+    } else if response.hovered()
+        && ctx.input(|input| input.pointer.delta() != vec2(0.0, 0.0))
+        && current.as_deref().is_some_and(|open| open != label)
+    {
+        set_open_menu(&ctx, Some(label));
+        current = Some(label.to_owned());
+    }
+    if current.as_deref() != Some(label) {
+        return;
+    }
+
+    let title = ctx
+        .data(|data| data.get_temp::<Rect>(menu_title_rect_id(label)))
+        .unwrap_or(response.rect);
+    let root_inner = ctx.input(|input| input.viewport().inner_rect);
+    let position = menu_popup_position(root_inner, title);
+    let frame = ui.spacing().menu_margin.sum().y;
+    let bar_bottom = ctx
+        .data(|data| data.get_temp::<f32>(Id::new(MENU_BAR_BOTTOM)))
+        .unwrap_or_else(|| ui.cursor().top());
+    let window_popup = popup_mode(ctx.embed_viewports(), popup_supported()) == PopupMode::Window;
+    let max_height = if window_popup {
+        ctx.input(|input| input.viewport().monitor_size)
+            .map_or_else(
+                || ctx.content_rect().bottom() - bar_bottom - MENU_MARGIN - frame,
+                |monitor| monitor.y - position.y - MENU_MARGIN - frame,
+            )
+    } else {
+        ctx.content_rect().bottom() - bar_bottom - MENU_MARGIN - frame
+    };
+    let title = menu_popup_title(label);
+    let popup = PopupWindow {
+        title: &title,
+        position,
+    };
+    let mut open = true;
+    let mut close = false;
+    popup_window(&ctx, &popup, &mut open, |ui| {
+        ctx.data_mut(|data| data.insert_temp(menu_window_popup_id(), window_popup));
+        ui.scope_builder(
+            UiBuilder::new()
+                .id_salt(("drydock-menu-content", label))
+                .ui_stack_info(
+                    UiStackInfo::new(UiKind::Menu)
+                        .with_tag_value(MenuConfig::MENU_CONFIG_TAG, MenuConfig::default()),
+                ),
+            |ui| {
+                let menu_root = eframe::egui::containers::menu::find_menu_root(ui).id;
+                eframe::egui::containers::menu::MenuState::mark_shown(ui.ctx(), menu_root);
+                let inner = ui.scope_builder(UiBuilder::new().closable(), |ui| {
+                    menu_scroll(ui, max_height, add_contents);
+                });
+                close = inner.response.should_close();
+            },
+        );
+        ctx.data_mut(|data| data.insert_temp(menu_window_popup_id(), false));
     });
+
+    if !open {
+        if open_menu(&ctx).as_deref() == Some(label) {
+            set_open_menu(&ctx, None);
+        }
+        remember_menu_closed(&ctx, label);
+    } else if close && open_menu(&ctx).as_deref() == Some(label) {
+        set_open_menu(&ctx, None);
+    }
 }
 
 /// A submenu row with a drawn arrow; `add_contents` fills the submenu.
@@ -848,6 +977,29 @@ pub fn submenu_button<R>(
     let enabled = ui.is_enabled();
     response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, enabled, label));
 
+    let ctx = ui.ctx().clone();
+    let window_popup = ctx.data(|data| {
+        data.get_temp::<bool>(menu_window_popup_id())
+            .unwrap_or(false)
+    });
+    let expanded_id = menu_submenu_expanded_id();
+    let mut expanded = window_popup
+        && ctx.data(|data| {
+            data.get_temp::<String>(expanded_id)
+                .as_deref()
+                .is_some_and(|open| open == label)
+        });
+    if window_popup && response.clicked() {
+        expanded = !expanded;
+        ctx.data_mut(|data| {
+            if expanded {
+                data.insert_temp(expanded_id, label.to_owned());
+            } else {
+                data.remove_temp::<String>(expanded_id);
+            }
+        });
+    }
+
     let visuals = ui.style().interact(&response);
     let painter = ui.painter().clone();
     if response.hovered() {
@@ -863,26 +1015,42 @@ pub fn submenu_button<R>(
     );
     let cx = row.right() - 12.0;
     let cy = row.center().y;
-    painter.add(Shape::convex_polygon(
+    let arrow = if expanded {
+        vec![
+            pos2(cx - 5.0, cy - 4.0),
+            pos2(cx + 5.0, cy - 4.0),
+            pos2(cx, cy + 4.0),
+        ]
+    } else {
         vec![
             pos2(cx - 4.0, cy - 5.0),
             pos2(cx + 4.0, cy),
             pos2(cx - 4.0, cy + 5.0),
-        ],
-        color,
-        Stroke::NONE,
-    ));
+        ]
+    };
+    painter.add(Shape::convex_polygon(arrow, color, Stroke::NONE));
 
-    let bar_bottom = ui
-        .ctx()
+    let bar_bottom = ctx
         .data(|data| data.get_temp::<f32>(Id::new(MENU_BAR_BOTTOM)))
         .unwrap_or_else(|| ui.max_rect().top());
     let frame = ui.spacing().menu_margin.sum().y;
-    let max_height = ui.ctx().content_rect().bottom() - bar_bottom - MENU_MARGIN - frame;
-    let popup = eframe::egui::containers::menu::SubMenu::new().show(ui, &response, |ui| {
-        menu_scroll(ui, max_height, add_contents)
-    });
-    InnerResponse::new(popup.map(|inner| inner.inner), response)
+    let max_height = ctx.content_rect().bottom() - bar_bottom - MENU_MARGIN - frame;
+    if window_popup {
+        if !expanded {
+            return InnerResponse::new(None, response);
+        }
+        let mut child_rect = ui.available_rect_before_wrap();
+        child_rect.min.x += 16.0;
+        let popup = ui.scope_builder(UiBuilder::new().max_rect(child_rect), |ui| {
+            menu_scroll(ui, max_height, add_contents)
+        });
+        InnerResponse::new(Some(popup.inner), response)
+    } else {
+        let popup = eframe::egui::containers::menu::SubMenu::new().show(ui, &response, |ui| {
+            menu_scroll(ui, max_height, add_contents)
+        });
+        InnerResponse::new(popup.map(|inner| inner.inner), response)
+    }
 }
 
 /// What the menu bar did this frame.
@@ -924,6 +1092,29 @@ fn menu_bar_inner(
     eframe::egui::MenuBar::new().ui(ui, |ui| {
         ui.ctx()
             .data_mut(|data| data.insert_temp(Id::new(MENU_BAR_BOTTOM), ui.min_rect().bottom()));
+        let ctx = ui.ctx().clone();
+        if let Some(open) = open_menu(&ctx)
+            && ctx
+                .data(|data| data.get_temp::<String>(menu_submenu_expanded_id()))
+                .is_none()
+        {
+            let index = TOP_MENUS.iter().position(|label| *label == open);
+            if let Some(index) = index {
+                let next = if ctx
+                    .input_mut(|input| input.consume_key(Modifiers::NONE, Key::ArrowRight))
+                {
+                    Some((index + 1) % TOP_MENUS.len())
+                } else if ctx.input_mut(|input| input.consume_key(Modifiers::NONE, Key::ArrowLeft))
+                {
+                    Some((index + TOP_MENUS.len() - 1) % TOP_MENUS.len())
+                } else {
+                    None
+                };
+                if let Some(next) = next {
+                    set_open_menu(&ctx, Some(TOP_MENUS[next]));
+                }
+            }
+        }
         top_menu(ui, "File", |ui| {
             if menu_item(ui, None, "New", "Ctrl+N", false).clicked() {
                 chosen = Some(Action::New);
