@@ -71,6 +71,26 @@ impl Drop for Kill {
     }
 }
 
+/// Starts the app with `start` and waits for the single window matching `name`. The display
+/// lets go of its state when its last client leaves (as the previous test's app is killed), and
+/// an app that connects at that moment exits at once (`XOpenDisplayFailed`), so an app that
+/// exits before its window appears is started again.
+fn launch(start: impl Fn() -> Command, name: &str) -> (Kill, String) {
+    let spawn = || Kill(start().spawn().expect("the app under test starts"));
+    let mut app = spawn();
+    let end = Instant::now() + Duration::from_secs(40);
+    loop {
+        if let [id] = windows(name).as_slice() {
+            return (app, id.clone());
+        }
+        assert!(Instant::now() < end, "timed out waiting for {name}");
+        if matches!(app.0.try_wait(), Ok(Some(_))) {
+            app = spawn();
+        }
+        std::thread::sleep(Duration::from_millis(300));
+    }
+}
+
 fn probe_path() -> PathBuf {
     // target/<profile>/deps/<this test> -> target/<profile>/examples/modal_probe
     let exe = std::env::current_exe().unwrap();
@@ -137,13 +157,15 @@ fn a_modal_prompt_blocks_the_main_window_until_it_is_answered() {
         return;
     }
     let _serial = serialize();
-    let _app = Kill(
-        Command::new(probe_path())
-            .arg("--modal")
-            .spawn()
-            .expect("modal_probe starts (cargo test builds the example)"),
+    let probe = probe_path();
+    let (_app, main) = launch(
+        || {
+            let mut command = Command::new(&probe);
+            command.arg("--modal");
+            command
+        },
+        "^probe clicks",
     );
-    let main = the_window("^probe clicks");
     let dialog = the_window("^Probe Name$");
     assert_ne!(main, dialog);
 
@@ -199,13 +221,15 @@ fn escape_cancels_a_modal_prompt_and_unblocks_the_main_window() {
         return;
     }
     let _serial = serialize();
-    let _app = Kill(
-        Command::new(probe_path())
-            .arg("--modal")
-            .spawn()
-            .expect("modal_probe starts"),
+    let probe = probe_path();
+    let (_app, main) = launch(
+        || {
+            let mut command = Command::new(&probe);
+            command.arg("--modal");
+            command
+        },
+        "^probe clicks",
     );
-    let main = the_window("^probe clicks");
     let dialog = the_window("^Probe Name$");
     tool("xdotool", &["windowfocus", "--sync", &dialog]);
     tool("xdotool", &["key", "Escape"]);
@@ -223,13 +247,14 @@ fn the_make_group_prompt_is_a_modal_window_of_the_app() {
     }
     // DRYDOCK_OPEN_DIALOG=group opens the Make Group prompt as the app starts (test hook).
     let _serial = serialize();
-    let _app = Kill(
-        Command::new(env!("CARGO_BIN_EXE_drydock"))
-            .env("DRYDOCK_OPEN_DIALOG", "group")
-            .spawn()
-            .expect("drydock starts"),
+    let (_app, prompt) = launch(
+        || {
+            let mut command = Command::new(env!("CARGO_BIN_EXE_drydock"));
+            command.env("DRYDOCK_OPEN_DIALOG", "group");
+            command
+        },
+        "^Make Group$",
     );
-    let prompt = the_window("^Make Group$");
     let main = windows("^Drydock$");
     assert_eq!(main.len(), 1, "one main window: {main:?}");
     assert_transient_for(&prompt, &main[0]);
