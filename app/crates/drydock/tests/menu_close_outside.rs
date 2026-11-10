@@ -7,7 +7,7 @@
 
 use drydock::chrome::{
     FOCUS_GRACE, MenuState, RootClose, RootInput, close_menus_from_root, menu_bar, open_menu,
-    request_menu, request_menu_step, root_close,
+    request_menu, request_menu_step, root_close, root_close_repaint_after,
 };
 use drydock::popup::PopupMode;
 use eframe::egui::{self, Rect, pos2, vec2};
@@ -106,7 +106,35 @@ fn focus_on_a_popup_window_keeps_the_menus_open() {
     assert_eq!(root_close(&i), RootClose::Nothing);
 }
 
-// ---- kittest ------------------------------------------------------------------------
+#[test]
+fn repaint_is_scheduled_for_the_rest_of_the_grace_time() {
+    let mut i = input(true, false);
+    i.unfocused_for = Some(0.1);
+    let after = root_close_repaint_after(&i).expect("a repaint is due");
+    assert!((after - (FOCUS_GRACE - 0.1)).abs() < 1e-9, "{after}");
+    i.unfocused_for = Some(0.0);
+    let after = root_close_repaint_after(&i).expect("a repaint is due");
+    assert!((after - FOCUS_GRACE).abs() < 1e-9);
+}
+
+#[test]
+fn no_repaint_is_needed_in_the_other_cases() {
+    let mut i = input(true, true);
+    i.unfocused_for = Some(FOCUS_GRACE + 0.01);
+    assert_eq!(root_close_repaint_after(&i), None, "grace already over");
+    i.unfocused_for = Some(FOCUS_GRACE);
+    assert_eq!(root_close_repaint_after(&i), None);
+    i.unfocused_for = None;
+    assert_eq!(root_close_repaint_after(&i), None, "focused");
+    i.unfocused_for = Some(0.1);
+    i.popup_has_focus = true;
+    assert_eq!(root_close_repaint_after(&i), None, "a pop-up has focus");
+    let mut closed = input(false, false);
+    closed.unfocused_for = Some(0.1);
+    assert_eq!(root_close_repaint_after(&closed), None, "no menu open");
+}
+
+// ---- kittest -------------------------------------------------------------------------
 
 /// A harness that opens `File` on its first frame and then, each frame, applies the
 /// main-window rules in `mode`. It has no menu bar of its own, so no title rectangles.
@@ -322,6 +350,18 @@ mod real {
         (get("X"), get("Y"), get("WIDTH"), get("HEIGHT"))
     }
 
+    /// Sets the X input focus to None, as when another application takes it away.
+    fn clear_x_focus() {
+        let script = "import ctypes; x=ctypes.CDLL('libX11.so.6'); \
+d=x.XOpenDisplay(None); x.XSetInputFocus(ctypes.c_void_p(d), 0, 2, 0); \
+x.XSync(ctypes.c_void_p(d), 0); x.XCloseDisplay(ctypes.c_void_p(d))";
+        let status = Command::new("python3").args(["-c", script]).status();
+        assert!(
+            status.is_ok_and(|s| s.success()),
+            "could not clear the X focus"
+        );
+    }
+
     fn wait_for(what: &str, mut ready: impl FnMut() -> bool) {
         let end = Instant::now() + Duration::from_secs(40);
         while Instant::now() < end {
@@ -377,6 +417,41 @@ mod real {
             find_window(&file).is_none()
         });
         assert!(find_window(ROOT).is_some());
+
+        // Losing focus entirely (no window has it) closes the menu by itself, with no input.
+        *request.lock().unwrap() = Some("File");
+        wait_for("the File pop-up for the focus test", || {
+            find_window(&file).is_some()
+        });
+        thread::sleep(Duration::from_secs(1));
+        clear_x_focus();
+        thread::sleep(Duration::from_secs(1));
+        assert!(
+            find_window(&file).is_none(),
+            "the menu stays open after focus is lost and nothing happens"
+        );
+
+        // Right in a focused pop-up switches to Edit and the new menu stays open.
+        let edit = drydock::chrome::menu_popup_title("Edit");
+        tool("xdotool", &["windowfocus", "--sync", &root.to_string()]);
+        thread::sleep(Duration::from_millis(500));
+        *request.lock().unwrap() = Some("File");
+        wait_for("the File pop-up for the step test", || {
+            find_window(&file).is_some()
+        });
+        thread::sleep(Duration::from_secs(1));
+        let file_id = find_window(&file).unwrap();
+        tool("xdotool", &["windowfocus", "--sync", &file_id.to_string()]);
+        thread::sleep(Duration::from_millis(300));
+        tool("xdotool", &["key", "Right"]);
+        wait_for("the Edit pop-up after Right", || {
+            find_window(&edit).is_some()
+        });
+        thread::sleep(Duration::from_secs(1));
+        assert!(
+            find_window(&edit).is_some(),
+            "the Edit menu closed by itself after the step"
+        );
 
         quit.store(true, Ordering::SeqCst);
         let end = Instant::now() + Duration::from_secs(20);
