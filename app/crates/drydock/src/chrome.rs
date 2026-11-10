@@ -1166,6 +1166,11 @@ pub fn close_menus_from_root(ctx: &eframe::egui::Context, mode: PopupMode) -> bo
             true
         }
     });
+    if step_focus_pending {
+        // Frames keep coming while the step waits, so `menu_bar` resends the focus request
+        // once the new pop-up exists and the marker is dropped when the window passes.
+        ctx.request_repaint_after_for(Duration::from_millis(50), eframe::egui::ViewportId::ROOT);
+    }
     let popup_has_focus = popup_has_focus || step_focus_pending;
 
     let input = RootInput {

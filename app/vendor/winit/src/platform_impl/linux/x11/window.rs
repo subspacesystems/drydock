@@ -124,6 +124,8 @@ pub struct UnownedWindow {
     pub shared_state: Mutex<SharedState>,
     redraw_sender: WakeSender<WindowId>,
     activation_sender: WakeSender<super::ActivationToken>,
+    /// Local patch (Drydock, PATCHES.md): made with `WindowAttributes::with_popup`.
+    popup: bool, // never changes
 }
 
 macro_rules! leap {
@@ -356,6 +358,7 @@ impl UnownedWindow {
             shared_state: SharedState::new(guessed_monitor, &window_attrs),
             redraw_sender: event_loop.redraw_sender.clone(),
             activation_sender: event_loop.activation_sender.clone(),
+            popup: window_attrs.popup,
         };
 
         // Title must be set before mapping. Some tiling window managers (i.e. i3) use the window
@@ -1830,6 +1833,19 @@ impl UnownedWindow {
                     [1, x11rb::CURRENT_TIME, 0, 0, 0],
                 )
                 .expect_then_ignore_error("Failed to send client message");
+            // Local patch (Drydock, PATCHES.md): a pop-up is a menu of this application,
+            // opened while one of its windows had focus, so it takes the input focus itself as
+            // well. `_NET_ACTIVE_WINDOW` alone does nothing without a window manager, and some
+            // window managers never activate a `PopupMenu` window.
+            if self.popup {
+                if let Ok(cookie) = self.xconn.xcb_connection().set_input_focus(
+                    xproto::InputFocus::PARENT,
+                    self.xwindow,
+                    x11rb::CURRENT_TIME,
+                ) {
+                    cookie.ignore_error();
+                }
+            }
             if let Err(e) = self.xconn.flush_requests() {
                 tracing::error!(
                     "`flush` returned an error when focusing the window. Error was: {}",

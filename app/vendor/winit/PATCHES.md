@@ -62,6 +62,10 @@ Goal: a menu is a real OS window that can reach past the main window's edge.
   `WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE`; the owner comes from the transient parent.
 - `src/platform_impl/linux/wayland/window/mod.rs` (`Window::new`): a pop-up logs a warning once
   and is created as a normal undecorated toplevel (no `xdg_popup` yet).
+- X11: `UnownedWindow` remembers `popup`, and `focus_window` on a pop-up also sets the X input
+  focus to it (`SetInputFocus`, revert to parent) after the `_NET_ACTIVE_WINDOW` request, so a
+  menu the application opens from one of its focused windows gets the keyboard even without a
+  window manager (`m12-menu-focus-loss`).
 
 ## Event loop recreation
 
