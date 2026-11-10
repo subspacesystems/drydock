@@ -1081,7 +1081,7 @@ pub fn close_menus_from_root(ctx: &eframe::egui::Context, mode: PopupMode) -> bo
         return true;
     }
     let Some(menu_label) = open_menu(ctx) else {
-        ctx.data_mut(|data| data.remove_temp::<(String, f64, bool)>(Id::new(MENU_STEP_FOCUS)));
+        ctx.data_mut(|data| data.remove_temp::<(String, f64)>(Id::new(MENU_STEP_FOCUS)));
         return false;
     };
     let submenu_label = open_submenu(ctx);
@@ -1145,11 +1145,11 @@ pub fn close_menus_from_root(ctx: &eframe::egui::Context, mode: PopupMode) -> bo
     });
     let step_focus_pending = ctx.data_mut(|data| {
         let id = Id::new(MENU_STEP_FOCUS);
-        let Some((label, since, reported_focus)) = data.get_temp::<(String, f64, bool)>(id) else {
+        let Some((label, since)) = data.get_temp::<(String, f64)>(id) else {
             return false;
         };
         if label != menu_label {
-            data.remove_temp::<(String, f64, bool)>(id);
+            data.remove_temp::<(String, f64)>(id);
             return false;
         }
         let focused = data
@@ -1159,15 +1159,10 @@ pub fn close_menus_from_root(ctx: &eframe::egui::Context, mode: PopupMode) -> bo
                     .with("popup-has-focus"),
             )
             .unwrap_or(false);
-        if focused && !reported_focus {
-            data.insert_temp(id, (label, since, true));
-        }
-        if now - since >= STEP_FOCUS_WINDOW && (focused || reported_focus) {
-            data.remove_temp::<(String, f64, bool)>(id);
+        if focused || now - since >= STEP_FOCUS_WINDOW {
+            data.remove_temp::<(String, f64)>(id);
             false
         } else {
-            // Still waiting for the new pop-up to report focus. Keep the menus up and let
-            // `menu_bar_inner` ask for focus again (the pop-up may take a few frames).
             true
         }
     });
@@ -1202,7 +1197,7 @@ pub fn close_menus_from_root(ctx: &eframe::egui::Context, mode: PopupMode) -> bo
         RootClose::All => {
             clear_submenu(ctx);
             set_open_menu(ctx, None);
-            ctx.data_mut(|data| data.remove_temp::<(String, f64, bool)>(Id::new(MENU_STEP_FOCUS)));
+            ctx.data_mut(|data| data.remove_temp::<(String, f64)>(Id::new(MENU_STEP_FOCUS)));
         }
         RootClose::Nothing => {}
     }
@@ -1530,14 +1525,14 @@ fn menu_bar_inner(
             if requested_step.is_some() {
                 let now = ui.ctx().input(|input| input.time);
                 ui.ctx().data_mut(|data| {
-                    data.insert_temp(Id::new(MENU_STEP_FOCUS), (label.to_owned(), now, false));
+                    data.insert_temp(Id::new(MENU_STEP_FOCUS), (label.to_owned(), now));
                 });
             }
         }
     }
-    if let Some((label, _, _)) = ui
+    if let Some((label, _)) = ui
         .ctx()
-        .data(|data| data.get_temp::<(String, f64, bool)>(Id::new(MENU_STEP_FOCUS)))
+        .data(|data| data.get_temp::<(String, f64)>(Id::new(MENU_STEP_FOCUS)))
         && open_menu(ui.ctx()).as_deref() == Some(label.as_str())
     {
         ui.ctx().send_viewport_cmd_to(
