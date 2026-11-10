@@ -1976,18 +1976,12 @@ pub fn create_window(
     // Local patch (Drydock, PATCHES.md): the first window made for a context is the root
     // viewport's (eframe creates it first); every later one is a dialog or tool window that
     // names the root window as its transient parent. A window whose title was marked with
-    // `mark_modal_title` is also modal.
+    // `mark_modal_title` is also modal, and one whose title was marked with `mark_popup_title`
+    // is a pop-up (the root viewport is never either).
     let root = root_window_id(egui_ctx);
-    let modal = root.is_some()
-        && viewport_builder
-            .title
-            .as_deref()
-            .is_some_and(|title| is_modal_title(egui_ctx, title));
-    let popup = root.is_some()
-        && viewport_builder
-            .title
-            .as_deref()
-            .is_some_and(|title| is_popup_title(egui_ctx, title));
+    let title = viewport_builder.title.as_deref();
+    let modal = root.is_some() && title.is_some_and(|title| is_modal_title(egui_ctx, title));
+    let popup = root.is_some() && title.is_some_and(|title| is_popup_title(egui_ctx, title));
     let window_attributes = apply_monitor_to_window_attributes(
         create_winit_window_attributes(egui_ctx, viewport_builder.clone()),
         viewport_builder,
@@ -2050,6 +2044,11 @@ pub fn is_modal_title(egui_ctx: &egui::Context, title: &str) -> bool {
     })
 }
 
+/// Local patch (Drydock, PATCHES.md): where [`mark_popup_title`] keeps the marked titles.
+fn popup_titles_key() -> egui::Id {
+    egui::Id::new("egui_winit_popup_titles")
+}
+
 /// Local patch (Drydock, PATCHES.md): every window [`create_window`] makes from now on for a
 /// viewport titled exactly `title` is a pop-up (winit's `WindowAttributes::with_popup`). Call
 /// it before the viewport is first shown. The root viewport is never a pop-up. Like
@@ -2069,11 +2068,6 @@ pub fn is_popup_title(egui_ctx: &egui::Context, title: &str) -> bool {
         data.get_temp::<Vec<String>>(popup_titles_key())
             .is_some_and(|titles| titles.iter().any(|known| known == title))
     })
-}
-
-/// Local patch (Drydock, PATCHES.md): where [`mark_popup_title`] keeps the marked titles.
-fn popup_titles_key() -> egui::Id {
-    egui::Id::new("egui_winit_popup_titles")
 }
 
 /// Apply [`ViewportBuilder::with_monitor`] to freshly-built [`winit::window::WindowAttributes`].

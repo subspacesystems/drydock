@@ -18,10 +18,13 @@ use sctk::reexports::csd_frame::{
 use sctk::reexports::protocols::wp::fractional_scale::v1::client::wp_fractional_scale_v1::WpFractionalScaleV1;
 use sctk::reexports::protocols::wp::text_input::zv3::client::zwp_text_input_v3::ZwpTextInputV3;
 use sctk::reexports::protocols::wp::viewporter::client::wp_viewport::WpViewport;
+use sctk::reexports::protocols::xdg::shell::client::xdg_surface::XdgSurface as XdgSurfaceProxy;
 use sctk::reexports::protocols::xdg::shell::client::xdg_toplevel::ResizeEdge as XdgResizeEdge;
+use sctk::reexports::protocols::xdg::shell::client::xdg_toplevel::XdgToplevel;
 
 use sctk::compositor::{CompositorState, Region, SurfaceData, SurfaceDataExt};
 use sctk::seat::pointer::{PointerDataExt, ThemedPointer};
+use sctk::shell::xdg::popup::Popup;
 use sctk::shell::xdg::window::{DecorationMode, Window, WindowConfigure};
 use sctk::shell::xdg::XdgSurface;
 use sctk::shell::WaylandSurface;
@@ -53,6 +56,40 @@ pub type WinitFrame = sctk::shell::xdg::fallback_frame::FallbackFrame<WinitState
 
 // Minimum window inner size.
 const MIN_WINDOW_SIZE: LogicalSize<u32> = LogicalSize::new(2, 1);
+
+/// Local patch (Drydock, PATCHES.md): what a window's surface is, a toplevel or an `xdg_popup`.
+#[derive(Clone, Debug)]
+pub enum WindowRole {
+    Toplevel(Window),
+    Popup(Popup),
+}
+
+impl WindowRole {
+    pub fn wl_surface(&self) -> &WlSurface {
+        match self {
+            Self::Toplevel(window) => window.wl_surface(),
+            Self::Popup(popup) => popup.wl_surface(),
+        }
+    }
+
+    pub fn xdg_surface(&self) -> &XdgSurfaceProxy {
+        match self {
+            Self::Toplevel(window) => window.xdg_surface(),
+            Self::Popup(popup) => popup.xdg_surface(),
+        }
+    }
+
+    pub fn toplevel(&self) -> Option<&Window> {
+        match self {
+            Self::Toplevel(window) => Some(window),
+            Self::Popup(_) => None,
+        }
+    }
+
+    pub fn xdg_toplevel(&self) -> Option<&XdgToplevel> {
+        self.toplevel().map(Window::xdg_toplevel)
+    }
+}
 
 /// The state of the window which is being updated from the [`WinitState`].
 pub struct WindowState {
@@ -156,8 +193,11 @@ pub struct WindowState {
     /// The value is the serial of the event triggered moved.
     has_pending_move: Option<u32>,
 
-    /// The underlying SCTK window.
-    pub window: Window,
+    /// Local patch (Drydock, PATCHES.md): whether an `xdg_popup` has been configured.
+    popup_configured: bool,
+
+    /// The underlying SCTK window or pop-up.
+    pub window: WindowRole,
 
     // NOTE: The spec says that destroying parent(`window` in our case), will unmap the
     // subsurfaces. Thus to achieve atomic unmap of the client, drop the decorations
@@ -174,7 +214,7 @@ impl WindowState {
         queue_handle: &QueueHandle<WinitState>,
         winit_state: &WinitState,
         initial_size: Size,
-        window: Window,
+        window: WindowRole,
         theme: Option<Theme>,
     ) -> Self {
         let compositor = winit_state.compositor_state.clone();
@@ -206,6 +246,7 @@ impl WindowState {
             ime_allowed: false,
             ime_purpose: ImePurpose::Normal,
             last_configure: None,
+            popup_configured: false,
             max_inner_size: None,
             min_inner_size: MIN_WINDOW_SIZE,
             resize_increments: None,
@@ -281,44 +322,47 @@ impl WindowState {
             self.stateless_size = self.size;
         }
 
-        if let Some(subcompositor) = subcompositor.as_ref().filter(|_| {
-            configure.decoration_mode == DecorationMode::Client
+        if let (Some(subcompositor), Some(toplevel)) =
+            (subcompositor.as_ref(), self.window.toplevel())
+        {
+            if configure.decoration_mode == DecorationMode::Client
                 && self.frame.is_none()
                 && !self.csd_fails
-        }) {
-            match WinitFrame::new(
-                &self.window,
-                shm,
-                #[cfg(feature = "sctk-adwaita")]
-                self.compositor.clone(),
-                subcompositor.clone(),
-                self.queue_handle.clone(),
-                #[cfg(feature = "sctk-adwaita")]
-                into_sctk_adwaita_config(self.theme),
-            ) {
-                Ok(mut frame) => {
-                    frame.set_title(&self.title);
-                    frame.set_scaling_factor(self.scale_factor);
-                    // Hide the frame if we were asked to not decorate.
-                    frame.set_hidden(!self.decorate);
-                    // Local patch (Drydock, PATCHES.md): apply the stored resizable and button
-                    // state now that the frame exists.
-                    frame.set_resizable(self.resizable);
+            {
+                match WinitFrame::new(
+                    toplevel,
+                    shm,
                     #[cfg(feature = "sctk-adwaita")]
-                    frame.set_enabled_buttons(
-                        self.enabled_buttons.contains(WindowButtons::MINIMIZE),
-                        self.enabled_buttons.contains(WindowButtons::MAXIMIZE),
-                    );
-                    self.frame = Some(frame);
-                },
-                Err(err) => {
-                    warn!("Failed to create client side decorations frame: {err}");
-                    self.csd_fails = true;
-                },
+                    self.compositor.clone(),
+                    subcompositor.clone(),
+                    self.queue_handle.clone(),
+                    #[cfg(feature = "sctk-adwaita")]
+                    into_sctk_adwaita_config(self.theme),
+                ) {
+                    Ok(mut frame) => {
+                        frame.set_title(&self.title);
+                        frame.set_scaling_factor(self.scale_factor);
+                        // Hide the frame if we were asked to not decorate.
+                        frame.set_hidden(!self.decorate);
+                        // Local patch (Drydock, PATCHES.md): apply the stored resizable and button
+                        // state now that the frame exists.
+                        frame.set_resizable(self.resizable);
+                        #[cfg(feature = "sctk-adwaita")]
+                        frame.set_enabled_buttons(
+                            self.enabled_buttons.contains(WindowButtons::MINIMIZE),
+                            self.enabled_buttons.contains(WindowButtons::MAXIMIZE),
+                        );
+                        self.frame = Some(frame);
+                    },
+                    Err(err) => {
+                        warn!("Failed to create client side decorations frame: {err}");
+                        self.csd_fails = true;
+                    },
+                }
+            } else if configure.decoration_mode == DecorationMode::Server {
+                // Drop the frame for server side decorations to save resources.
+                self.frame = None;
             }
-        } else if configure.decoration_mode == DecorationMode::Server {
-            // Drop the frame for server side decorations to save resources.
-            self.frame = None;
         }
 
         let stateless = Self::is_stateless(&configure);
@@ -444,7 +488,9 @@ impl WindowState {
 
     /// Start interacting drag resize.
     pub fn drag_resize_window(&self, direction: ResizeDirection) -> Result<(), ExternalError> {
-        let xdg_toplevel = self.window.xdg_toplevel();
+        let Some(xdg_toplevel) = self.window.xdg_toplevel() else {
+            return Ok(());
+        };
 
         // TODO(kchibisov) handle touch serials.
         self.apply_on_pointer(|_, data| {
@@ -458,7 +504,9 @@ impl WindowState {
 
     /// Start the window drag.
     pub fn drag_window(&self) -> Result<(), ExternalError> {
-        let xdg_toplevel = self.window.xdg_toplevel();
+        let Some(xdg_toplevel) = self.window.xdg_toplevel() else {
+            return Ok(());
+        };
         // TODO(kchibisov) handle touch serials.
         self.apply_on_pointer(|_, data| {
             let serial = data.latest_button_serial();
@@ -482,9 +530,21 @@ impl WindowState {
         updates: &mut Vec<WindowCompositorUpdate>,
     ) -> Option<bool> {
         match self.frame.as_mut()?.on_click(timestamp, click, pressed)? {
-            FrameAction::Minimize => self.window.set_minimized(),
-            FrameAction::Maximize => self.window.set_maximized(),
-            FrameAction::UnMaximize => self.window.unset_maximized(),
+            FrameAction::Minimize => {
+                if let Some(window) = self.window.toplevel() {
+                    window.set_minimized();
+                }
+            },
+            FrameAction::Maximize => {
+                if let Some(window) = self.window.toplevel() {
+                    window.set_maximized();
+                }
+            },
+            FrameAction::UnMaximize => {
+                if let Some(window) = self.window.toplevel() {
+                    window.unset_maximized();
+                }
+            },
             FrameAction::Close => WinitState::queue_close(updates, window_id),
             FrameAction::Move => self.has_pending_move = Some(serial),
             FrameAction::Resize(edge) => {
@@ -500,9 +560,15 @@ impl WindowState {
                     ResizeEdge::BottomRight => XdgResizeEdge::BottomRight,
                     _ => return None,
                 };
-                self.window.resize(seat, serial, edge);
+                if let Some(window) = self.window.toplevel() {
+                    window.resize(seat, serial, edge);
+                }
             },
-            FrameAction::ShowMenu(x, y) => self.window.show_window_menu(seat, serial, (x, y)),
+            FrameAction::ShowMenu(x, y) => {
+                if let Some(window) = self.window.toplevel() {
+                    window.show_window_menu(seat, serial, (x, y));
+                }
+            },
             _ => (),
         };
 
@@ -532,7 +598,9 @@ impl WindowState {
             // If we have a cursor change, that means that cursor is over the decorations,
             // so try to apply move.
             if let Some(serial) = cursor.is_some().then_some(serial).flatten() {
-                self.window.move_(seat, serial);
+                if let Some(window) = self.window.toplevel() {
+                    window.move_(seat, serial);
+                }
                 None
             } else {
                 cursor
@@ -626,11 +694,45 @@ impl WindowState {
     /// Whether the window received initial configure event from the compositor.
     #[inline]
     pub fn is_configured(&self) -> bool {
-        self.last_configure.is_some()
+        self.last_configure.is_some() || self.popup_configured
+    }
+
+    /// Local patch (Drydock, PATCHES.md): remember the size an `xdg_popup` was configured with.
+    pub fn configure_popup(&mut self, width: i32, height: i32) -> bool {
+        self.popup_configured = true;
+
+        let (width, height) = (width.max(1) as u32, height.max(1) as u32);
+        let new_size = LogicalSize::new(width, height);
+        if new_size != self.size {
+            self.size = new_size;
+            self.stateless_size = new_size;
+            if let Some(viewport) = self.viewport.as_ref() {
+                viewport.set_destination(self.size.width as _, self.size.height as _);
+            }
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Local patch (Drydock, PATCHES.md): where the content area starts inside the window
+    /// geometry, i.e. the client-side title bar height as a positive offset.
+    pub fn content_offset(&self) -> (i32, i32) {
+        self.frame
+            .as_ref()
+            .map(|frame| {
+                let (x, y) = frame.location();
+                (-x, -y)
+            })
+            .unwrap_or((0, 0))
     }
 
     #[inline]
     pub fn is_decorated(&mut self) -> bool {
+        if matches!(self.window, WindowRole::Popup(_)) {
+            return false;
+        }
+
         let csd = self
             .last_configure
             .as_ref()
@@ -871,7 +973,9 @@ impl WindowState {
             .unwrap_or(size);
 
         self.min_inner_size = size;
-        self.window.set_min_size(Some(size.into()));
+        if let Some(window) = self.window.toplevel() {
+            window.set_min_size(Some(size.into()));
+        }
     }
 
     /// Set maximum inner window size.
@@ -884,7 +988,9 @@ impl WindowState {
         });
 
         self.max_inner_size = size;
-        self.window.set_max_size(size.map(Into::into));
+        if let Some(window) = self.window.toplevel() {
+            window.set_max_size(size.map(Into::into));
+        }
     }
 
     /// Set the CSD theme.
@@ -977,11 +1083,14 @@ impl WindowState {
     }
 
     pub fn show_window_menu(&self, position: LogicalPosition<u32>) {
+        let Some(window) = self.window.toplevel() else {
+            return;
+        };
         // TODO(kchibisov) handle touch serials.
         self.apply_on_pointer(|_, data| {
             let serial = data.latest_button_serial();
             let seat = data.seat();
-            self.window.show_window_menu(seat, serial, position.into());
+            window.show_window_menu(seat, serial, position.into());
         });
     }
 
@@ -1032,13 +1141,17 @@ impl WindowState {
 
         self.decorate = decorate;
 
-        match self.last_configure.as_ref().map(|configure| configure.decoration_mode) {
-            Some(DecorationMode::Server) if !self.decorate => {
-                // To disable decorations we should request client and hide the frame.
-                self.window.request_decoration_mode(Some(DecorationMode::Client))
-            },
-            _ if self.decorate => self.window.request_decoration_mode(Some(DecorationMode::Server)),
-            _ => (),
+        if let Some(window) = self.window.toplevel() {
+            match self.last_configure.as_ref().map(|configure| configure.decoration_mode) {
+                Some(DecorationMode::Server) if !self.decorate => {
+                    // To disable decorations we should request client and hide the frame.
+                    window.request_decoration_mode(Some(DecorationMode::Client))
+                },
+                _ if self.decorate => {
+                    window.request_decoration_mode(Some(DecorationMode::Server))
+                },
+                _ => (),
+            }
         }
 
         if let Some(frame) = self.frame.as_mut() {
@@ -1114,7 +1227,7 @@ impl WindowState {
 
         // NOTE: When fractional scaling is not used update the buffer scale.
         if self.fractional_scale.is_none() {
-            let _ = self.window.set_buffer_scale(self.scale_factor as _);
+            self.window.wl_surface().set_buffer_scale(self.scale_factor as i32);
         }
 
         if let Some(frame) = self.frame.as_mut() {
@@ -1158,7 +1271,9 @@ impl WindowState {
             frame.set_title(&title);
         }
 
-        self.window.set_title(&title);
+        if let Some(window) = self.window.toplevel() {
+            window.set_title(&title);
+        }
         self.title = title;
     }
 

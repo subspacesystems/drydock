@@ -12,15 +12,21 @@ use sctk::reexports::client::{Proxy, QueueHandle};
 use sctk::compositor::{CompositorState, Region, SurfaceData};
 use sctk::reexports::protocols::xdg::activation::v1::client::xdg_activation_v1::XdgActivationV1;
 use sctk::reexports::protocols::xdg::dialog::v1::client::xdg_dialog_v1::XdgDialogV1;
-use sctk::shell::xdg::window::{Window as SctkWindow, WindowDecorations};
+use sctk::reexports::protocols::xdg::shell::client::xdg_positioner::{
+    Anchor, ConstraintAdjustment, Gravity,
+};
+use sctk::shell::xdg::popup::Popup;
+use sctk::shell::xdg::window::WindowDecorations;
+use sctk::shell::xdg::XdgPositioner;
 use sctk::shell::WaylandSurface;
 
-use tracing::warn;
+use tracing::{debug, warn};
 
-use crate::dpi::{LogicalSize, PhysicalPosition, PhysicalSize, Position, Size};
+use crate::dpi::{LogicalPosition, LogicalSize, PhysicalPosition, PhysicalSize, Position, Size};
 use crate::error::{ExternalError, NotSupportedError, OsError as RootOsError};
 use crate::event::{Ime, WindowEvent};
 use crate::event_loop::AsyncRequestSerial;
+use crate::platform::wayland::popup_positioner;
 use crate::platform_impl::{
     Fullscreen, MonitorHandle as PlatformMonitorHandle, OsError, PlatformIcon,
 };
@@ -35,14 +41,21 @@ use super::state::WinitState;
 use super::types::xdg_activation::XdgActivationTokenData;
 use super::{ActiveEventLoop, WaylandError, WindowId};
 
+/// Local patch (Drydock, PATCHES.md): whether the Wayland pop-up warning was already logged.
+static POPUP_WARNED: AtomicBool = AtomicBool::new(false);
+
 pub(crate) mod state;
 
+use state::WindowRole;
 pub use state::WindowState;
+
+/// Local patch (Drydock, PATCHES.md): whether the fallback for a pop-up was already announced.
+static POPUP_FALLBACK_WARNED: AtomicBool = AtomicBool::new(false);
 
 /// The Wayland window.
 pub struct Window {
-    /// Reference to the underlying SCTK window.
-    window: SctkWindow,
+    /// Reference to the underlying SCTK window or pop-up.
+    window: WindowRole,
 
     /// Window id.
     window_id: WindowId,
@@ -85,12 +98,35 @@ pub struct Window {
 impl Window {
     pub(crate) fn new(
         event_loop_window_target: &ActiveEventLoop,
-        attributes: WindowAttributes,
+        mut attributes: WindowAttributes,
     ) -> Result<Self, RootOsError> {
         let queue_handle = event_loop_window_target.queue_handle.clone();
         let mut state = event_loop_window_target.state.borrow_mut();
 
         let monitors = state.monitors.clone();
+
+        // Local patch (Drydock, PATCHES.md): a pop-up with a parent in this loop is a real
+        // `xdg_popup`; otherwise it falls back to the undecorated toplevel below.
+        if attributes.popup() {
+            let parent = attributes
+                .transient_parent
+                .filter(|parent_id| state.windows.get_mut().contains_key(&parent_id.0));
+            if let Some(parent_id) = parent {
+                match Self::new_popup(
+                    event_loop_window_target,
+                    &mut state,
+                    &attributes,
+                    parent_id.0,
+                ) {
+                    Ok(window) => return Ok(window),
+                    Err(_) => Self::warn_popup_fallback(),
+                }
+            } else {
+                Self::warn_popup_fallback();
+            }
+
+            attributes.decorations = false;
+        }
 
         let surface = state.compositor_state.create_surface(&queue_handle);
         let compositor = state.compositor_state.clone();
@@ -100,9 +136,16 @@ impl Window {
 
         let size: Size = attributes.inner_size.unwrap_or(LogicalSize::new(800., 600.).into());
 
+        // Local patch (Drydock, PATCHES.md): pop-ups are not supported on Wayland yet; use a
+        // normal undecorated toplevel instead (it keeps the transient parent).
+        if attributes.popup && !POPUP_WARNED.swap(true, Ordering::Relaxed) {
+            warn!("pop-up windows are not supported on Wayland yet; using an undecorated window");
+        }
+        let decorations = attributes.decorations && !attributes.popup;
+
         // We prefer server side decorations, however to not have decorations we ask for client
         // side decorations instead.
-        let default_decorations = if attributes.decorations {
+        let default_decorations = if decorations {
             WindowDecorations::RequestServer
         } else {
             WindowDecorations::RequestClient
@@ -116,7 +159,7 @@ impl Window {
             &event_loop_window_target.queue_handle,
             &state,
             size,
-            window.clone(),
+            WindowRole::Toplevel(window.clone()),
             attributes.preferred_theme,
         );
 
@@ -126,7 +169,7 @@ impl Window {
         window_state.set_blur(attributes.blur);
 
         // Set the decorations hint.
-        window_state.set_decorate(attributes.decorations);
+        window_state.set_decorate(decorations);
 
         // Set the app_id.
         if let Some(name) = attributes.platform_specific.name.map(|name| name.general) {
@@ -190,7 +233,12 @@ impl Window {
         // Local patch (Drydock, PATCHES.md): a dialog names the window it belongs to.
         if let Some(parent_id) = attributes.transient_parent {
             match state.windows.get_mut().get(&parent_id.0) {
-                Some(parent) => window.set_parent(Some(&parent.lock().unwrap().window)),
+                Some(parent) => {
+                    let parent = parent.lock().unwrap();
+                    if let Some(parent) = parent.window.toplevel() {
+                        window.set_parent(Some(parent));
+                    }
+                },
                 None => warn!("transient parent {parent_id:?} is not a window of this event loop"),
             }
         }
@@ -242,7 +290,7 @@ impl Window {
         event_loop_awakener.ping();
 
         Ok(Self {
-            window,
+            window: WindowRole::Toplevel(window),
             display,
             monitors,
             window_id,
@@ -258,8 +306,149 @@ impl Window {
         })
     }
 
+    fn warn_popup_fallback() {
+        if !POPUP_FALLBACK_WARNED.swap(true, Ordering::Relaxed) {
+            warn!(
+                "a pop-up window needs a transient parent in this event loop; using an \
+                 undecorated toplevel"
+            );
+        }
+    }
+
+    /// Local patch (Drydock, PATCHES.md): create a pop-up as an `xdg_popup` of its parent.
+    fn new_popup(
+        event_loop_window_target: &ActiveEventLoop,
+        state: &mut WinitState,
+        attributes: &WindowAttributes,
+        parent_id: WindowId,
+    ) -> Result<Self, RootOsError> {
+        let queue_handle = event_loop_window_target.queue_handle.clone();
+        let display = event_loop_window_target.connection.display();
+        let monitors = state.monitors.clone();
+
+        let parent = state
+            .windows
+            .get_mut()
+            .get(&parent_id)
+            .expect("pop-up parent disappeared")
+            .clone();
+        let (parent_surface, content_offset, parent_scale) = {
+            let parent = parent.lock().unwrap();
+            (parent.window.xdg_surface().clone(), parent.content_offset(), parent.scale_factor())
+        };
+
+        let initial_size: Size =
+            attributes.inner_size.unwrap_or(LogicalSize::new(800., 600.).into());
+        let logical_size: LogicalSize<u32> = initial_size.to_logical(parent_scale);
+        let requested = attributes
+            .position
+            .map(|position| position.to_logical::<i32>(parent_scale))
+            .unwrap_or(LogicalPosition::new(0, 0));
+
+        let placement = popup_positioner(
+            content_offset,
+            (requested.x, requested.y),
+            (logical_size.width as i32, logical_size.height as i32),
+        );
+
+        let positioner = XdgPositioner::new(&state.xdg_shell)
+            .map_err(|_| os_error!(OsError::Misc("failed to create an xdg_positioner")))?;
+        positioner.set_size(placement.size.0, placement.size.1);
+        positioner.set_anchor_rect(
+            placement.anchor_rect.x,
+            placement.anchor_rect.y,
+            placement.anchor_rect.width,
+            placement.anchor_rect.height,
+        );
+        positioner.set_anchor(Anchor::TopLeft);
+        positioner.set_gravity(Gravity::BottomRight);
+        positioner.set_offset(placement.offset.0, placement.offset.1);
+
+        let mut adjustment = ConstraintAdjustment::empty();
+        if placement.adjustment.slide_x {
+            adjustment |= ConstraintAdjustment::SlideX;
+        }
+        if placement.adjustment.slide_y {
+            adjustment |= ConstraintAdjustment::SlideY;
+        }
+        if placement.adjustment.flip_x {
+            adjustment |= ConstraintAdjustment::FlipX;
+        }
+        if placement.adjustment.flip_y {
+            adjustment |= ConstraintAdjustment::FlipY;
+        }
+        positioner.set_constraint_adjustment(adjustment);
+
+        let surface = state.compositor_state.create_surface(&queue_handle);
+        let popup = Popup::from_surface(
+            Some(&parent_surface),
+            &positioner,
+            &queue_handle,
+            surface,
+            &state.xdg_shell,
+        )
+        .map_err(|_| os_error!(OsError::Misc("failed to create an xdg_popup")))?;
+
+        let window_state = WindowState::new(
+            event_loop_window_target.connection.clone(),
+            &queue_handle,
+            state,
+            initial_size,
+            WindowRole::Popup(popup.clone()),
+            attributes.preferred_theme,
+        );
+        let window_state = Arc::new(Mutex::new(window_state));
+        let window_id = super::make_wid(popup.wl_surface());
+        state.windows.get_mut().insert(window_id, window_state.clone());
+
+        let window_requests = Arc::new(WindowRequests {
+            redraw_requested: AtomicBool::new(true),
+            closed: AtomicBool::new(false),
+        });
+        state.window_requests.get_mut().insert(window_id, window_requests.clone());
+
+        // Grab before the first commit, so the compositor sees it in the initial state.
+        match state.seats.values().find_map(|seat| seat.popup_grab()) {
+            Some((seat, serial)) => popup.xdg_popup().grab(&seat, serial),
+            None => debug!("no pointer button serial; creating the pop-up without a grab"),
+        }
+        popup.wl_surface().commit();
+
+        let mut wayland_source = event_loop_window_target.wayland_dispatcher.as_source_mut();
+        let event_queue = wayland_source.queue();
+        event_queue.roundtrip(state).map_err(|error| {
+            os_error!(OsError::WaylandError(Arc::new(WaylandError::Dispatch(error))))
+        })?;
+        while !window_state.lock().unwrap().is_configured() {
+            event_queue.blocking_dispatch(state).map_err(|error| {
+                os_error!(OsError::WaylandError(Arc::new(WaylandError::Dispatch(error))))
+            })?;
+        }
+
+        let event_loop_awakener = event_loop_window_target.event_loop_awakener.clone();
+        event_loop_awakener.ping();
+
+        Ok(Self {
+            window: WindowRole::Popup(popup),
+            display,
+            monitors,
+            window_id,
+            compositor: state.compositor_state.clone(),
+            window_state,
+            queue_handle,
+            xdg_activation: None,
+            attention_requested: Arc::new(AtomicBool::new(false)),
+            xdg_dialog: None,
+            event_loop_awakener,
+            window_requests,
+            window_events_sink: state.window_events_sink.clone(),
+        })
+    }
+
     pub(crate) fn xdg_toplevel(&self) -> Option<NonNull<c_void>> {
-        NonNull::new(self.window.xdg_toplevel().id().as_ptr().cast())
+        self.window
+            .xdg_toplevel()
+            .map(|toplevel| NonNull::new(toplevel.id().as_ptr().cast()).unwrap())
     }
 }
 
@@ -469,7 +658,9 @@ impl Window {
             return;
         }
 
-        self.window.set_minimized();
+        if let WindowRole::Toplevel(window) = &self.window {
+            window.set_minimized();
+        }
     }
 
     #[inline]
@@ -485,10 +676,13 @@ impl Window {
 
     #[inline]
     pub fn set_maximized(&self, maximized: bool) {
+        let WindowRole::Toplevel(window) = &self.window else {
+            return;
+        };
         if maximized {
-            self.window.set_maximized()
+            window.set_maximized()
         } else {
-            self.window.unset_maximized()
+            window.unset_maximized()
         }
     }
 
@@ -525,9 +719,15 @@ impl Window {
                     PlatformMonitorHandle::X(_) => None,
                 });
 
-                self.window.set_fullscreen(output.as_ref())
+                if let WindowRole::Toplevel(window) = &self.window {
+                    window.set_fullscreen(output.as_ref())
+                }
             },
-            None => self.window.unset_fullscreen(),
+            None => {
+                if let WindowRole::Toplevel(window) = &self.window {
+                    window.unset_fullscreen()
+                }
+            },
         }
     }
 

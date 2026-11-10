@@ -63,6 +63,15 @@ impl WinitSeatState {
     pub fn new() -> Self {
         Default::default()
     }
+
+    /// Local patch (Drydock, PATCHES.md): the seat and the latest button serial a pop-up can
+    /// grab with, if this seat has seen a button press.
+    pub fn popup_grab(&self) -> Option<(WlSeat, u32)> {
+        let pointer = self.pointer.as_ref()?;
+        let data = pointer.pointer().winit_data();
+        let serial = data.latest_button_serial();
+        (serial != 0).then(|| (data.seat().clone(), serial))
+    }
 }
 
 impl SeatHandler for WinitState {
