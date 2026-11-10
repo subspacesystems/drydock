@@ -11,6 +11,7 @@ use drydock::background_ui;
 use drydock::chrome::{self, MenuState};
 use drydock::clearance_offset::selected_instances;
 use drydock::components_panel::{ComponentAction, ComponentsPanel, components_panel};
+use drydock::cursor_set;
 use drydock::dialog;
 use drydock::dock::{
     self, DockLayout, PanelEvent, PanelId, Side as DockSide, StackRow, apply_drop,
@@ -1595,21 +1596,26 @@ impl App {
             .is_some_and(|editor| editor.eyedropper_armed());
         let left_tool = tool.and_then(|tool| input::left_button_tool(tool, armed));
         if response.contains_pointer() && armed {
+            ui.ctx().set_cursor_image(None);
             ui.ctx().set_cursor_icon(egui::CursorIcon::None);
-        }
-        if response.contains_pointer()
-            && let Some(handles) = self.editor.as_ref().and_then(|editor| {
-                self.model
-                    .as_ref()
-                    .and_then(|document| document.kernel.as_ref())
-                    .and_then(|model| editor.texture_handles(model))
-            })
-        {
-            let icon = handles
-                .held
-                .or(handles.hover)
-                .map_or(egui::CursorIcon::Default, |grip| grip.cursor());
-            ui.ctx().set_cursor_icon(icon);
+        } else if response.contains_pointer() {
+            let grip = self
+                .editor
+                .as_ref()
+                .and_then(|editor| {
+                    self.model
+                        .as_ref()
+                        .and_then(|document| document.kernel.as_ref())
+                        .and_then(|model| editor.texture_handles(model))
+                })
+                .and_then(|handles| handles.held.or(handles.hover))
+                .map(|grip| grip.cursor());
+            let middle_down = ui.input(|i| i.pointer.middle_down());
+            if let Some(tool) = tool {
+                cursor_set::apply(ui.ctx(), tool, grip, middle_down, mods.shift);
+            }
+        } else {
+            ui.ctx().set_cursor_image(None);
         }
         for (egui_button, button) in [
             (PointerButton::Primary, Button::Left),
