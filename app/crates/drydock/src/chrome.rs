@@ -1024,6 +1024,19 @@ pub fn root_close(input: &RootInput<'_>) -> RootClose {
     RootClose::Nothing
 }
 
+/// How long (seconds) after a pop-up asked for a menu step the new menu counts as focused
+/// even though its pop-up has not yet reported focus.
+pub const STEP_FOCUS_WINDOW: f64 = 0.5;
+
+/// When the main window should be repainted so a focus-loss close happens on time: `Some`
+/// of the seconds left until [`FOCUS_GRACE`] is reached when a menu is open, the main
+/// window is unfocused (`unfocused_for` is `Some` and below the grace), and no pop-up has
+/// focus; `None` in every other case (including when the grace has already passed).
+pub fn root_close_repaint_after(input: &RootInput<'_>) -> Option<f64> {
+    let _ = input;
+    unimplemented!("m12-menu-focus-loss")
+}
+
 /// Applies [`root_close`] to the main window's input. Does nothing unless `mode` is
 /// `PopupMode::Window` and a menu is open (inline pop-ups close themselves). Reads the
 /// ROOT viewport's input, consumes the Escape it acts on, records unfocused time and the
