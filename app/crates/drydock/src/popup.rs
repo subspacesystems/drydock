@@ -58,7 +58,7 @@ pub fn popup_supported_on(os: &str, wayland: bool) -> bool {
 /// `WAYLAND_DISPLAY` is non-empty and `WINIT_UNIX_BACKEND` is not "x11".
 pub fn popup_supported() -> bool {
     let wayland = std::env::var_os("WAYLAND_DISPLAY").is_some_and(|v| !v.is_empty())
-        && std::env::var_os("WINIT_UNIX_BACKEND").map_or(true, |backend| backend != "x11");
+        && std::env::var_os("WINIT_UNIX_BACKEND").is_none_or(|backend| backend != "x11");
     popup_supported_on(std::env::consts::OS, wayland)
 }
 
@@ -166,7 +166,7 @@ fn popup_window_window(
     let placeholder = vec2(120.0, 40.0);
     let shown_id = viewport_id.0.with("popup-shown");
     let focus_id = viewport_id.0.with("popup-focused");
-    let shown = ctx.data(|data| *data.get_temp_mut_or(shown_id, false));
+    let shown = ctx.data(|data| data.get_temp::<bool>(shown_id).unwrap_or(false));
     let builder = crate::window_icon::with_app_identity(
         egui::ViewportBuilder::default()
             .with_title(popup.title)
@@ -186,15 +186,14 @@ fn popup_window_window(
         let frame = egui::Frame::menu(ui.style());
         let margin = frame.total_margin().sum();
         let content_size = egui::CentralPanel::default()
-            .frame(frame.clone())
+            .frame(frame)
             .show(ui, |ui| {
-                ui.scope(|ui| {
-                    if let Some(content) = content.take() {
-                        content(ui);
-                    }
-                })
-                .response
-                .rect
+                let start = ui.min_rect().min;
+                if let Some(content) = content.take() {
+                    content(ui);
+                }
+                let end = ui.min_rect().max;
+                end - start
             })
             .inner
             + margin;
@@ -203,24 +202,25 @@ fn popup_window_window(
         let current = ui
             .input(|input| input.viewport().inner_rect)
             .map_or(placeholder, |r| r.size());
-        if (current.x - target.x).abs() > 1.0 || (current.y - target.y).abs() > 1.0 {
-            ctx.send_viewport_cmd_to(
-                viewport_id,
-                egui::ViewportCommand::InnerSize(target),
-            );
+        if crate::dialog::needs_resize(current.x, target.x)
+            || crate::dialog::needs_resize(current.y, target.y)
+        {
+            ctx.send_viewport_cmd_to(viewport_id, egui::ViewportCommand::InnerSize(target));
             ctx.request_repaint();
         }
         if !shown {
             ctx.data_mut(|data| data.insert_temp(shown_id, true));
+            ctx.request_repaint();
         }
-        let focused = ui.input(|input| input.viewport().focused).unwrap_or(false);
-        if ctx
-            .data(|data| *data.get_temp_mut_or(focus_id, false))
-            && !focused
+        let focused = ui.input(|input| input.viewport().focused);
+        if ctx.data(|data| data.get_temp::<bool>(focus_id).unwrap_or(false))
+            && focused == Some(false)
         {
             close = true;
         }
-        ctx.data_mut(|data| data.insert_temp(focus_id, focused));
+        if focused == Some(true) {
+            ctx.data_mut(|data| data.insert_temp(focus_id, true));
+        }
         if ui.input(|i| i.viewport().close_requested() || i.key_pressed(egui::Key::Escape)) {
             close = true;
         }
@@ -251,37 +251,30 @@ fn popup_window_inline(
     let size = size.unwrap_or_default();
     let position = inline_position(root_inner, popup.position, size, content_rect);
     let mut close = false;
-    let mut rect = None;
-    let mut new_size = Vec2::ZERO;
+    let mut content = Some(content);
+    let response = egui::Area::new(egui::Id::new(("drydock-popup-area", popup.title)))
+        .order(egui::Order::Foreground)
+        .fixed_pos(position)
+        .interactable(true)
+        .show(ctx, |ui| {
+            egui::Frame::menu(ui.style()).show(ui, |ui| {
+                if let Some(content) = content.take() {
+                    content(ui);
+                }
+            });
+        });
+    let rect = Some(response.response.rect);
+    let new_size = response.response.rect.size();
+    let outside = ctx.input(|input| {
+        input.pointer.button_pressed(egui::PointerButton::Primary)
+            && input
+                .pointer
+                .interact_pos()
+                .is_some_and(|pos| !response.response.rect.contains(pos))
+    });
+    if ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) || outside
     {
-        let mut content = Some(content);
-        let response = egui::Area::new(egui::Id::new(("drydock-popup-area", popup.title)))
-            .order(egui::Order::Foreground)
-            .fixed_pos(position)
-            .interactable(true)
-            .show(ctx, |ui| {
-                egui::Frame::menu(ui.style()).show_inside(ui, |ui| {
-                    if let Some(content) = content.take() {
-                        content(ui);
-                    }
-                });
-            });
-        if let Some(response) = response {
-            rect = Some(response.response.rect);
-            new_size = response.response.rect.size();
-            let outside = ctx.input(|input| {
-                input.pointer().button_pressed(egui::PointerButton::Primary)
-                    && input
-                        .pointer()
-                        .interact_pos()
-                        .is_some_and(|pos| !response.response.rect.contains(pos))
-            });
-            if ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::Escape))
-                || outside
-            {
-                close = true;
-            }
-        }
+        close = true;
     }
     ctx.data_mut(|data| data.insert_temp(viewport_id.0.with("popup-size"), new_size));
     if close {

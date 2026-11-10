@@ -189,6 +189,10 @@ impl UnownedWindow {
         };
         let scale_factor = guessed_monitor.scale_factor();
 
+        // Local patch (Drydock, PATCHES.md): pop-up windows have no decorations and are
+        // skipped by the taskbar and pager.
+        let popup = window_attrs.popup;
+
         info!("Guessed window scale factor: {}", scale_factor);
 
         let max_inner_size: Option<(u32, u32)> =
@@ -357,7 +361,7 @@ impl UnownedWindow {
         // title to determine placement/etc., so doing this after mapping would cause the WM to
         // act on the wrong title state.
         leap!(window.set_title_inner(&window_attrs.title)).ignore_error();
-        leap!(window.set_decorations_inner(window_attrs.decorations)).ignore_error();
+        leap!(window.set_decorations_inner(!popup && window_attrs.decorations)).ignore_error();
 
         if let Some(theme) = window_attrs.preferred_theme {
             leap!(window.set_theme_inner(Some(theme))).ignore_error();
@@ -429,24 +433,36 @@ impl UnownedWindow {
                 ))
                 .ignore_error();
 
-                if window_types.as_slice() == [WindowType::Normal] {
+                if !popup && window_types.as_slice() == [WindowType::Normal] {
                     window_types = vec![WindowType::Dialog];
                 }
+            }
+
+            if popup && window_types.as_slice() == [WindowType::Normal] {
+                window_types = vec![WindowType::PopupMenu];
             }
 
             leap!(window.set_window_types(window_types)).ignore_error();
 
             // Local patch (Drydock, PATCHES.md): a modal dialog marks itself as such before
-            // mapping. The window manager reads `_NET_WM_STATE` from the property then; a
-            // client message only reaches windows that are already mapped.
+            // mapping, and a pop-up is skipped by the taskbar and pager. The window manager
+            // reads `_NET_WM_STATE` from the property then; a client message only reaches
+            // windows that are already mapped.
+            let mut states = Vec::new();
             if window_attrs.modal {
-                let atoms = xconn.atoms();
+                states.push(xconn.atoms()[_NET_WM_STATE_MODAL]);
+            }
+            if popup {
+                states.push(xconn.atoms()[_NET_WM_STATE_SKIP_TASKBAR]);
+                states.push(xconn.atoms()[_NET_WM_STATE_SKIP_PAGER]);
+            }
+            if !states.is_empty() {
                 leap!(xconn.change_property(
                     window.xwindow,
-                    atoms[_NET_WM_STATE],
+                    xconn.atoms()[_NET_WM_STATE],
                     xproto::Atom::from(xproto::AtomEnum::ATOM),
                     xproto::PropMode::APPEND,
-                    &[atoms[_NET_WM_STATE_MODAL]],
+                    &states,
                 ))
                 .ignore_error();
             }
