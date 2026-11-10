@@ -35,6 +35,9 @@ use super::state::WinitState;
 use super::types::xdg_activation::XdgActivationTokenData;
 use super::{ActiveEventLoop, WaylandError, WindowId};
 
+/// Local patch (Drydock, PATCHES.md): whether the Wayland pop-up warning was already logged.
+static POPUP_WARNED: AtomicBool = AtomicBool::new(false);
+
 pub(crate) mod state;
 
 pub use state::WindowState;
@@ -100,9 +103,16 @@ impl Window {
 
         let size: Size = attributes.inner_size.unwrap_or(LogicalSize::new(800., 600.).into());
 
+        // Local patch (Drydock, PATCHES.md): pop-ups are not supported on Wayland yet; use a
+        // normal undecorated toplevel instead (it keeps the transient parent).
+        if attributes.popup && !POPUP_WARNED.swap(true, Ordering::Relaxed) {
+            warn!("pop-up windows are not supported on Wayland yet; using an undecorated window");
+        }
+        let decorations = attributes.decorations && !attributes.popup;
+
         // We prefer server side decorations, however to not have decorations we ask for client
         // side decorations instead.
-        let default_decorations = if attributes.decorations {
+        let default_decorations = if decorations {
             WindowDecorations::RequestServer
         } else {
             WindowDecorations::RequestClient
@@ -126,7 +136,7 @@ impl Window {
         window_state.set_blur(attributes.blur);
 
         // Set the decorations hint.
-        window_state.set_decorate(attributes.decorations);
+        window_state.set_decorate(decorations);
 
         // Set the app_id.
         if let Some(name) = attributes.platform_specific.name.map(|name| name.general) {
