@@ -556,7 +556,10 @@ impl WindowAttributes {
     /// - **X11:** window type `_NET_WM_WINDOW_TYPE_POPUP_MENU`, `_NET_WM_STATE_SKIP_TASKBAR` and
     ///   `_NET_WM_STATE_SKIP_PAGER`, no decorations, `WM_TRANSIENT_FOR` the parent.
     /// - **Windows:** `WS_POPUP` with `WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE`, owned by the parent.
-    /// - **Wayland:** not supported yet: a warning, and a normal undecorated window.
+    /// - **Wayland:** an `xdg_popup` of the transient parent with an input grab. The position
+    ///   from [`with_position`](Self::with_position) is relative to the parent's content area,
+    ///   in logical pixels; without a parent in the same event loop it falls back to an
+    ///   undecorated toplevel.
     /// - **Other platforms:** ignored.
     #[inline]
     pub fn with_popup(mut self, popup: bool) -> Self {

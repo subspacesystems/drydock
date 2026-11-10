@@ -139,10 +139,15 @@ impl UnownedWindow {
     #[allow(clippy::unnecessary_cast)]
     pub(crate) fn new(
         event_loop: &ActiveEventLoop,
-        window_attrs: WindowAttributes,
+        mut window_attrs: WindowAttributes,
     ) -> Result<UnownedWindow, RootOsError> {
         let xconn = &event_loop.xconn;
         let atoms = xconn.atoms();
+
+        // Local patch (Drydock, PATCHES.md): a pop-up is never decorated.
+        if window_attrs.popup {
+            window_attrs.decorations = false;
+        }
 
         let screen_id = match window_attrs.platform_specific.x11.screen_id {
             Some(id) => id,
@@ -418,6 +423,9 @@ impl UnownedWindow {
 
             // Local patch (Drydock, PATCHES.md): a dialog names the window it belongs to.
             let mut window_types = window_attrs.platform_specific.x11.x11_window_types;
+            if window_attrs.popup && window_types.as_slice() == [WindowType::Normal] {
+                window_types = vec![WindowType::PopupMenu];
+            }
             if let Some(parent) = window_attrs.transient_parent {
                 let parent = u64::from(parent) as xproto::Window;
                 leap!(xconn.change_property(
@@ -429,24 +437,31 @@ impl UnownedWindow {
                 ))
                 .ignore_error();
 
-                if window_types.as_slice() == [WindowType::Normal] {
+                if !window_attrs.popup && window_types.as_slice() == [WindowType::Normal] {
                     window_types = vec![WindowType::Dialog];
                 }
             }
 
             leap!(window.set_window_types(window_types)).ignore_error();
 
-            // Local patch (Drydock, PATCHES.md): a modal dialog marks itself as such before
-            // mapping. The window manager reads `_NET_WM_STATE` from the property then; a
-            // client message only reaches windows that are already mapped.
+            // Local patch (Drydock, PATCHES.md): a modal dialog and a pop-up mark themselves
+            // before mapping. The window manager reads `_NET_WM_STATE` from the property then;
+            // a client message only reaches windows that are already mapped.
+            let mut states = Vec::new();
+            if window_attrs.popup {
+                states.push(atoms[_NET_WM_STATE_SKIP_TASKBAR]);
+                states.push(atoms[_NET_WM_STATE_SKIP_PAGER]);
+            }
             if window_attrs.modal {
-                let atoms = xconn.atoms();
+                states.push(atoms[_NET_WM_STATE_MODAL]);
+            }
+            if !states.is_empty() {
                 leap!(xconn.change_property(
                     window.xwindow,
                     atoms[_NET_WM_STATE],
                     xproto::Atom::from(xproto::AtomEnum::ATOM),
-                    xproto::PropMode::APPEND,
-                    &[atoms[_NET_WM_STATE_MODAL]],
+                    xproto::PropMode::REPLACE,
+                    &states,
                 ))
                 .ignore_error();
             }
