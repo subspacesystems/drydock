@@ -366,50 +366,26 @@ pub fn resolve_popup_position(
     (x, y)
 }
 
-/// Local patch (Drydock, PATCHES.md): where a pop-up's top-left corner is, in logical pixels from
-/// the top-left of the root window's *content area*. `chain` is the `xdg_popup.configure` x, y of
-/// each pop-up from the one directly under the root window down to the pop-up in question (each
-/// relative to its own parent's window geometry; a pop-up has no frame, so its geometry starts at
-/// its top-left corner); `content_offset` is where the root's content area starts inside its
-/// window geometry. An empty chain is the root's content origin, `(0, 0)`.
-pub fn popup_origin_in_content(chain: &[(i32, i32)], content_offset: (i32, i32)) -> (i32, i32) {
-    if chain.is_empty() {
-        return (0, 0);
-    }
-    let mut origin = (0, 0);
-    for &(x, y) in chain {
-        origin.0 += x;
-        origin.1 += y;
-    }
-    (origin.0 - content_offset.0, origin.1 - content_offset.1)
-}
-
-/// Local patch (Drydock, PATCHES.md): a position wanted relative to the root's content area, as
-/// seen from a parent pop-up whose own origin (see [`popup_origin_in_content`]) is
-/// `parent_origin`. Negative results are fine (a submenu may open left of its menu).
-pub fn popup_request_in_parent(requested: (i32, i32), parent_origin: (i32, i32)) -> (i32, i32) {
-    (requested.0 - parent_origin.0, requested.1 - parent_origin.1)
-}
-
 /// Local patch (Drydock, PATCHES.md): the positioner for a pop-up of `size` wanted at
-/// `requested` (from the root's content area) whose parent is a pop-up at `parent_origin`
-/// (`None`: the root window, then `content_offset` is its title-bar offset and the result is
-/// exactly [`popup_positioner`]`(content_offset, requested, size)`). With a parent pop-up the
-/// anchor rect is the one-pixel rect at [`popup_request_in_parent`] and the flags are the same as
-/// [`popup_positioner`]'s.
+/// `requested` whose parent is (`Some`) a pop-up or (`None`) the root window.
+///
+/// Under the root, `requested` is from the root's content area, `content_offset` is its title-bar
+/// offset and the result is exactly [`popup_positioner`]`(content_offset, requested, size)`.
+///
+/// Under a parent pop-up, `requested` is already in that parent pop-up's coordinates (its
+/// top-left is `(0, 0)`), so the anchor is the one-pixel rect at `requested` itself and no title
+/// bar offset applies. The `Some` payload is no longer used; it is kept so callers still say
+/// "the parent is a pop-up". Negative values are fine (a submenu may open left of its menu). The
+/// flags are the same as [`popup_positioner`]'s.
 pub fn popup_positioner_under(
-    parent_origin: Option<(i32, i32)>,
+    parent: Option<(i32, i32)>,
     content_offset: (i32, i32),
     requested: (i32, i32),
     size: (i32, i32),
 ) -> PopupPositioner {
-    match parent_origin {
+    match parent {
         None => popup_positioner(content_offset, requested, size),
-        Some(origin) => popup_positioner(
-            (0, 0),
-            popup_request_in_parent(requested, origin),
-            size,
-        ),
+        Some(_) => popup_positioner((0, 0), requested, size),
     }
 }
 

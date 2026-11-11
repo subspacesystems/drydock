@@ -24,8 +24,9 @@ pub struct PopupWindow<'a> {
     /// per pop-up that can be open at once.
     pub title: &'a str,
     /// Where the pop-up's top-left corner goes, in screen points (the same space as
-    /// `ViewportInfo::inner_rect` of the root viewport). Inline, it is converted to the
-    /// calling viewport's own coordinates.
+    /// `ViewportInfo::inner_rect` of the root viewport). On Wayland, a pop-up with a `parent`
+    /// is positioned in that parent pop-up's points, not the root's. Inline, it is converted to
+    /// the calling viewport's own coordinates.
     pub position: Pos2,
     /// The title of the pop-up this one opens from (a submenu's menu), or `None` for a pop-up
     /// of the main window. Wayland needs it: a grabbing pop-up's parent must be the topmost
@@ -54,9 +55,10 @@ pub fn popup_supported_on(os: &str, _wayland: bool) -> bool {
 }
 
 /// The root window's inner rectangle as pop-up positions must see it: on Wayland always `None`
-/// (a pop-up is placed relative to the parent's content area, so the root's position, when
-/// the platform reports one at all, must not be added); elsewhere `root_inner` unchanged.
-/// The menu, submenu and context-menu position functions take this as their `root_inner`.
+/// (a pop-up with a `parent` is placed in that parent pop-up's points, not the root's, so the
+/// root's position, when the platform reports one at all, must not be added); elsewhere
+/// `root_inner` unchanged. The menu, submenu and context-menu position functions take this as
+/// their `root_inner`.
 pub fn popup_root_inner(root_inner: Option<Rect>, wayland: bool) -> Option<Rect> {
     if wayland { None } else { root_inner }
 }

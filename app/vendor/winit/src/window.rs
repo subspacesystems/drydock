@@ -558,8 +558,9 @@ impl WindowAttributes {
     /// - **Windows:** `WS_POPUP` with `WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE`, owned by the parent.
     /// - **Wayland:** an `xdg_popup` of the transient parent with an input grab. The position
     ///   from [`with_position`](Self::with_position) is relative to the parent's content area,
-    ///   in logical pixels; without a parent in the same event loop it falls back to an
-    ///   undecorated toplevel.
+    ///   in logical pixels; when the parent is itself a pop-up it is relative to that pop-up's
+    ///   own top-left (no title-bar offset). Without a parent in the same event loop it falls
+    ///   back to an undecorated toplevel.
     /// - **Other platforms:** ignored.
     #[inline]
     pub fn with_popup(mut self, popup: bool) -> Self {

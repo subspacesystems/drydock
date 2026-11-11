@@ -31,8 +31,7 @@ use crate::event::{Ime, WindowEvent};
 use crate::event_loop::AsyncRequestSerial;
 use crate::platform::wayland::{
     POPUP_CONFIGURE_TIMEOUT, PopupConfigureWait, PopupDismissed, PopupPositioner, PopupResize,
-    popup_configure_wait, popup_origin_in_content, popup_positioner_under, popup_resize_action,
-    popup_should_grab,
+    popup_configure_wait, popup_positioner_under, popup_resize_action, popup_should_grab,
 };
 use crate::platform_impl::{
     Fullscreen, MonitorHandle as PlatformMonitorHandle, OsError, PlatformIcon,
@@ -408,33 +407,9 @@ impl Window {
             .unwrap_or(LogicalPosition::new(0, 0));
         let requested = (requested.x, requested.y);
 
-        // Local patch (Drydock, PATCHES.md): a pop-up parent means the positioner is relative to
-        // that pop-up; walk the chain up to the root to find the parent's origin in the root's
-        // content area. A root parent keeps today's plain positioner.
-        let parent_origin = if parent_is_popup {
-            let mut chain = Vec::new();
-            let mut current = Some(parent_id);
-            let mut root_content_offset = (0, 0);
-            while let Some(id) = current {
-                let window = state.windows.get_mut().get(&id).cloned();
-                let Some(window) = window else { break };
-                let window = window.lock().unwrap();
-                match &window.window {
-                    WindowRole::Popup(_) => {
-                        chain.push(window.popup_position());
-                        current = window.popup_parent();
-                    },
-                    WindowRole::Toplevel(_) => {
-                        root_content_offset = window.content_offset();
-                        break;
-                    },
-                }
-            }
-            chain.reverse();
-            Some(popup_origin_in_content(&chain, root_content_offset))
-        } else {
-            None
-        };
+        // Local patch (Drydock, PATCHES.md): a position under a parent pop-up is already in that
+        // pop-up's coordinates. A root parent keeps today's content-relative positioner.
+        let parent_origin = parent_is_popup.then_some((0, 0));
 
         let placement = popup_positioner_under(
             parent_origin,
@@ -463,7 +438,6 @@ impl Window {
             WindowRole::Popup(popup.clone()),
             attributes.preferred_theme,
         );
-        window_state.set_popup_parent(parent_id);
         window_state.set_popup_placement(placement);
         let window_state = Arc::new(Mutex::new(window_state));
         let window_id = super::make_wid(popup.wl_surface());

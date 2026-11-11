@@ -345,11 +345,7 @@ impl PopupHandler for WinitState {
             .get_mut()
             .get_mut(&window_id)
             .map(|window| {
-                window.lock().unwrap().configure_popup(
-                    configure.width,
-                    configure.height,
-                    configure.position,
-                )
+                window.lock().unwrap().configure_popup(configure.width, configure.height)
             })
             .unwrap_or(false);
 
