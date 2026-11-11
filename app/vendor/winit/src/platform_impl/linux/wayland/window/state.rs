@@ -196,6 +196,10 @@ pub struct WindowState {
     /// Local patch (Drydock, PATCHES.md): whether an `xdg_popup` has been configured.
     popup_configured: bool,
 
+    /// Local patch (Drydock, PATCHES.md): whether an `xdg_popup` was dismissed before it was
+    /// configured, so no buffer may be attached to it.
+    popup_dismissed: bool,
+
     /// The underlying SCTK window or pop-up.
     pub window: WindowRole,
 
@@ -247,6 +251,7 @@ impl WindowState {
             ime_purpose: ImePurpose::Normal,
             last_configure: None,
             popup_configured: false,
+            popup_dismissed: false,
             max_inner_size: None,
             min_inner_size: MIN_WINDOW_SIZE,
             resize_increments: None,
@@ -695,6 +700,19 @@ impl WindowState {
     #[inline]
     pub fn is_configured(&self) -> bool {
         self.last_configure.is_some() || self.popup_configured
+    }
+
+    /// Local patch (Drydock, PATCHES.md): whether an `xdg_popup` was dismissed before its first
+    /// configure, so the window must stay unmapped and draw nothing.
+    #[inline]
+    pub fn is_popup_dismissed(&self) -> bool {
+        self.popup_dismissed
+    }
+
+    /// Local patch (Drydock, PATCHES.md): mark the `xdg_popup` as dismissed.
+    #[inline]
+    pub fn set_popup_dismissed(&mut self, dismissed: bool) {
+        self.popup_dismissed = dismissed;
     }
 
     /// Local patch (Drydock, PATCHES.md): remember the size an `xdg_popup` was configured with.

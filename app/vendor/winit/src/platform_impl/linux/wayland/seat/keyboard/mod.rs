@@ -16,6 +16,7 @@ use sctk::reexports::client::{Connection, Dispatch, Proxy, QueueHandle, WEnum};
 use crate::event::{ElementState, WindowEvent};
 use crate::keyboard::ModifiersState;
 
+use crate::platform::wayland::PopupGrabInput;
 use crate::platform_impl::common::xkb::Context;
 use crate::platform_impl::wayland::event_loop::sink::EventSink;
 use crate::platform_impl::wayland::state::WinitState;
@@ -131,7 +132,13 @@ impl Dispatch<WlKeyboard, KeyboardData, WinitState> for WinitState {
                     state.events_sink.push_window_event(WindowEvent::Focused(false), window_id);
                 }
             },
-            WlKeyboardEvent::Key { key, state: WEnum::Value(WlKeyState::Pressed), .. } => {
+            WlKeyboardEvent::Key {
+                key,
+                state: WEnum::Value(WlKeyState::Pressed),
+                serial,
+                ..
+            } => {
+                seat_state.popup_grab_serial.record(PopupGrabInput::KeyPress(serial));
                 let key = key + 8;
 
                 key_input(
@@ -203,7 +210,13 @@ impl Dispatch<WlKeyboard, KeyboardData, WinitState> for WinitState {
                     })
                     .ok();
             },
-            WlKeyboardEvent::Key { key, state: WEnum::Value(WlKeyState::Released), .. } => {
+            WlKeyboardEvent::Key {
+                key,
+                state: WEnum::Value(WlKeyState::Released),
+                serial,
+                ..
+            } => {
+                seat_state.popup_grab_serial.record(PopupGrabInput::KeyRelease(serial));
                 let key = key + 8;
 
                 key_input(

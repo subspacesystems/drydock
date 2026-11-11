@@ -215,13 +215,19 @@ pub struct PopupGrabSerial {
 
 impl PopupGrabSerial {
     /// Feeds one input event (in arrival order).
-    pub fn record(&mut self, _input: PopupGrabInput) {
-        unimplemented!("m12-wayland-popup-hang")
+    pub fn record(&mut self, input: PopupGrabInput) {
+        let serial = match input {
+            PopupGrabInput::ButtonPress(serial) | PopupGrabInput::KeyPress(serial) => serial,
+            PopupGrabInput::ButtonRelease(_) | PopupGrabInput::KeyRelease(_) => return,
+        };
+        if serial != 0 {
+            self.latest = Some(serial);
+        }
     }
 
     /// The serial to pass to `xdg_popup.grab`, or `None` when no press has been seen yet.
     pub fn serial(&self) -> Option<u32> {
-        unimplemented!("m12-wayland-popup-hang")
+        self.latest
     }
 }
 
@@ -246,12 +252,20 @@ pub enum PopupConfigureWait {
 /// dismissed pop-up wins over a configured one (a buffer must never be attached to a pop-up
 /// that is already done); then configured; then the timeout (`elapsed >= timeout`).
 pub fn popup_configure_wait(
-    _configured: bool,
-    _dismissed: bool,
-    _elapsed: std::time::Duration,
-    _timeout: std::time::Duration,
+    configured: bool,
+    dismissed: bool,
+    elapsed: std::time::Duration,
+    timeout: std::time::Duration,
 ) -> PopupConfigureWait {
-    unimplemented!("m12-wayland-popup-hang")
+    if dismissed {
+        PopupConfigureWait::Dismissed
+    } else if configured {
+        PopupConfigureWait::Configured
+    } else if elapsed >= timeout {
+        PopupConfigureWait::TimedOut
+    } else {
+        PopupConfigureWait::Wait
+    }
 }
 
 /// Local patch (Drydock, PATCHES.md): a model of the compositor's placement, following the

@@ -483,6 +483,12 @@ impl<T: 'static> EventLoop<T> {
                 let mut window =
                     state.windows.get_mut().get_mut(window_id).unwrap().lock().unwrap();
 
+                // Local patch (Drydock, PATCHES.md): a dismissed pop-up must not be drawn.
+                if window.is_popup_dismissed() {
+                    window_requests.get(window_id).unwrap().take_redraw_requested();
+                    return None;
+                }
+
                 if window.frame_callback_state() == FrameCallbackState::Requested {
                     return None;
                 }
