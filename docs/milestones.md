@@ -396,6 +396,8 @@ Menus become real pop-up windows that can reach past the main window's edge. Eve
 | `m12-menu-close-outside` | Fix (sign-off): an open pop-up menu closes on a click in the main window, on Escape there and when Drydock loses focus, even though the pop-up itself never has keyboard focus (Windows pop-ups never take it); arrow keys switch menus from either window | `m12-submenu-popups` |
 | `m12-popup-wayland-on` | Fix (sign-off): turn the pop-up windows on for Wayland now that the winit patch makes them `xdg_popup`s, placed relative to the main window's content | `m12-menu-close-outside` |
 | `m12-menu-focus-loss` | Fix (sign-off 2): a menu closes by itself about a quarter second after Drydock loses focus (today it waits for the next mouse or key event in Drydock, so it stays over the other app); an arrow key pressed in a focused pop-up switches menus and keeps the new one open | `m12-popup-wayland-on` |
+| `m12-wayland-popup-hang` | Fix (Tyrel): on GNOME a click on any menu title freezes Drydock. The Wayland pop-up grabs with the button-release serial, GNOME refuses the grab and dismisses the pop-up before configuring it, and window creation waits for a configure forever. Grab with the press (or key) serial; stop waiting when the pop-up is dismissed | |
+| `m12-popup-paint` | Fix (Tyrel, Windows): menus visibly draw themselves (a black rectangle grows, then the menu fills in), their rounded corners are black and a black line sometimes crosses the top. A pop-up opens at its final size and is shown only after its first frame is painted; its frame is square and fills the whole window (Windows 11 rounds and shadows it natively) | |
 
 ## Future (unscheduled)
 
