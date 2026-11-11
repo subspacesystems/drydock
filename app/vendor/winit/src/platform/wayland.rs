@@ -371,16 +371,22 @@ pub fn resolve_popup_position(
 /// its top-left corner); `content_offset` is where the root's content area starts inside its
 /// window geometry. An empty chain is the root's content origin, `(0, 0)`.
 pub fn popup_origin_in_content(chain: &[(i32, i32)], content_offset: (i32, i32)) -> (i32, i32) {
-    let _ = (chain, content_offset);
-    unimplemented!("m12-wayland-popup-stack")
+    if chain.is_empty() {
+        return (0, 0);
+    }
+    let mut origin = (0, 0);
+    for &(x, y) in chain {
+        origin.0 += x;
+        origin.1 += y;
+    }
+    (origin.0 - content_offset.0, origin.1 - content_offset.1)
 }
 
 /// Local patch (Drydock, PATCHES.md): a position wanted relative to the root's content area, as
 /// seen from a parent pop-up whose own origin (see [`popup_origin_in_content`]) is
 /// `parent_origin`. Negative results are fine (a submenu may open left of its menu).
 pub fn popup_request_in_parent(requested: (i32, i32), parent_origin: (i32, i32)) -> (i32, i32) {
-    let _ = (requested, parent_origin);
-    unimplemented!("m12-wayland-popup-stack")
+    (requested.0 - parent_origin.0, requested.1 - parent_origin.1)
 }
 
 /// Local patch (Drydock, PATCHES.md): the positioner for a pop-up of `size` wanted at
@@ -395,8 +401,14 @@ pub fn popup_positioner_under(
     requested: (i32, i32),
     size: (i32, i32),
 ) -> PopupPositioner {
-    let _ = (parent_origin, content_offset, requested, size);
-    unimplemented!("m12-wayland-popup-stack")
+    match parent_origin {
+        None => popup_positioner(content_offset, requested, size),
+        Some(origin) => popup_positioner(
+            (0, 0),
+            popup_request_in_parent(requested, origin),
+            size,
+        ),
+    }
 }
 
 /// Local patch (Drydock, PATCHES.md): the live pop-ups of one window, oldest first. The xdg-shell
@@ -421,26 +433,24 @@ impl<W: Copy + PartialEq> PopupStack<W> {
 
     /// A new pop-up on top (an id already in the stack moves to the top).
     pub fn push(&mut self, id: W) {
-        let _ = id;
-        unimplemented!("m12-wayland-popup-stack")
+        self.remove(id);
+        self.ids.push(id);
     }
 
     /// A pop-up that was dismissed or destroyed; unknown ids are ignored.
     pub fn remove(&mut self, id: W) {
-        let _ = id;
-        unimplemented!("m12-wayland-popup-stack")
+        self.ids.retain(|&known| known != id);
     }
 
     /// The topmost live pop-up.
     pub fn topmost(&self) -> Option<W> {
-        unimplemented!("m12-wayland-popup-stack")
+        self.ids.last().copied()
     }
 
     /// Whether a pop-up whose parent is `parent` (`None`: the root window) may take a grab: the
     /// parent is the topmost pop-up, or the root while the stack is empty.
     pub fn may_grab_under(&self, parent: Option<W>) -> bool {
-        let _ = parent;
-        unimplemented!("m12-wayland-popup-stack")
+        self.topmost() == parent
     }
 }
 
@@ -448,8 +458,7 @@ impl<W: Copy + PartialEq> PopupStack<W> {
 /// and when the parent rule holds (`parent_ok`, from [`PopupStack::may_grab_under`]). Without a
 /// grab the pop-up is still created (a refused or skipped grab must not crash or hang).
 pub fn popup_should_grab(serial: Option<u32>, parent_ok: bool) -> bool {
-    let _ = (serial, parent_ok);
-    unimplemented!("m12-wayland-popup-stack")
+    serial.is_some() && parent_ok
 }
 
 /// Local patch (Drydock, PATCHES.md): the lowest `xdg_wm_base` version that has
@@ -473,6 +482,9 @@ pub fn popup_resize_action(
     old_size: (i32, i32),
     new_size: (i32, i32),
 ) -> PopupResize {
-    let _ = (wm_base_version, old_size, new_size);
-    unimplemented!("m12-wayland-popup-stack")
+    if old_size != new_size && wm_base_version >= POPUP_REPOSITION_VERSION {
+        PopupResize::Reposition
+    } else {
+        PopupResize::Keep
+    }
 }
