@@ -401,6 +401,7 @@ Menus become real pop-up windows that can reach past the main window's edge. Eve
 | `m12-wayland-startup-hang` | Fix (sign-off 4): on Wayland Drydock deadlocks before its window appears. `m12-wayland-popup-hang` made the Wayland `request_redraw` lock the window state, and `request_inner_size` (called while creating every window) already holds that lock | |
 | `m12-wayland-popup-stack` | Fix (sign-off 4, winit side): a pop-up can have a pop-up as its parent (positioned in the parent's coordinates), a grab is only taken when the parent is the topmost pop-up, and a pop-up whose size changes is repositioned so the compositor keeps it on screen | `m12-wayland-startup-hang` |
 | `m12-wayland-popup-switch` | Fix (sign-off 4, app side): a submenu names its menu as the parent pop-up, and switching menus (hover, Left/Right) destroys the old pop-up the frame before the new one is created | `m12-wayland-popup-stack` |
+| `m12-wayland-popup-order` | Fix (sign-off 5): on Wayland a pop-up never outlives its order. Closing a menu with its submenu open (an item in the submenu, Escape, a click outside, focus loss, switching menus) destroys the submenu's pop-up first, and the menu's only on a later frame (GNOME kills Drydock with "destroyed popup not top most popup" today). Switching menus destroys the old pop-up before creating the new one, so the new one takes a grab and its submenu's grab is legal | `m12-wayland-popup-switch` |
 
 ## Future (unscheduled)
 
