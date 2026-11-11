@@ -12,47 +12,12 @@ use egui_winit::{
     register_popup_window, root_window_id,
 };
 use winit::platform::wayland::{
-    POPUP_REPOSITION_VERSION, PopupRect, PopupResize, PopupStack, popup_origin_in_content,
-    popup_positioner, popup_positioner_under, popup_request_in_parent, popup_resize_action,
-    popup_should_grab, resolve_popup_position,
+    POPUP_REPOSITION_VERSION, PopupRect, PopupResize, PopupStack, popup_positioner,
+    popup_positioner_under, popup_resize_action, popup_should_grab, resolve_popup_position,
 };
 use winit::window::WindowId;
 
 // --- position conversion -------------------------------------------------------------------
-
-#[test]
-fn no_pop_up_in_the_chain_is_the_content_origin() {
-    assert_eq!(popup_origin_in_content(&[], (0, 37)), (0, 0));
-}
-
-#[test]
-fn a_first_level_pop_up_sits_below_the_title_bar() {
-    // Configured at (40, 77) in the root's geometry; the content starts 37 px down.
-    assert_eq!(popup_origin_in_content(&[(40, 77)], (0, 37)), (40, 40));
-}
-
-#[test]
-fn nested_pop_ups_add_up() {
-    assert_eq!(
-        popup_origin_in_content(&[(40, 77), (150, 20)], (0, 37)),
-        (190, 60)
-    );
-}
-
-#[test]
-fn no_title_bar_means_no_offset() {
-    assert_eq!(popup_origin_in_content(&[(10, 30)], (0, 0)), (10, 30));
-}
-
-#[test]
-fn a_request_is_made_relative_to_the_parent_pop_up() {
-    assert_eq!(popup_request_in_parent((200, 100), (40, 40)), (160, 60));
-}
-
-#[test]
-fn a_submenu_left_of_its_menu_has_a_negative_x() {
-    assert_eq!(popup_request_in_parent((10, 100), (40, 40)), (-30, 60));
-}
 
 #[test]
 fn under_the_root_it_is_the_plain_positioner() {
@@ -63,37 +28,70 @@ fn under_the_root_it_is_the_plain_positioner() {
 }
 
 #[test]
-fn under_a_pop_up_the_anchor_is_in_the_parent_and_ignores_the_title_bar() {
-    let p = popup_positioner_under(Some((40, 40)), (0, 37), (200, 100), (150, 90));
-    assert_eq!(p.size, (150, 90));
-    assert_eq!(
-        p.anchor_rect,
-        PopupRect {
-            x: 160,
-            y: 60,
-            width: 1,
-            height: 1
-        }
-    );
-    assert_eq!(p.offset, (0, 0));
-    assert!(p.adjustment.slide_x && p.adjustment.slide_y);
-    assert!(p.adjustment.flip_x && p.adjustment.flip_y);
+fn under_a_pop_up_the_anchor_is_the_request_itself_and_ignores_the_title_bar() {
+    // Whatever the parent pop-up's own place is, the request is already in its coordinates.
+    for parent in [(0, 0), (40, 40), (74, 26)] {
+        let p = popup_positioner_under(Some(parent), (0, 37), (266, 605), (135, 163));
+        assert_eq!(p.size, (135, 163));
+        assert_eq!(
+            p.anchor_rect,
+            PopupRect {
+                x: 266,
+                y: 605,
+                width: 1,
+                height: 1
+            }
+        );
+        assert_eq!(p.offset, (0, 0));
+        assert!(p.adjustment.slide_x && p.adjustment.slide_y);
+        assert!(p.adjustment.flip_x && p.adjustment.flip_y);
+    }
+}
+
+#[test]
+fn a_submenu_left_of_its_menu_has_a_negative_x() {
+    let p = popup_positioner_under(Some((40, 40)), (0, 37), (-30, 60), (150, 90));
+    assert_eq!((p.anchor_rect.x, p.anchor_rect.y), (-30, 60));
+}
+
+#[test]
+fn view_toolbars_from_the_gnome_log_is_not_shifted_by_the_views_place() {
+    // Sign-off 6: View sits at (74, 61) in the main window's geometry; the Toolbars row's right
+    // and top are (266, 605) in View. The compositor must be asked for exactly that (it was
+    // asked for (192, 579) after the parent's origin was subtracted a second time).
+    let p = popup_positioner_under(Some((74, 61)), (0, 35), (266, 605), (135, 163));
+    assert_eq!((p.anchor_rect.x, p.anchor_rect.y), (266, 605));
+    assert_ne!((p.anchor_rect.x, p.anchor_rect.y), (192, 579));
 }
 
 #[test]
 fn the_compositor_model_puts_a_submenu_where_it_was_asked() {
-    // Menu at content (40, 40) = output (40, 77) when the root is at (0, 0) with a 37 px bar.
+    // Menu at (40, 77) on the output; it has no frame, so its geometry origin is its corner.
     let menu_origin_on_output = (40, 77);
-    let p = popup_positioner_under(Some((40, 40)), (0, 37), (200, 100), (150, 90));
+    let p = popup_positioner_under(Some((40, 40)), (0, 37), (160, 20), (150, 90));
     let screen = PopupRect {
         x: 0,
         y: 0,
         width: 1920,
         height: 1080,
     };
-    // The parent pop-up has no frame: its geometry origin is the pop-up's own corner.
     let at = resolve_popup_position(&p, menu_origin_on_output, screen);
-    assert_eq!(at, (200, 137));
+    assert_eq!(at, (200, 97));
+}
+
+#[test]
+fn a_submenu_near_the_bottom_stays_on_the_output() {
+    // The View case on an 800-px-high output: the row is at y 605 in a menu at output y 61.
+    let p = popup_positioner_under(Some((74, 61)), (0, 35), (266, 605), (135, 163));
+    let screen = PopupRect {
+        x: 0,
+        y: 0,
+        width: 1280,
+        height: 800,
+    };
+    let (x, y) = resolve_popup_position(&p, (74, 61), screen);
+    assert_eq!(x, 74 + 266);
+    assert!(y >= 0 && y + 163 <= 800, "y {y}");
 }
 
 // --- the stack and the grab rule -----------------------------------------------------------
