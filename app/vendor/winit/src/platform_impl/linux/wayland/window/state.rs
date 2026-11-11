@@ -34,9 +34,9 @@ use sctk::subcompositor::SubcompositorState;
 use wayland_protocols_plasma::blur::client::org_kde_kwin_blur::OrgKdeKwinBlur;
 
 use crate::cursor::CustomCursor as RootCustomCursor;
-use crate::platform::wayland::PopupPositioner;
 use crate::dpi::{LogicalPosition, LogicalSize, PhysicalPosition, PhysicalSize, Size};
 use crate::error::{ExternalError, NotSupportedError};
+use crate::platform::wayland::{PopupDismissed, PopupPositioner};
 use crate::platform_impl::wayland::logical_to_physical_rounded;
 use crate::platform_impl::wayland::types::cursor::{CustomCursor, SelectedCursor};
 use crate::platform_impl::wayland::types::kwin_blur::KWinBlurManager;
@@ -199,7 +199,7 @@ pub struct WindowState {
 
     /// Local patch (Drydock, PATCHES.md): whether an `xdg_popup` was dismissed before it was
     /// configured, so no buffer may be attached to it.
-    popup_dismissed: bool,
+    popup_dismissed: PopupDismissed,
 
     /// Local patch (Drydock, PATCHES.md): the `xdg_popup`'s configured position, relative to its
     /// parent's window geometry.
@@ -267,7 +267,7 @@ impl WindowState {
             ime_purpose: ImePurpose::Normal,
             last_configure: None,
             popup_configured: false,
-            popup_dismissed: false,
+            popup_dismissed: PopupDismissed::new(),
             popup_position: (0, 0),
             popup_parent: None,
             popup_placement: None,
@@ -726,13 +726,20 @@ impl WindowState {
     /// configure, so the window must stay unmapped and draw nothing.
     #[inline]
     pub fn is_popup_dismissed(&self) -> bool {
-        self.popup_dismissed
+        self.popup_dismissed.is_set()
+    }
+
+    /// Local patch (Drydock, PATCHES.md): a clone of the shared dismissed flag, for the window
+    /// handle to read without the state lock.
+    #[inline]
+    pub fn popup_dismissed_flag(&self) -> PopupDismissed {
+        self.popup_dismissed.clone()
     }
 
     /// Local patch (Drydock, PATCHES.md): mark the `xdg_popup` as dismissed.
     #[inline]
     pub fn set_popup_dismissed(&mut self, dismissed: bool) {
-        self.popup_dismissed = dismissed;
+        self.popup_dismissed.set(dismissed);
     }
 
     /// Local patch (Drydock, PATCHES.md): remember the size and position an `xdg_popup` was
