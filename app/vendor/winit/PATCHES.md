@@ -158,24 +158,24 @@ Goal: GNOME accepts a grabbing pop-up only when its parent is the topmost pop-up
 positioned relative to its menu and a pop-up that grows is repositioned so the compositor's
 slide/flip use the new size. X11 and Windows are unchanged.
 
-- `src/platform/wayland.rs`: new `popup_origin_in_content` (a pop-up's corner from the root's
-  content area, summing the configure x/y chain), `popup_request_in_parent` and
-  `popup_positioner_under` (positioner relative to the parent pop-up or, under the root, exactly
-  `popup_positioner`). New `PopupStack` (`push`, `remove`, `topmost`, `may_grab_under`) and
-  `popup_should_grab`. New `POPUP_REPOSITION_VERSION`, `PopupResize` and `popup_resize_action`.
+- `src/platform/wayland.rs`: `popup_positioner_under` (positioner relative to the parent
+  pop-up or, under the root, exactly `popup_positioner`). Under a parent pop-up the request is
+  already in that pop-up's coordinates, so the anchor is the one-pixel rect at the request; only
+  root-parented pop-ups add the title-bar offset. New `PopupStack` (`push`, `remove`,
+  `topmost`, `may_grab_under`) and `popup_should_grab`. New `POPUP_REPOSITION_VERSION`,
+  `PopupResize` and `popup_resize_action`.
 - `src/platform_impl/linux/wayland/window/mod.rs`: `Window::new` rejects a dismissed transient
   parent (falls back to the existing toplevel warning). New `Window::make_positioner`; it is
-  used for creation and for repositioning. `Window::new_popup` accepts a pop-up parent: it walks
-  the stored parent chain to find the parent's origin in the root's content area, positions with
-  `popup_positioner_under`, records the parent id and placement on the window state, applies the
-  grab rule (`popup_should_grab` with `PopupStack::may_grab_under`) and pushes the new pop-up on
-  the stack. `Window::request_inner_size` repositions a resized pop-up with a positioner of the
-  new size built from the same placement and a fresh token.
-- `src/platform_impl/linux/wayland/window/state.rs`: `WindowState` stores the pop-up's
-  configured `popup_position`, its `popup_parent`, its creation `popup_placement` and the next
-  reposition token; `configure_popup` now also takes the configure position. New getters
-  `popup_position`, `popup_parent`, `popup_placement` and setters `set_popup_parent`,
-  `set_popup_placement`, `next_popup_reposition_token`.
+  used for creation and for repositioning. `Window::new_popup` accepts a pop-up parent: since a
+  pop-up-parented position is in the parent pop-up's own points, it positions with
+  `popup_positioner_under(Some(_), ..)` without walking any chain, records the placement on the
+  window state, applies the grab rule (`popup_should_grab` with `PopupStack::may_grab_under`)
+  and pushes the new pop-up on the stack. `Window::request_inner_size` repositions a resized
+  pop-up with a positioner of the new size built from the same placement and a fresh token.
+- `src/platform_impl/linux/wayland/window/state.rs`: `WindowState` stores the pop-up's creation
+  `popup_placement` and the next reposition token; `configure_popup` applies the compositor's
+  size. Getters `popup_placement` and setters `set_popup_placement`,
+  `next_popup_reposition_token`.
 - `src/platform_impl/linux/wayland/state.rs`: `WinitState` keeps `popups: PopupStack<WindowId>`
   and its `xdg_shell` is now shared in an `Arc` so a window can make a positioner. `PopupHandler`
   `configure` passes the configured position to `configure_popup`; `done` removes the pop-up

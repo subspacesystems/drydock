@@ -201,14 +201,6 @@ pub struct WindowState {
     /// configured, so no buffer may be attached to it.
     popup_dismissed: PopupDismissed,
 
-    /// Local patch (Drydock, PATCHES.md): the `xdg_popup`'s configured position, relative to its
-    /// parent's window geometry.
-    popup_position: (i32, i32),
-
-    /// Local patch (Drydock, PATCHES.md): the window id of the `xdg_popup`'s parent, for walking
-    /// the pop-up chain.
-    popup_parent: Option<WindowId>,
-
     /// Local patch (Drydock, PATCHES.md): the placement the `xdg_popup` was created with, reused
     /// when it is repositioned after a size change.
     popup_placement: Option<PopupPositioner>,
@@ -268,8 +260,6 @@ impl WindowState {
             last_configure: None,
             popup_configured: false,
             popup_dismissed: PopupDismissed::new(),
-            popup_position: (0, 0),
-            popup_parent: None,
             popup_placement: None,
             popup_reposition_token: 0,
             max_inner_size: None,
@@ -742,11 +732,9 @@ impl WindowState {
         self.popup_dismissed.set(dismissed);
     }
 
-    /// Local patch (Drydock, PATCHES.md): remember the size and position an `xdg_popup` was
-    /// configured with.
-    pub fn configure_popup(&mut self, width: i32, height: i32, position: (i32, i32)) -> bool {
+    /// Local patch (Drydock, PATCHES.md): remember the size an `xdg_popup` was configured with.
+    pub fn configure_popup(&mut self, width: i32, height: i32) -> bool {
         self.popup_configured = true;
-        self.popup_position = position;
 
         let (width, height) = (width.max(1) as u32, height.max(1) as u32);
         let new_size = LogicalSize::new(width, height);
@@ -760,25 +748,6 @@ impl WindowState {
         } else {
             false
         }
-    }
-
-    /// Local patch (Drydock, PATCHES.md): the `xdg_popup`'s configured position, relative to its
-    /// parent's window geometry.
-    #[inline]
-    pub fn popup_position(&self) -> (i32, i32) {
-        self.popup_position
-    }
-
-    /// Local patch (Drydock, PATCHES.md): the window id of the `xdg_popup`'s parent.
-    #[inline]
-    pub fn popup_parent(&self) -> Option<WindowId> {
-        self.popup_parent
-    }
-
-    /// Local patch (Drydock, PATCHES.md): remember the `xdg_popup`'s parent for the chain walk.
-    #[inline]
-    pub fn set_popup_parent(&mut self, parent: WindowId) {
-        self.popup_parent = Some(parent);
     }
 
     /// Local patch (Drydock, PATCHES.md): the placement the `xdg_popup` was created with.
