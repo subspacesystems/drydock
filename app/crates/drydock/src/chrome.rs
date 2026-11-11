@@ -17,8 +17,7 @@ use crate::icons::Icon;
 use crate::input::{Action, EditKey, Tool};
 use crate::mesh_export::ExportFormat;
 use crate::popup::{
-    PopupMode, PopupWindow, popup_mode, popup_root_inner, popup_supported, popup_window,
-    wayland_session,
+    PopupMode, PopupWindow, popup_mode_in, popup_root_inner, popup_window, wayland_in,
 };
 use crate::toolbars::{self, ToolbarLayout, ToolbarsMenuEvent};
 use drydock_kernel::units::{LengthFormat, format_with};
@@ -766,6 +765,9 @@ const MENU_BAR_BOTTOM: &str = "drydock_menu_bar_bottom";
 /// The label of the top-level menu that is open now.
 const OPEN_MENU: &str = "drydock_open_menu";
 
+/// The menu whose pop-up window was shown on the last frame.
+const SHOWN_MENU: &str = "drydock_shown_menu";
+
 /// The label of the submenu that is open now.
 const OPEN_SUBMENU: &str = "drydock_open_submenu";
 
@@ -860,7 +862,7 @@ fn clear_submenu(ctx: &eframe::egui::Context) {
         data.remove_temp::<eframe::egui::Vec2>(Id::new(SUBMENU_SIZE));
     });
     if let Some(label) = label
-        && popup_mode(ctx.embed_viewports(), popup_supported()) == PopupMode::Window
+        && popup_mode_in(ctx) == PopupMode::Window
     {
         let title = submenu_popup_title(&label);
         ctx.send_viewport_cmd_to(
@@ -906,6 +908,7 @@ fn set_open_menu(ctx: &eframe::egui::Context, label: Option<&str>) {
             data.insert_temp(Id::new(OPEN_MENU), label.to_owned());
         } else {
             data.remove_temp::<String>(Id::new(OPEN_MENU));
+            data.remove_temp::<String>(Id::new(SHOWN_MENU));
         }
     });
 }
@@ -1176,7 +1179,11 @@ pub fn close_menus_from_root(ctx: &eframe::egui::Context, mode: PopupMode) -> bo
     let input = RootInput {
         menu_open: true,
         submenu_open: submenu_label.is_some(),
-        press,
+        press: if embedded && crate::popup::wayland_forced(ctx) {
+            None
+        } else {
+            press
+        },
         escape,
         titles: &titles,
         unfocused_for,
@@ -1223,15 +1230,17 @@ pub enum MenuSwitch {
 /// `wayland_window`: pop-ups are windows on Wayland. `HideThenShow` only when `wayland_window`
 /// and `shown` is another menu than `open`; otherwise `Show`.
 pub fn menu_switch_step(shown: Option<&str>, open: &str, wayland_window: bool) -> MenuSwitch {
-    let _ = (shown, open, wayland_window);
-    unimplemented!("m12-wayland-popup-switch")
+    if wayland_window && shown.is_some_and(|shown| shown != open) {
+        MenuSwitch::HideThenShow
+    } else {
+        MenuSwitch::Show
+    }
 }
 
 /// The menu whose pop-up window was shown on the last frame (`None` when none; cleared when
 /// the menu closes or on a hidden switch frame).
 pub fn shown_menu(ctx: &eframe::egui::Context) -> Option<String> {
-    let _ = ctx;
-    unimplemented!("m12-wayland-popup-switch")
+    ctx.data(|data| data.get_temp::<String>(Id::new(SHOWN_MENU)))
 }
 
 /// Asks the menu bar to move the open menu `step` titles along (wrapping), as the arrow
@@ -1283,16 +1292,30 @@ fn top_menu<R>(ui: &mut Ui, label: &str, add_contents: impl FnOnce(&mut Ui) -> R
         return;
     }
 
+    let shown = shown_menu(&ctx);
+    let wayland_window = popup_mode_in(&ctx) == PopupMode::Window && wayland_in(&ctx);
+    if menu_switch_step(shown.as_deref(), label, wayland_window) == MenuSwitch::HideThenShow {
+        clear_submenu(&ctx);
+        let old = shown.unwrap_or_default();
+        let old_title = menu_popup_title(&old);
+        let old_id = crate::popup::popup_viewport_id(&old_title);
+        ctx.send_viewport_cmd_to(old_id, eframe::egui::ViewportCommand::Close);
+        crate::popup::forget_state(&ctx, old_id);
+        ctx.data_mut(|data| data.remove_temp::<String>(Id::new(SHOWN_MENU)));
+        ctx.request_repaint();
+        return;
+    }
+
     let title = menu_popup_title(label);
     let root_inner = ctx
         .data(|data| data.get_temp::<Option<Rect>>(Id::new(ROOT_INNER)))
         .flatten()
         .or_else(|| ctx.input(|input| input.viewport().inner_rect));
     let position = menu_popup_position(
-        popup_root_inner(root_inner, wayland_session()),
+        popup_root_inner(root_inner, wayland_in(&ctx)),
         response.rect,
     );
-    let mode = popup_mode(ctx.embed_viewports(), popup_supported());
+    let mode = popup_mode_in(&ctx);
     let bar_bottom = ctx
         .data(|data| data.get_temp::<f32>(Id::new(MENU_BAR_BOTTOM)))
         .unwrap_or_else(|| response.rect.bottom());
@@ -1311,6 +1334,7 @@ fn top_menu<R>(ui: &mut Ui, label: &str, add_contents: impl FnOnce(&mut Ui) -> R
             closed = asked_to_close;
         }
     });
+    ctx.data_mut(|data| data.insert_temp(Id::new(SHOWN_MENU), label.to_owned()));
 
     if closed || open_menu(&ctx).as_deref() != Some(label) {
         set_open_menu(&ctx, None);
@@ -1411,13 +1435,14 @@ pub fn submenu_button<R>(
         .unwrap_or_else(|| row.size());
     let monitor = ctx.input(|input| input.viewport().monitor_size);
     let mut position = submenu_popup_position(
-        popup_root_inner(root_inner, wayland_session()),
+        popup_root_inner(root_inner, wayland_in(&ctx)),
         row_rect,
         size,
         monitor,
     );
     let title = submenu_popup_title(label);
-    let mode = popup_mode(ctx.embed_viewports(), popup_supported());
+    let parent_title = open_menu(&ctx).map(|open| menu_popup_title(&open));
+    let mode = popup_mode_in(&ctx);
     if mode == PopupMode::Window
         && let (Some(viewport), Some(root)) = (viewport_inner, root_inner)
         && (position.x - (row_rect.right() + root.min.x)).abs() < 0.5
@@ -1431,7 +1456,7 @@ pub fn submenu_button<R>(
     let popup = PopupWindow {
         title: &title,
         position,
-        parent: None,
+        parent: parent_title.as_deref(),
     };
     let mut shown = true;
     let mut content = Some(add_contents);
@@ -1527,51 +1552,8 @@ fn menu_bar_inner(
     ui.ctx()
         .data_mut(|data| data.insert_temp(Id::new(ROOT_INNER), root_inner));
 
-    let mode = popup_mode(ui.ctx().embed_viewports(), popup_supported());
+    let mode = popup_mode_in(ui.ctx());
     close_menus_from_root(ui.ctx(), mode);
-    let requested_step = ui
-        .ctx()
-        .data_mut(|data| data.remove_temp::<i32>(Id::new(MENU_STEP)));
-
-    if open_submenu(ui.ctx()).is_none()
-        && let Some(label) = open_menu(ui.ctx())
-        && let Some(index) = MENU_LABELS.iter().position(|known| *known == label)
-    {
-        let step = if let Some(step) = requested_step {
-            Some(step as isize)
-        } else if ui.ctx().input_mut(|input| {
-            input.consume_key(eframe::egui::Modifiers::NONE, eframe::egui::Key::ArrowRight)
-        }) {
-            Some(1)
-        } else if ui.ctx().input_mut(|input| {
-            input.consume_key(eframe::egui::Modifiers::NONE, eframe::egui::Key::ArrowLeft)
-        }) {
-            Some(-1)
-        } else {
-            None
-        };
-        if let Some(step) = step {
-            let next = (index as isize + step).rem_euclid(MENU_LABELS.len() as isize) as usize;
-            let label = MENU_LABELS[next];
-            set_open_menu(ui.ctx(), Some(label));
-            if requested_step.is_some() {
-                let now = ui.ctx().input(|input| input.time);
-                ui.ctx().data_mut(|data| {
-                    data.insert_temp(Id::new(MENU_STEP_FOCUS), (label.to_owned(), now));
-                });
-            }
-        }
-    }
-    if let Some((label, _)) = ui
-        .ctx()
-        .data(|data| data.get_temp::<(String, f64)>(Id::new(MENU_STEP_FOCUS)))
-        && open_menu(ui.ctx()).as_deref() == Some(label.as_str())
-    {
-        ui.ctx().send_viewport_cmd_to(
-            crate::popup::popup_viewport_id(&menu_popup_title(&label)),
-            eframe::egui::ViewportCommand::Focus,
-        );
-    }
 
     eframe::egui::MenuBar::new().ui(ui, |ui| {
         ui.ctx()
@@ -1918,6 +1900,49 @@ fn menu_bar_inner(
             }
         });
     });
+
+    let requested_step = ui
+        .ctx()
+        .data_mut(|data| data.remove_temp::<i32>(Id::new(MENU_STEP)));
+    if open_submenu(ui.ctx()).is_none()
+        && let Some(label) = open_menu(ui.ctx())
+        && let Some(index) = MENU_LABELS.iter().position(|known| *known == label)
+    {
+        let step = if let Some(step) = requested_step {
+            Some(step as isize)
+        } else if ui.ctx().input_mut(|input| {
+            input.consume_key(eframe::egui::Modifiers::NONE, eframe::egui::Key::ArrowRight)
+        }) {
+            Some(1)
+        } else if ui.ctx().input_mut(|input| {
+            input.consume_key(eframe::egui::Modifiers::NONE, eframe::egui::Key::ArrowLeft)
+        }) {
+            Some(-1)
+        } else {
+            None
+        };
+        if let Some(step) = step {
+            let next = (index as isize + step).rem_euclid(MENU_LABELS.len() as isize) as usize;
+            let label = MENU_LABELS[next];
+            set_open_menu(ui.ctx(), Some(label));
+            if requested_step.is_some() {
+                let now = ui.ctx().input(|input| input.time);
+                ui.ctx().data_mut(|data| {
+                    data.insert_temp(Id::new(MENU_STEP_FOCUS), (label.to_owned(), now));
+                });
+            }
+        }
+    }
+    if let Some((label, _)) = ui
+        .ctx()
+        .data(|data| data.get_temp::<(String, f64)>(Id::new(MENU_STEP_FOCUS)))
+        && open_menu(ui.ctx()).as_deref() == Some(label.as_str())
+    {
+        ui.ctx().send_viewport_cmd_to(
+            crate::popup::popup_viewport_id(&menu_popup_title(&label)),
+            eframe::egui::ViewportCommand::Focus,
+        );
+    }
 
     if open_menu(ui.ctx()).is_none() {
         clear_submenu(ui.ctx());

@@ -82,7 +82,7 @@ pub fn force_wayland_windows(ctx: &egui::Context, on: bool) {
     ctx.data_mut(|data| data.insert_temp(egui::Id::new(FORCE_WAYLAND_WINDOWS), on));
 }
 
-fn wayland_forced(ctx: &egui::Context) -> bool {
+pub(crate) fn wayland_forced(ctx: &egui::Context) -> bool {
     ctx.data(|data| data.get_temp::<bool>(egui::Id::new(FORCE_WAYLAND_WINDOWS)))
         .unwrap_or(false)
 }
@@ -252,7 +252,7 @@ pub fn popup_window(
             rect: None,
         };
     }
-    let mode = popup_mode(ctx.embed_viewports(), popup_supported());
+    let mode = popup_mode_in(ctx);
     if mode == PopupMode::Inline {
         popup_window_inline(ctx, popup, open, content)
     } else {
@@ -262,7 +262,7 @@ pub fn popup_window(
 
 /// Clears the temporary data a pop-up keeps between openings (the inline size, the window's
 /// first-measurement flag), so the next opening starts fresh.
-fn forget_state(ctx: &egui::Context, viewport_id: egui::ViewportId) {
+pub(crate) fn forget_state(ctx: &egui::Context, viewport_id: egui::ViewportId) {
     ctx.data_mut(|data| {
         data.remove_temp::<Vec2>(viewport_id.0.with("popup-size"));
         data.remove_temp::<bool>(viewport_id.0.with("popup-shown"));
@@ -270,6 +270,7 @@ fn forget_state(ctx: &egui::Context, viewport_id: egui::ViewportId) {
         data.remove_temp::<u32>(viewport_id.0.with("popup-frames-hidden"));
         data.remove_temp::<bool>(viewport_id.0.with("popup-focused"));
         data.remove_temp::<bool>(viewport_id.0.with("popup-has-focus"));
+        data.remove_temp::<bool>(viewport_id.0.with("popup-first-frame"));
     });
 }
 
@@ -285,6 +286,9 @@ fn popup_window_window(
 ) -> PopupOutcome {
     let viewport_id = popup_viewport_id(popup.title);
     egui_winit::mark_popup_title(ctx, popup.title);
+    if let Some(parent) = popup.parent {
+        egui_winit::mark_popup_parent(ctx, popup.title, parent);
+    }
     let shown_id = viewport_id.0.with("popup-shown");
     let painted_id = viewport_id.0.with("popup-painted");
     let frames_id = viewport_id.0.with("popup-frames-hidden");
@@ -308,7 +312,13 @@ fn popup_window_window(
     let mut rect: Option<Rect> = None;
     let mut content = Some(content);
     ctx.show_viewport_immediate(viewport_id, builder, |ui, _class| {
-        if ctx.cumulative_frame_nr_for(viewport_id) == 0 {
+        if ctx.embed_viewports() {
+            let first_frame_id = viewport_id.0.with("popup-first-frame");
+            if !ctx.data(|data| data.get_temp::<bool>(first_frame_id).unwrap_or(false)) {
+                forget_state(ctx, viewport_id);
+                ctx.data_mut(|data| data.insert_temp(first_frame_id, true));
+            }
+        } else if ctx.cumulative_frame_nr_for(viewport_id) == 0 {
             forget_state(ctx, viewport_id);
         }
         let frame = popup_frame(ui.style());
