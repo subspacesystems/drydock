@@ -248,6 +248,30 @@ pub enum PopupConfigureWait {
     TimedOut,
 }
 
+/// Local patch (Drydock, PATCHES.md): whether a pop-up was dismissed, shared between the
+/// window's state and its `Window` handle. Reading it never takes the window-state lock, so
+/// `Window::request_redraw` is safe to call while a state guard is held. Clones share one flag.
+#[derive(Clone, Debug, Default)]
+pub struct PopupDismissed(std::sync::Arc<std::sync::atomic::AtomicBool>);
+
+impl PopupDismissed {
+    /// A new flag, not set.
+    pub fn new() -> Self {
+        unimplemented!("m12-wayland-startup-hang")
+    }
+
+    /// Set or clear the flag, for this value and every clone.
+    pub fn set(&self, dismissed: bool) {
+        let _ = dismissed;
+        unimplemented!("m12-wayland-startup-hang")
+    }
+
+    /// Whether the flag is set.
+    pub fn is_set(&self) -> bool {
+        unimplemented!("m12-wayland-startup-hang")
+    }
+}
+
 /// Local patch (Drydock, PATCHES.md): decides the wait for a pop-up's first configure. A
 /// dismissed pop-up wins over a configured one (a buffer must never be attached to a pop-up
 /// that is already done); then configured; then the timeout (`elapsed >= timeout`).
