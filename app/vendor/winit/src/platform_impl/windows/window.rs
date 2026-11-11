@@ -12,8 +12,9 @@ use windows_sys::Win32::Foundation::{
 };
 use windows_sys::Win32::Graphics::Dwm::{
     DwmEnableBlurBehindWindow, DwmSetWindowAttribute, DWMWA_BORDER_COLOR, DWMWA_CAPTION_COLOR,
-    DWMWA_SYSTEMBACKDROP_TYPE, DWMWA_TEXT_COLOR, DWMWA_WINDOW_CORNER_PREFERENCE, DWM_BB_BLURREGION,
-    DWM_BB_ENABLE, DWM_BLURBEHIND, DWM_SYSTEMBACKDROP_TYPE, DWM_WINDOW_CORNER_PREFERENCE,
+    DWMWA_SYSTEMBACKDROP_TYPE, DWMWA_TEXT_COLOR, DWMWA_TRANSITIONS_FORCEDISABLED,
+    DWMWA_WINDOW_CORNER_PREFERENCE, DWM_BB_BLURREGION, DWM_BB_ENABLE, DWM_BLURBEHIND,
+    DWM_SYSTEMBACKDROP_TYPE, DWM_WINDOW_CORNER_PREFERENCE,
 };
 use windows_sys::Win32::Graphics::Gdi::{
     ChangeDisplaySettingsExW, ClientToScreen, CreateRectRgn, DeleteObject, InvalidateRgn,
@@ -1106,6 +1107,21 @@ impl Window {
             );
         }
     }
+
+    /// Local patch (Drydock, PATCHES.md): pop-ups skip the DWM open/close animation, so the
+    /// window does not draw itself growing when it is first shown.
+    #[inline]
+    pub fn disable_transitions(&self) {
+        let disabled: i32 = 1;
+        unsafe {
+            DwmSetWindowAttribute(
+                self.hwnd(),
+                DWMWA_TRANSITIONS_FORCEDISABLED as u32,
+                &disabled as *const _ as _,
+                mem::size_of::<i32>() as _,
+            );
+        }
+    }
 }
 
 impl Drop for Window {
@@ -1274,7 +1290,9 @@ impl InitData<'_> {
 
         // Set visible before setting the size to ensure the
         // attribute is correctly applied.
-        win.set_visible(attributes.visible);
+        // Local patch (Drydock, PATCHES.md): a pop-up is created hidden; it is shown only by
+        // `ViewportCommand::Visible(true)` after it has painted at its final size.
+        win.set_visible(attributes.visible && !attributes.popup);
 
         win.set_enabled_buttons(attributes.enabled_buttons);
 
@@ -1299,6 +1317,14 @@ impl InitData<'_> {
         }
 
         win.set_system_backdrop(self.attributes.platform_specific.backdrop_type);
+
+        // Local patch (Drydock, PATCHES.md): a pop-up has no open/close animation and asks for
+        // small rounded corners (which also gives the native shadow on Windows 11; Windows 10
+        // ignores the attribute and keeps square corners).
+        if self.attributes.popup {
+            win.disable_transitions();
+            win.set_corner_preference(CornerPreference::RoundSmall);
+        }
 
         if let Some(color) = self.attributes.platform_specific.border_color {
             win.set_border_color(color);

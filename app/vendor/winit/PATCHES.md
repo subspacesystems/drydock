@@ -78,6 +78,14 @@ once at a time.
   `EVENT_LOOP_CREATED`, so a later `EventLoopBuilder::build` succeeds once the previous event
   loop is gone.
 
+## X display connection retry
+
+Goal: a test that starts its window just as the shared Xvfb resets (it resets when its last
+client leaves) connects instead of exiting at once with `XOpenDisplayFailed`.
+
+- `src/platform_impl/linux/x11/xdisplay.rs` (`XConnection::new`): retries `XOpenDisplay` for
+  about a second before reporting the server as missing.
+
 ## Enabled title-bar buttons
 
 Goal: a window can ask for no Minimize/Maximize button. On GNOME Wayland the client-side
@@ -136,3 +144,7 @@ A window with `WindowAttributes::with_popup` is a menu. X11 and Windows support 
   dismissed, besides the focus loss and close it already reports.
 - `src/window.rs` (`WindowAttributes::with_popup` docs): the Wayland line describes the
   `xdg_popup`, the input grab and the content-relative position.
+- Windows (`src/platform_impl/windows/window.rs`): a pop-up is created hidden (shown only by
+  `ViewportCommand::Visible(true)`), its DWM open/close transitions are disabled
+  (`DWMWA_TRANSITIONS_FORCEDISABLED`) and it asks for `DWMWCP_ROUNDSMALL` corners
+  (`m12-popup-paint`).
