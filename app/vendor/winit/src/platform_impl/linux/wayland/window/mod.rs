@@ -20,7 +20,7 @@ use sctk::reexports::protocols::xdg::shell::client::xdg_positioner::{
 };
 use sctk::shell::xdg::popup::Popup;
 use sctk::shell::xdg::window::WindowDecorations;
-use sctk::shell::xdg::XdgPositioner;
+use sctk::shell::xdg::{XdgPositioner, XdgShell};
 use sctk::shell::WaylandSurface;
 
 use tracing::{debug, warn};
@@ -30,7 +30,9 @@ use crate::error::{ExternalError, NotSupportedError, OsError as RootOsError};
 use crate::event::{Ime, WindowEvent};
 use crate::event_loop::AsyncRequestSerial;
 use crate::platform::wayland::{
-    POPUP_CONFIGURE_TIMEOUT, PopupConfigureWait, popup_configure_wait, popup_positioner,
+    POPUP_CONFIGURE_TIMEOUT, PopupConfigureWait, PopupPositioner, PopupResize,
+    popup_configure_wait, popup_origin_in_content, popup_positioner_under, popup_resize_action,
+    popup_should_grab,
 };
 use crate::platform_impl::{
     Fullscreen, MonitorHandle as PlatformMonitorHandle, OsError, PlatformIcon,
@@ -87,6 +89,9 @@ pub struct Window {
     /// Handle to the main queue to perform requests.
     queue_handle: QueueHandle<WinitState>,
 
+    /// Local patch (Drydock, PATCHES.md): the shell, for repositioning a resized pop-up.
+    xdg_shell: Arc<XdgShell>,
+
     /// Window requests to the event loop.
     window_requests: Arc<WindowRequests>,
 
@@ -113,9 +118,13 @@ impl Window {
         // Local patch (Drydock, PATCHES.md): a pop-up with a parent in this loop is a real
         // `xdg_popup`; otherwise it falls back to the undecorated toplevel below.
         if attributes.popup() {
-            let parent = attributes
-                .transient_parent
-                .filter(|parent_id| state.windows.get_mut().contains_key(&parent_id.0));
+            let parent = attributes.transient_parent.filter(|parent_id| {
+                state
+                    .windows
+                    .get_mut()
+                    .get(&parent_id.0)
+                    .is_some_and(|window| !window.lock().unwrap().is_popup_dismissed())
+            });
             if let Some(parent_id) = parent {
                 match Self::new_popup(
                     event_loop_window_target,
@@ -302,6 +311,7 @@ impl Window {
             compositor,
             window_state,
             queue_handle,
+            xdg_shell: state.xdg_shell.clone(),
             xdg_activation,
             attention_requested: Arc::new(AtomicBool::new(false)),
             xdg_dialog,
@@ -320,43 +330,12 @@ impl Window {
         }
     }
 
-    /// Local patch (Drydock, PATCHES.md): create a pop-up as an `xdg_popup` of its parent.
-    fn new_popup(
-        event_loop_window_target: &ActiveEventLoop,
-        state: &mut WinitState,
-        attributes: &WindowAttributes,
-        parent_id: WindowId,
-    ) -> Result<Self, RootOsError> {
-        let queue_handle = event_loop_window_target.queue_handle.clone();
-        let display = event_loop_window_target.connection.display();
-        let monitors = state.monitors.clone();
-
-        let parent = state
-            .windows
-            .get_mut()
-            .get(&parent_id)
-            .expect("pop-up parent disappeared")
-            .clone();
-        let (parent_surface, content_offset, parent_scale) = {
-            let parent = parent.lock().unwrap();
-            (parent.window.xdg_surface().clone(), parent.content_offset(), parent.scale_factor())
-        };
-
-        let initial_size: Size =
-            attributes.inner_size.unwrap_or(LogicalSize::new(800., 600.).into());
-        let logical_size: LogicalSize<u32> = initial_size.to_logical(parent_scale);
-        let requested = attributes
-            .position
-            .map(|position| position.to_logical::<i32>(parent_scale))
-            .unwrap_or(LogicalPosition::new(0, 0));
-
-        let placement = popup_positioner(
-            content_offset,
-            (requested.x, requested.y),
-            (logical_size.width as i32, logical_size.height as i32),
-        );
-
-        let positioner = XdgPositioner::new(&state.xdg_shell)
+    /// Local patch (Drydock, PATCHES.md): build the `xdg_positioner` for a placement.
+    fn make_positioner(
+        shell: &XdgShell,
+        placement: &PopupPositioner,
+    ) -> Result<XdgPositioner, RootOsError> {
+        let positioner = XdgPositioner::new(shell)
             .map_err(|_| os_error!(OsError::Misc("failed to create an xdg_positioner")))?;
         positioner.set_size(placement.size.0, placement.size.1);
         positioner.set_anchor_rect(
@@ -383,6 +362,81 @@ impl Window {
             adjustment |= ConstraintAdjustment::FlipY;
         }
         positioner.set_constraint_adjustment(adjustment);
+        Ok(positioner)
+    }
+
+    /// Local patch (Drydock, PATCHES.md): create a pop-up as an `xdg_popup` of its parent.
+    fn new_popup(
+        event_loop_window_target: &ActiveEventLoop,
+        state: &mut WinitState,
+        attributes: &WindowAttributes,
+        parent_id: WindowId,
+    ) -> Result<Self, RootOsError> {
+        let queue_handle = event_loop_window_target.queue_handle.clone();
+        let display = event_loop_window_target.connection.display();
+        let monitors = state.monitors.clone();
+
+        let parent = state
+            .windows
+            .get_mut()
+            .get(&parent_id)
+            .cloned()
+            .ok_or_else(|| os_error!(OsError::Misc("pop-up parent disappeared")))?;
+        let (parent_surface, content_offset, parent_scale, parent_is_popup) = {
+            let parent = parent.lock().unwrap();
+            (
+                parent.window.xdg_surface().clone(),
+                parent.content_offset(),
+                parent.scale_factor(),
+                matches!(parent.window, WindowRole::Popup(_)),
+            )
+        };
+
+        let initial_size: Size =
+            attributes.inner_size.unwrap_or(LogicalSize::new(800., 600.).into());
+        let logical_size: LogicalSize<u32> = initial_size.to_logical(parent_scale);
+        let requested = attributes
+            .position
+            .map(|position| position.to_logical::<i32>(parent_scale))
+            .unwrap_or(LogicalPosition::new(0, 0));
+        let requested = (requested.x, requested.y);
+
+        // Local patch (Drydock, PATCHES.md): a pop-up parent means the positioner is relative to
+        // that pop-up; walk the chain up to the root to find the parent's origin in the root's
+        // content area. A root parent keeps today's plain positioner.
+        let parent_origin = if parent_is_popup {
+            let mut chain = Vec::new();
+            let mut current = Some(parent_id);
+            let mut root_content_offset = (0, 0);
+            while let Some(id) = current {
+                let window = state.windows.get_mut().get(&id).cloned();
+                let Some(window) = window else { break };
+                let window = window.lock().unwrap();
+                match &window.window {
+                    WindowRole::Popup(_) => {
+                        chain.push(window.popup_position());
+                        current = window.popup_parent();
+                    },
+                    WindowRole::Toplevel(_) => {
+                        root_content_offset = window.content_offset();
+                        break;
+                    },
+                }
+            }
+            chain.reverse();
+            Some(popup_origin_in_content(&chain, root_content_offset))
+        } else {
+            None
+        };
+
+        let placement = popup_positioner_under(
+            parent_origin,
+            content_offset,
+            requested,
+            (logical_size.width as i32, logical_size.height as i32),
+        );
+
+        let positioner = Self::make_positioner(state.xdg_shell.as_ref(), &placement)?;
 
         let surface = state.compositor_state.create_surface(&queue_handle);
         let popup = Popup::from_surface(
@@ -390,11 +444,11 @@ impl Window {
             &positioner,
             &queue_handle,
             surface,
-            &state.xdg_shell,
+            state.xdg_shell.as_ref(),
         )
         .map_err(|_| os_error!(OsError::Misc("failed to create an xdg_popup")))?;
 
-        let window_state = WindowState::new(
+        let mut window_state = WindowState::new(
             event_loop_window_target.connection.clone(),
             &queue_handle,
             state,
@@ -402,6 +456,8 @@ impl Window {
             WindowRole::Popup(popup.clone()),
             attributes.preferred_theme,
         );
+        window_state.set_popup_parent(parent_id);
+        window_state.set_popup_placement(placement);
         let window_state = Arc::new(Mutex::new(window_state));
         let window_id = super::make_wid(popup.wl_surface());
         state.windows.get_mut().insert(window_id, window_state.clone());
@@ -412,9 +468,20 @@ impl Window {
         });
         state.window_requests.get_mut().insert(window_id, window_requests.clone());
 
+        // Local patch (Drydock, PATCHES.md): the xdg-shell grab rule. A pop-up may take a grab
+        // only when its parent is the topmost pop-up (the root while the stack is empty).
+        let grab_parent = parent_is_popup.then_some(parent_id);
+        let parent_ok = state.popups.may_grab_under(grab_parent);
+        state.popups.push(window_id);
+
         // Grab before the first commit, so the compositor sees it in the initial state.
         match state.seats.values().find_map(|seat| seat.popup_grab()) {
-            Some((seat, serial)) => popup.xdg_popup().grab(&seat, serial),
+            Some((seat, serial)) if popup_should_grab(Some(serial), parent_ok) => {
+                popup.xdg_popup().grab(&seat, serial);
+            },
+            Some(_) => debug!(
+                "the parent pop-up is not topmost; creating the pop-up without a grab"
+            ),
             None => debug!("no pointer button serial; creating the pop-up without a grab"),
         }
         popup.wl_surface().commit();
@@ -486,6 +553,7 @@ impl Window {
             compositor: state.compositor_state.clone(),
             window_state,
             queue_handle,
+            xdg_shell: state.xdg_shell.clone(),
             xdg_activation: None,
             attention_requested: Arc::new(AtomicBool::new(false)),
             xdg_dialog: None,
@@ -584,7 +652,30 @@ impl Window {
     #[inline]
     pub fn request_inner_size(&self, size: Size) -> Option<PhysicalSize<u32>> {
         let mut window_state = self.window_state.lock().unwrap();
+        let old_size = window_state.inner_size();
         let new_size = window_state.request_inner_size(size);
+        let new_logical = window_state.inner_size();
+
+        // Local patch (Drydock, PATCHES.md): tell the compositor about a resized pop-up so its
+        // slide and flip use the new size; otherwise a tall menu runs off the screen.
+        if let WindowRole::Popup(popup) = &self.window {
+            if let Some(placement) = window_state.popup_placement() {
+                let old = (old_size.width as i32, old_size.height as i32);
+                let new = (new_logical.width as i32, new_logical.height as i32);
+                let version = self.xdg_shell.xdg_wm_base().version();
+                if popup_resize_action(version, old, new) == PopupResize::Reposition {
+                    if let Ok(positioner) = Self::make_positioner(
+                        self.xdg_shell.as_ref(),
+                        &PopupPositioner { size: new, ..placement },
+                    ) {
+                        let token = window_state.next_popup_reposition_token();
+                        popup.reposition(&positioner, token);
+                    }
+                }
+            }
+        }
+
+        drop(window_state);
         self.request_redraw();
         Some(new_size)
     }

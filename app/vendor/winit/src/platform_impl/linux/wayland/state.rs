@@ -36,6 +36,7 @@ use crate::platform_impl::wayland::types::wp_fractional_scaling::FractionalScali
 use crate::platform_impl::wayland::types::wp_viewporter::ViewporterState;
 use crate::platform_impl::wayland::types::xdg_activation::XdgActivationState;
 use crate::platform_impl::wayland::types::xdg_dialog::XdgDialogState;
+use crate::platform::wayland::PopupStack;
 use crate::platform_impl::wayland::window::{WindowRequests, WindowState};
 use crate::platform_impl::wayland::{WaylandError, WindowId};
 use crate::platform_impl::OsError;
@@ -64,10 +65,13 @@ pub struct WinitState {
     pub custom_cursor_pool: Arc<Mutex<SlotPool>>,
 
     /// The XDG shell that is used for windows.
-    pub xdg_shell: XdgShell,
+    pub xdg_shell: Arc<XdgShell>,
 
     /// The currently present windows.
     pub windows: RefCell<AHashMap<WindowId, Arc<Mutex<WindowState>>>>,
+
+    /// Local patch (Drydock, PATCHES.md): the live pop-ups, oldest first, for the grab rule.
+    pub popups: PopupStack<WindowId>,
 
     /// The requests from the `Window` to EventLoop, such as close operations and redraw requests.
     pub window_requests: RefCell<AHashMap<WindowId, Arc<WindowRequests>>>,
@@ -173,11 +177,14 @@ impl WinitState {
             shm,
             custom_cursor_pool,
 
-            xdg_shell: XdgShell::bind(globals, queue_handle).map_err(WaylandError::Bind)?,
+            xdg_shell: Arc::new(
+                XdgShell::bind(globals, queue_handle).map_err(WaylandError::Bind)?,
+            ),
             xdg_activation: XdgActivationState::bind(globals, queue_handle).ok(),
             xdg_dialog: XdgDialogState::bind(globals, queue_handle).ok(),
 
             windows: Default::default(),
+            popups: PopupStack::new(),
             window_requests: Default::default(),
             window_compositor_updates: Vec::new(),
             window_events_sink: Default::default(),
@@ -338,7 +345,11 @@ impl PopupHandler for WinitState {
             .get_mut()
             .get_mut(&window_id)
             .map(|window| {
-                window.lock().unwrap().configure_popup(configure.width, configure.height)
+                window.lock().unwrap().configure_popup(
+                    configure.width,
+                    configure.height,
+                    configure.position,
+                )
             })
             .unwrap_or(false);
 
@@ -351,6 +362,9 @@ impl PopupHandler for WinitState {
 
     fn done(&mut self, _: &Connection, _: &QueueHandle<Self>, popup: &Popup) {
         let window_id = super::make_wid(popup.wl_surface());
+
+        // Local patch (Drydock, PATCHES.md): a dismissed pop-up is no longer live.
+        self.popups.remove(window_id);
 
         // Local patch (Drydock, PATCHES.md): never attach a buffer to a dismissed pop-up.
         if let Some(window) = self.windows.get_mut().get_mut(&window_id) {

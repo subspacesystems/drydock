@@ -34,6 +34,7 @@ use sctk::subcompositor::SubcompositorState;
 use wayland_protocols_plasma::blur::client::org_kde_kwin_blur::OrgKdeKwinBlur;
 
 use crate::cursor::CustomCursor as RootCustomCursor;
+use crate::platform::wayland::PopupPositioner;
 use crate::dpi::{LogicalPosition, LogicalSize, PhysicalPosition, PhysicalSize, Size};
 use crate::error::{ExternalError, NotSupportedError};
 use crate::platform_impl::wayland::logical_to_physical_rounded;
@@ -200,6 +201,21 @@ pub struct WindowState {
     /// configured, so no buffer may be attached to it.
     popup_dismissed: bool,
 
+    /// Local patch (Drydock, PATCHES.md): the `xdg_popup`'s configured position, relative to its
+    /// parent's window geometry.
+    popup_position: (i32, i32),
+
+    /// Local patch (Drydock, PATCHES.md): the window id of the `xdg_popup`'s parent, for walking
+    /// the pop-up chain.
+    popup_parent: Option<WindowId>,
+
+    /// Local patch (Drydock, PATCHES.md): the placement the `xdg_popup` was created with, reused
+    /// when it is repositioned after a size change.
+    popup_placement: Option<PopupPositioner>,
+
+    /// Local patch (Drydock, PATCHES.md): the token for the next `xdg_popup.reposition`.
+    popup_reposition_token: u32,
+
     /// The underlying SCTK window or pop-up.
     pub window: WindowRole,
 
@@ -252,6 +268,10 @@ impl WindowState {
             last_configure: None,
             popup_configured: false,
             popup_dismissed: false,
+            popup_position: (0, 0),
+            popup_parent: None,
+            popup_placement: None,
+            popup_reposition_token: 0,
             max_inner_size: None,
             min_inner_size: MIN_WINDOW_SIZE,
             resize_increments: None,
@@ -715,9 +735,11 @@ impl WindowState {
         self.popup_dismissed = dismissed;
     }
 
-    /// Local patch (Drydock, PATCHES.md): remember the size an `xdg_popup` was configured with.
-    pub fn configure_popup(&mut self, width: i32, height: i32) -> bool {
+    /// Local patch (Drydock, PATCHES.md): remember the size and position an `xdg_popup` was
+    /// configured with.
+    pub fn configure_popup(&mut self, width: i32, height: i32, position: (i32, i32)) -> bool {
         self.popup_configured = true;
+        self.popup_position = position;
 
         let (width, height) = (width.max(1) as u32, height.max(1) as u32);
         let new_size = LogicalSize::new(width, height);
@@ -731,6 +753,44 @@ impl WindowState {
         } else {
             false
         }
+    }
+
+    /// Local patch (Drydock, PATCHES.md): the `xdg_popup`'s configured position, relative to its
+    /// parent's window geometry.
+    #[inline]
+    pub fn popup_position(&self) -> (i32, i32) {
+        self.popup_position
+    }
+
+    /// Local patch (Drydock, PATCHES.md): the window id of the `xdg_popup`'s parent.
+    #[inline]
+    pub fn popup_parent(&self) -> Option<WindowId> {
+        self.popup_parent
+    }
+
+    /// Local patch (Drydock, PATCHES.md): remember the `xdg_popup`'s parent for the chain walk.
+    #[inline]
+    pub fn set_popup_parent(&mut self, parent: WindowId) {
+        self.popup_parent = Some(parent);
+    }
+
+    /// Local patch (Drydock, PATCHES.md): the placement the `xdg_popup` was created with.
+    #[inline]
+    pub fn popup_placement(&self) -> Option<PopupPositioner> {
+        self.popup_placement
+    }
+
+    /// Local patch (Drydock, PATCHES.md): remember the `xdg_popup`'s creation placement.
+    #[inline]
+    pub fn set_popup_placement(&mut self, placement: PopupPositioner) {
+        self.popup_placement = Some(placement);
+    }
+
+    /// Local patch (Drydock, PATCHES.md): a fresh token for the next `xdg_popup.reposition`.
+    #[inline]
+    pub fn next_popup_reposition_token(&mut self) -> u32 {
+        self.popup_reposition_token = self.popup_reposition_token.wrapping_add(1);
+        self.popup_reposition_token
     }
 
     /// Local patch (Drydock, PATCHES.md): where the content area starts inside the window
