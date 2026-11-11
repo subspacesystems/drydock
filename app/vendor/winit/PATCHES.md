@@ -136,10 +136,13 @@ A window with `WindowAttributes::with_popup` is a menu. X11 and Windows support 
   `Window::pre_present_notify`): the wait for the first configure is bounded and really times
   out; on `Dismissed` or `TimedOut` it stops, marks the pop-up dismissed and reports
   `Focused(false)`/`CloseRequested`, and a dismissed pop-up never gets a redraw or a frame
-  callback.
+  callback. `Window` keeps a clone of the shared `PopupDismissed` flag, so `request_redraw` reads
+  the flag without the `window_state` lock; it must never need that lock (the state's
+  `request_inner_size` calls it while holding the guard).
 - `src/platform_impl/linux/wayland/window/state.rs` (`WindowState::is_popup_dismissed`,
-  `WindowState::set_popup_dismissed`): remembers that the pop-up was dismissed before its first
-  configure, so no buffer is attached to it.
+  `WindowState::set_popup_dismissed`, `WindowState::popup_dismissed_flag`): a `PopupDismissed`
+  flag over an `Arc<AtomicBool>`, shared with the window handle, remembers that the pop-up was
+  dismissed before its first configure, so no buffer is attached to it.
 - `src/platform_impl/linux/wayland/state.rs` (`PopupHandler::done`): also marks the window
   dismissed, besides the focus loss and close it already reports.
 - `src/window.rs` (`WindowAttributes::with_popup` docs): the Wayland line describes the
