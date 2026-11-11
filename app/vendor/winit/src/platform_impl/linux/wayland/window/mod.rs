@@ -30,7 +30,8 @@ use crate::error::{ExternalError, NotSupportedError, OsError as RootOsError};
 use crate::event::{Ime, WindowEvent};
 use crate::event_loop::AsyncRequestSerial;
 use crate::platform::wayland::{
-    POPUP_CONFIGURE_TIMEOUT, PopupConfigureWait, popup_configure_wait, popup_positioner,
+    POPUP_CONFIGURE_TIMEOUT, PopupConfigureWait, PopupDismissed, popup_configure_wait,
+    popup_positioner,
 };
 use crate::platform_impl::{
     Fullscreen, MonitorHandle as PlatformMonitorHandle, OsError, PlatformIcon,
@@ -67,6 +68,10 @@ pub struct Window {
 
     /// The state of the window.
     window_state: Arc<Mutex<WindowState>>,
+
+    /// Local patch (Drydock, PATCHES.md): the pop-up's dismissed flag, shared with the state so
+    /// reading it never needs the state lock.
+    popup_dismissed: PopupDismissed,
 
     /// Compositor to handle WlRegion stuff.
     compositor: Arc<CompositorState>,
@@ -294,6 +299,8 @@ impl Window {
         let event_loop_awakener = event_loop_window_target.event_loop_awakener.clone();
         event_loop_awakener.ping();
 
+        let popup_dismissed = window_state.lock().unwrap().popup_dismissed_flag();
+
         Ok(Self {
             window: WindowRole::Toplevel(window),
             display,
@@ -301,6 +308,7 @@ impl Window {
             window_id,
             compositor,
             window_state,
+            popup_dismissed,
             queue_handle,
             xdg_activation,
             attention_requested: Arc::new(AtomicBool::new(false)),
@@ -478,6 +486,8 @@ impl Window {
         let event_loop_awakener = event_loop_window_target.event_loop_awakener.clone();
         event_loop_awakener.ping();
 
+        let popup_dismissed = window_state.lock().unwrap().popup_dismissed_flag();
+
         Ok(Self {
             window: WindowRole::Popup(popup),
             display,
@@ -485,6 +495,7 @@ impl Window {
             window_id,
             compositor: state.compositor_state.clone(),
             window_state,
+            popup_dismissed,
             queue_handle,
             xdg_activation: None,
             attention_requested: Arc::new(AtomicBool::new(false)),
@@ -549,7 +560,7 @@ impl Window {
     #[inline]
     pub fn request_redraw(&self) {
         // Local patch (Drydock, PATCHES.md): a dismissed pop-up must not be drawn.
-        if self.window_state.lock().unwrap().is_popup_dismissed() {
+        if self.popup_dismissed.is_set() {
             return;
         }
         // NOTE: try to not wake up the loop when the event was already scheduled and not yet
@@ -568,10 +579,12 @@ impl Window {
 
     #[inline]
     pub fn pre_present_notify(&self) {
-        let mut window_state = self.window_state.lock().unwrap();
-        if !window_state.is_popup_dismissed() {
-            window_state.request_frame_callback();
+        // Local patch (Drydock, PATCHES.md): a dismissed pop-up must not be drawn.
+        if self.popup_dismissed.is_set() {
+            return;
         }
+        let mut window_state = self.window_state.lock().unwrap();
+        window_state.request_frame_callback();
     }
 
     #[inline]
@@ -583,8 +596,7 @@ impl Window {
 
     #[inline]
     pub fn request_inner_size(&self, size: Size) -> Option<PhysicalSize<u32>> {
-        let mut window_state = self.window_state.lock().unwrap();
-        let new_size = window_state.request_inner_size(size);
+        let new_size = self.window_state.lock().unwrap().request_inner_size(size);
         self.request_redraw();
         Some(new_size)
     }
@@ -854,12 +866,9 @@ impl Window {
     pub fn set_cursor_position(&self, position: Position) -> Result<(), ExternalError> {
         let scale_factor = self.scale_factor();
         let position = position.to_logical(scale_factor);
-        self.window_state
-            .lock()
-            .unwrap()
-            .set_cursor_position(position)
-            // Request redraw on success, since the state is double buffered.
-            .map(|_| self.request_redraw())
+        let result = self.window_state.lock().unwrap().set_cursor_position(position);
+        // Request redraw on success, since the state is double buffered.
+        result.map(|_| self.request_redraw())
     }
 
     #[inline]
