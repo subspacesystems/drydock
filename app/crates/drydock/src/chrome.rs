@@ -788,6 +788,7 @@ const IN_SUBMENU: &str = "drydock_in_submenu";
 
 /// A top-level menu title's rectangle, kept for [`request_menu`].
 const MENU_TITLE: &str = "drydock_menu_title";
+const SUBMENU_ROW_SEEN: &str = "drydock_submenu_row_seen";
 
 /// A menu step requested by a focused pop-up window, waiting for the next `menu_bar`.
 const MENU_STEP: &str = "drydock_menu_step";
@@ -937,6 +938,13 @@ pub fn request_submenu(ctx: &eframe::egui::Context, label: &str) {
 /// drawn on the last frame, in the main window's points; `None` before the first frame.
 pub fn menu_title_rect(ctx: &eframe::egui::Context, label: &str) -> Option<Rect> {
     ctx.data(|data| data.get_temp::<Rect>(Id::new((MENU_TITLE, label))))
+}
+
+/// Test hook (`m12-wayland-submenu-place`): where the row of the submenu `label` was drawn on
+/// the last frame, in the points of the viewport that holds it (a pop-up menu's own, for
+/// View > Toolbars); `None` before it was drawn.
+pub fn submenu_row_rect(ctx: &eframe::egui::Context, label: &str) -> Option<Rect> {
+    ctx.data(|data| data.get_temp::<Rect>(Id::new((SUBMENU_ROW_SEEN, label))))
 }
 
 /// The pop-up title (and viewport name) of the submenu labelled `label` (e.g. "Toolbars"):
@@ -1458,6 +1466,7 @@ pub fn submenu_button<R>(
         Stroke::NONE,
     ));
 
+    ctx.data_mut(|data| data.insert_temp(Id::new((SUBMENU_ROW_SEEN, label)), row));
     let viewport_inner = ctx.input(|input| input.viewport().inner_rect);
     let root_inner = ctx
         .data(|data| data.get_temp::<Option<Rect>>(Id::new(ROOT_INNER)))
