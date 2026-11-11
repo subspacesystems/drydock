@@ -117,6 +117,65 @@ pub fn inline_position(
     pos2(x.max(content_rect.min.x), y.max(content_rect.min.y))
 }
 
+/// The frame of a window pop-up (`docs/specs/m12-popup-paint.md`): square corners, no shadow
+/// (the window is rectangular and opaque, so rounding or a shadow would show the clear color;
+/// Windows 11 rounds and shadows the window itself), a 1 px border stroke and the menu's
+/// fill color, taken from `egui::Frame::menu(style)`, with that frame's inner margin. The
+/// inline pop-up keeps egui's own menu frame.
+pub fn popup_frame(style: &egui::Style) -> egui::Frame {
+    let _ = style;
+    unimplemented!("m12-popup-paint")
+}
+
+/// The rectangle the pop-up's fill is painted over: the whole viewport rectangle, so no clear
+/// color shows at the edges (at fractional scales too). Equal to `viewport_rect`.
+pub fn popup_fill_rect(viewport_rect: Rect) -> Rect {
+    let _ = viewport_rect;
+    unimplemented!("m12-popup-paint")
+}
+
+/// The size a pop-up window is created at: `cached` (the content size of the last opening
+/// under the same title, already `fit_size`d) when known, else the 120 x 40 placeholder.
+pub fn initial_size(cached: Option<Vec2>) -> Vec2 {
+    let _ = cached;
+    unimplemented!("m12-popup-paint")
+}
+
+/// What one frame of a window pop-up does about its size and visibility.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ShowStep {
+    /// Send `InnerSize(target)`; the window stays as it is (hidden stays hidden) and the frame
+    /// painted at the old size does not count as painted.
+    Resize(Vec2),
+    /// Hidden: paint this frame at the final size and look again on the next one.
+    Wait,
+    /// Hidden, and a frame was already painted at the final size: send `Visible(true)` now.
+    Reveal,
+    /// Visible at the right size: nothing to do.
+    Keep,
+}
+
+/// The show sequence. `visible`: the window was already made visible. `current`: its inner
+/// size now. `painted`: the inner size at which a frame was painted while hidden (`None`
+/// before the first, and after a `Resize`). `target`: `fit_size` of the content this frame.
+/// `frames_hidden`: frames spent hidden so far.
+/// - Hidden and `needs_resize(current, target)` (`crate::dialog::needs_resize`, per axis):
+///   `Resize(target)`. Hidden at the right size: `Reveal` when `painted` is within a
+///   `needs_resize` tolerance of `target`, else `Wait`. After 5 or more `frames_hidden`
+///   it is always `Reveal` (a window that never reports its size must still appear).
+/// - Visible: `Resize(target)` when the size is off (the content changed), else `Keep`.
+///   Never `Wait` or `Reveal`.
+pub fn show_step(
+    visible: bool,
+    current: Vec2,
+    painted: Option<Vec2>,
+    target: Vec2,
+    frames_hidden: u32,
+) -> ShowStep {
+    let _ = (visible, current, painted, target, frames_hidden);
+    unimplemented!("m12-popup-paint")
+}
+
 /// Shows `content` as a pop-up while `*open`; nothing is drawn (and a window is closed) when
 /// `!*open`. Escape clears `open`, in both modes.
 /// - `Window` (`popup_mode(ctx.embed_viewports(), popup_supported())`): a viewport with no
