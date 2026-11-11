@@ -77,13 +77,20 @@ impl XConnection {
         unsafe { (xlib.XSetErrorHandler)(error_handler) };
 
         // calling XOpenDisplay
-        let display = unsafe {
-            let display = (xlib.XOpenDisplay)(ptr::null());
-            if display.is_null() {
+        // Local patch (Drydock, PATCHES.md): a display without `-noreset` resets when its last
+        // client leaves, and a client that connects during the reset gets a null display. Try
+        // for a moment before reporting the server as missing.
+        let mut display: *mut ffi::Display = ptr::null_mut();
+        for attempt in 0..20 {
+            display = unsafe { (xlib.XOpenDisplay)(ptr::null()) };
+            if !display.is_null() {
+                break;
+            }
+            if attempt == 19 {
                 return Err(XNotSupported::XOpenDisplayFailed);
             }
-            display
-        };
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
 
         // Open the x11rb XCB connection.
         let xcb = {

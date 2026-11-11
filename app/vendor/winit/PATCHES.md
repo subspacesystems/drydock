@@ -77,6 +77,14 @@ once at a time.
   `EVENT_LOOP_CREATED`, so a later `EventLoopBuilder::build` succeeds once the previous event
   loop is gone.
 
+## X display connection retry
+
+Goal: a test that starts its window just as the shared Xvfb resets (it resets when its last
+client leaves) connects instead of exiting at once with `XOpenDisplayFailed`.
+
+- `src/platform_impl/linux/x11/xdisplay.rs` (`XConnection::new`): retries `XOpenDisplay` for
+  about a second before reporting the server as missing.
+
 ## Enabled title-bar buttons
 
 Goal: a window can ask for no Minimize/Maximize button. On GNOME Wayland the client-side
