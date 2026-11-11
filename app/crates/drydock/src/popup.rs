@@ -123,22 +123,25 @@ pub fn inline_position(
 /// fill color, taken from `egui::Frame::menu(style)`, with that frame's inner margin. The
 /// inline pop-up keeps egui's own menu frame.
 pub fn popup_frame(style: &egui::Style) -> egui::Frame {
-    let _ = style;
-    unimplemented!("m12-popup-paint")
+    let menu = egui::Frame::menu(style);
+    egui::Frame {
+        corner_radius: egui::CornerRadius::ZERO,
+        shadow: egui::Shadow::NONE,
+        stroke: egui::Stroke::new(1.0, menu.stroke.color),
+        ..menu
+    }
 }
 
 /// The rectangle the pop-up's fill is painted over: the whole viewport rectangle, so no clear
 /// color shows at the edges (at fractional scales too). Equal to `viewport_rect`.
 pub fn popup_fill_rect(viewport_rect: Rect) -> Rect {
-    let _ = viewport_rect;
-    unimplemented!("m12-popup-paint")
+    viewport_rect
 }
 
 /// The size a pop-up window is created at: `cached` (the content size of the last opening
 /// under the same title, already `fit_size`d) when known, else the 120 x 40 placeholder.
 pub fn initial_size(cached: Option<Vec2>) -> Vec2 {
-    let _ = cached;
-    unimplemented!("m12-popup-paint")
+    cached.unwrap_or(vec2(120.0, 40.0))
 }
 
 /// What one frame of a window pop-up does about its size and visibility.
@@ -172,8 +175,25 @@ pub fn show_step(
     target: Vec2,
     frames_hidden: u32,
 ) -> ShowStep {
-    let _ = (visible, current, painted, target, frames_hidden);
-    unimplemented!("m12-popup-paint")
+    let same = |size: Vec2| {
+        !crate::dialog::needs_resize(size.x, target.x)
+            && !crate::dialog::needs_resize(size.y, target.y)
+    };
+    if visible {
+        if same(current) {
+            ShowStep::Keep
+        } else {
+            ShowStep::Resize(target)
+        }
+    } else if frames_hidden >= 5 {
+        ShowStep::Reveal
+    } else if !same(current) {
+        ShowStep::Resize(target)
+    } else if painted.is_some_and(same) {
+        ShowStep::Reveal
+    } else {
+        ShowStep::Wait
+    }
 }
 
 /// Shows `content` as a pop-up while `*open`; nothing is drawn (and a window is closed) when
@@ -213,6 +233,8 @@ fn forget_state(ctx: &egui::Context, viewport_id: egui::ViewportId) {
     ctx.data_mut(|data| {
         data.remove_temp::<Vec2>(viewport_id.0.with("popup-size"));
         data.remove_temp::<bool>(viewport_id.0.with("popup-shown"));
+        data.remove_temp::<Vec2>(viewport_id.0.with("popup-painted"));
+        data.remove_temp::<u32>(viewport_id.0.with("popup-frames-hidden"));
         data.remove_temp::<bool>(viewport_id.0.with("popup-focused"));
         data.remove_temp::<bool>(viewport_id.0.with("popup-has-focus"));
     });
@@ -230,10 +252,13 @@ fn popup_window_window(
 ) -> PopupOutcome {
     let viewport_id = popup_viewport_id(popup.title);
     egui_winit::mark_popup_title(ctx, popup.title);
-    let placeholder = vec2(120.0, 40.0);
     let shown_id = viewport_id.0.with("popup-shown");
+    let painted_id = viewport_id.0.with("popup-painted");
+    let frames_id = viewport_id.0.with("popup-frames-hidden");
+    let cache_id = viewport_id.0.with("popup-last-size");
     let focus_id = viewport_id.0.with("popup-focused");
-    let shown = ctx.data(|data| data.get_temp::<bool>(shown_id).unwrap_or(false));
+    let cached = ctx.data(|data| data.get_temp::<Vec2>(cache_id));
+    let initial = initial_size(cached);
     let builder = crate::window_icon::with_app_identity(
         egui::ViewportBuilder::default()
             .with_title(popup.title)
@@ -242,15 +267,21 @@ fn popup_window_window(
             .with_minimize_button(false)
             .with_maximize_button(false)
             .with_taskbar(false)
-            .with_visible(shown)
+            .with_visible(false)
             .with_position(popup.position)
-            .with_inner_size(placeholder),
+            .with_inner_size(initial),
     );
     let mut close = false;
     let mut rect: Option<Rect> = None;
     let mut content = Some(content);
     ctx.show_viewport_immediate(viewport_id, builder, |ui, _class| {
-        let frame = egui::Frame::menu(ui.style());
+        if ctx.cumulative_frame_nr_for(viewport_id) == 0 {
+            forget_state(ctx, viewport_id);
+        }
+        let frame = popup_frame(ui.style());
+        let fill = frame.fill;
+        ui.painter()
+            .rect_filled(popup_fill_rect(ui.max_rect()), 0.0, fill);
         let margin = frame.total_margin().sum();
         let content_size = egui::CentralPanel::default()
             .frame(frame)
@@ -266,18 +297,33 @@ fn popup_window_window(
             + margin;
         let monitor = ui.input(|input| input.viewport().monitor_size);
         let target = fit_size(content_size, monitor);
+        ctx.data_mut(|data| data.insert_temp(cache_id, target));
         let current = ui
             .input(|input| input.viewport().inner_rect)
-            .map_or(placeholder, |r| r.size());
-        if crate::dialog::needs_resize(current.x, target.x)
-            || crate::dialog::needs_resize(current.y, target.y)
-        {
-            ctx.send_viewport_cmd_to(viewport_id, egui::ViewportCommand::InnerSize(target));
-            ctx.request_repaint();
+            .map_or(initial, |r| r.size());
+        let visible = ctx.data(|data| data.get_temp::<bool>(shown_id).unwrap_or(false));
+        let painted = ctx.data(|data| data.get_temp::<Vec2>(painted_id));
+        let frames_hidden = ctx.data(|data| data.get_temp::<u32>(frames_id).unwrap_or(0));
+        let mut now_visible = visible;
+        match show_step(visible, current, painted, target, frames_hidden) {
+            ShowStep::Resize(target) => {
+                ctx.send_viewport_cmd_to(viewport_id, egui::ViewportCommand::InnerSize(target));
+                ctx.data_mut(|data| data.remove_temp::<Vec2>(painted_id));
+                ctx.request_repaint();
+            }
+            ShowStep::Wait => {
+                ctx.data_mut(|data| data.insert_temp(painted_id, current));
+                ctx.request_repaint();
+            }
+            ShowStep::Reveal => {
+                ctx.send_viewport_cmd_to(viewport_id, egui::ViewportCommand::Visible(true));
+                ctx.data_mut(|data| data.insert_temp(shown_id, true));
+                now_visible = true;
+            }
+            ShowStep::Keep => {}
         }
-        if !shown {
-            ctx.data_mut(|data| data.insert_temp(shown_id, true));
-            ctx.request_repaint();
+        if !now_visible {
+            ctx.data_mut(|data| data.insert_temp(frames_id, frames_hidden.saturating_add(1)));
         }
         let focused = ui.input(|input| input.viewport().focused);
         ctx.data_mut(|data| {

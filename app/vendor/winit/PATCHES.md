@@ -120,3 +120,7 @@ A window with `WindowAttributes::with_popup` is a menu. X11 and Windows support 
   seat and latest button serial for the grab.
 - `src/window.rs` (`WindowAttributes::with_popup` docs): the Wayland line describes the
   `xdg_popup`, the input grab and the content-relative position.
+- Windows (`src/platform_impl/windows/window.rs`): a pop-up is created hidden (shown only by
+  `ViewportCommand::Visible(true)`), its DWM open/close transitions are disabled
+  (`DWMWA_TRANSITIONS_FORCEDISABLED`) and it asks for `DWMWCP_ROUNDSMALL` corners
+  (`m12-popup-paint`).
