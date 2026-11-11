@@ -352,6 +352,11 @@ impl PopupHandler for WinitState {
     fn done(&mut self, _: &Connection, _: &QueueHandle<Self>, popup: &Popup) {
         let window_id = super::make_wid(popup.wl_surface());
 
+        // Local patch (Drydock, PATCHES.md): never attach a buffer to a dismissed pop-up.
+        if let Some(window) = self.windows.get_mut().get_mut(&window_id) {
+            window.lock().unwrap().set_popup_dismissed(true);
+        }
+
         // Give the application the same focus-loss and close it gets on X11.
         let mut sink = self.window_events_sink.lock().unwrap();
         sink.push_window_event(WindowEvent::Focused(false), window_id);

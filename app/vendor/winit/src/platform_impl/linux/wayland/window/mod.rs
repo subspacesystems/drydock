@@ -4,6 +4,9 @@ use std::ffi::c_void;
 use std::ptr::NonNull;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
+
+use rustix::event::{PollFd, PollFlags};
 
 use sctk::reexports::client::protocol::wl_display::WlDisplay;
 use sctk::reexports::client::protocol::wl_surface::WlSurface;
@@ -26,7 +29,9 @@ use crate::dpi::{LogicalPosition, LogicalSize, PhysicalPosition, PhysicalSize, P
 use crate::error::{ExternalError, NotSupportedError, OsError as RootOsError};
 use crate::event::{Ime, WindowEvent};
 use crate::event_loop::AsyncRequestSerial;
-use crate::platform::wayland::popup_positioner;
+use crate::platform::wayland::{
+    POPUP_CONFIGURE_TIMEOUT, PopupConfigureWait, popup_configure_wait, popup_positioner,
+};
 use crate::platform_impl::{
     Fullscreen, MonitorHandle as PlatformMonitorHandle, OsError, PlatformIcon,
 };
@@ -419,10 +424,55 @@ impl Window {
         event_queue.roundtrip(state).map_err(|error| {
             os_error!(OsError::WaylandError(Arc::new(WaylandError::Dispatch(error))))
         })?;
-        while !window_state.lock().unwrap().is_configured() {
-            event_queue.blocking_dispatch(state).map_err(|error| {
-                os_error!(OsError::WaylandError(Arc::new(WaylandError::Dispatch(error))))
-            })?;
+
+        // Local patch (Drydock, PATCHES.md): a compositor may dismiss the pop-up instead of
+        // configuring it, so bound the wait and never block forever.
+        let wait_started = Instant::now();
+        loop {
+            let (configured, dismissed) = {
+                let window_state = window_state.lock().unwrap();
+                (window_state.is_configured(), window_state.is_popup_dismissed())
+            };
+            match popup_configure_wait(
+                configured,
+                dismissed,
+                wait_started.elapsed(),
+                POPUP_CONFIGURE_TIMEOUT,
+            ) {
+                PopupConfigureWait::Wait => {
+                    event_queue.flush().map_err(|error| {
+                        os_error!(OsError::WaylandError(Arc::new(WaylandError::Wire(error))))
+                    })?;
+                    let remaining =
+                        POPUP_CONFIGURE_TIMEOUT.saturating_sub(wait_started.elapsed());
+                    if let Some(guard) = event_queue.prepare_read() {
+                        let poll_fd =
+                            PollFd::from_borrowed_fd(guard.connection_fd(), PollFlags::IN);
+                        let timeout_ms = remaining.as_millis().min(i32::MAX as u128) as i32;
+                        let _ = rustix::event::poll(&mut [poll_fd], timeout_ms);
+                        let _ = guard.read();
+                    }
+                    event_queue.dispatch_pending(state).map_err(|error| {
+                        os_error!(OsError::WaylandError(Arc::new(WaylandError::Dispatch(error))))
+                    })?;
+                },
+                PopupConfigureWait::Configured => break,
+                PopupConfigureWait::Dismissed => break,
+                PopupConfigureWait::TimedOut => {
+                    window_state.lock().unwrap().set_popup_dismissed(true);
+                    let mut sink = state.window_events_sink.lock().unwrap();
+                    sink.push_window_event(WindowEvent::Focused(false), window_id);
+                    sink.push_window_event(WindowEvent::CloseRequested, window_id);
+                    drop(sink);
+                    if let Some(requests) =
+                        state.window_requests.get_mut().get_mut(&window_id)
+                    {
+                        requests.closed.store(true, Ordering::Relaxed);
+                    }
+                    state.dispatched_events = true;
+                    break;
+                },
+            }
         }
 
         let event_loop_awakener = event_loop_window_target.event_loop_awakener.clone();
@@ -498,6 +548,10 @@ impl Window {
 
     #[inline]
     pub fn request_redraw(&self) {
+        // Local patch (Drydock, PATCHES.md): a dismissed pop-up must not be drawn.
+        if self.window_state.lock().unwrap().is_popup_dismissed() {
+            return;
+        }
         // NOTE: try to not wake up the loop when the event was already scheduled and not yet
         // processed by the loop, because if at this point the value was `true` it could only
         // mean that the loop still haven't dispatched the value to the client and will do
@@ -514,7 +568,10 @@ impl Window {
 
     #[inline]
     pub fn pre_present_notify(&self) {
-        self.window_state.lock().unwrap().request_frame_callback();
+        let mut window_state = self.window_state.lock().unwrap();
+        if !window_state.is_popup_dismissed() {
+            window_state.request_frame_callback();
+        }
     }
 
     #[inline]

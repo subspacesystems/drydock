@@ -30,6 +30,7 @@ use sctk::seat::SeatState;
 use crate::dpi::{LogicalPosition, PhysicalPosition};
 use crate::event::{ElementState, MouseButton, MouseScrollDelta, TouchPhase, WindowEvent};
 
+use crate::platform::wayland::PopupGrabInput;
 use crate::platform_impl::wayland::state::WinitState;
 use crate::platform_impl::wayland::{self, DeviceId, WindowId};
 
@@ -44,7 +45,7 @@ impl PointerHandler for WinitState {
         events: &[PointerEvent],
     ) {
         let seat = pointer.winit_data().seat();
-        let seat_state = match self.seats.get(&seat.id()) {
+        let seat_state = match self.seats.get_mut(&seat.id()) {
             Some(seat_state) => seat_state,
             None => {
                 warn!("Received pointer event without seat");
@@ -157,6 +158,11 @@ impl PointerHandler for WinitState {
                 | ref kind @ PointerEventKind::Release { button, serial, .. } => {
                     // Update the last button serial.
                     pointer.winit_data().inner.lock().unwrap().latest_button_serial = serial;
+                    seat_state.popup_grab_serial.record(match kind {
+                        PointerEventKind::Press { .. } => PopupGrabInput::ButtonPress(serial),
+                        PointerEventKind::Release { .. } => PopupGrabInput::ButtonRelease(serial),
+                        _ => unreachable!(),
+                    });
 
                     let button = wayland_button_to_winit(button);
                     let state = if matches!(kind, PointerEventKind::Press { .. }) {

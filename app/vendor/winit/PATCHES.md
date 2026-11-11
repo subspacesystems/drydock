@@ -60,8 +60,9 @@ Goal: a menu is a real OS window that can reach past the main window's edge.
   `src/platform_impl/windows/window_state.rs` (`WindowFlags::to_window_styles`): a pop-up gets
   `WS_POPUP` without caption, border or thick frame, plus
   `WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE`; the owner comes from the transient parent.
-- `src/platform_impl/linux/wayland/window/mod.rs` (`Window::new`): a pop-up logs a warning once
-  and is created as a normal undecorated toplevel (no `xdg_popup` yet).
+- `src/platform_impl/linux/wayland/window/mod.rs` (`Window::new`): a pop-up that has no usable
+  parent or grab falls back to a normal undecorated toplevel. When it can, it is a real
+  `xdg_popup` (see the Wayland pop-up section below).
 - X11: `UnownedWindow` remembers `popup`, and `focus_window` on a pop-up also sets the X input
   focus to it (`SetInputFocus`, revert to parent) after the `_NET_ACTIVE_WINDOW` request, so a
   menu the application opens from one of its focused windows gets the keyboard even without a
@@ -100,7 +101,10 @@ A window with `WindowAttributes::with_popup` is a menu. X11 and Windows support 
 
 - `src/platform/wayland.rs`: new `PopupRect`, `PopupAdjustment` and `PopupPositioner` types plus
   the pure functions `popup_positioner` (builds the positioner from a content-relative request)
-  and `resolve_popup_position` (models the compositor's flip/slide rules for the tests).
+  and `resolve_popup_position` (models the compositor's flip/slide rules for the tests). Also
+  `PopupGrabInput`/`PopupGrabSerial` (tracks the latest button or key *press* serial, since
+  mutter rejects a grab made with a release serial) and `PopupConfigureWait` /
+  `popup_configure_wait` / `POPUP_CONFIGURE_TIMEOUT` (the bounded wait for the first configure).
 - `src/platform_impl/linux/wayland/window/mod.rs` (`Window::new`, new `Window::new_popup`,
   `Window::warn_popup_fallback`, `Window::xdg_toplevel`, `Window::set_minimized`,
   `Window::set_maximized`, `Window::set_fullscreen`): a pop-up with a transient parent in the
@@ -117,6 +121,18 @@ A window with `WindowAttributes::with_popup` is a menu. X11 and Windows support 
   `delegate_xdg_popup!`): `configure` applies the chosen size and requests a redraw; `done`
   reports `Focused(false)` and `CloseRequested` so the application closes the pop-up like on X11.
 - `src/platform_impl/linux/wayland/seat/mod.rs` (`WinitSeatState::popup_grab`): supplies the
-  seat and latest button serial for the grab.
+  seat and latest press serial for the grab, from a `PopupGrabSerial` kept per seat. The pointer
+  and keyboard handlers feed it presses and releases (`latest_button_serial` is unchanged for
+  move, resize and the window menu).
+- `src/platform_impl/linux/wayland/window/mod.rs` (`Window::new_popup`, `Window::request_redraw`,
+  `Window::pre_present_notify`): the wait for the first configure is bounded and really times
+  out; on `Dismissed` or `TimedOut` it stops, marks the pop-up dismissed and reports
+  `Focused(false)`/`CloseRequested`, and a dismissed pop-up never gets a redraw or a frame
+  callback.
+- `src/platform_impl/linux/wayland/window/state.rs` (`WindowState::is_popup_dismissed`,
+  `WindowState::set_popup_dismissed`): remembers that the pop-up was dismissed before its first
+  configure, so no buffer is attached to it.
+- `src/platform_impl/linux/wayland/state.rs` (`PopupHandler::done`): also marks the window
+  dismissed, besides the focus loss and close it already reports.
 - `src/window.rs` (`WindowAttributes::with_popup` docs): the Wayland line describes the
   `xdg_popup`, the input grab and the content-relative position.

@@ -17,6 +17,7 @@ use sctk::seat::{Capability as SeatCapability, SeatHandler, SeatState};
 
 use crate::event::WindowEvent;
 use crate::keyboard::ModifiersState;
+use crate::platform::wayland::PopupGrabSerial;
 use crate::platform_impl::wayland::state::WinitState;
 
 mod keyboard;
@@ -57,6 +58,9 @@ pub struct WinitSeatState {
 
     /// Whether we have pending modifiers.
     modifiers_pending: bool,
+
+    /// Local patch (Drydock, PATCHES.md): the latest press serial a pop-up can grab with.
+    popup_grab_serial: PopupGrabSerial,
 }
 
 impl WinitSeatState {
@@ -64,13 +68,13 @@ impl WinitSeatState {
         Default::default()
     }
 
-    /// Local patch (Drydock, PATCHES.md): the seat and the latest button serial a pop-up can
-    /// grab with, if this seat has seen a button press.
+    /// Local patch (Drydock, PATCHES.md): the seat and the latest press serial a pop-up can
+    /// grab with, if this seat has seen a button or key press.
     pub fn popup_grab(&self) -> Option<(WlSeat, u32)> {
         let pointer = self.pointer.as_ref()?;
         let data = pointer.pointer().winit_data();
-        let serial = data.latest_button_serial();
-        (serial != 0).then(|| (data.seat().clone(), serial))
+        let serial = self.popup_grab_serial.serial()?;
+        Some((data.seat().clone(), serial))
     }
 }
 
