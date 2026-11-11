@@ -73,6 +73,35 @@ pub fn popup_supported() -> bool {
     popup_supported_on(std::env::consts::OS, wayland_session())
 }
 
+const FORCE_WAYLAND_WINDOWS: &str = "drydock_force_wayland_windows";
+
+/// Test hook (`m12-wayland-popup-switch`): with `on`, [`popup_mode_in`] says `Window` and
+/// [`wayland_in`] says true for this context whatever the platform, so kittest can drive the
+/// Wayland pop-up path (the viewports stay embedded, as in every kittest).
+pub fn force_wayland_windows(ctx: &egui::Context, on: bool) {
+    ctx.data_mut(|data| data.insert_temp(egui::Id::new(FORCE_WAYLAND_WINDOWS), on));
+}
+
+fn wayland_forced(ctx: &egui::Context) -> bool {
+    ctx.data(|data| data.get_temp::<bool>(egui::Id::new(FORCE_WAYLAND_WINDOWS)))
+        .unwrap_or(false)
+}
+
+/// [`popup_mode`] for this machine and context: `Window` when [`force_wayland_windows`] is on,
+/// else `popup_mode(ctx.embed_viewports(), popup_supported())`. All pop-up code asks this.
+pub fn popup_mode_in(ctx: &egui::Context) -> PopupMode {
+    if wayland_forced(ctx) {
+        PopupMode::Window
+    } else {
+        popup_mode(ctx.embed_viewports(), popup_supported())
+    }
+}
+
+/// [`wayland_session`], or true when [`force_wayland_windows`] is on.
+pub fn wayland_in(ctx: &egui::Context) -> bool {
+    wayland_forced(ctx) || wayland_session()
+}
+
 /// `Window` only when the viewports are real (`!embed_viewports`) and the platform
 /// `supported` it; otherwise `Inline`.
 pub fn popup_mode(embed_viewports: bool, supported: bool) -> PopupMode {
