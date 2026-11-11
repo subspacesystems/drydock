@@ -69,6 +69,7 @@ pub fn context_popup(
     let popup = PopupWindow {
         title: &title,
         position,
+        parent: None,
     };
     let mut open = true;
     let mut closed = false;

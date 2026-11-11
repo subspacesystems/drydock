@@ -27,6 +27,10 @@ pub struct PopupWindow<'a> {
     /// `ViewportInfo::inner_rect` of the root viewport). Inline, it is converted to the
     /// calling viewport's own coordinates.
     pub position: Pos2,
+    /// The title of the pop-up this one opens from (a submenu's menu), or `None` for a pop-up
+    /// of the main window. Wayland needs it: a grabbing pop-up's parent must be the topmost
+    /// pop-up (`egui_winit::mark_popup_parent`; `m12-wayland-popup-switch` wires it).
+    pub parent: Option<&'a str>,
 }
 
 /// What [`popup_window`] reports for one frame.

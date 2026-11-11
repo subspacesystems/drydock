@@ -96,6 +96,7 @@ fn harness(open: Rc<RefCell<bool>>, position: egui::Pos2) -> Harness<'static> {
         let popup = PopupWindow {
             title: "Test Popup",
             position,
+            parent: None,
         };
         let outcome = popup_window(ui.ctx(), &popup, &mut o, |ui| {
             ui.label("popup item");
@@ -210,6 +211,7 @@ mod real {
             let popup = PopupWindow {
                 title: POPUP,
                 position: egui::pos2(250.0, 200.0),
+                parent: None,
             };
             popup_window(&ctx, &popup, &mut self.open, |ui| {
                 ui.label("popup-probe-item");

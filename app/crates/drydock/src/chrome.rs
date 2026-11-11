@@ -1275,6 +1275,7 @@ fn top_menu<R>(ui: &mut Ui, label: &str, add_contents: impl FnOnce(&mut Ui) -> R
     let popup = PopupWindow {
         title: &title,
         position,
+        parent: None,
     };
     let mut shown = true;
     let mut closed = false;
@@ -1405,6 +1406,7 @@ pub fn submenu_button<R>(
     let popup = PopupWindow {
         title: &title,
         position,
+        parent: None,
     };
     let mut shown = true;
     let mut content = Some(add_contents);

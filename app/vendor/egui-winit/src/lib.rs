@@ -2070,6 +2070,40 @@ pub fn is_popup_title(egui_ctx: &egui::Context, title: &str) -> bool {
     })
 }
 
+/// Local patch (Drydock, PATCHES.md): the pop-up titled `title` is a child of the pop-up titled
+/// `parent_title` (a submenu of its menu). Call it before the viewport is first shown, like
+/// [`mark_popup_title`]. [`create_window`] then names the parent's window as the transient
+/// parent instead of the root window, as Wayland requires of a grabbing pop-up.
+pub fn mark_popup_parent(egui_ctx: &egui::Context, title: &str, parent_title: &str) {
+    let _ = (egui_ctx, title, parent_title);
+    unimplemented!("m12-wayland-popup-stack")
+}
+
+/// Local patch (Drydock, PATCHES.md): what [`mark_popup_parent`] stored for `title`.
+pub fn popup_parent_title(egui_ctx: &egui::Context, title: &str) -> Option<String> {
+    let _ = (egui_ctx, title);
+    unimplemented!("m12-wayland-popup-stack")
+}
+
+/// Local patch (Drydock, PATCHES.md): remembers that the window `id` is the pop-up titled
+/// `title` ([`create_window`] does this for every pop-up it makes; a later window with the same
+/// title replaces the entry).
+pub fn register_popup_window(egui_ctx: &egui::Context, title: &str, id: winit::window::WindowId) {
+    let _ = (egui_ctx, title, id);
+    unimplemented!("m12-wayland-popup-stack")
+}
+
+/// Local patch (Drydock, PATCHES.md): the transient parent for a window made for a viewport
+/// titled `title`: the registered window of its [`mark_popup_parent`] parent, else
+/// [`root_window_id`] (also when the parent was never registered).
+pub fn popup_transient_parent(
+    egui_ctx: &egui::Context,
+    title: &str,
+) -> Option<winit::window::WindowId> {
+    let _ = (egui_ctx, title);
+    unimplemented!("m12-wayland-popup-stack")
+}
+
 /// Apply [`ViewportBuilder::with_monitor`] to freshly-built [`winit::window::WindowAttributes`].
 ///
 /// Resolve the target monitor index → `MonitorHandle` and request borderless
