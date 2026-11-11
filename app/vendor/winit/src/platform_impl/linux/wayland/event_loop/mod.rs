@@ -477,6 +477,9 @@ impl<T: 'static> EventLoop<T> {
                 if window_requests.get(window_id).unwrap().take_closed() {
                     mem::drop(window_requests.remove(window_id));
                     mem::drop(state.windows.get_mut().remove(window_id));
+                    // Local patch (Drydock, PATCHES.md): a closed or dropped pop-up leaves the
+                    // grab-rule stack.
+                    state.popups.remove(*window_id);
                     return Some(WindowEvent::Destroyed);
                 }
 
