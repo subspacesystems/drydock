@@ -257,18 +257,20 @@ pub struct PopupDismissed(std::sync::Arc<std::sync::atomic::AtomicBool>);
 impl PopupDismissed {
     /// A new flag, not set.
     pub fn new() -> Self {
-        unimplemented!("m12-wayland-startup-hang")
+        Self(std::sync::Arc::new(std::sync::atomic::AtomicBool::new(
+            false,
+        )))
     }
 
     /// Set or clear the flag, for this value and every clone.
     pub fn set(&self, dismissed: bool) {
-        let _ = dismissed;
-        unimplemented!("m12-wayland-startup-hang")
+        self.0
+            .store(dismissed, std::sync::atomic::Ordering::Release);
     }
 
     /// Whether the flag is set.
     pub fn is_set(&self) -> bool {
-        unimplemented!("m12-wayland-startup-hang")
+        self.0.load(std::sync::atomic::Ordering::Acquire)
     }
 }
 
