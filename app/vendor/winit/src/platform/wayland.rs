@@ -195,6 +195,65 @@ pub fn popup_positioner(
     }
 }
 
+/// Local patch (Drydock, PATCHES.md): an input event that can carry the serial an `xdg_popup`
+/// grab needs. Only presses are valid grab serials (mutter dismisses a grab made with a release
+/// serial); releases are listed so the tracker can be fed every event unfiltered.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PopupGrabInput {
+    ButtonPress(u32),
+    ButtonRelease(u32),
+    KeyPress(u32),
+    KeyRelease(u32),
+}
+
+/// Local patch (Drydock, PATCHES.md): remembers the serial a pop-up should grab with: that of
+/// the most recent button press or key press, whichever came last. Releases never count.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct PopupGrabSerial {
+    latest: Option<u32>,
+}
+
+impl PopupGrabSerial {
+    /// Feeds one input event (in arrival order).
+    pub fn record(&mut self, _input: PopupGrabInput) {
+        unimplemented!("m12-wayland-popup-hang")
+    }
+
+    /// The serial to pass to `xdg_popup.grab`, or `None` when no press has been seen yet.
+    pub fn serial(&self) -> Option<u32> {
+        unimplemented!("m12-wayland-popup-hang")
+    }
+}
+
+/// Local patch (Drydock, PATCHES.md): how long window creation waits for a pop-up's first
+/// configure before it treats the pop-up as dismissed.
+pub const POPUP_CONFIGURE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(1);
+
+/// Local patch (Drydock, PATCHES.md): what the wait for a pop-up's first configure does next.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PopupConfigureWait {
+    /// Keep dispatching events.
+    Wait,
+    /// Configured and alive: attach the first buffer.
+    Configured,
+    /// The compositor sent `popup_done` first: the pop-up stays unmapped, no buffer is attached.
+    Dismissed,
+    /// Neither happened within the timeout: treated like `Dismissed`.
+    TimedOut,
+}
+
+/// Local patch (Drydock, PATCHES.md): decides the wait for a pop-up's first configure. A
+/// dismissed pop-up wins over a configured one (a buffer must never be attached to a pop-up
+/// that is already done); then configured; then the timeout (`elapsed >= timeout`).
+pub fn popup_configure_wait(
+    _configured: bool,
+    _dismissed: bool,
+    _elapsed: std::time::Duration,
+    _timeout: std::time::Duration,
+) -> PopupConfigureWait {
+    unimplemented!("m12-wayland-popup-hang")
+}
+
 /// Local patch (Drydock, PATCHES.md): a model of the compositor's placement, following the
 /// `xdg_positioner` rules, used only to test the flags (a compositor does the real work).
 /// `parent_origin` is the parent's window-geometry top-left on the output and `bounds` the
