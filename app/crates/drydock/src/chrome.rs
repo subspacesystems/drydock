@@ -1209,6 +1209,31 @@ pub fn close_menus_from_root(ctx: &eframe::egui::Context, mode: PopupMode) -> bo
     !embedded
 }
 
+/// What a top-level menu does on the frame its title becomes the open one (Wayland only: a
+/// grabbing pop-up cannot be created while the previous menu's still exists).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MenuSwitch {
+    /// Show the pop-up this frame.
+    Show,
+    /// Show no pop-up this frame (close the previous menu's), open the new one next frame.
+    HideThenShow,
+}
+
+/// `shown`: the menu whose pop-up was shown last frame; `open`: the menu to show now;
+/// `wayland_window`: pop-ups are windows on Wayland. `HideThenShow` only when `wayland_window`
+/// and `shown` is another menu than `open`; otherwise `Show`.
+pub fn menu_switch_step(shown: Option<&str>, open: &str, wayland_window: bool) -> MenuSwitch {
+    let _ = (shown, open, wayland_window);
+    unimplemented!("m12-wayland-popup-switch")
+}
+
+/// The menu whose pop-up window was shown on the last frame (`None` when none; cleared when
+/// the menu closes or on a hidden switch frame).
+pub fn shown_menu(ctx: &eframe::egui::Context) -> Option<String> {
+    let _ = ctx;
+    unimplemented!("m12-wayland-popup-switch")
+}
+
 /// Asks the menu bar to move the open menu `step` titles along (wrapping), as the arrow
 /// keys do; for a pop-up window that has the keyboard focus. The next `menu_bar` call
 /// applies it; with no menu open it does nothing.
