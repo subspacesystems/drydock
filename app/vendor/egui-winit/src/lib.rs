@@ -1982,12 +1982,17 @@ pub fn create_window(
     let title = viewport_builder.title.as_deref();
     let modal = root.is_some() && title.is_some_and(|title| is_modal_title(egui_ctx, title));
     let popup = root.is_some() && title.is_some_and(|title| is_popup_title(egui_ctx, title));
+    let transient_parent = if popup {
+        title.and_then(|title| popup_transient_parent(egui_ctx, title))
+    } else {
+        root
+    };
     let window_attributes = apply_monitor_to_window_attributes(
         create_winit_window_attributes(egui_ctx, viewport_builder.clone()),
         viewport_builder,
         event_loop,
     )
-    .with_transient_parent(root)
+    .with_transient_parent(transient_parent)
     .with_modal(modal)
     .with_popup(popup);
 
@@ -1995,6 +2000,11 @@ pub fn create_window(
     if root.is_none() {
         let id = u64::from(window.id());
         egui_ctx.data_mut(|data| data.insert_temp(root_window_key(), id));
+    }
+    if popup {
+        if let Some(title) = title {
+            register_popup_window(egui_ctx, title, window.id());
+        }
     }
     apply_viewport_builder_to_window(egui_ctx, &window, viewport_builder);
     Ok(window)
@@ -2070,27 +2080,57 @@ pub fn is_popup_title(egui_ctx: &egui::Context, title: &str) -> bool {
     })
 }
 
+/// Local patch (Drydock, PATCHES.md): where [`mark_popup_parent`] keeps the parent marks.
+fn popup_parents_key() -> egui::Id {
+    egui::Id::new("egui_winit_popup_parents")
+}
+
+/// Local patch (Drydock, PATCHES.md): where [`register_popup_window`] keeps the windows.
+fn popup_windows_key() -> egui::Id {
+    egui::Id::new("egui_winit_popup_windows")
+}
+
 /// Local patch (Drydock, PATCHES.md): the pop-up titled `title` is a child of the pop-up titled
 /// `parent_title` (a submenu of its menu). Call it before the viewport is first shown, like
 /// [`mark_popup_title`]. [`create_window`] then names the parent's window as the transient
 /// parent instead of the root window, as Wayland requires of a grabbing pop-up.
 pub fn mark_popup_parent(egui_ctx: &egui::Context, title: &str, parent_title: &str) {
-    let _ = (egui_ctx, title, parent_title);
-    unimplemented!("m12-wayland-popup-stack")
+    egui_ctx.data_mut(|data| {
+        let parents = data.get_temp_mut_or_default::<Vec<(String, String)>>(popup_parents_key());
+        if let Some(entry) = parents.iter_mut().find(|(known, _)| known == title) {
+            entry.1 = parent_title.to_owned();
+        } else {
+            parents.push((title.to_owned(), parent_title.to_owned()));
+        }
+    });
 }
 
 /// Local patch (Drydock, PATCHES.md): what [`mark_popup_parent`] stored for `title`.
 pub fn popup_parent_title(egui_ctx: &egui::Context, title: &str) -> Option<String> {
-    let _ = (egui_ctx, title);
-    unimplemented!("m12-wayland-popup-stack")
+    egui_ctx.data(|data| {
+        data.get_temp::<Vec<(String, String)>>(popup_parents_key())
+            .and_then(|parents| {
+                parents
+                    .into_iter()
+                    .find(|(known, _)| known == title)
+                    .map(|(_, parent)| parent)
+            })
+    })
 }
 
 /// Local patch (Drydock, PATCHES.md): remembers that the window `id` is the pop-up titled
 /// `title` ([`create_window`] does this for every pop-up it makes; a later window with the same
 /// title replaces the entry).
 pub fn register_popup_window(egui_ctx: &egui::Context, title: &str, id: winit::window::WindowId) {
-    let _ = (egui_ctx, title, id);
-    unimplemented!("m12-wayland-popup-stack")
+    let id = u64::from(id);
+    egui_ctx.data_mut(|data| {
+        let windows = data.get_temp_mut_or_default::<Vec<(String, u64)>>(popup_windows_key());
+        if let Some(entry) = windows.iter_mut().find(|(known, _)| known == title) {
+            entry.1 = id;
+        } else {
+            windows.push((title.to_owned(), id));
+        }
+    });
 }
 
 /// Local patch (Drydock, PATCHES.md): the transient parent for a window made for a viewport
@@ -2100,8 +2140,18 @@ pub fn popup_transient_parent(
     egui_ctx: &egui::Context,
     title: &str,
 ) -> Option<winit::window::WindowId> {
-    let _ = (egui_ctx, title);
-    unimplemented!("m12-wayland-popup-stack")
+    let parent = popup_parent_title(egui_ctx, title).and_then(|parent_title| {
+        egui_ctx.data(|data| {
+            data.get_temp::<Vec<(String, u64)>>(popup_windows_key())
+                .and_then(|windows| {
+                    windows
+                        .into_iter()
+                        .find(|(known, _)| *known == parent_title)
+                        .map(|(_, id)| winit::window::WindowId::from(id))
+                })
+        })
+    });
+    parent.or_else(|| root_window_id(egui_ctx))
 }
 
 /// Apply [`ViewportBuilder::with_monitor`] to freshly-built [`winit::window::WindowAttributes`].

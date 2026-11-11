@@ -23,3 +23,9 @@ is upgraded.
 - `src/lib.rs` (`create_window`): new public functions `mark_popup_title` and `is_popup_title`,
   with their own temporary-data key. A window made for a viewport whose title was marked gets
   winit's `WindowAttributes::with_popup(true)`; the root window never does.
+- `src/lib.rs` (`create_window`): new public functions `mark_popup_parent` and
+  `popup_parent_title` (the parent mark, keyed by title in the context's temporary data),
+  `register_popup_window` (the window id of each pop-up `create_window` makes, replacing an
+  earlier entry with the same title) and `popup_transient_parent` (the registered parent
+  window, else `root_window_id`). A pop-up window now uses `popup_transient_parent` as its
+  transient parent instead of always the root; other windows keep the root.
