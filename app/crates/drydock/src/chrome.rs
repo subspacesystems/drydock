@@ -921,6 +921,18 @@ pub fn request_menu(ctx: &eframe::egui::Context, label: &str) {
     }
 }
 
+/// Test hook (`m12-wayland-popup-order`): opens the submenu labelled `label` as if its row had
+/// been clicked (its pop-up appears on the next `submenu_button` call for that label).
+pub fn request_submenu(ctx: &eframe::egui::Context, label: &str) {
+    set_open_submenu(ctx, Some(label));
+}
+
+/// Test hook (`m12-wayland-popup-order`): where the title of the top-level menu `label` was
+/// drawn on the last frame, in the main window's points; `None` before the first frame.
+pub fn menu_title_rect(ctx: &eframe::egui::Context, label: &str) -> Option<Rect> {
+    ctx.data(|data| data.get_temp::<Rect>(Id::new((MENU_TITLE, label))))
+}
+
 /// The pop-up title (and viewport name) of the submenu labelled `label` (e.g. "Toolbars"):
 /// distinct per label and from every [`menu_popup_title`] (`docs/specs/m12-submenu-popups.md`).
 pub fn submenu_popup_title(label: &str) -> String {
