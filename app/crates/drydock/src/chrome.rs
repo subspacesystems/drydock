@@ -768,6 +768,12 @@ const OPEN_MENU: &str = "drydock_open_menu";
 /// The menu whose pop-up window was shown on the last frame.
 const SHOWN_MENU: &str = "drydock_shown_menu";
 
+/// The last frame in which a top-level menu's pop-up was shown.
+const MENU_POPUP_SHOWN_AT: &str = "drydock_menu_popup_shown_at";
+
+/// The last frame in which the submenu opened from a top-level menu was shown.
+const SUBMENU_POPUP_SHOWN_AT: &str = "drydock_submenu_popup_shown_at";
+
 /// The label of the submenu that is open now.
 const OPEN_SUBMENU: &str = "drydock_open_submenu";
 
@@ -1300,15 +1306,41 @@ fn top_menu<R>(ui: &mut Ui, label: &str, add_contents: impl FnOnce(&mut Ui) -> R
         clear_submenu(&ctx);
     }
 
-    if open_menu(&ctx).as_deref() != Some(label) {
+    let frame = ctx.cumulative_frame_nr_for(eframe::egui::ViewportId::ROOT);
+    let shown_last_frame = |key: &str| {
+        frame.checked_sub(1).is_some_and(|prev| {
+            ctx.data(|data| data.get_temp::<u64>(Id::new((key, label)))) == Some(prev)
+        })
+    };
+    let wayland_window = popup_mode_in(&ctx) == PopupMode::Window && wayland_in(&ctx);
+    let keep_showing = !ctx.embed_viewports()
+        && open_menu(&ctx).as_deref() != Some(label)
+        && wayland_window
+        && shown_last_frame(MENU_POPUP_SHOWN_AT)
+        && shown_last_frame(SUBMENU_POPUP_SHOWN_AT);
+    if open_menu(&ctx).as_deref() != Some(label) && !keep_showing {
         return;
+    }
+    if keep_showing {
+        clear_submenu(&ctx);
     }
 
     let shown = shown_menu(&ctx);
-    let wayland_window = popup_mode_in(&ctx) == PopupMode::Window && wayland_in(&ctx);
     if menu_switch_step(shown.as_deref(), label, wayland_window) == MenuSwitch::HideThenShow {
-        clear_submenu(&ctx);
         let old = shown.unwrap_or_default();
+        let old_shown_now = ctx.data(|data| {
+            data.get_temp::<u64>(Id::new((MENU_POPUP_SHOWN_AT, old.as_str()))) == Some(frame)
+        });
+        let old_submenu_shown_last = frame.checked_sub(1).is_some_and(|prev| {
+            ctx.data(|data| {
+                data.get_temp::<u64>(Id::new((SUBMENU_POPUP_SHOWN_AT, old.as_str()))) == Some(prev)
+            })
+        });
+        if !ctx.embed_viewports() && (old_shown_now || old_submenu_shown_last) {
+            ctx.request_repaint();
+            return;
+        }
+        clear_submenu(&ctx);
         let old_title = menu_popup_title(&old);
         let old_id = crate::popup::popup_viewport_id(&old_title);
         ctx.send_viewport_cmd_to(old_id, eframe::egui::ViewportCommand::Close);
@@ -1342,11 +1374,22 @@ fn top_menu<R>(ui: &mut Ui, label: &str, add_contents: impl FnOnce(&mut Ui) -> R
     let mut content = Some(add_contents);
     popup_window(&ctx, &popup, &mut shown, |ui| {
         if let Some(content) = content.take() {
-            let (_, asked_to_close) = popup_rows(ui, max_height, content);
-            closed = asked_to_close;
+            if keep_showing {
+                let _ = ui.add_enabled_ui(false, |ui| popup_rows(ui, max_height, content));
+            } else {
+                let (_, asked_to_close) = popup_rows(ui, max_height, content);
+                closed = asked_to_close;
+            }
         }
     });
-    ctx.data_mut(|data| data.insert_temp(Id::new(SHOWN_MENU), label.to_owned()));
+    ctx.data_mut(|data| {
+        data.insert_temp(Id::new(SHOWN_MENU), label.to_owned());
+        data.insert_temp(Id::new((MENU_POPUP_SHOWN_AT, label)), frame);
+    });
+    if keep_showing {
+        ctx.request_repaint();
+        return;
+    }
 
     if closed || open_menu(&ctx).as_deref() != Some(label) {
         set_open_menu(&ctx, None);
@@ -1453,7 +1496,8 @@ pub fn submenu_button<R>(
         monitor,
     );
     let title = submenu_popup_title(label);
-    let parent_title = open_menu(&ctx).map(|open| menu_popup_title(&open));
+    let parent_label = open_menu(&ctx);
+    let parent_title = parent_label.as_deref().map(menu_popup_title);
     let mode = popup_mode_in(&ctx);
     if mode == PopupMode::Window
         && let (Some(viewport), Some(root)) = (viewport_inner, root_inner)
@@ -1487,6 +1531,12 @@ pub fn submenu_button<R>(
         }
         content_size = ui.min_rect().max - start;
     });
+    if let Some(parent) = parent_label.as_deref() {
+        let frame = ctx.cumulative_frame_nr_for(eframe::egui::ViewportId::ROOT);
+        ctx.data_mut(|data| {
+            data.insert_temp(Id::new((SUBMENU_POPUP_SHOWN_AT, parent)), frame);
+        });
+    }
     ctx.data_mut(|data| data.remove_temp::<bool>(Id::new(IN_SUBMENU)));
     ctx.data_mut(|data| data.insert_temp(Id::new(SUBMENU_SIZE), content_size));
 
