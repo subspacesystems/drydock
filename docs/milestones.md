@@ -404,6 +404,13 @@ Menus become real pop-up windows that can reach past the main window's edge. Eve
 | `m12-wayland-popup-order` | Fix (sign-off 5): on Wayland a pop-up never outlives its order. Closing a menu with its submenu open (an item in the submenu, Escape, a click outside, focus loss, switching menus) destroys the submenu's pop-up first, and the menu's only on a later frame (GNOME kills Drydock with "destroyed popup not top most popup" today). Switching menus destroys the old pop-up before creating the new one, so the new one takes a grab and its submenu's grab is legal | `m12-wayland-popup-switch` |
 | `m12-wayland-submenu-place` | Fix (sign-off 6): on Wayland View > Toolbars opens overlapping its menu, shifted up and left by the menu's own position (GNOME put it at (189, 579) inside View instead of about (266, 605)), so a click where the submenu should be lands in the main window. Wayland reports no window positions, so the app can only give the submenu's place relative to its menu; the winit patch must take a pop-up-parented position in the parent pop-up's coordinates instead of subtracting the parent's origin again | `m12-wayland-popup-order` |
 
+## M13: (scope pending)
+
+Tyrel accepted M12 (2026-11-12) and lifted the limit to M13. Every feature in the original plan has now shipped, so M13 has no contents yet; Tyrel picks them on a question issue. No tasks until he answers.
+
+| Task | What | Needs |
+| --- | --- | --- |
+
 ## Future (unscheduled)
 
 Ideas parked (woodworking, drawings, CNC export, plugin API, design library and more). Nothing there is planned until Tyrel opens its own issue or asks for it to be scheduled.
