@@ -168,7 +168,8 @@ fn contents_lists_the_new_pages_after_the_first_six() {
         first_six,
         "the first six entries keep their order"
     );
-    let rest: Vec<&str> = PAGES.iter().map(|p| p.0).collect();
+    let mut rest: Vec<&str> = PAGES.iter().map(|p| p.0).collect();
+    rest.insert(rest.len() - 1, "updates.md");
     assert_eq!(listed[6..], rest[..], "the new pages follow, in this order");
 }
 

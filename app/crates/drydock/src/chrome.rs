@@ -1968,6 +1968,22 @@ fn menu_bar_inner(
                 chosen = Some(Action::UserGuide);
                 ui.close();
             }
+            if crate::update_ui::supported() {
+                let label = if state.update_channel {
+                    "Check for Updates..."
+                } else {
+                    "Check for Updates... (not set up)"
+                };
+                let item = ui
+                    .add_enabled_ui(state.update_channel, |ui| {
+                        menu_item(ui, None, label, "", false)
+                    })
+                    .inner;
+                if item.clicked() {
+                    chosen = Some(Action::CheckForUpdates);
+                    ui.close();
+                }
+            }
             if menu_item(ui, None, "About Drydock...", "", false).clicked() {
                 chosen = Some(Action::About);
                 ui.close();
