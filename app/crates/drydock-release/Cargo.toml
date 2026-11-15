@@ -1,0 +1,23 @@
+[package]
+name = "drydock-release"
+description = "Release tool: update key pair, signed update manifest for a built installer"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "drydock-release"
+path = "src/main.rs"
+
+[dependencies]
+drydock-update = { path = "../drydock-update" }
+ed25519-dalek = { workspace = true, features = ["std", "zeroize"] }
+sha2 = { workspace = true }
+
+[dev-dependencies]
+proptest.workspace = true
+
+[lints]
+workspace = true

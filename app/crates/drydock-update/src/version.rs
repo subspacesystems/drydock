@@ -37,11 +37,11 @@ impl Version {
     }
 }
 
-fn parse_part(part: &str) -> Option<u64> {
-    if part.is_empty() || !part.bytes().all(|b| b.is_ascii_digit()) {
+fn parse_part(text: &str) -> Option<u64> {
+    if text.is_empty() || !text.bytes().all(|b| b.is_ascii_digit()) {
         return None;
     }
-    part.parse().ok()
+    text.parse().ok()
 }
 
 impl fmt::Display for Version {

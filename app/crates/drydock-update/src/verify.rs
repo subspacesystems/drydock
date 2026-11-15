@@ -36,10 +36,9 @@ pub fn verify(
     if signature.is_empty() {
         return Err(VerifyError::Missing);
     }
-    let signature: &[u8; 64] = signature.try_into().map_err(|_| VerifyError::Malformed)?;
-    let signature = Signature::from_bytes(signature);
+    let signature: [u8; 64] = signature.try_into().map_err(|_| VerifyError::Malformed)?;
     let key = VerifyingKey::from_bytes(public_key).map_err(|_| VerifyError::BadSignature)?;
-    key.verify_strict(manifest_bytes, &signature)
+    key.verify_strict(manifest_bytes, &Signature::from_bytes(&signature))
         .map_err(|_| VerifyError::BadSignature)?;
     Manifest::parse(manifest_bytes).map_err(VerifyError::Parse)
 }
@@ -69,7 +68,8 @@ pub fn verify_file_sha256(
     let mut file = File::open(path).map_err(|e| FileCheckError::Io(e.kind()))?;
     let mut hasher = Sha256::new();
     let mut buffer = [0u8; 64 * 1024];
-    let mut actual = 0u64;
+    let mut count: u64 = 0;
+
     loop {
         let read = file
             .read(&mut buffer)
@@ -77,23 +77,24 @@ pub fn verify_file_sha256(
         if read == 0 {
             break;
         }
-        actual += read as u64;
-        if actual > expected_size {
+        count += read as u64;
+        if count > expected_size {
             return Err(FileCheckError::SizeMismatch {
                 expected: expected_size,
-                actual,
+                actual: count,
             });
         }
         hasher.update(&buffer[..read]);
     }
-    if actual != expected_size {
+
+    if count != expected_size {
         return Err(FileCheckError::SizeMismatch {
             expected: expected_size,
-            actual,
+            actual: count,
         });
     }
-    let digest: [u8; 32] = hasher.finalize().into();
-    if digest != *expected_sha256 {
+    let actual: [u8; 32] = hasher.finalize().into();
+    if &actual != expected_sha256 {
         return Err(FileCheckError::HashMismatch);
     }
     Ok(())
