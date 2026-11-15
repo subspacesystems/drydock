@@ -44,6 +44,13 @@ case " $* " in
     mkdir -p "$dst"
     printf 'stub-guide' > "$dst/index.html"
     exit 0;;
+  *" -p drydock-release "*)
+    [ "${STUB_SIGN_FAIL:-}" = 1 ] && exit 1
+    dst=${@: -1}
+    mkdir -p "$dst"
+    printf 'stub-manifest' > "$dst/manifest"
+    printf 'stub-signature' > "$dst/manifest.sig"
+    exit 0;;
 esac
 [ "${STUB_CARGO_NO_EXE:-}" = 1 ] && exit 0
 d="$CARGO_TARGET_DIR/x86_64-pc-windows-gnu/release"
@@ -763,4 +770,195 @@ fn install_notes_use_only_the_product_name() {
         !t.contains("sketchup") && !t.contains("trimble"),
         "other products named"
     );
+}
+
+// ---- signed update manifest (m13-release-manifest) ----
+
+const BASE: &str = "https://example.test/dl";
+const NOTES: &str = "https://example.test/notes/1.2.3";
+
+fn sign_opts() -> Vec<&'static str> {
+    vec![
+        "--sign-key-env",
+        "MY_RELEASE_KEY",
+        "--url-base",
+        BASE,
+        "--notes-url",
+        NOTES,
+    ]
+}
+
+fn release_with(rig: &Rig, extra: &[&str], env: &[(&str, &str)]) -> Output {
+    let out = rig.out();
+    let mut args = vec!["--version", "1.2.3", "--out", out.to_str().unwrap()];
+    args.extend_from_slice(extra);
+    rig.run(&args, env)
+}
+
+#[test]
+fn dry_run_prints_the_sign_step_after_the_installer_is_built() {
+    let rig = Rig::new("dry-sign");
+    let o = release_with(
+        &rig,
+        &[&["--dry-run"], sign_opts().as_slice()].concat(),
+        &[],
+    );
+    ok(&o);
+    let t = text(&o);
+    let lines: Vec<&str> = t.lines().collect();
+    let makensis = lines
+        .iter()
+        .position(|l| l.contains("makensis"))
+        .expect("makensis step");
+    let sign = lines
+        .iter()
+        .position(|l| l.contains("-p drydock-release"))
+        .unwrap_or_else(|| panic!("no sign step in: {t}"));
+    assert!(sign > makensis, "sign comes after the installer is built");
+    let line = lines[sign];
+    for want in [
+        "sign",
+        "--key-env MY_RELEASE_KEY",
+        "--version 1.2.3",
+        "--notes-url https://example.test/notes/1.2.3",
+        "--installer-url https://example.test/dl/drydock-1.2.3-setup.exe",
+        "drydock-1.2.3-setup.exe",
+    ] {
+        assert!(line.contains(want), "sign step lacks {want:?}: {line}");
+    }
+    assert!(
+        !rig.out().join("manifest").exists(),
+        "dry run writes nothing"
+    );
+}
+
+#[test]
+fn dry_run_without_sign_options_has_no_sign_step() {
+    let rig = Rig::new("dry-nosign");
+    let o = release_with(&rig, &["--dry-run"], &[]);
+    ok(&o);
+    assert!(!text(&o).contains("-p drydock-release"));
+}
+
+#[test]
+fn a_trailing_slash_on_the_url_base_makes_no_double_slash() {
+    let rig = Rig::new("slash");
+    let o = release_with(
+        &rig,
+        &[
+            "--dry-run",
+            "--sign-key-env",
+            "K",
+            "--url-base",
+            "https://example.test/dl/",
+            "--notes-url",
+            NOTES,
+        ],
+        &[],
+    );
+    ok(&o);
+    let t = text(&o);
+    assert!(
+        t.contains("--installer-url https://example.test/dl/drydock-1.2.3-setup.exe"),
+        "{t}"
+    );
+}
+
+#[test]
+fn signing_runs_after_the_installer_and_writes_manifest_files_next_to_it() {
+    let rig = Rig::new("sign-real");
+    let o = release_with(
+        &rig,
+        &sign_opts(),
+        &[("MY_RELEASE_KEY", "SECRET-KEY-VALUE")],
+    );
+    ok(&o);
+    let makensis = rig.pos("makensis").expect("makensis ran");
+    let sign = rig.pos("cargo run").map(|_| ()).and(
+        rig.log_lines()
+            .iter()
+            .position(|l| l.contains("-p drydock-release")),
+    );
+    let sign = sign.expect("the sign tool ran");
+    assert!(sign > makensis);
+    assert!(rig.out().join("drydock-1.2.3-setup.exe").exists());
+    assert!(rig.out().join("manifest").exists());
+    assert!(rig.out().join("manifest.sig").exists());
+    let log = rig.log_lines().join("\n");
+    assert!(
+        !log.contains("SECRET-KEY-VALUE"),
+        "only the variable's name is passed"
+    );
+    assert!(!text(&o).contains("SECRET-KEY-VALUE"));
+}
+
+#[test]
+fn without_sign_options_no_manifest_is_written() {
+    let rig = Rig::new("nosign");
+    ok(&rig.release("1.2.3"));
+    assert!(
+        !rig.log_lines()
+            .iter()
+            .any(|l| l.contains("-p drydock-release"))
+    );
+    assert!(!rig.out().join("manifest").exists());
+    assert!(!rig.out().join("manifest.sig").exists());
+}
+
+#[test]
+fn unset_key_variable_stops_the_release_before_building() {
+    let rig = Rig::new("sign-nokey");
+    let o = release_with(&rig, &sign_opts(), &[]);
+    assert!(!o.status.success());
+    assert!(
+        text(&o).contains("MY_RELEASE_KEY"),
+        "names the variable: {}",
+        text(&o)
+    );
+    assert!(rig.pos("makensis").is_none(), "nothing was built");
+    assert!(rig.pos("cargo").is_none());
+}
+
+#[test]
+fn a_failing_sign_tool_fails_the_release() {
+    let rig = Rig::new("sign-fail");
+    let o = release_with(
+        &rig,
+        &sign_opts(),
+        &[("MY_RELEASE_KEY", "x"), ("STUB_SIGN_FAIL", "1")],
+    );
+    assert!(!o.status.success());
+}
+
+#[test]
+fn sign_options_must_come_together() {
+    for extra in [
+        vec!["--sign-key-env", "K"],
+        vec!["--sign-key-env", "K", "--url-base", BASE],
+        vec!["--sign-key-env", "K", "--notes-url", NOTES],
+        vec!["--url-base", BASE],
+        vec!["--notes-url", NOTES],
+    ] {
+        let rig = Rig::new("sign-opts");
+        let o = release_with(&rig, &extra, &[("K", "x")]);
+        assert_eq!(o.status.code(), Some(2), "{extra:?}: {}", text(&o));
+        assert!(rig.pos("makensis").is_none());
+    }
+}
+
+#[test]
+fn the_script_has_no_hard_coded_host() {
+    let s = std::fs::read_to_string(script()).unwrap();
+    assert!(!s.contains("https://"), "the URL base is always passed in");
+    assert!(!s.contains("http://"));
+}
+
+#[test]
+fn install_notes_say_dev_builds_use_a_test_key() {
+    let t = install_notes().to_lowercase();
+    assert!(
+        t.contains("test key"),
+        "INSTALL.md explains the test update key"
+    );
+    assert!(t.contains("update"));
 }

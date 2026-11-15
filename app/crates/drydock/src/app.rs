@@ -1287,6 +1287,8 @@ impl App {
             Effect::Edit(key) => self.edit(key, ctx, frame),
             Effect::About => self.about_open = true,
             Effect::UserGuide => self.open_user_guide(),
+            // m13-update-ui wires this to `update_ui::UpdateUi::open_dialog`.
+            Effect::CheckForUpdates => {}
             Effect::ModelInfo => self.model_info_open = true,
             Effect::ToggleShadows => self.reveal_panel(PanelId::Shadows, ctx),
             Effect::TogglePanel(id) => self.reveal_panel(id, ctx),
@@ -2204,6 +2206,8 @@ impl App {
                 .as_ref()
                 .and_then(|d| d.kernel.as_ref())
                 .is_some_and(mesh_export::can_export),
+            // m13-update-ui: the updater's channel.
+            update_channel: false,
             shadows: self.dock.is_open(PanelId::Shadows),
             entity_info: self.dock.is_open(PanelId::EntityInfo),
             materials: self.dock.is_open(PanelId::Materials),

@@ -66,6 +66,9 @@ pub struct MenuState<'a> {
     /// The model holds at least one group or component (Export 3MF... and Export STL...
     /// need it; `docs/specs/m7-export-ui.md`).
     pub can_export: bool,
+    /// The build has an update channel (Help > Check for Updates is enabled; the item itself
+    /// is shown only where `update_ui::supported()`; `docs/specs/m13-update-ui.md`).
+    pub update_channel: bool,
     /// The Shadows window is showing (the View menu's Shadows item is checked;
     /// `docs/specs/m5-app-shadows-ui.md`).
     pub shadows: bool,

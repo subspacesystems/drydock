@@ -71,6 +71,8 @@ pub enum Effect {
     About,
     /// Open the user guide in the browser.
     UserGuide,
+    /// Open the Updates window and start a manual check.
+    CheckForUpdates,
     /// Show the Model Info window.
     ModelInfo,
     /// Show or hide the Shadows window.
@@ -354,6 +356,7 @@ impl ViewState {
             Action::Paste => return Effect::Paste,
             Action::About => return Effect::About,
             Action::UserGuide => return Effect::UserGuide,
+            Action::CheckForUpdates => return Effect::CheckForUpdates,
             Action::ModelInfo => return Effect::ModelInfo,
             Action::ToggleShadows => return Effect::ToggleShadows,
             Action::TogglePanel(id) => return Effect::TogglePanel(id),

@@ -28,6 +28,12 @@ On Windows 11, Smart App Control blocks unsigned programs and offers no way to c
 To run this beta you must turn Smart App Control off in Windows Security. It cannot be turned
 back on without resetting Windows, so please weigh that before installing.
 
+## Updates
+
+A Windows build can check for updates, and update checks are signed so the program can tell
+they came from the project. Builds made from source or by developers carry a **test key**, so
+they do not accept the project's releases, and the project's installers do not accept theirs.
+
 ## Your files
 
 Settings live in `%APPDATA%\Drydock`. Uninstalling Subspace Drydock keeps your models and
