@@ -16,22 +16,37 @@ impl Version {
     /// part, no pre-release suffix; leading zeros are accepted: `01.2.3` is 1.2.3).
     /// A part too big for u64 is an error. Returns None for anything else.
     pub fn parse(text: &str) -> Option<Version> {
-        let _ = text;
-        unimplemented!()
+        let mut parts = text.split('.');
+        let major = parse_part(parts.next()?)?;
+        let minor = parse_part(parts.next()?)?;
+        let patch = parse_part(parts.next()?)?;
+        if parts.next().is_some() {
+            return None;
+        }
+        Some(Version {
+            major,
+            minor,
+            patch,
+        })
     }
 
     /// True when `self` is strictly newer than `running` (the caller passes
     /// `Version::parse(env!("CARGO_PKG_VERSION"))`).
     pub fn is_newer_than(&self, running: &Version) -> bool {
-        let _ = running;
-        unimplemented!()
+        self > running
     }
+}
+
+fn parse_part(text: &str) -> Option<u64> {
+    if text.is_empty() || !text.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    text.parse().ok()
 }
 
 impl fmt::Display for Version {
     /// `major.minor.patch`, no padding.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let _ = f;
-        unimplemented!()
+        write!(f, "{}.{}.{}", self.major, self.minor, self.patch)
     }
 }
