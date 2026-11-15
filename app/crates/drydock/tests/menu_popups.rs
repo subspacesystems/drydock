@@ -287,10 +287,13 @@ mod real {
     }
 
     fn find_window(title: &str) -> Option<u32> {
-        tool("xdotool", &["search", "--name", &format!("^{title}$")])
-            .lines()
-            .next()
-            .and_then(|line| line.trim().parse().ok())
+        tool(
+            "xdotool",
+            &["search", "--onlyvisible", "--name", &format!("^{title}$")],
+        )
+        .lines()
+        .next()
+        .and_then(|line| line.trim().parse().ok())
     }
 
     fn geometry(id: u32) -> (i32, i32, i32, i32) {
@@ -329,11 +332,26 @@ mod real {
         }
         let request: Request = Arc::default();
         let quit = Arc::new(AtomicBool::new(false));
-        let app = {
+        let spawn = || {
             let (request, quit) = (Arc::clone(&request), Arc::clone(&quit));
             thread::spawn(move || run_probe(request, quit))
         };
-        wait_for("the root window", || find_window(ROOT).is_some());
+        let mut app = spawn();
+        let deadline = Instant::now() + Duration::from_secs(40);
+        loop {
+            if find_window(ROOT).is_some() {
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "timed out waiting for the root window"
+            );
+            if app.is_finished() {
+                let _ = app.join();
+                app = spawn();
+            }
+            thread::sleep(Duration::from_millis(250));
+        }
         thread::sleep(Duration::from_secs(1));
         let root = find_window(ROOT).unwrap();
         let (_, _, root_w, root_h) = geometry(root);
@@ -360,11 +378,17 @@ mod real {
         wait_for("the File pop-up", || find_window(&file).is_some());
         wait_for("the Tools pop-up to go", || find_window(&tools).is_none());
 
-        // Escape closes the open one.
+        // Escape closes the open one. Focus and send again: the pop-up may still be being
+        // revealed when it first shows, so one lost key must not fail the test.
         let popup = find_window(&file).unwrap();
-        tool("xdotool", &["windowfocus", "--sync", &popup.to_string()]);
-        tool("xdotool", &["key", "Escape"]);
-        wait_for("Escape to close the menu", || find_window(&file).is_none());
+        wait_for("Escape to close the menu", || {
+            if find_window(&file).is_none() {
+                return true;
+            }
+            tool("xdotool", &["windowfocus", "--sync", &popup.to_string()]);
+            tool("xdotool", &["key", "Escape"]);
+            false
+        });
         assert!(find_window(ROOT).is_some());
 
         quit.store(true, Ordering::SeqCst);

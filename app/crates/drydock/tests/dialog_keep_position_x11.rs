@@ -75,13 +75,49 @@ fn run_probe(probe: Probe, root_title: &'static str) -> Result<(), String> {
 
 fn find_window(title: &str) -> Option<u32> {
     let out = Command::new("xdotool")
-        .args(["search", "--name", &format!("^{title}$")])
+        .args(["search", "--onlyvisible", "--name", &format!("^{title}$")])
         .output()
         .expect("xdotool runs");
     String::from_utf8_lossy(&out.stdout)
         .lines()
         .next()
         .and_then(|line| line.trim().parse().ok())
+}
+
+/// Starts a probe and waits until its root window is visible. The display resets when its last
+/// client leaves, so an app that connects at that moment can exit before opening a window;
+/// such a probe is started again.
+fn launch(
+    root_title: &'static str,
+    dialog_title: &'static str,
+    modal: bool,
+    open: &Arc<AtomicBool>,
+    quit: &Arc<AtomicBool>,
+) -> (thread::JoinHandle<Result<(), String>>, u32) {
+    let spawn = || {
+        let probe = Probe {
+            title: dialog_title,
+            modal,
+            open: Arc::clone(open),
+            quit: Arc::clone(quit),
+        };
+        thread::spawn(move || run_probe(probe, root_title))
+    };
+    let mut app = spawn();
+    let deadline = Instant::now() + Duration::from_secs(60);
+    loop {
+        if let Some(id) = find_window(root_title) {
+            return (app, id);
+        }
+        if Instant::now() >= deadline {
+            panic!("window {root_title:?} never became visible");
+        }
+        if app.is_finished() {
+            let _ = app.join();
+            app = spawn();
+        }
+        thread::sleep(Duration::from_millis(200));
+    }
 }
 
 fn wait_for(title: &str, present: bool) -> Option<u32> {
@@ -144,15 +180,7 @@ fn run_case(root_title: &'static str, dialog_title: &'static str, modal: bool) {
     }
     let open = Arc::new(AtomicBool::new(false));
     let quit = Arc::new(AtomicBool::new(false));
-    let probe = Probe {
-        title: dialog_title,
-        modal,
-        open: Arc::clone(&open),
-        quit: Arc::clone(&quit),
-    };
-    let app = thread::spawn(move || run_probe(probe, root_title));
-
-    let root = wait_for(root_title, true).expect("root window");
+    let (app, root) = launch(root_title, dialog_title, modal, &open, &quit);
     thread::sleep(Duration::from_secs(1));
     move_window(root, 100, 100);
     thread::sleep(Duration::from_millis(500));
