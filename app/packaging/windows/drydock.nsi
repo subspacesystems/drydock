@@ -1,6 +1,12 @@
 ; SPDX-License-Identifier: GPL-3.0-or-later
 ; Copyright (C) 2026 Subspace Systems
 
+; Usage:
+;   setup.exe             interactive install, as before
+;   setup.exe /S          silent install; nothing is started
+;   setup.exe /S /UPDATE  silent update: installs into the folder of the installed version and
+;                         starts drydock.exe again, not elevated, when done
+
 !ifndef VERSION
   !error "pass -DVERSION=x.y.z"
 !endif
@@ -10,6 +16,11 @@
 !ifndef OUTFILE
   !define OUTFILE "drydock-setup-${VERSION}.exe"
 !endif
+
+!include "FileFunc.nsh"
+!insertmacro GetParameters
+!insertmacro GetOptions
+Var UpdateMode
 
 Unicode true
 Name "Subspace Drydock"
@@ -26,6 +37,13 @@ UninstPage instfiles
 Function .onInit
   SetRegView 64
   SetShellVarContext all
+
+  StrCpy $UpdateMode "0"
+  ${GetParameters} $R0
+  ClearErrors
+  ${GetOptions} $R0 "/UPDATE" $R3
+  IfErrors +2 0
+  StrCpy $UpdateMode "1"
 
   ReadRegStr $R1 HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\SubspaceDrydock" "InstallLocation"
   StrCmp $R1 "" notice_done
@@ -46,6 +64,10 @@ notice_unknown:
   Abort
 
 notice_done:
+  StrCmp $UpdateMode "1" 0 notice_end
+  StrCmp $R1 "" notice_end
+  StrCpy $INSTDIR $R1
+notice_end:
 FunctionEnd
 
 Function un.onInit
@@ -56,6 +78,7 @@ FunctionEnd
 Function RemoveOldVersion
   ReadRegStr $R1 HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\SubspaceDrydock" "InstallLocation"
   StrCmp $R1 "" done
+  StrCmp $R1 "$INSTDIR" done
   IfFileExists "$R1\uninstall.exe" 0 done
   ExecWait '"$R1\uninstall.exe" /S _?=$R1'
   Delete "$R1\uninstall.exe"
@@ -64,11 +87,30 @@ done:
 FunctionEnd
 
 Section "Install"
-  Call RemoveOldVersion
-
   SetOutPath "$INSTDIR"
-  File "${STAGE}\drydock.exe"
+  File /oname=drydock.exe.new "${STAGE}\drydock.exe"
+
+  StrCpy $R2 0
+swap_retry:
+  System::Call 'kernel32::MoveFileExW(w "$INSTDIR\drydock.exe.new", w "$INSTDIR\drydock.exe", i 1) i .r0'
+  IntCmp $R0 0 swap_failed swap_done swap_done
+
+swap_failed:
+  IntOp $R2 $R2 + 1
+  IntCmp $R2 20 swap_give_up swap_wait swap_wait
+
+swap_wait:
+  Sleep 500
+  Goto swap_retry
+
+swap_give_up:
+  Delete "$INSTDIR\drydock.exe.new"
+  Abort "Subspace Drydock was not updated because the installed version is still running. The installed version was not changed."
+
+swap_done:
   File /nonfatal /r "${STAGE}\guide"
+
+  Call RemoveOldVersion
 
   WriteUninstaller "$INSTDIR\uninstall.exe"
 
@@ -89,6 +131,13 @@ Section "Install"
   WriteRegStr HKLM "Software\Classes\SubspaceDrydock.Model\shell\open\command" "" '"$INSTDIR\drydock.exe" "%1"'
   System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, p 0, p 0)'
 SectionEnd
+
+Function .onInstSuccess
+  IfSilent 0 inst_success_done
+  StrCmp $UpdateMode "1" 0 inst_success_done
+  Exec '"$WINDIR\explorer.exe" "$INSTDIR\drydock.exe"'
+inst_success_done:
+FunctionEnd
 
 Section "Uninstall"
   Delete "$INSTDIR\drydock.exe"
