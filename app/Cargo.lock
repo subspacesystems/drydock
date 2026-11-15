@@ -701,6 +701,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "drydock-release"
+version = "0.12.1"
+dependencies = [
+ "drydock-update",
+ "ed25519-dalek",
+ "proptest",
+ "sha2",
+]
+
+[[package]]
 name = "drydock-render"
 version = "0.12.1"
 dependencies = [
