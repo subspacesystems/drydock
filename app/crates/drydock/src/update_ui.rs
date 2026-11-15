@@ -260,6 +260,8 @@ pub struct UpdateUi {
     launcher_error: Option<String>,
     requested_download: Option<Version>,
     later: Option<Version>,
+    /// The ready prompt was seen for a frame; draw it from the next one.
+    prompt_armed: bool,
     restart: Restart,
 }
 
@@ -308,6 +310,7 @@ impl UpdateUi {
             launcher_error: None,
             requested_download: None,
             later: None,
+            prompt_armed: false,
             restart: Restart::None,
         }
     }
@@ -401,6 +404,14 @@ impl UpdateUi {
             return None;
         }
         let state = self.state();
+        let showing = self.prompt_showing();
+        if showing && !self.prompt_armed {
+            self.prompt_armed = true;
+            ctx.request_repaint_after(Duration::from_millis(250));
+        } else if !showing {
+            self.prompt_armed = false;
+        }
+        let draw_prompt = showing && self.prompt_armed;
         if self.setting == UpdateSetting::Auto
             && let Some(State::Available(manifest)) = &state
             && self.requested_download.as_ref() != Some(&manifest.version)
@@ -415,7 +426,10 @@ impl UpdateUi {
         );
         let asked = self.check_requested && matches!(state, Some(State::Idle) | None);
         if working || asked {
-            ctx.request_repaint_after(Duration::from_millis(250));
+            // egui subtracts the predicted frame time from the delay; add it back so the
+            // request stays in the future even when a test steps in large increments.
+            let frame = ctx.input(|input| input.predicted_dt);
+            ctx.request_repaint_after(Duration::from_millis(250) + Duration::from_secs_f32(frame));
         }
         if self.check_requested && !matches!(state, Some(State::Idle) | None) {
             self.check_requested = false;
@@ -472,9 +486,7 @@ impl UpdateUi {
 
         let mut event = None;
         let mut later = false;
-        if self.prompt_showing()
-            && let Some(State::Ready { manifest, .. }) = self.state()
-        {
+        if draw_prompt && let Some(State::Ready { manifest, .. }) = self.state() {
             let mut open = true;
             crate::dialog::dialog_window(
                 ctx,
