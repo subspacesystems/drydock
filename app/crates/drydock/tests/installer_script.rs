@@ -98,24 +98,150 @@ fn names_and_install_dir() {
 }
 
 #[test]
-fn removes_the_old_version_before_installing() {
-    // Reads the old install folder ...
+fn old_version_is_removed_only_after_the_new_files_are_in_place() {
     let read_loc = must("ReadRegStr", &[UNINSTALL_KEY, "InstallLocation"]);
-    // ... runs the old uninstaller from that folder, silently, waiting for it, in place ...
     let run = must("ExecWait", &["$R1", "uninstall.exe", "/S", "_?="]);
-    // ... and does all that before the first file is installed.
-    let first_file = must("File", &[]);
     assert!(
         read_loc < run,
         "read the key before running the uninstaller"
     );
-    assert!(
-        run < first_file,
-        "old version is removed before new files are copied"
-    );
-    // After the wait, the leftovers of the old uninstaller are cleaned up.
+    // The removal happens in a function that the install section calls ...
+    let call = must("Call", &["RemoveOldVersion"]);
+    // ... after the new program and the guide were copied ...
+    let program = must("File", &["${STAGE}", "drydock.exe"]);
+    let guide = must("File", &["/nonfatal", "${STAGE}", "guide"]);
+    assert!(program < call && guide < call, "copy first, remove after");
+    // ... and the leftovers of the old uninstaller are cleaned up after the wait.
     let del = find_from(run, "Delete", &["uninstall"]).expect("Delete of the old uninstaller");
-    assert!(del < first_file);
+    assert!(del > run);
+}
+
+#[test]
+fn new_program_is_swapped_in_so_a_failed_copy_keeps_the_old_one() {
+    // Copied under another name next to the old program, then moved over it in one step.
+    let staged = must("File", &["/oname=", "drydock.exe.new", "${STAGE}"]);
+    let swap = must(
+        "System::Call",
+        &["MoveFileEx", "drydock.exe.new", "drydock.exe"],
+    );
+    let call = must("Call", &["RemoveOldVersion"]);
+    assert!(staged < swap && swap < call);
+    // Giving up deletes the staged copy and aborts; nothing else was changed before.
+    let abort = find_from(swap, "Abort", &[]).expect("Abort after the swap");
+    let del = find_from(swap, "Delete", &["drydock.exe.new"]).expect("staged copy is deleted");
+    assert!(swap < del && del < abort && abort < call);
+    // Nothing is written to the registry or the Start menu before the swap.
+    for (i, l) in lines().iter().enumerate() {
+        let low = l.to_lowercase();
+        if low.starts_with("writereg") || low.starts_with("createshortcut") {
+            assert!(i > call, "written before the old version was handled: {l}");
+        }
+    }
+    let first_exec = must("ExecWait", &[]);
+    assert!(
+        first_exec < staged,
+        "RemoveOldVersion is defined above the section"
+    );
+}
+
+#[test]
+fn the_uninstaller_registry_and_shortcut_come_after_the_removal() {
+    // The old uninstaller deletes the shortcut and keys; the new ones are written afterwards.
+    let call = must("Call", &["RemoveOldVersion"]);
+    for (word, frags) in [
+        ("WriteUninstaller", vec!["uninstall.exe"]),
+        ("CreateShortcut", vec!["Subspace Drydock.lnk"]),
+        ("WriteRegStr", vec![UNINSTALL_KEY, "InstallLocation"]),
+        ("WriteRegStr", vec![r"Classes\.drydock"]),
+    ] {
+        assert!(
+            must(word, &frags) > call,
+            "`{word}` {frags:?} before the removal"
+        );
+    }
+}
+
+#[test]
+fn the_folder_being_installed_into_is_not_uninstalled() {
+    // The old uninstaller would delete the files just copied: skip it for the same folder.
+    let ls = lines();
+    let read_loc = must("ReadRegStr", &[UNINSTALL_KEY, "InstallLocation"]);
+    let same = ls
+        .iter()
+        .position(|l| l.starts_with("StrCmp") && l.contains("$R1") && l.contains("$INSTDIR"))
+        .expect("StrCmp of the old folder with $INSTDIR");
+    let run = must("ExecWait", &["/S", "_?="]);
+    assert!(read_loc < same && same < run);
+}
+
+#[test]
+fn update_mode_flags_are_documented_and_parsed() {
+    let text = raw();
+    let header: String = text
+        .lines()
+        .take_while(|l| !l.starts_with("!ifndef"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(
+        header.contains("/S") && header.contains("/UPDATE"),
+        "{header}"
+    );
+    must("!include", &["FileFunc.nsh"]);
+    let opt = must("${GetOptions}", &["/UPDATE"]);
+    assert_eq!(enclosing(opt).as_deref(), Some("function .oninit"));
+    // The only include is NSIS's own; no plugins beyond the built-in System one.
+    for l in lines() {
+        let low = l.to_lowercase();
+        if low.starts_with("!include") {
+            assert!(low.contains("filefunc.nsh"), "unexpected include: {l}");
+        }
+        assert!(!low.contains("!addplugindir"), "{l}");
+        if low.starts_with("system::") {
+            continue;
+        }
+        assert!(
+            !low.contains("::") || low.starts_with("system::"),
+            "plugin call: {l}"
+        );
+    }
+}
+
+#[test]
+fn update_installs_into_the_installed_folder() {
+    // In update mode $INSTDIR is taken from InstallLocation (still inside .onInit).
+    let set = must("StrCpy", &["$INSTDIR", "$R1"]);
+    assert_eq!(enclosing(set).as_deref(), Some("function .oninit"));
+    let read_loc = must("ReadRegStr", &[UNINSTALL_KEY, "InstallLocation"]);
+    assert!(read_loc < set);
+}
+
+#[test]
+fn update_restarts_drydock_without_elevation() {
+    let ex = must("Exec", &["explorer.exe", "$INSTDIR", "drydock.exe"]);
+    assert_eq!(enclosing(ex).as_deref(), Some("function .oninstsuccess"));
+    // Only after a successful, silent update; never ExecShell/runas or a direct launch.
+    let block: Vec<String> = lines()
+        .into_iter()
+        .skip_while(|l| !l.to_lowercase().starts_with("function .oninstsuccess"))
+        .take_while(|l| !l.eq_ignore_ascii_case("FunctionEnd"))
+        .collect();
+    assert!(block.iter().any(|l| l.starts_with("IfSilent")), "{block:?}");
+    assert!(block.iter().any(|l| l.contains("UpdateMode")), "{block:?}");
+    for l in lines() {
+        let low = l.to_lowercase();
+        assert!(!low.contains("runas"), "{l}");
+        if low.starts_with("exec") && low.contains("drydock.exe") {
+            assert!(low.contains("explorer.exe"), "launched directly: {l}");
+        }
+    }
+}
+
+#[test]
+fn install_never_touches_settings() {
+    for l in lines() {
+        let low = l.to_lowercase();
+        assert!(!low.contains("appdata") && !low.contains("$profile"), "{l}");
+    }
 }
 
 #[test]
