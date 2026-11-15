@@ -416,7 +416,7 @@ Tyrel picked Windows auto-update (2026-11-13); the requirements are. Windows onl
 - **Pluggable channel:** the manifest URL comes from a channel definition (name, URL, public key, optional extra request headers), never a hard-coded host, so a later channel can add an auth header through configuration alone.
 - **Install flow:** download in the background, then ask ("Restart and update" / "Later"); unsaved changes are saved (or discarded on purpose) first; the existing installer does the install.
 - **Rollback safety:** a failed or cancelled download or install leaves the running version as it was.
-- **Release side:** a tool builds the installer, writes the manifest and signs it. Tyrel generates and holds the real private key; it is never in a repo and no agent reads it. Tests use a throwaway test key. Dev releases go to this repo's Gitea releases only.
+- **Release side:** a tool builds the installer, writes the manifest and signs it. Tyrel generates and holds the real private key; it is never in a repo and no agent reads it. Tests use a throwaway test key. Releases go to GitHub Releases once the repository has moved to GitHub (Tyrel, 2026-11-15); nothing is published anywhere until Tyrel gives the go-ahead.
 - **Out of scope:** Authenticode signing (the guide says SmartScreen warns until then), delta updates, several channels in the UI, macOS and Linux updating.
 
 | Task | What | Needs |
@@ -427,9 +427,9 @@ Tyrel picked Windows auto-update (2026-11-13); the requirements are. Windows onl
 | `m13-update-winhttp` | Windows transport over WinHTTP (system proxy and certificate store, channel headers, timeouts, size limit from the manifest); built only on Windows | `m13-update-check` |
 | `m13-installer-update` | Installer: a silent update mode that starts Drydock again (not elevated) when done; the old version is removed only once the new files are in place, so a failed install leaves it working; settings untouched | |
 | `m13-update-ui` | The setting and Help > Check for Updates (Windows only), the "Restart and update" / "Later" prompt, save-first guard, starting the installer and quitting; guide page (offline, no telemetry, SmartScreen warning) | `m13-update-check`, `m13-installer-update` |
-| `m13-release-publish` | `release.sh` publishing: the installer goes to a per-version Gitea release, and the manifest and signature replace the ones on the channel's fixed release | `m13-release-manifest` |
+| `m13-release-publish` | `release.sh` publishing to GitHub Releases: the installer goes to a per-version release, and the manifest and signature replace the ones on the channel's fixed release. **On hold** until the repository has moved to GitHub and Tyrel gives the go-ahead | `m13-release-manifest` |
 
-Done when: tests cover manifest parsing, signature and hash checks (good, bad and missing signatures), offline behavior and the unsaved-changes guard; and on Tyrel's Windows desktop, version N finds N+1 published on Gitea, verifies it, updates and restarts into N+1 with his settings intact.
+Done when: tests cover manifest parsing, signature and hash checks (good, bad and missing signatures), offline behavior and the unsaved-changes guard; and on Tyrel's Windows desktop, version N finds N+1 published on GitHub Releases, verifies it, updates and restarts into N+1 with his settings intact.
 
 ## Future (unscheduled)
 
