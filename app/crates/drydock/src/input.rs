@@ -126,6 +126,8 @@ pub enum Action {
     About,
     /// Open the bundled user guide in the browser (Help menu, F1; `docs/specs/m8-guide-help.md`).
     UserGuide,
+    /// Open the Updates window and check now (Help menu, Windows only; `docs/specs/m13-update-ui.md`).
+    CheckForUpdates,
     /// Make the selection a component, after asking for its name (Edit menu;
     /// `docs/specs/m4-app-components-ui.md`).
     MakeComponent,

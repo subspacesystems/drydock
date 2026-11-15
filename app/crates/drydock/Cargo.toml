@@ -43,6 +43,8 @@ winresource.workspace = true
 proptest.workspace = true
 egui_kittest.workspace = true
 usvg.workspace = true
+ed25519-dalek = { workspace = true, features = ["std"] }
+sha2.workspace = true
 resvg.workspace = true
 
 [lints]

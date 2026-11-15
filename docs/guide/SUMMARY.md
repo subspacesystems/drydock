@@ -13,4 +13,5 @@
 - [Files, import and export](files.md)
 - [3D printing](printing.md)
 - [Keyboard shortcuts](shortcuts.md)
+- [Updates](updates.md)
 - [Drydock on Linux](linux.md)

@@ -56,6 +56,7 @@ pub mod texture_handles;
 pub mod texture_panel;
 pub mod toolbars;
 pub mod units_ui;
+pub mod update_ui;
 pub mod viewstate;
 pub mod window_icon;
 pub mod winmeta;
