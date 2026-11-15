@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Subspace Systems
 
+use std::fs::File;
+use std::io::Read;
 use std::path::Path;
+
+use ed25519_dalek::{Signature, VerifyingKey};
+use sha2::{Digest, Sha256};
 
 use crate::{Manifest, ParseError};
 
@@ -28,8 +33,15 @@ pub fn verify(
     signature: &[u8],
     public_key: &[u8; 32],
 ) -> Result<Manifest, VerifyError> {
-    let _ = (manifest_bytes, signature, public_key);
-    unimplemented!()
+    if signature.is_empty() {
+        return Err(VerifyError::Missing);
+    }
+    let signature: &[u8; 64] = signature.try_into().map_err(|_| VerifyError::Malformed)?;
+    let signature = Signature::from_bytes(signature);
+    let key = VerifyingKey::from_bytes(public_key).map_err(|_| VerifyError::BadSignature)?;
+    key.verify_strict(manifest_bytes, &signature)
+        .map_err(|_| VerifyError::BadSignature)?;
+    Manifest::parse(manifest_bytes).map_err(VerifyError::Parse)
 }
 
 /// Why a downloaded file was refused.
@@ -54,6 +66,35 @@ pub fn verify_file_sha256(
     expected_sha256: &[u8; 32],
     expected_size: u64,
 ) -> Result<(), FileCheckError> {
-    let _ = (path, expected_sha256, expected_size);
-    unimplemented!()
+    let mut file = File::open(path).map_err(|e| FileCheckError::Io(e.kind()))?;
+    let mut hasher = Sha256::new();
+    let mut buffer = [0u8; 64 * 1024];
+    let mut actual = 0u64;
+    loop {
+        let read = file
+            .read(&mut buffer)
+            .map_err(|e| FileCheckError::Io(e.kind()))?;
+        if read == 0 {
+            break;
+        }
+        actual += read as u64;
+        if actual > expected_size {
+            return Err(FileCheckError::SizeMismatch {
+                expected: expected_size,
+                actual,
+            });
+        }
+        hasher.update(&buffer[..read]);
+    }
+    if actual != expected_size {
+        return Err(FileCheckError::SizeMismatch {
+            expected: expected_size,
+            actual,
+        });
+    }
+    let digest: [u8; 32] = hasher.finalize().into();
+    if digest != *expected_sha256 {
+        return Err(FileCheckError::HashMismatch);
+    }
+    Ok(())
 }
