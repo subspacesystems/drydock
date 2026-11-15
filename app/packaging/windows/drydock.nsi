@@ -93,7 +93,7 @@ Section "Install"
   StrCpy $R2 0
 swap_retry:
   System::Call 'kernel32::MoveFileExW(w "$INSTDIR\drydock.exe.new", w "$INSTDIR\drydock.exe", i 1) i .r0'
-  IntCmp $R0 0 swap_failed swap_done swap_done
+  IntCmp $0 0 swap_failed swap_done swap_done
 
 swap_failed:
   IntOp $R2 $R2 + 1
