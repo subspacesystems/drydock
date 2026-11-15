@@ -645,6 +645,7 @@ dependencies = [
  "drydock-kernel",
  "drydock-mesh",
  "drydock-render",
+ "drydock-update",
  "drydock-view",
  "eframe",
  "egui-wgpu",
@@ -732,6 +733,7 @@ dependencies = [
  "ed25519-dalek",
  "proptest",
  "sha2",
+ "windows",
 ]
 
 [[package]]

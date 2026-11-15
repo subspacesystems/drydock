@@ -17,14 +17,24 @@
 
 mod channel;
 mod manifest;
+mod net;
 mod transport;
 mod updater;
 mod verify;
 mod version;
+#[cfg(windows)]
+mod winhttp;
 
 pub use channel::{Channel, ChannelError};
 pub use manifest::{Manifest, ParseError, hex_decode_32, hex_encode};
+pub use net::{
+    BodyBudget, CHUNK_BYTES, CONNECT_TIMEOUT_MS, GET_TOTAL_TIMEOUT, HttpsUrl, RECEIVE_TIMEOUT_MS,
+    RESOLVE_TIMEOUT_MS, SEND_TIMEOUT_MS, USER_AGENT, check_status, error_from_win32, header_block,
+    parse_https_url,
+};
 pub use transport::{Transport, TransportError};
 pub use updater::{Background, Config, Mode, State, Updater};
 pub use verify::{FileCheckError, VerifyError, verify, verify_file_sha256};
 pub use version::Version;
+#[cfg(windows)]
+pub use winhttp::WinHttpTransport;

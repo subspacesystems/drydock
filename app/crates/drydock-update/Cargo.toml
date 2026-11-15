@@ -11,9 +11,18 @@ publish.workspace = true
 ed25519-dalek = { workspace = true }
 sha2 = { workspace = true }
 
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_Networking_WinHttp"] }
+
 [dev-dependencies]
 ed25519-dalek = { workspace = true, features = ["std"] }
 proptest.workspace = true
 
-[lints]
-workspace = true
+# WinHTTP needs unsafe calls (docs/adr/009-winhttp-unsafe.md): this crate cannot inherit the
+# workspace's `forbid`, so it repeats the workspace lints with `deny`; only `winhttp.rs` allows it.
+[lints.rust]
+unsafe_code = "deny"
+
+[lints.clippy]
+dbg_macro = "warn"
+todo = "warn"
