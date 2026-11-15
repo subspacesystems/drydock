@@ -59,6 +59,7 @@ const MENU_ITEMS: &[(&str, &str)] = &[
     ("Tools", "3D Text"),
     ("Tools", "Print Setup"),
     ("Help", "User Guide"),
+    ("Help", "Check for Updates"),
     ("Help", "About Drydock"),
 ];
 

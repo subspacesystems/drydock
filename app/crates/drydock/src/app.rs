@@ -6,6 +6,7 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, TryRecvError};
+use std::time::Duration;
 
 use drydock::background_ui;
 use drydock::chrome::{self, MenuState};
@@ -59,6 +60,9 @@ use drydock::texture_handles;
 use drydock::texture_panel::{TextureForm, texture_position_section};
 use drydock::toolbars::{self, CustomizeState, Edge, Placement, ToolbarEvent, ToolbarLayout};
 use drydock::units_ui;
+use drydock::update_ui::{
+    self, Parts, ProcessLauncher, Step, UpdateEvent, UpdateSetting, UpdateUi,
+};
 use drydock::viewstate::{Effect, ViewState, scene_bounds, zoom_pivot_at};
 use drydock_dae::{FlatScene, RestView};
 use drydock_kernel::editpath::EditPath;
@@ -70,6 +74,7 @@ use drydock_kernel::tools::plane::DrawPlane;
 use drydock_kernel::tools::scale;
 use drydock_kernel::topology::FaceId;
 use drydock_render::{GpuScene, Renderer, Style, Viewport};
+use drydock_update::Version;
 use drydock_view::Projection;
 use eframe::egui;
 use egui::{Color32, Event, MouseWheelUnit, PointerButton, Pos2, Rect, Sense, pos2};
@@ -192,6 +197,8 @@ pub struct App {
     export_options: Vec<ExportOptions>,
     /// The last export's status line, until the next action.
     export_note: Option<String>,
+    /// The updater and its windows; `None` where updating is not supported.
+    updates: Option<UpdateUi>,
     save_dialog: Option<SaveDialog>,
     /// A destructive action waiting for the Save/Discard/Cancel question.
     confirm: Option<PendingAction>,
@@ -273,6 +280,7 @@ impl App {
             .unwrap_or_default();
         let print_setup_texts =
             PrintSetupTexts::for_view(&print_settings.bed, print_settings.overhang_degrees);
+        let updates = update_ui_for_new();
         let dialog_hook = std::env::var("DRYDOCK_OPEN_DIALOG").unwrap_or_default();
         let about_open = dialog_hook == "about";
         let group_open = dialog_hook == "group";
@@ -320,6 +328,7 @@ impl App {
             text_options: None,
             export_options: Vec::new(),
             export_note: None,
+            updates,
             save_dialog: None,
             confirm: None,
             app_confirm: None,
@@ -838,7 +847,7 @@ impl App {
                     }
                     Some(Err(message)) => {
                         self.error = Some(message);
-                        self.after_save = None;
+                        self.abandon_after_save();
                     }
                     None => {}
                 }
@@ -875,7 +884,7 @@ impl App {
             }
             Some(Err(message)) => {
                 self.error = Some(message);
-                self.after_save = None;
+                self.abandon_after_save();
             }
             None => {}
         }
@@ -923,7 +932,48 @@ impl App {
                 self.allow_close = true;
                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             }
+            PendingAction::InstallUpdate => {
+                let step = self
+                    .updates
+                    .as_mut()
+                    .map(|updates| updates.after_saved(true))
+                    .unwrap_or(Step::Stay);
+                self.update_step(step, ctx, frame);
+            }
         }
+    }
+
+    fn update_step(&mut self, step: Step, ctx: &egui::Context, frame: &eframe::Frame) {
+        match step {
+            Step::Ask => {}
+            Step::Save => {
+                self.after_save = Some(PendingAction::InstallUpdate);
+                self.save(ctx, frame);
+            }
+            Step::Quit => {
+                self.allow_close = true;
+                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            }
+            Step::Stay => {}
+        }
+    }
+
+    fn abandon_after_save(&mut self) {
+        if matches!(self.after_save, Some(PendingAction::InstallUpdate))
+            && let Some(updates) = &mut self.updates
+        {
+            let _ = updates.after_saved(false);
+        }
+        self.after_save = None;
+    }
+
+    fn cancel_after_save(&mut self) {
+        if matches!(self.after_save, Some(PendingAction::InstallUpdate))
+            && let Some(updates) = &mut self.updates
+        {
+            updates.cancel_restart();
+        }
+        self.after_save = None;
     }
 
     /// Save from the unsaved-changes question, then continue what was asked for.
@@ -1252,6 +1302,9 @@ impl App {
 
     fn apply(&mut self, action: input::Action, ctx: &egui::Context, frame: &eframe::Frame) {
         self.export_note = None;
+        if let Some(updates) = &mut self.updates {
+            updates.clear_status();
+        }
         let selects_tool = matches!(action, input::Action::SelectTool(_));
         let effect = self.view.apply(action, self.viewport_pt);
         if selects_tool {
@@ -1287,8 +1340,11 @@ impl App {
             Effect::Edit(key) => self.edit(key, ctx, frame),
             Effect::About => self.about_open = true,
             Effect::UserGuide => self.open_user_guide(),
-            // m13-update-ui wires this to `update_ui::UpdateUi::open_dialog`.
-            Effect::CheckForUpdates => {}
+            Effect::CheckForUpdates => {
+                if let Some(updates) = &mut self.updates {
+                    updates.open_dialog();
+                }
+            }
             Effect::ModelInfo => self.model_info_open = true,
             Effect::ToggleShadows => self.reveal_panel(PanelId::Shadows, ctx),
             Effect::TogglePanel(id) => self.reveal_panel(id, ctx),
@@ -2206,8 +2262,7 @@ impl App {
                 .as_ref()
                 .and_then(|d| d.kernel.as_ref())
                 .is_some_and(mesh_export::can_export),
-            // m13-update-ui: the updater's channel.
-            update_channel: false,
+            update_channel: self.updates.as_ref().is_some_and(UpdateUi::has_channel),
             shadows: self.dock.is_open(PanelId::Shadows),
             entity_info: self.dock.is_open(PanelId::EntityInfo),
             materials: self.dock.is_open(PanelId::Materials),
@@ -2276,6 +2331,10 @@ impl App {
             if let Some(note) = &self.export_note {
                 ui.separator();
                 ui.label(note);
+            }
+            if let Some(text) = self.updates.as_ref().and_then(UpdateUi::status_text) {
+                ui.separator();
+                ui.label(text);
             }
             if let Some(report) = self.current_print_report() {
                 ui.separator();
@@ -3047,7 +3106,8 @@ impl eframe::App for App {
             || self.save_dialog.is_some()
             || self.app_confirm.is_some()
             || self.materials.confirming()
-            || self.customize.prompt.is_some();
+            || self.customize.prompt.is_some()
+            || self.updates.as_ref().is_some_and(UpdateUi::restart_pending);
         let may_start_picker = self.modal_gate.frame(modal_open);
         if let Some((started, request)) =
             self.picker
@@ -3146,7 +3206,8 @@ impl eframe::App for App {
             || self.confirm.is_some()
             || self.app_confirm.is_some()
             || self.name_prompt.is_some()
-            || self.materials.confirming();
+            || self.materials.confirming()
+            || self.updates.as_ref().is_some_and(UpdateUi::restart_pending);
         if !dialog_open {
             self.global_input(&ctx, frame);
             self.sync_editor_path(&ctx, frame);
@@ -3340,7 +3401,7 @@ impl eframe::App for App {
             match picked.path {
                 None => {
                     if matches!(picked.purpose, PickPurpose::Save(_)) {
-                        self.after_save = None;
+                        self.cancel_after_save();
                     }
                 }
                 Some(path) => match picked.purpose {
@@ -3435,7 +3496,7 @@ impl eframe::App for App {
                 }
                 SaveOutcome::Cancel => {
                     self.save_dialog = None;
-                    self.after_save = None;
+                    self.cancel_after_save();
                 }
                 SaveOutcome::Pending => {}
             }
@@ -3456,6 +3517,32 @@ impl eframe::App for App {
                 }
                 Some(UnsavedChoice::Cancel) => self.confirm = None,
                 None => {}
+            }
+        }
+        let update_event = self.updates.as_mut().and_then(|updates| updates.show(&ctx));
+        if let Some(UpdateEvent::Restart) = update_event {
+            let modified = self.model.as_ref().is_some_and(|model| model.modified);
+            let step = self
+                .updates
+                .as_mut()
+                .map(|updates| updates.begin_restart(modified))
+                .unwrap_or(Step::Stay);
+            self.update_step(step, &ctx, frame);
+        }
+        let restart_waiting = self.updates.as_ref().is_some_and(UpdateUi::restart_pending);
+        if restart_waiting && self.after_save.is_none() {
+            let name = self
+                .model
+                .as_ref()
+                .map(|model| file_name(&model.path))
+                .unwrap_or_else(|| "this model".to_owned());
+            if let Some(choice) = prompts::unsaved_prompt(&ctx, &name) {
+                let step = self
+                    .updates
+                    .as_mut()
+                    .map(|updates| updates.answer_unsaved(choice))
+                    .unwrap_or(Step::Stay);
+                self.update_step(step, &ctx, frame);
             }
         }
         if self.picker.has_queued() {
@@ -3487,12 +3574,89 @@ enum UnitsPurpose {
     Import,
 }
 
+/// The updater for this run, or `None` where updating is not offered.
+fn update_ui_for_new() -> Option<UpdateUi> {
+    if !update_ui::supported() {
+        return None;
+    }
+    let var = |name: &str| std::env::var_os(name);
+    let settings_file = update_ui::settings_file(var);
+    let setting = settings_file
+        .as_deref()
+        .map(UpdateSetting::load)
+        .unwrap_or_default();
+    let key = match update_ui::BUILT_IN_KEY {
+        Some(key) => key.to_owned(),
+        None => update_ui::parse_key_file(include_str!("../../../packaging/update-key.pub"))
+            .map(|key| drydock_update::hex_encode(&key))
+            .unwrap_or_default(),
+    };
+    let built_in = update_ui::built_in_channel(update_ui::BUILT_IN_URL, &key);
+    let channel_bytes = update_ui::channel_file(var).and_then(|path| std::fs::read(path).ok());
+    let channel = update_ui::resolve_channel(built_in, channel_bytes.as_deref());
+    let download_dir = update_ui::download_dir(var)
+        .unwrap_or_else(|| std::env::temp_dir().join("drydock-update-downloads"));
+    Some(UpdateUi::new(Parts {
+        channel,
+        transport: update_transport(),
+        launcher: Box::new(ProcessLauncher),
+        settings_file,
+        download_dir,
+        running: Version::parse(drydock::chrome::VERSION).unwrap_or(Version {
+            major: 0,
+            minor: 0,
+            patch: 0,
+        }),
+        setting,
+        startup_delay: Duration::from_secs(20),
+        interval: Duration::from_secs(24 * 60 * 60),
+    }))
+}
+
+fn update_transport() -> std::sync::Arc<dyn drydock_update::Transport> {
+    #[cfg(windows)]
+    {
+        std::sync::Arc::new(drydock_update::WinHttpTransport::new())
+    }
+    #[cfg(not(windows))]
+    {
+        struct Offline;
+
+        impl drydock_update::Transport for Offline {
+            fn get(
+                &self,
+                _url: &str,
+                _headers: &[(String, String)],
+                _max_bytes: u64,
+            ) -> Result<Vec<u8>, drydock_update::TransportError> {
+                Err(drydock_update::TransportError::Offline)
+            }
+
+            fn download(
+                &self,
+                _url: &str,
+                _headers: &[(String, String)],
+                _max_bytes: u64,
+                _dest: &Path,
+                _cancel: &std::sync::atomic::AtomicBool,
+                _progress: &mut dyn FnMut(u64),
+            ) -> Result<(), drydock_update::TransportError> {
+                Err(drydock_update::TransportError::Offline)
+            }
+        }
+
+        std::sync::Arc::new(Offline)
+    }
+}
+
 /// What the user asked for that may need the document saved first.
 #[derive(Clone, Debug)]
 enum PendingAction {
     New,
     Open(Option<PathBuf>),
     Close,
+    /// Continue the update restart after the document was saved.
+    InstallUpdate,
 }
 
 /// A destructive app-level action waiting for confirmation (`docs/specs/m6-confirm.md`).
