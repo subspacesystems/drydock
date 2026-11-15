@@ -7,6 +7,7 @@ set -euo pipefail
 usage() {
     cat <<'EOF'
 Usage: release.sh [--version X.Y.Z] [--out DIR] [--guide DIR] [--dry-run]
+                  [--sign-key-env NAME --url-base URL --notes-url URL]
 
 Build the Windows program, pack it into the installer and write the files a
 beta tester downloads.
@@ -22,6 +23,12 @@ version_set=0
 out=
 guide=
 dry_run=0
+sign_key_env=
+url_base=
+notes_url=
+sign_key_env_set=0
+url_base_set=0
+notes_url_set=0
 
 while [ $# -gt 0 ]; do
     case $1 in
@@ -63,6 +70,48 @@ while [ $# -gt 0 ]; do
             guide=${1#--guide=}
             shift
             ;;
+        --sign-key-env)
+            if [ $# -lt 2 ]; then
+                echo "sign-key-env needs a value" >&2
+                exit 2
+            fi
+            sign_key_env=$2
+            sign_key_env_set=1
+            shift 2
+            ;;
+        --sign-key-env=*)
+            sign_key_env=${1#--sign-key-env=}
+            sign_key_env_set=1
+            shift
+            ;;
+        --url-base)
+            if [ $# -lt 2 ]; then
+                echo "url-base needs a value" >&2
+                exit 2
+            fi
+            url_base=$2
+            url_base_set=1
+            shift 2
+            ;;
+        --url-base=*)
+            url_base=${1#--url-base=}
+            url_base_set=1
+            shift
+            ;;
+        --notes-url)
+            if [ $# -lt 2 ]; then
+                echo "notes-url needs a value" >&2
+                exit 2
+            fi
+            notes_url=$2
+            notes_url_set=1
+            shift 2
+            ;;
+        --notes-url=*)
+            notes_url=${1#--notes-url=}
+            notes_url_set=1
+            shift
+            ;;
         --dry-run)
             dry_run=1
             shift
@@ -77,6 +126,13 @@ while [ $# -gt 0 ]; do
             ;;
     esac
 done
+
+if [ "$sign_key_env_set" = 1 ] || [ "$url_base_set" = 1 ] || [ "$notes_url_set" = 1 ]; then
+    if [ "$sign_key_env_set" = 0 ] || [ "$url_base_set" = 0 ] || [ "$notes_url_set" = 0 ]; then
+        echo "signing options must be given together: --sign-key-env, --url-base and --notes-url" >&2
+        exit 2
+    fi
+fi
 
 if [ "$version_set" = 0 ]; then
     version=$(awk '
@@ -94,6 +150,13 @@ fi
 if ! [[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
     echo "invalid version: '$version'" >&2
     exit 2
+fi
+
+if [ "$sign_key_env_set" = 1 ] && [ "$dry_run" = 0 ]; then
+    if [ -z "$sign_key_env" ] || [ -z "${!sign_key_env:-}" ]; then
+        echo "signing key environment variable not set: $sign_key_env" >&2
+        exit 1
+    fi
 fi
 
 repo=$(cd "$app_dir/.." && pwd)
@@ -148,6 +211,13 @@ fi
 export CARGO_TARGET_DIR
 
 installer=$out/drydock-$version-setup.exe
+installer_url=
+if [ "$sign_key_env_set" = 1 ]; then
+    while [ "${url_base%/}" != "$url_base" ]; do
+        url_base=${url_base%/}
+    done
+    installer_url=$url_base/drydock-$version-setup.exe
+fi
 nsi=$packaging_dir/windows/drydock.nsi
 stage=$out/stage
 exe_name=drydock.exe
@@ -188,6 +258,11 @@ if [ "$dry_run" = 1 ]; then
     if [ -n "$sign_pfx" ]; then
         sign_file "$installer"
     fi
+    if [ "$sign_key_env_set" = 1 ]; then
+        print_cmd "$cargo" run --release --locked -p drydock-release -- sign \
+            --key-env "$sign_key_env" --version "$version" --notes-url "$notes_url" \
+            --installer-url "$installer_url" "$installer" "$out"
+    fi
     exit 0
 fi
 
@@ -227,6 +302,15 @@ fi
 
 if [ -n "$sign_pfx" ]; then
     sign_file "$installer"
+fi
+
+if [ "$sign_key_env_set" = 1 ]; then
+    (
+        cd "$app_dir"
+        "$cargo" run --release --locked -p drydock-release -- sign \
+            --key-env "$sign_key_env" --version "$version" --notes-url "$notes_url" \
+            --installer-url "$installer_url" "$installer" "$out"
+    )
 fi
 
 cp "$packaging_dir/INSTALL.md" "$out/INSTALL.txt"
