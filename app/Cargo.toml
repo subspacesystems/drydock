@@ -17,6 +17,7 @@ drydock-render = { path = "crates/drydock-render" }
 drydock-kernel = { path = "crates/drydock-kernel" }
 drydock-mesh = { path = "crates/drydock-mesh" }
 drydock-guide = { path = "crates/drydock-guide" }
+drydock-update = { path = "crates/drydock-update" }
 glam = "0.34"
 # Markdown parser for the user guide generator (MIT); no command-line or HTML-bin features.
 pulldown-cmark = { version = "0.13", default-features = false, features = ["html"] }
@@ -45,6 +46,10 @@ pollster = "1"
 winresource = "0.1"
 bytemuck = { version = "1", features = ["derive"] }
 proptest = "1"
+# Update manifest signatures: verify only (BSD-3-Clause); tests also sign with a throwaway key.
+ed25519-dalek = { version = "2", default-features = false }
+# Update installer hashing (MIT OR Apache-2.0).
+sha2 = { version = "0.10", default-features = false }
 egui_kittest = "0.36"
 
 [workspace.lints.rust]
