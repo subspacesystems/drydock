@@ -136,6 +136,24 @@ const PAGES: &[(&str, &str, &[&str], &[&str])] = &[
         ],
     ),
     (
+        "updates.md",
+        "Updates",
+        &[
+            "Works offline, always",
+            "The three choices",
+            "Installing an update",
+            "Windows warnings",
+        ],
+        &[
+            "Check automatically",
+            "Notify only",
+            "Check now",
+            "Restart and update",
+            "signed",
+            "test key",
+        ],
+    ),
+    (
         "linux.md",
         "Drydock on Linux",
         &["Where the files go", "Removing them"],

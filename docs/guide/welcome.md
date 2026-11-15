@@ -26,6 +26,7 @@ Read the pages below in order when you are new. Each one is short and builds on 
 - [Files, import and export](files.md) saves your work and moves models in and out.
 - [3D printing](printing.md) checks a model and prepares it for a printer.
 - [Keyboard shortcuts](shortcuts.md) lists the keys for every tool.
+- [Updates](updates.md) explains how Drydock updates itself.
 - [Drydock on Linux](linux.md) explains the desktop entry and icons it creates.
 
 Take your time, try each step in the program as you read, and do not worry about making mistakes. Undo is always close by, and every master began with a wobbly first rectangle. Have fun building something that is truly yours.
