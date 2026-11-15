@@ -17,10 +17,14 @@
 
 mod channel;
 mod manifest;
+mod transport;
+mod updater;
 mod verify;
 mod version;
 
 pub use channel::{Channel, ChannelError};
 pub use manifest::{Manifest, ParseError, hex_decode_32, hex_encode};
+pub use transport::{Transport, TransportError};
+pub use updater::{Background, Config, Mode, State, Updater};
 pub use verify::{FileCheckError, VerifyError, verify, verify_file_sha256};
 pub use version::Version;
