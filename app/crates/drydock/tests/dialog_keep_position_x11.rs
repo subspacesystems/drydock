@@ -7,13 +7,22 @@
 #![cfg(target_os = "linux")]
 
 use std::process::Command;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use drydock::dialog::{DialogWindow, dialog_window, modal_dialog_window};
 use eframe::egui;
+
+/// The probes share this display, so only one test may drive it at a time.
+static DISPLAY_LOCK: Mutex<()> = Mutex::new(());
+
+fn serialize() -> MutexGuard<'static, ()> {
+    DISPLAY_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
 
 struct Probe {
     title: &'static str,
@@ -178,6 +187,7 @@ fn run_case(root_title: &'static str, dialog_title: &'static str, modal: bool) {
         eprintln!("skipped: needs DRYDOCK_GUI_TESTS=1 and an X display");
         return;
     }
+    let _serial = serialize();
     let open = Arc::new(AtomicBool::new(false));
     let quit = Arc::new(AtomicBool::new(false));
     let (app, root) = launch(root_title, dialog_title, modal, &open, &quit);
