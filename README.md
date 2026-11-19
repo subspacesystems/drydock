@@ -7,6 +7,8 @@ and Linux and is written in Rust.
 
 ![A house with a gable roof, recessed windows, a door and three trees, with afternoon shadows](docs/images/drydock-house.png)
 
+The model in the screenshots is [docs/examples/house.drydock](docs/examples/house.drydock); open it with File > Open.
+
 ## What it does
 
 - **Drawing:** lines, rectangles, circles and arcs (center or three-point) with inference snapping
