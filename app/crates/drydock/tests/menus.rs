@@ -5,8 +5,8 @@
 //! egui_kittest. See docs/specs/m4-ui-menus.md.
 
 use drydock::chrome::{
-    CONTRIBUTORS, MenuState, TOOL_BUTTONS, TOOL_GROUPS, about_lines, about_text, menu_bar,
-    recent_labels,
+    CONTRIBUTORS, MenuState, SPONSOR_LABEL, SPONSOR_URL, TOOL_BUTTONS, TOOL_GROUPS, about_lines,
+    about_text, menu_bar, recent_labels,
 };
 use drydock::input::{Action, Tool};
 use egui_kittest::Harness;
@@ -282,10 +282,7 @@ fn about_lines_name_version_license_and_contributors() {
     let lines = about_lines();
     assert_eq!(lines[0], about_text());
     assert_eq!(lines[1], "A Subspace Systems product.");
-    assert_eq!(
-        lines[2],
-        "License: GPL-3.0-or-later"
-    );
+    assert_eq!(lines[2], "License: GPL-3.0-or-later");
     assert_eq!(lines[3], "Copyright (c) 2026 Subspace Systems");
     assert_eq!(lines[4], "Contributors:");
     let names: Vec<&str> = CONTRIBUTORS
@@ -310,6 +307,17 @@ fn about_window_shows_every_line() {
         assert!(h.query_by_label(&line).is_some(), "{line}");
     }
     assert!(h.query_by_label("Close").is_some());
+}
+
+#[test]
+fn about_window_links_to_github_sponsors() {
+    assert_eq!(SPONSOR_URL, "https://github.com/sponsors/subspacesystems");
+    let mut h = Harness::new_ui(|ui| {
+        let mut open = true;
+        drydock::chrome::about_window(ui.ctx(), &mut open);
+    });
+    h.run();
+    assert!(h.query_by_label(SPONSOR_LABEL).is_some());
 }
 
 #[test]

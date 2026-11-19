@@ -1,5 +1,9 @@
 # m13-release-publish: publish a release to this repository's Gitea releases
 
+> Public releases now go to GitHub Releases instead, through `.github/workflows/release.yml` and
+> `app/packaging/sign-github-release.sh` ([docs/releasing.md](../releasing.md)). `publish.sh`
+> stays for a Gitea server's releases.
+
 The last step of the release side of M13. `release.sh` already builds the installer and writes
 `manifest` and `manifest.sig` next to it (`m13-release-manifest`). This task adds
 `app/packaging/publish.sh`, which uploads them. Publish to this repository's Gitea releases

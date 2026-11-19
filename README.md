@@ -34,9 +34,16 @@ copies of models you care about. Bug reports are welcome (see [CONTRIBUTING.md](
 
 ## Download
 
-Windows installers are on the releases page. Each release lists SHA-256 checksums;
-[app/packaging/INSTALL.md](app/packaging/INSTALL.md) explains how to check a download and what to
-expect from Windows SmartScreen while the installer is unsigned. On Linux, build from source.
+Get the latest version from the
+[releases page](https://github.com/subspacesystems/drydock/releases/latest):
+
+- **Windows:** `drydock-X.Y.Z-setup.exe`. The installed program keeps itself up to date.
+  [app/packaging/INSTALL.md](app/packaging/INSTALL.md) explains how to check the download and what
+  to expect from Windows SmartScreen while the installer is unsigned.
+- **Linux (x86-64):** `drydock-X.Y.Z-linux-x86_64.tar.gz`. Unpack it and run `./drydock`. Or build
+  from source (below).
+
+Each release lists SHA-256 checksums in `SHA256SUMS`.
 
 ## Build from source
 
@@ -70,7 +77,8 @@ Drydock is written from scratch and contains no code or artwork from other 3D mo
 
 ## Maintenance
 
-I review issues and PRs and release updates; response times vary.
+I review issues and PRs and release updates; response times vary. If Drydock is useful to you,
+you can support its development through [GitHub Sponsors](https://github.com/sponsors/subspacesystems).
 
 ## License
 

@@ -1,0 +1,149 @@
+# Builds a release when a tag vX.Y.Z reaches GitHub (tags are pushed to Gitea and mirrored here):
+# the Windows installer and a Linux build, put on a *draft* GitHub release with SHA256SUMS.
+# The draft is not public. A maintainer then signs the update manifest off GitHub and publishes
+# the release with app/packaging/sign-github-release.sh (docs/releasing.md); the private update
+# key never reaches GitHub.
+#
+# Repository variable DRYDOCK_UPDATE_KEY: the public update key (64 hex digits). Required: without
+# it a Windows build would carry the test key, whose private half is in the tests.
+name: Release
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+*"]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+defaults:
+  run:
+    working-directory: app
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: version
+        name: The tag matches app/Cargo.toml and the update key is set
+        env:
+          TAG: ${{ github.ref_name }}
+          UPDATE_KEY: ${{ vars.DRYDOCK_UPDATE_KEY }}
+        run: |
+          version=$(awk '/^\[workspace\.package\]/ {p=1; next} p && /^[[:space:]]*version[[:space:]]*=/ {
+            line=$0; sub(/^[^"]*"/, "", line); sub(/".*$/, "", line); print line; exit }' Cargo.toml)
+          if [ "v$version" != "$TAG" ]; then
+            echo "::error::tag $TAG does not match app/Cargo.toml version $version"
+            exit 1
+          fi
+          if ! [[ $UPDATE_KEY =~ ^[0-9a-fA-F]{64}$ ]]; then
+            echo "::error::repository variable DRYDOCK_UPDATE_KEY must be the public update key (64 hex digits)"
+            exit 1
+          fi
+          test_key=$(grep -v '^#' packaging/update-key.pub | tr -d '[:space:]')
+          if [ "${UPDATE_KEY,,}" = "${test_key,,}" ]; then
+            echo "::error::DRYDOCK_UPDATE_KEY is the test key"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  windows:
+    needs: check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      VERSION: ${{ needs.check.outputs.version }}
+      # Built into the program: where it looks for updates, and the key their manifests must be
+      # signed with. "latest" is the newest published (non-draft, non-prerelease) release.
+      DRYDOCK_UPDATE_URL: https://github.com/${{ github.repository }}/releases/latest/download/manifest
+      DRYDOCK_UPDATE_KEY: ${{ vars.DRYDOCK_UPDATE_KEY }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: System packages
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            gcc-mingw-w64-x86-64 nsis
+      - name: Rust toolchain (app/rust-toolchain.toml)
+        run: |
+          rustup show active-toolchain || rustup toolchain install
+          rustup target add x86_64-pc-windows-gnu
+      - name: Installer
+        run: packaging/release.sh --version "$VERSION" --out "$RUNNER_TEMP/dist"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows
+          path: |
+            ${{ runner.temp }}/dist/drydock-${{ env.VERSION }}-setup.exe
+            ${{ runner.temp }}/dist/INSTALL.txt
+          if-no-files-found: error
+
+  linux:
+    needs: check
+    # The oldest supported runner, so the program runs on older distributions too (glibc).
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    env:
+      VERSION: ${{ needs.check.outputs.version }}
+      DRYDOCK_VERSION: ${{ needs.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: System packages
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            build-essential pkg-config cmake libssl-dev libx11-dev libxcursor-dev \
+            libxrandr-dev libxi-dev libxkbcommon-dev libwayland-dev libfontconfig-dev libudev-dev
+      - name: Rust toolchain (app/rust-toolchain.toml)
+        run: rustup show active-toolchain || rustup toolchain install
+      - name: Build
+        run: |
+          export DRYDOCK_GIT_HASH=$(git rev-parse --short HEAD)
+          cargo build --release --locked -p drydock
+          name=drydock-$VERSION-linux-x86_64
+          stage=$RUNNER_TEMP/$name
+          mkdir -p "$stage"
+          cp target/release/drydock "$stage/"
+          cargo run --release --locked -p drydock-guide -- "$GITHUB_WORKSPACE/docs/guide" "$stage/guide"
+          cp ../LICENSE ../README.md NOTICE "$stage/"
+          tar -C "$RUNNER_TEMP" -czf "$RUNNER_TEMP/$name.tar.gz" "$name"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: linux
+          path: ${{ runner.temp }}/drydock-${{ env.VERSION }}-linux-x86_64.tar.gz
+          if-no-files-found: error
+
+  draft:
+    needs: [check, windows, linux]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.check.outputs.version }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Draft release
+        run: |
+          cd dist
+          sha256sum INSTALL.txt "drydock-$VERSION-setup.exe" "drydock-$VERSION-linux-x86_64.tar.gz" > SHA256SUMS
+          cat SHA256SUMS
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            echo "::error::release v$VERSION already exists; not overwriting"
+            exit 1
+          fi
+          gh release create "v$VERSION" --draft --verify-tag --title "Drydock $VERSION" \
+            --notes "Windows: run drydock-$VERSION-setup.exe (see INSTALL.txt). Linux: unpack the tar.gz and run ./drydock. SHA256SUMS lists each file's hash." \
+            INSTALL.txt "drydock-$VERSION-setup.exe" "drydock-$VERSION-linux-x86_64.tar.gz" SHA256SUMS

@@ -1,0 +1,16 @@
+name: Feature request
+description: Something Drydock should do that it doesn't.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What you want to do
+      description: The task you're trying to get done, and where Drydock gets in the way. Describe the result you want rather than how another program does it.
+    validations:
+      required: true
+  - type: textarea
+    id: more
+    attributes:
+      label: Anything else
+      description: Sketches, examples, or how you work around it today.

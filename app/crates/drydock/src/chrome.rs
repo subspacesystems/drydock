@@ -372,6 +372,10 @@ pub fn about_text() -> String {
 /// The line under the version in the About window.
 pub const PRODUCT_LINE: &str = "A Subspace Systems product.";
 
+/// The About window's link to the project's GitHub Sponsors page, under the contributors.
+pub const SPONSOR_LABEL: &str = "Support Drydock on GitHub Sponsors";
+pub const SPONSOR_URL: &str = "https://github.com/sponsors/subspacesystems";
+
 /// Width in points of the lockup image in the About window; the height follows the SVG's
 /// aspect ratio (3410 x 748).
 pub const LOCKUP_WIDTH: f32 = 341.0;
@@ -436,7 +440,7 @@ pub fn about_window(ctx: &eframe::egui::Context, open: &mut bool) {
     let mut close = false;
     let window = DialogWindow {
         title: "About Drydock",
-        size: vec2(380.0, 440.0),
+        size: vec2(380.0, 470.0),
     };
     dialog_window(ctx, &window, open, |ui| {
         let dark = ui.visuals().dark_mode;
@@ -448,6 +452,8 @@ pub fn about_window(ctx: &eframe::egui::Context, open: &mut bool) {
         for line in about_lines() {
             ui.label(line);
         }
+        ui.add_space(6.0);
+        ui.hyperlink_to(SPONSOR_LABEL, SPONSOR_URL);
         if button_row(
             ui,
             &[DialogButton {

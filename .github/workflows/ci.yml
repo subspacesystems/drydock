@@ -1,0 +1,123 @@
+# Checks every push to main and every pull request with the same gates Drydock's own test oracle
+# runs: formatting, clippy, the tests (with the real-window tests on a virtual display and
+# rendering on Mesa's software Vulkan), clippy for the Windows build, the installer script, and
+# the dependency license policy. A Windows job builds the program and runs the tests that need
+# no graphics.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
+  CARGO_DENY_VERSION: 0.20.2
+
+defaults:
+  run:
+    working-directory: app
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: System packages
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            build-essential pkg-config cmake libssl-dev libx11-dev libxcursor-dev \
+            libxrandr-dev libxi-dev libxkbcommon-dev libwayland-dev libfontconfig-dev libudev-dev \
+            gcc-mingw-w64-x86-64 nsis \
+            libvulkan1 mesa-vulkan-drivers vulkan-tools \
+            xvfb xauth xdotool x11-apps x11-utils libxkbcommon-x11-0 libx11-xcb1
+      - name: Software Vulkan (lavapipe)
+        run: |
+          icd=$(ls /usr/share/vulkan/icd.d/lvp_icd*.json | head -1)
+          echo "VK_ICD_FILENAMES=$icd" >> "$GITHUB_ENV"
+          echo "VK_DRIVER_FILES=$icd" >> "$GITHUB_ENV"
+          echo "WGPU_BACKEND=vulkan" >> "$GITHUB_ENV"
+      - name: Rust toolchain (app/rust-toolchain.toml)
+        run: |
+          rustup show active-toolchain || rustup toolchain install
+          rustup target add x86_64-pc-windows-gnu
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: app
+      - name: cargo-deny
+        run: |
+          if ! cargo deny --version 2>/dev/null | grep -qF "$CARGO_DENY_VERSION"; then
+            cargo install --locked cargo-deny --version "$CARGO_DENY_VERSION"
+          fi
+      - name: fetch
+        run: cargo fetch --locked
+      - name: fmt
+        run: cargo fmt --all --check
+      - name: clippy
+        run: cargo clippy --workspace --all-targets --offline -- -D warnings
+      - name: vulkan
+        run: vulkaninfo --summary
+      - name: test
+        env:
+          DRYDOCK_GUI_TESTS: "1"
+        run: xvfb-run -a -s "-screen 0 1280x800x24" cargo test --workspace --offline --no-fail-fast
+      - name: winclippy
+        run: cargo clippy --target x86_64-pc-windows-gnu -p drydock --offline -- -D warnings
+      - name: nsis
+        run: |
+          d=$(mktemp -d)
+          mkdir "$d/stage"
+          : > "$d/stage/drydock.exe"
+          makensis -V2 -DVERSION=0.0.0 -DSTAGE="$d/stage" -DOUTFILE="$d/setup.exe" packaging/windows/drydock.nsi
+          test -s "$d/setup.exe"
+      - name: deny
+        run: cargo deny --offline --workspace --manifest-path Cargo.toml check licenses bans sources
+
+  # New RustSec advisories can appear at any time; kept apart so they don't look like a code failure.
+  advisories:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cargo/bin/cargo-deny
+          key: cargo-deny-${{ env.CARGO_DENY_VERSION }}
+      - name: cargo-deny
+        run: |
+          if ! cargo deny --version 2>/dev/null | grep -qF "$CARGO_DENY_VERSION"; then
+            cargo install --locked cargo-deny --version "$CARGO_DENY_VERSION"
+          fi
+      - name: advisories
+        run: cargo deny --workspace --manifest-path Cargo.toml check advisories
+
+  windows:
+    runs-on: windows-2025
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Rust toolchain (app/rust-toolchain.toml)
+        run: rustup show active-toolchain || rustup toolchain install
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: app
+      - name: build
+        run: cargo build --locked -p drydock
+      - name: clippy
+        run: cargo clippy --locked -p drydock -p drydock-update -- -D warnings
+      # The crates that need no graphics adapter. The render and window tests run on Linux.
+      - name: test
+        run: >-
+          cargo test --locked --no-fail-fast
+          -p drydock-kernel -p drydock-dae -p drydock-mesh -p drydock-view
+          -p drydock-update -p drydock-guide
