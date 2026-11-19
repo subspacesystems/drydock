@@ -5,6 +5,8 @@ anything else you can draw. You sketch flat shapes and pull them into solids, mu
 paper with depth, and it is especially good at preparing models for 3D printing. It runs on Windows
 and Linux and is written in Rust.
 
+![A house with a gable roof, recessed windows, a door and three trees, with afternoon shadows](docs/images/drydock-house.png)
+
 ## What it does
 
 - **Drawing:** lines, rectangles, circles and arcs (center or three-point) with inference snapping
@@ -17,6 +19,8 @@ and Linux and is written in Rust.
 - **Files:** its own `.drydock` format ([docs/format.md](docs/format.md)); imports COLLADA (DAE),
   STL and 3MF.
 - **Windows updates:** the Windows build finds, verifies and installs new releases itself.
+
+![The Shadows panel: time of day, date, light and dark](docs/images/drydock-shadows.png)
 
 A user guide ships with the program (Help > User Guide, F1); its source is in
 [docs/guide](docs/guide/welcome.md).
