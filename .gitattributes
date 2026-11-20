@@ -1,1 +1,5 @@
 # No LFS content here. Reference models for the corpus tests live in a separate private repository.
+
+# Text files are LF in every checkout, Windows included: tests and the guide generator read them
+# byte for byte, and Git for Windows would otherwise check them out with CRLF.
+* text=auto eol=lf

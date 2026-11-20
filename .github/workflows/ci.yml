@@ -70,7 +70,20 @@ jobs:
       - name: test
         env:
           DRYDOCK_GUI_TESTS: "1"
-        run: xvfb-run -a -s "-screen 0 1280x800x24" cargo test --workspace --offline --no-fail-fast
+        run: |
+          set -o pipefail
+          xvfb-run -a -s "-screen 0 1280x800x24" cargo test --workspace --offline --no-fail-fast 2>&1 | tee "$RUNNER_TEMP/test.log"
+      # Job logs need a GitHub sign-in to read; annotations don't. Each failing test's panic
+      # message becomes an annotation on the run.
+      - name: Failed tests as annotations
+        if: failure()
+        shell: bash
+        run: |
+          awk '/panicked at/ {msg=$0; n=0; grab=1; next}
+               grab && (/^$/ || /^note:/ || n==8) {print "::error title=test failure::" msg; grab=0; next}
+               grab {msg=msg "%0A" $0; n++}
+               END {if (grab) print "::error title=test failure::" msg}' "$RUNNER_TEMP/test.log" | head -10
+          grep -E '^test .* FAILED$|^error' "$RUNNER_TEMP/test.log" | head -40 || true
       - name: winclippy
         run: cargo clippy --target x86_64-pc-windows-gnu -p drydock --offline -- -D warnings
       - name: nsis
@@ -117,7 +130,20 @@ jobs:
         run: cargo clippy --locked -p drydock -p drydock-update -- -D warnings
       # The crates that need no graphics adapter. The render and window tests run on Linux.
       - name: test
-        run: >-
-          cargo test --locked --no-fail-fast
-          -p drydock-kernel -p drydock-dae -p drydock-mesh -p drydock-view
-          -p drydock-update -p drydock-guide
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo test --locked --no-fail-fast \
+            -p drydock-kernel -p drydock-dae -p drydock-mesh -p drydock-view \
+            -p drydock-update -p drydock-guide 2>&1 | tee "$RUNNER_TEMP/test.log"
+      # Job logs need a GitHub sign-in to read; annotations don't. Each failing test's panic
+      # message becomes an annotation on the run.
+      - name: Failed tests as annotations
+        if: failure()
+        shell: bash
+        run: |
+          awk '/panicked at/ {msg=$0; n=0; grab=1; next}
+               grab && (/^$/ || /^note:/ || n==8) {print "::error title=test failure::" msg; grab=0; next}
+               grab {msg=msg "%0A" $0; n++}
+               END {if (grab) print "::error title=test failure::" msg}' "$RUNNER_TEMP/test.log" | head -10
+          grep -E '^test .* FAILED$|^error' "$RUNNER_TEMP/test.log" | head -40 || true
