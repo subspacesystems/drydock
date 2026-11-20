@@ -11,8 +11,8 @@ Contributor as well as the protection of Subspace Systems and the users of its s
 not change your rights to use your own Contributions for any other purpose.
 
 You agree to this Agreement by signing it through the CLA check on your first pull request (the
-check asks you to confirm with a comment). Read this document carefully before agreeing and keep
-a copy for your records.
+check links to a page where you sign in with GitHub and agree). Read this document carefully
+before agreeing and keep a copy for your records.
 
 You accept and agree to the following terms and conditions for Your Contributions (present and
 future) that you submit to Subspace Systems. Except for the license granted herein to Subspace
