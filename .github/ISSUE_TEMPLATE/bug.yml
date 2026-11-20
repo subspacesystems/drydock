@@ -22,7 +22,7 @@ body:
     id: version
     attributes:
       label: Drydock version
-      description: Help > About shows it, for example "Drydock 0.12.1 (ac86649)".
+      description: Help > About shows it, for example "Drydock 0.13.0 (26aba60)".
     validations:
       required: true
   - type: dropdown
