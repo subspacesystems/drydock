@@ -15,6 +15,12 @@ on:
 permissions:
   contents: read
 
+# The push mirror can deliver a tag twice, which starts two runs at once. The second waits for the
+# first and then finds its release (check), so it builds nothing.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -25,8 +31,11 @@ defaults:
 jobs:
   check:
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write # to see draft releases
     outputs:
       version: ${{ steps.version.outputs.version }}
+      skip: ${{ steps.existing.outputs.skip }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: version
@@ -51,9 +60,21 @@ jobs:
             exit 1
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
+      - id: existing
+        name: Skip if the tag already has a release
+        env:
+          TAG: ${{ github.ref_name }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "::notice::release $TAG already exists (an earlier run of this tag made it); nothing to do"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
 
   windows:
     needs: check
+    if: needs.check.outputs.skip != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
@@ -85,6 +106,7 @@ jobs:
 
   linux:
     needs: check
+    if: needs.check.outputs.skip != 'true'
     # The oldest supported runner, so the program runs on older distributions too (glibc).
     runs-on: ubuntu-22.04
     timeout-minutes: 60
