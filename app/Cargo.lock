@@ -638,7 +638,7 @@ checksum = "d8b14ccef22fc6f5a8f4d7d768562a182c04ce9a3b3157b91390b52ddfdf1a76"
 
 [[package]]
 name = "drydock"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "drydock-dae",
  "drydock-guide",
@@ -667,7 +667,7 @@ dependencies = [
 
 [[package]]
 name = "drydock-dae"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "drydock-kernel",
  "glam",
@@ -678,14 +678,14 @@ dependencies = [
 
 [[package]]
 name = "drydock-guide"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "pulldown-cmark",
 ]
 
 [[package]]
 name = "drydock-kernel"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "glam",
  "proptest",
@@ -693,7 +693,7 @@ dependencies = [
 
 [[package]]
 name = "drydock-mesh"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "drydock-dae",
  "drydock-kernel",
@@ -705,7 +705,7 @@ dependencies = [
 
 [[package]]
 name = "drydock-release"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "drydock-update",
  "ed25519-dalek",
@@ -715,7 +715,7 @@ dependencies = [
 
 [[package]]
 name = "drydock-render"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "bytemuck",
  "drydock-dae",
@@ -730,7 +730,7 @@ dependencies = [
 
 [[package]]
 name = "drydock-update"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "ed25519-dalek",
  "proptest",
@@ -740,7 +740,7 @@ dependencies = [
 
 [[package]]
 name = "drydock-view"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "glam",
  "proptest",
