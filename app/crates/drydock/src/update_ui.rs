@@ -187,7 +187,10 @@ pub trait Launcher: Send {
     fn launch(&mut self, installer: &Path) -> Result<(), String>;
 }
 
-/// The real launcher: `std::process::Command::new(installer).args(INSTALLER_ARGS).spawn()`.
+/// The real launcher. On Windows: `drydock_update::run_elevated(installer, INSTALLER_ARGS)`
+/// (the shell shows the elevation prompt). Elsewhere: `std::process::Command::new(installer)
+/// .args(INSTALLER_ARGS).spawn()`, not waited for. A declined prompt is
+/// `Err(drydock_update::LAUNCH_CANCELLED.to_owned())`.
 pub struct ProcessLauncher;
 
 impl Launcher for ProcessLauncher {

@@ -31,8 +31,8 @@ eframe = { version = "0.36", default-features = false, features = ["wgpu", "wayl
 rfd = { version = "0.17", default-features = false, features = ["xdg-portal", "wayland"] }
 egui-wgpu = "0.36"
 # Local egui-winit (vendor/egui-winit): drydock calls its patch functions, such as
-# mark_modal_title. No features of its own; eframe picks them.
-egui-winit = { version = "0.36", default-features = false }
+# mark_modal_title. "links" opens hyperlinks in the browser (webbrowser); eframe picks the rest.
+egui-winit = { version = "0.36", default-features = false, features = ["links"] }
 # SVG image loader for the brand icons (rasterised by resvg); same major as egui 0.36.
 egui_extras = { version = "0.36", default-features = false, features = ["svg"] }
 # Parses the icon SVGs in tests (already in the lock through egui_extras).

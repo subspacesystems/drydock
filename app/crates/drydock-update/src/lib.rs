@@ -18,12 +18,15 @@
 mod channel;
 mod manifest;
 mod net;
+mod shell;
 mod transport;
 mod updater;
 mod verify;
 mod version;
 #[cfg(windows)]
 mod winhttp;
+#[cfg(windows)]
+mod winshell;
 
 pub use channel::{Channel, ChannelError};
 pub use manifest::{Manifest, ParseError, hex_decode_32, hex_encode};
@@ -32,9 +35,12 @@ pub use net::{
     RESOLVE_TIMEOUT_MS, SEND_TIMEOUT_MS, USER_AGENT, check_status, error_from_win32, header_block,
     parse_https_url,
 };
+pub use shell::{ERROR_CANCELLED, LAUNCH_CANCELLED, join_parameters, launch_failure, quote_arg};
 pub use transport::{Transport, TransportError};
 pub use updater::{Background, Config, Mode, State, Updater};
 pub use verify::{FileCheckError, VerifyError, verify, verify_file_sha256};
 pub use version::Version;
 #[cfg(windows)]
 pub use winhttp::WinHttpTransport;
+#[cfg(windows)]
+pub use winshell::run_elevated;
