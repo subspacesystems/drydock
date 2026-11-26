@@ -428,6 +428,7 @@ Tyrel picked Windows auto-update (2026-11-13); the requirements are. Windows onl
 | `m13-installer-update` | Installer: a silent update mode that starts Drydock again (not elevated) when done; the old version is removed only once the new files are in place, so a failed install leaves it working; settings untouched | |
 | `m13-update-ui` | The setting and Help > Check for Updates (Windows only), the "Restart and update" / "Later" prompt, save-first guard, starting the installer and quitting; guide page (offline, no telemetry, SmartScreen warning) | `m13-update-check`, `m13-installer-update` |
 | `m13-release-publish` | `publish.sh` next to `release.sh`: publishes to this repository's Gitea releases (Tyrel): the installer, INSTALL.txt and SHA256SUMS go to a per-version release, and the manifest and signature replace the ones on the channel's fixed release. Running it for real waits for Tyrel's go-ahead | `m13-release-manifest` |
+| `m13-update-launch-fix` | Fixes from Tyrel's N to N+1 test: links open in the browser (Release notes, About's sponsor link), and the installer is started through the Windows shell with an elevation prompt instead of failing with error 740; a declined prompt leaves the running version alone | |
 
 Done when: tests cover manifest parsing, signature and hash checks (good, bad and missing signatures), offline behavior and the unsaved-changes guard; and on Tyrel's Windows desktop, version N finds N+1 published on GitHub Releases, verifies it, updates and restarts into N+1 with his settings intact.
 
