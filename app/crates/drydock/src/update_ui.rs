@@ -182,7 +182,8 @@ pub fn resolve_channel(built_in: Option<Channel>, file: Option<&[u8]>) -> Option
 }
 
 /// Starts the downloaded installer. The app's launcher runs the file with [`INSTALLER_ARGS`]
-/// and does not wait; tests use a recording one.
+/// and does not wait; tests use a recording one. A declined elevation prompt is
+/// `Err(drydock_update::LAUNCH_CANCELLED.to_owned())`, shown as the calm "Update cancelled" line.
 pub trait Launcher: Send {
     fn launch(&mut self, installer: &Path) -> Result<(), String>;
 }
@@ -195,11 +196,18 @@ pub struct ProcessLauncher;
 
 impl Launcher for ProcessLauncher {
     fn launch(&mut self, installer: &Path) -> Result<(), String> {
-        std::process::Command::new(installer)
-            .args(INSTALLER_ARGS)
-            .spawn()
-            .map(|_| ())
-            .map_err(|error| error.to_string())
+        #[cfg(windows)]
+        {
+            drydock_update::run_elevated(installer, &INSTALLER_ARGS)
+        }
+        #[cfg(not(windows))]
+        {
+            std::process::Command::new(installer)
+                .args(INSTALLER_ARGS)
+                .spawn()
+                .map(|_| ())
+                .map_err(|error| error.to_string())
+        }
     }
 }
 
@@ -531,7 +539,8 @@ impl UpdateUi {
     /// "Restart and update": with the state not `Ready` -> `Stay`. With `modified` (unsaved
     /// changes) -> `Ask`, nothing launched. Otherwise start the installer: `Quit` when the
     /// launcher succeeds; on failure the status text says so ("Could not start the installer:
-    /// {reason}") and the step is `Stay`.
+    /// {reason}") and the step is `Stay`. A declined elevation prompt is the calm line
+    /// "Update cancelled" and also stays.
     pub fn begin_restart(&mut self, modified: bool) -> Step {
         if !matches!(self.state(), Some(State::Ready { .. })) {
             return Step::Stay;
@@ -589,6 +598,10 @@ impl UpdateUi {
             Ok(()) => {
                 self.launcher_error = None;
                 Step::Quit
+            }
+            Err(reason) if reason == drydock_update::LAUNCH_CANCELLED => {
+                self.launcher_error = Some("Update cancelled".to_owned());
+                Step::Stay
             }
             Err(reason) => {
                 self.launcher_error = Some(format!("Could not start the installer: {reason}"));
