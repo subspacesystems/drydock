@@ -127,10 +127,15 @@ impl Transport for Fake {
 struct Rec {
     launched: Arc<Mutex<Vec<PathBuf>>>,
     fail: Arc<AtomicBool>,
+    /// The user declined the elevation prompt.
+    cancel: Arc<AtomicBool>,
 }
 
 impl Launcher for Rec {
     fn launch(&mut self, installer: &Path) -> Result<(), String> {
+        if self.cancel.load(Ordering::SeqCst) {
+            return Err(drydock_update::LAUNCH_CANCELLED.to_owned());
+        }
         if self.fail.load(Ordering::SeqCst) {
             return Err("access denied".into());
         }
@@ -760,6 +765,56 @@ fn a_launcher_failure_keeps_the_app_and_says_why() {
     let text = ui.status_text().unwrap();
     assert!(text.starts_with("Could not start the installer"), "{text}");
     assert!(text.contains("access denied"), "{text}");
+}
+
+#[test]
+fn a_declined_elevation_prompt_keeps_the_app_running_and_is_calm() {
+    let (mut ui, f) = ready_ui("guard-cancelled");
+    f.rec.cancel.store(true, Ordering::SeqCst);
+    assert_eq!(ui.begin_restart(false), Step::Stay);
+    let text = ui.status_text().unwrap();
+    assert_eq!(text, "Update cancelled");
+    assert!(launched(&f).is_empty());
+    // The update is still ready: asking again works once the prompt is accepted.
+    assert!(is_ready(&ui));
+    f.rec.cancel.store(false, Ordering::SeqCst);
+    assert_eq!(ui.begin_restart(false), Step::Quit);
+    assert_eq!(launched(&f).len(), 1);
+    assert_eq!(
+        ui.status_text()
+            .as_deref()
+            .filter(|t| t.contains("cancelled")),
+        None
+    );
+}
+
+#[test]
+fn a_declined_prompt_after_discarding_changes_also_stays() {
+    let (mut ui, f) = ready_ui("guard-cancelled-discard");
+    f.rec.cancel.store(true, Ordering::SeqCst);
+    assert_eq!(ui.begin_restart(true), Step::Ask);
+    assert_eq!(ui.answer_unsaved(UnsavedChoice::Discard), Step::Stay);
+    assert_eq!(ui.status_text().unwrap(), "Update cancelled");
+    assert_eq!(ui.begin_restart(true), Step::Ask);
+    assert_eq!(ui.answer_unsaved(UnsavedChoice::Save), Step::Save);
+    assert_eq!(ui.after_saved(true), Step::Stay);
+    assert_eq!(ui.status_text().unwrap(), "Update cancelled");
+}
+
+#[test]
+fn the_cancelled_line_shows_in_the_window_and_other_errors_keep_their_text() {
+    let (mut h, f) = ready("window-cancelled");
+    f.rec.cancel.store(true, Ordering::SeqCst);
+    h.state_mut().ui.begin_restart(false);
+    h.run();
+    assert!(has(&h, "Update cancelled"));
+    assert!(!has(&h, "Could not start the installer"));
+    f.rec.cancel.store(false, Ordering::SeqCst);
+    f.rec.fail.store(true, Ordering::SeqCst);
+    h.state_mut().ui.begin_restart(false);
+    h.run();
+    assert!(has(&h, "Could not start the installer: access denied"));
+    assert!(!has(&h, "Update cancelled"));
 }
 
 #[test]
